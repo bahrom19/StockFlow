@@ -34,7 +34,7 @@ COPY . .
 RUN npx prisma generate && npm run build
 
 # ── Stage 4: Production Runner ─────────────────────────────────
-FROM alpine:3.21 AS runner
+FROM alpine:3.24 AS runner
 
 # Install only what's needed at runtime
 RUN apk add --no-cache \
