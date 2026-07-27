@@ -140,7 +140,7 @@ jobs:
       # 7. Coverage report — upload unit and integration reports
       # ───────────────────────────────────────────────────────────
       - name: 📊 Upload unit test coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report-unit
           path: ${{ env.WORKING_DIR }}/coverage/
@@ -148,7 +148,7 @@ jobs:
           if-no-files-found: warn
 
       - name: 📊 Upload integration test coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report-integration
           path: ${{ env.WORKING_DIR }}/coverage-integration/
