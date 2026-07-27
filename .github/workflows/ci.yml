@@ -1,0 +1,241 @@
+# ═══════════════════════════════════════════════════════════════
+# StockFlow Enterprise — CI/CD Pipeline
+# ═══════════════════════════════════════════════════════════════
+# Runs on every pull request and every push to main.
+#
+# Stages:
+#   1. Install dependencies
+#   2. Prisma generate
+#   3. TypeScript build (typecheck + nest build)
+#   4. ESLint (check only, no auto-fix)
+#   5. Unit tests + coverage
+#   6. Integration tests (requires PostgreSQL)
+#   7. Coverage report
+#   8. Security audit (npm audit)
+#   9. Circular dependency detection (madge)
+#  10. Prisma schema validation
+#  11. Prisma migration verification
+#  12. Docker image build
+#
+# ═══════════════════════════════════════════════════════════════
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# ── Global concurrency — cancel in-flight runs for the same PR ──
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ── Environment ────────────────────────────────────────────────
+env:
+  NODE_VERSION: '22'
+  WORKING_DIR: ./backend
+
+defaults:
+  run:
+    working-directory: ${{ env.WORKING_DIR }}
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════
+  # MAIN CI JOB
+  # ═══════════════════════════════════════════════════════════════
+  ci:
+    name: 'CI — ${{ github.ref_name }}'
+    runs-on: ubuntu-latest
+
+    # Spin up PostgreSQL for integration tests
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: stockflow_test
+          POSTGRES_USER: stockflow
+          POSTGRES_PASSWORD: stockflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      # ───────────────────────────────────────────────────────────
+      # 0. Checkout
+      # ───────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ───────────────────────────────────────────────────────────
+      # 0. Setup Node
+      # ───────────────────────────────────────────────────────────
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: ${{ env.WORKING_DIR }}/package-lock.json
+
+      # ───────────────────────────────────────────────────────────
+      # 1. Install dependencies
+      # ───────────────────────────────────────────────────────────
+      - name: ⚙️ Install dependencies
+        run: npm ci
+        shell: bash
+
+      # ───────────────────────────────────────────────────────────
+      # 2. Prisma generate
+      # ───────────────────────────────────────────────────────────
+      - name: 🗄️ Generate Prisma client
+        run: npm run prisma:generate
+        shell: bash
+
+      # ───────────────────────────────────────────────────────────
+      # 3. TypeScript build (typecheck first, then nest build)
+      # ───────────────────────────────────────────────────────────
+      - name: 🔍 TypeScript typecheck
+        run: npx tsc -p tsconfig.json --noEmit
+        shell: bash
+
+      - name: 🏗️ NestJS build
+        run: npm run build
+        shell: bash
+
+      # ───────────────────────────────────────────────────────────
+      # 4. ESLint (check only — no auto-fix)
+      # ───────────────────────────────────────────────────────────
+      - name: 📐 ESLint
+        run: npm run lint:check
+        shell: bash
+
+      # ───────────────────────────────────────────────────────────
+      # 5. Unit tests with coverage
+      # ───────────────────────────────────────────────────────────
+      - name: 🧪 Unit tests
+        run: npx jest --coverage --passWithNoTests
+        shell: bash
+
+      # ───────────────────────────────────────────────────────────
+      # 6. Integration tests (with PostgreSQL from services)
+      # ───────────────────────────────────────────────────────────
+      - name: 🔗 Integration tests
+        run: |
+          if [ -f jest.integration.config.js ]; then
+            echo "Running integration tests..."
+            npx jest --config jest.integration.config.js --coverage --passWithNoTests
+          else
+            echo "⚠️ jest.integration.config.js not found — skipping integration tests"
+          fi
+        shell: bash
+        env:
+          DATABASE_URL: postgresql://stockflow:stockflow@localhost:5432/stockflow_test
+
+      # ───────────────────────────────────────────────────────────
+      # 7. Coverage report — upload unit and integration reports
+      # ───────────────────────────────────────────────────────────
+      - name: 📊 Upload unit test coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-unit
+          path: ${{ env.WORKING_DIR }}/coverage/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: 📊 Upload integration test coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-integration
+          path: ${{ env.WORKING_DIR }}/coverage-integration/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # ───────────────────────────────────────────────────────────
+      # 8. Security audit
+      # ───────────────────────────────────────────────────────────
+      # Fails on critical severity. To suppress known-acceptable
+      # advisories, add an .nsprc file to the project root.
+      - name: 🔒 Security audit
+        run: npm audit --audit-level=critical
+        shell: bash
+
+      # ───────────────────────────────────────────────────────────
+      # 9. Circular dependency detection
+      # ───────────────────────────────────────────────────────────
+      # madge is installed on-demand. To speed up, add it as a devDependency.
+      - name: 🔄 Circular dependency check
+        run: |
+          npx -p madge@8 madge --warning --circular --extensions ts src/
+        shell: bash
+
+      # ───────────────────────────────────────────────────────────
+      # 10. Verify Prisma schema — check for common issues
+      # ───────────────────────────────────────────────────────────
+      - name: 📋 Validate Prisma schema
+        run: |
+          npx prisma validate
+          echo "✓ Prisma schema is valid"
+        shell: bash
+
+      # ───────────────────────────────────────────────────────────
+      # 11. Verify migrations — check migration health
+      # ───────────────────────────────────────────────────────────
+      - name: 🔼 Verify Prisma migrations
+        run: |
+          echo "Checking migration files..."
+          if [ -d "prisma/migrations" ]; then
+            MIGRATION_COUNT=$(ls -d prisma/migrations/*/ 2>/dev/null | wc -l)
+            echo "✓ Found $MIGRATION_COUNT migration(s)"
+            # Verify migration_lock.toml exists
+            if [ -f "prisma/migrations/migration_lock.toml" ]; then
+              echo "✓ migration_lock.toml exists"
+            else
+              echo "⚠️  migration_lock.toml not found"
+              exit 1
+            fi
+            # Check each migration has a migration.sql
+            for dir in prisma/migrations/*/; do
+              if [ -f "${dir}migration.sql" ]; then
+                echo "  ✓ $(basename $dir)/migration.sql"
+              else
+                echo "  ✗ $(basename $dir) — missing migration.sql"
+                exit 1
+              fi
+            done
+          else
+            echo "⚠️  No migrations directory found"
+            exit 1
+          fi
+        shell: bash
+
+      # ───────────────────────────────────────────────────────────
+      # 12. Docker image build (cached layers)
+      # ───────────────────────────────────────────────────────────
+      - name: 🐳 Build Docker image
+        run: docker build -t stockflow-backend:${{ github.sha }} .
+        shell: bash
+
+  # ═══════════════════════════════════════════════════════════════
+  # STATUS CHECK — aggregate job for branch protection rules
+  # ═══════════════════════════════════════════════════════════════
+  status:
+    name: '✅ CI Status'
+    if: always()
+    needs: [ci]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check CI result
+        run: |
+          if [ "${{ needs.ci.result }}" = "success" ]; then
+            echo "✅ All CI stages passed"
+            exit 0
+          else
+            echo "❌ CI pipeline failed (result: ${{ needs.ci.result }})"
+            exit 1
+          fi
+        shell: bash

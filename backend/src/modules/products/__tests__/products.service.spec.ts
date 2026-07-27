@@ -1,0 +1,133 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { ProductsService } from '../services/products.service';
+import { ProductsRepository } from '../repositories/products.repository';
+import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+
+describe('ProductsService', () => {
+  let service: ProductsService;
+  let mockRepo: jest.Mocked<ProductsRepository>;
+
+  const currentUser: JwtPayload = {
+    userId: 'me',
+    companyId: 'comp-1',
+    roles: ['Admin'],
+    email: 'me@test.com',
+  };
+  const baseProduct = {
+    id: 'prod-1',
+    name: 'Test Product',
+    companyId: 'comp-1',
+    sku: 'SKU-001',
+    isActive: true,
+    price: new Prisma.Decimal(1000),
+    costPrice: new Prisma.Decimal(600),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+    description: null,
+    barcode: null,
+    category: null,
+    brand: null,
+    unit: null,
+    stockQuantity: 0,
+    rowVersion: 0,
+    unitId: null,
+    costingMethod: 'AVERAGE' as const,
+  };
+
+  beforeEach(async () => {
+    mockRepo = {
+      create: jest.fn(),
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      update: jest.fn(),
+      softDelete: jest.fn(),
+    } as unknown as jest.Mocked<ProductsRepository>;
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ProductsService,
+        { provide: ProductsRepository, useValue: mockRepo },
+      ],
+    }).compile();
+
+    service = module.get<ProductsService>(ProductsService);
+  });
+
+  it('should create a product', async () => {
+    mockRepo.create.mockResolvedValue(baseProduct as any);
+    const result = await service.create(
+      {
+        name: 'Test Product',
+        sku: 'SKU-001',
+        price: 1000,
+        costPrice: 600,
+      } as any,
+      currentUser,
+    );
+    expect(result.name).toBe('Test Product');
+    expect(mockRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ company: { connect: { id: 'comp-1' } } }),
+    );
+  });
+
+  it('should find all products with pagination', async () => {
+    mockRepo.findAll.mockResolvedValue({ items: [baseProduct], total: 1 });
+    const result = await service.findAll(
+      { page: 1, limit: 20 } as any,
+      currentUser,
+    );
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(1);
+  });
+
+  it('should find product by id', async () => {
+    mockRepo.findById.mockResolvedValue(baseProduct as any);
+    const result = await service.findById('prod-1', currentUser);
+    expect(result.id).toBe('prod-1');
+  });
+
+  it('should throw NotFoundException when product not found', async () => {
+    mockRepo.findById.mockResolvedValue(null);
+    await expect(service.findById('unknown', currentUser)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('should update a product', async () => {
+    mockRepo.findById.mockResolvedValue(baseProduct as any);
+    mockRepo.update.mockResolvedValue({
+      ...baseProduct,
+      name: 'Updated',
+    } as any);
+    const result = await service.update(
+      'prod-1',
+      { name: 'Updated' } as any,
+      currentUser,
+    );
+    expect(result.name).toBe('Updated');
+  });
+
+  it('should soft delete a product', async () => {
+    mockRepo.findById.mockResolvedValue(baseProduct as any);
+    mockRepo.softDelete.mockResolvedValue({
+      ...baseProduct,
+      deletedAt: new Date(),
+    } as any);
+    const result = await service.softDelete('prod-1', currentUser);
+    expect(result.deletedAt).not.toBeNull();
+  });
+
+  it('should enforce company isolation', async () => {
+    mockRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.findById('prod-1', {
+        ...currentUser,
+        companyId: 'other-company',
+      }),
+    ).rejects.toThrow(NotFoundException);
+    expect(mockRepo.findById).toHaveBeenCalledWith('prod-1', 'other-company');
+  });
+});

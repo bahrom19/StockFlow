@@ -1,0 +1,100 @@
+import { Module } from '@nestjs/common';
+import { PrismaModule } from '../../common/prisma';
+import { SharedModule } from '../shared/shared.module';
+import { EventBusModule } from '../../common/events';
+import {
+  CustomerAddressController,
+  ContactController,
+  CustomerGroupController,
+  CreditLimitController,
+  LoyaltyController,
+  OpportunityController,
+  TaskController,
+  PriceListController,
+  CustomerNoteController,
+} from './controllers';
+import {
+  CustomerAddressService,
+  ContactService,
+  CustomerGroupService,
+  CreditLimitService,
+  LoyaltyService,
+  OpportunityService,
+  TaskService,
+  PriceListService,
+  CustomerNoteService,
+} from './services';
+import {
+  CustomerAddressRepository,
+  ContactRepository,
+  CustomerGroupRepository,
+  CreditLimitRepository,
+  LoyaltyRepository,
+  OpportunityRepository,
+  TaskRepository,
+  PriceListRepository,
+  CustomerNoteRepository,
+} from './repositories';
+import {
+  CustomerAddressMapper,
+  ContactMapper,
+  CustomerGroupMapper,
+  CreditLimitMapper,
+  LoyaltyMapper,
+  OpportunityMapper,
+  TaskMapper,
+  PriceListMapper,
+  CustomerNoteMapper,
+} from './mappers';
+
+@Module({
+  imports: [PrismaModule, SharedModule, EventBusModule],
+  controllers: [
+    CustomerAddressController,
+    ContactController,
+    CustomerGroupController,
+    CreditLimitController,
+    LoyaltyController,
+    OpportunityController,
+    TaskController,
+    PriceListController,
+    CustomerNoteController,
+  ],
+  providers: [
+    CustomerAddressService,
+    ContactService,
+    CustomerGroupService,
+    CreditLimitService,
+    LoyaltyService,
+    OpportunityService,
+    TaskService,
+    PriceListService,
+    CustomerNoteService,
+    CustomerAddressRepository,
+    ContactRepository,
+    CustomerGroupRepository,
+    CreditLimitRepository,
+    LoyaltyRepository,
+    OpportunityRepository,
+    TaskRepository,
+    PriceListRepository,
+    CustomerNoteRepository,
+    CustomerAddressMapper,
+    ContactMapper,
+    CustomerGroupMapper,
+    CreditLimitMapper,
+    LoyaltyMapper,
+    OpportunityMapper,
+    TaskMapper,
+    PriceListMapper,
+    CustomerNoteMapper,
+  ],
+  exports: [
+    CustomerAddressService,
+    ContactService,
+    CustomerGroupService,
+    CreditLimitService,
+    LoyaltyService,
+  ],
+})
+export class CrmModule {}

@@ -1,0 +1,92 @@
+# ═══════════════════════════════════════════════════════════════
+# StockFlow Enterprise — Dependabot Configuration
+# ═══════════════════════════════════════════════════════════════
+# Automates dependency updates for npm, Docker, and GitHub Actions.
+
+version: 2
+updates:
+  # ── npm (backend) ──────────────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/backend'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'UTC'
+    versioning-strategy: 'auto'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'npm'
+    groups:
+      nestjs:
+        patterns:
+          - '@nestjs/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      prisma:
+        patterns:
+          - '@prisma/*'
+          - 'prisma'
+        update-types:
+          - 'minor'
+          - 'patch'
+      opentelemetry:
+        patterns:
+          - '@opentelemetry/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      testing:
+        patterns:
+          - 'jest'
+          - '@types/jest'
+          - 'ts-jest'
+        update-types:
+          - 'minor'
+          - 'patch'
+      eslint:
+        patterns:
+          - 'eslint*'
+          - '@typescript-eslint/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+    reviewers:
+      - 'StockFlow/engineering'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+    # Ignore major version bumps (manual review required)
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # ── Docker ────────────────────────────────────────────────────
+  - package-ecosystem: 'docker'
+    directory: '/backend'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'UTC'
+    labels:
+      - 'dependencies'
+      - 'docker'
+    commit-message:
+      prefix: 'chore(docker)'
+
+  # ── GitHub Actions ────────────────────────────────────────────
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'UTC'
+    labels:
+      - 'dependencies'
+      - 'github-actions'
+    commit-message:
+      prefix: 'chore(ci)'

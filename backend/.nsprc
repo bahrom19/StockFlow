@@ -1,0 +1,10 @@
+{
+  "1096992": {
+    "active": true,
+    "notes": "Prototype Pollution in ip@2.0.1 (dev dependency, not exploitable in production). Awaiting upstream fix."
+  },
+  "1096489": {
+    "active": true,
+    "notes": "Regular Expression DOS in cross-spawn (dev dependency, local build tool only). Safe to suppress."
+  }
+}
