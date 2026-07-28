@@ -1,0 +1,66 @@
+# ═══════════════════════════════════════════════════════════════
+# StockFlow Enterprise — .dockerignore
+# ═══════════════════════════════════════════════════════════════
+# Exclude everything from the Docker build context that isn't
+# needed for a production build. Reduces build time and image size.
+# ═══════════════════════════════════════════════════════════════
+
+# ── Dependencies ───────────────────────────────────────────────
+node_modules/
+.turbo/
+
+# ── Build output ───────────────────────────────────────────────
+dist/
+coverage/
+coverage-integration/
+
+# ── Tests ──────────────────────────────────────────────────────
+*.spec.ts
+*.test.ts
+__tests__/
+test/
+
+# ── Local development ──────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.log
+.npmrc
+.yarnrc
+
+# ── IDE ────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── OS ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Git ────────────────────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ── CI ─────────────────────────────────────────────────────────
+.github/
+
+# ── Documentation (not needed at runtime) ──────────────────────
+docs/
+README.md
+CHANGELOG.md
+LICENSE
+
+# ── Docker ─────────────────────────────────────────────────────
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker-compose*.yaml
+
+# ── Misc ───────────────────────────────────────────────────────
+*.tgz
+*.tar.gz
+tmp/
+temp/

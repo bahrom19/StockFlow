@@ -54,6 +54,16 @@ async function bootstrap(): Promise<void> {
   app.use(compression());
   app.enableShutdownHooks();
 
+  // ── API version endpoint ────────────────────────────────────
+  // Responds at GET /api/v1 — used by Railway for deploy verification
+  app.getHttpAdapter().get('/api/v1', (_req, res) => {
+    res.json({
+      version: '1.0.0',
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   const port = configService.get<number>('app.port', 3000);
 
   // Swagger
