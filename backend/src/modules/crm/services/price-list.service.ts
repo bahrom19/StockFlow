@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { PriceListRepository } from '../repositories/price-list.repository';
@@ -10,7 +10,7 @@ import {
   PriceListQueryDto,
 } from '../dto/price-list.dto';
 import { AuditLogService } from '../../shared/services/audit-log.service';
-import { EventBus } from '../../../common/events/event-bus.interface';
+import { EventBus, EVENT_BUS } from '../../../common/events';
 
 @Injectable()
 export class PriceListService {
@@ -19,7 +19,7 @@ export class PriceListService {
     private readonly mapper: PriceListMapper,
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly eventBus: EventBus,
+    @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
 
   async create(

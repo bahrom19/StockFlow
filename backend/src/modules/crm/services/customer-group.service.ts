@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CustomerGroupRepository } from '../repositories/customer-group.repository';
@@ -10,7 +10,7 @@ import {
   CustomerGroupQueryDto,
 } from '../dto/customer-group.dto';
 import { AuditLogService } from '../../shared/services/audit-log.service';
-import { EventBus } from '../../../common/events/event-bus.interface';
+import { EventBus, EVENT_BUS } from '../../../common/events';
 
 @Injectable()
 export class CustomerGroupService {
@@ -19,7 +19,7 @@ export class CustomerGroupService {
     private readonly mapper: CustomerGroupMapper,
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly eventBus: EventBus,
+    @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
 
   async create(

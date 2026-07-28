@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CacheService } from '../../../infrastructure/cache/cache.service';
 import { CompanySubscriptionRepository } from '../repositories/company-subscription.repository';
@@ -6,7 +6,7 @@ import { CompanySubscriptionService } from '../services/company-subscription.ser
 import { InvoiceService } from '../services/invoice.service';
 import { InvoiceRepository } from '../repositories/invoice.repository';
 import { PrismaService } from '../../../common/prisma';
-import { EventBus } from '../../../common/events';
+import { EventBus, EVENT_BUS } from '../../../common/events';
 import { SubscriptionExpiredEvent } from '../events/subscription-expired.event';
 
 const LOCK_PREFIX = 'cron:lock:';
@@ -24,7 +24,7 @@ export class BillingCronService {
     private readonly invoiceRepository: InvoiceRepository,
     private readonly companySubscriptionService: CompanySubscriptionService,
     private readonly invoiceService: InvoiceService,
-    private readonly eventBus: EventBus,
+    @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
 
   /**

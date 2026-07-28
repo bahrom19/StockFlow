@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Prisma, Currency as PrismaCurrency } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreditLimitRepository } from '../repositories/credit-limit.repository';
@@ -10,7 +10,7 @@ import {
   CreditLimitQueryDto,
 } from '../dto/credit-limit.dto';
 import { AuditLogService } from '../../shared/services/audit-log.service';
-import { EventBus } from '../../../common/events/event-bus.interface';
+import { EventBus, EVENT_BUS } from '../../../common/events';
 import { CustomerCreditLimitChangedEvent } from '../events/customer-credit-limit-changed.event';
 
 @Injectable()
@@ -20,7 +20,7 @@ export class CreditLimitService {
     private readonly mapper: CreditLimitMapper,
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly eventBus: EventBus,
+    @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
 
   async create(

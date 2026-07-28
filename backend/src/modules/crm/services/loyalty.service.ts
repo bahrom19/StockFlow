@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Inject, Injectable, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoyaltyRepository } from '../repositories/loyalty.repository';
@@ -10,7 +10,7 @@ import {
   LoyaltyQueryDto,
 } from '../dto/loyalty.dto';
 import { AuditLogService } from '../../shared/services/audit-log.service';
-import { EventBus } from '../../../common/events/event-bus.interface';
+import { EventBus, EVENT_BUS } from '../../../common/events';
 import { CustomerLoyaltyUpdatedEvent } from '../events/customer-loyalty-updated.event';
 
 @Injectable()
@@ -20,7 +20,7 @@ export class LoyaltyService {
     private readonly mapper: LoyaltyMapper,
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
-    private readonly eventBus: EventBus,
+    @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
 
   async getOrCreateAccount(

@@ -26,6 +26,7 @@ import { CashAccountsRepository } from './repositories/cash-accounts.repository'
 import { FinancialPeriodsRepository } from './repositories/financial-periods.repository';
 import { FinancialTransactionsRepository } from './repositories/financial-transactions.repository';
 import { JournalEntriesRepository } from './repositories/journal-entries.repository';
+import { LedgerRepository } from './repositories/ledger.repository';
 import { FinanceIntegrationService } from './services/finance-integration.service';
 import { SaleCompletedEventHandler } from './events/sale-completed.handler';
 import { SaleRefundedEventHandler } from './events/sale-refunded.handler';
@@ -63,6 +64,7 @@ import { SaleRefundedEventHandler } from './events/sale-refunded.handler';
     FinancialPeriodsRepository,
     FinancialTransactionsRepository,
     JournalEntriesRepository,
+    LedgerRepository,
     // Event handlers
     SaleCompletedEventHandler,
     SaleRefundedEventHandler,

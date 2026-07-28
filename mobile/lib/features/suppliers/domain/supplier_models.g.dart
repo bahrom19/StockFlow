@@ -1,0 +1,85 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'supplier_models.dart';
+
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+_$SupplierImpl _$$SupplierImplFromJson(Map<String, dynamic> json) =>
+    _$SupplierImpl(
+      id: json['id'] as String,
+      companyId: json['companyId'] as String,
+      companyName: json['companyName'] as String,
+      bin: json['bin'] as String?,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      website: json['website'] as String?,
+      notes: json['notes'] as String?,
+      isActive: json['isActive'] as bool? ?? true,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      deletedAt: json['deletedAt'] == null
+          ? null
+          : DateTime.parse(json['deletedAt'] as String),
+    );
+
+Map<String, dynamic> _$$SupplierImplToJson(_$SupplierImpl instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'companyId': instance.companyId,
+      'companyName': instance.companyName,
+      'bin': instance.bin,
+      'email': instance.email,
+      'phone': instance.phone,
+      'website': instance.website,
+      'notes': instance.notes,
+      'isActive': instance.isActive,
+      'createdAt': instance.createdAt.toIso8601String(),
+      'updatedAt': instance.updatedAt.toIso8601String(),
+      'deletedAt': instance.deletedAt?.toIso8601String(),
+    };
+
+_$SupplierListResponseImpl _$$SupplierListResponseImplFromJson(
+        Map<String, dynamic> json) =>
+    _$SupplierListResponseImpl(
+      items: (json['items'] as List<dynamic>)
+          .map((e) => Supplier.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      total: (json['total'] as num).toInt(),
+      page: (json['page'] as num).toInt(),
+      limit: (json['limit'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$SupplierListResponseImplToJson(
+        _$SupplierListResponseImpl instance) =>
+    <String, dynamic>{
+      'items': instance.items,
+      'total': instance.total,
+      'page': instance.page,
+      'limit': instance.limit,
+    };
+
+_$CreateSupplierRequestImpl _$$CreateSupplierRequestImplFromJson(
+        Map<String, dynamic> json) =>
+    _$CreateSupplierRequestImpl(
+      companyName: json['companyName'] as String,
+      bin: json['bin'] as String?,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      website: json['website'] as String?,
+      notes: json['notes'] as String?,
+      isActive: json['isActive'] as bool? ?? true,
+    );
+
+Map<String, dynamic> _$$CreateSupplierRequestImplToJson(
+        _$CreateSupplierRequestImpl instance) =>
+    <String, dynamic>{
+      'companyName': instance.companyName,
+      'bin': instance.bin,
+      'email': instance.email,
+      'phone': instance.phone,
+      'website': instance.website,
+      'notes': instance.notes,
+      'isActive': instance.isActive,
+    };

@@ -1,0 +1,131 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'product_models.dart';
+
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+_$ProductImpl _$$ProductImplFromJson(Map<String, dynamic> json) =>
+    _$ProductImpl(
+      id: json['id'] as String,
+      companyId: json['companyId'] as String,
+      name: json['name'] as String,
+      description: json['description'] as String?,
+      sku: json['sku'] as String?,
+      barcode: json['barcode'] as String?,
+      price: json['price'] as String?,
+      costPrice: json['costPrice'] as String?,
+      unit: json['unit'] as String?,
+      category: json['category'] as String?,
+      brand: json['brand'] as String?,
+      stockQuantity: (json['stockQuantity'] as num?)?.toInt() ?? 0,
+      isActive: json['isActive'] as bool? ?? true,
+      createdAt: json['createdAt'] as String,
+      updatedAt: json['updatedAt'] as String,
+      deletedAt: json['deletedAt'] as String?,
+    );
+
+Map<String, dynamic> _$$ProductImplToJson(_$ProductImpl instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'companyId': instance.companyId,
+      'name': instance.name,
+      'description': instance.description,
+      'sku': instance.sku,
+      'barcode': instance.barcode,
+      'price': instance.price,
+      'costPrice': instance.costPrice,
+      'unit': instance.unit,
+      'category': instance.category,
+      'brand': instance.brand,
+      'stockQuantity': instance.stockQuantity,
+      'isActive': instance.isActive,
+      'createdAt': instance.createdAt,
+      'updatedAt': instance.updatedAt,
+      'deletedAt': instance.deletedAt,
+    };
+
+_$ProductListResponseImpl _$$ProductListResponseImplFromJson(
+        Map<String, dynamic> json) =>
+    _$ProductListResponseImpl(
+      items: (json['items'] as List<dynamic>)
+          .map((e) => Product.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      total: (json['total'] as num).toInt(),
+      page: (json['page'] as num).toInt(),
+      limit: (json['limit'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$ProductListResponseImplToJson(
+        _$ProductListResponseImpl instance) =>
+    <String, dynamic>{
+      'items': instance.items,
+      'total': instance.total,
+      'page': instance.page,
+      'limit': instance.limit,
+    };
+
+_$ProductFormDataImpl _$$ProductFormDataImplFromJson(
+        Map<String, dynamic> json) =>
+    _$ProductFormDataImpl(
+      name: json['name'] as String,
+      sku: json['sku'] as String?,
+      barcode: json['barcode'] as String?,
+      price: json['price'] as String,
+      costPrice: json['costPrice'] as String?,
+      unit: json['unit'] as String?,
+      category: json['category'] as String?,
+      brand: json['brand'] as String?,
+      description: json['description'] as String?,
+      stockQuantity: (json['stockQuantity'] as num?)?.toInt() ?? 0,
+      isActive: json['isActive'] as bool? ?? true,
+    );
+
+Map<String, dynamic> _$$ProductFormDataImplToJson(
+        _$ProductFormDataImpl instance) =>
+    <String, dynamic>{
+      'name': instance.name,
+      'sku': instance.sku,
+      'barcode': instance.barcode,
+      'price': instance.price,
+      'costPrice': instance.costPrice,
+      'unit': instance.unit,
+      'category': instance.category,
+      'brand': instance.brand,
+      'description': instance.description,
+      'stockQuantity': instance.stockQuantity,
+      'isActive': instance.isActive,
+    };
+
+_$CreateProductRequestImpl _$$CreateProductRequestImplFromJson(
+        Map<String, dynamic> json) =>
+    _$CreateProductRequestImpl(
+      name: json['name'] as String,
+      sku: json['sku'] as String?,
+      barcode: json['barcode'] as String?,
+      price: json['price'] as String,
+      costPrice: json['costPrice'] as String?,
+      unit: json['unit'] as String?,
+      category: json['category'] as String?,
+      brand: json['brand'] as String?,
+      description: json['description'] as String?,
+      stockQuantity: (json['stockQuantity'] as num?)?.toInt() ?? 0,
+      isActive: json['isActive'] as bool? ?? true,
+    );
+
+Map<String, dynamic> _$$CreateProductRequestImplToJson(
+        _$CreateProductRequestImpl instance) =>
+    <String, dynamic>{
+      'name': instance.name,
+      'sku': instance.sku,
+      'barcode': instance.barcode,
+      'price': instance.price,
+      'costPrice': instance.costPrice,
+      'unit': instance.unit,
+      'category': instance.category,
+      'brand': instance.brand,
+      'description': instance.description,
+      'stockQuantity': instance.stockQuantity,
+      'isActive': instance.isActive,
+    };

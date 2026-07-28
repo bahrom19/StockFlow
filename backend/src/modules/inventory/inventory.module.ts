@@ -1,8 +1,8 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Inject, Module, OnModuleInit } from '@nestjs/common';
 import { PrismaModule } from '../../common/prisma';
 import { SharedModule } from '../shared/shared.module';
+import { FinanceModule } from '../finance/finance.module';
 import { EventBus, EVENT_BUS } from '../../common/events';
-import { Inject } from '@nestjs/common';
 import {
   StockController,
   WarehouseController,
@@ -34,7 +34,7 @@ import {
 } from './events';
 
 @Module({
-  imports: [PrismaModule, SharedModule],
+  imports: [PrismaModule, SharedModule, FinanceModule],
   controllers: [
     StockController,
     WarehouseController,

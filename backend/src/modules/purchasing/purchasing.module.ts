@@ -3,6 +3,7 @@ import { Inject } from '@nestjs/common';
 import { EventBus, EVENT_BUS } from '../../common/events';
 import { PrismaModule } from '../../common/prisma';
 import { SharedModule } from '../shared/shared.module';
+import { FinanceModule } from '../finance/finance.module';
 import { GoodsReceiptController } from './controllers/goods-receipt.controller';
 import { PurchaseOrderController } from './controllers/purchase-order.controller';
 import { PurchaseReturnController } from './controllers/purchase-return.controller';
@@ -21,10 +22,11 @@ import { PurchaseReturnService } from './services/purchase-return.service';
 import { PurchaseInvoiceService } from './services/purchase-invoice.service';
 import { RFQService } from './services/rfq.service';
 import { SupplierQuotationService } from './services/supplier-quotation.service';
+import { PurchasingFinanceService } from './services/purchasing-finance.service';
 import { AuditLogService } from '../shared/services/audit-log.service';
 
 @Module({
-  imports: [PrismaModule, SharedModule],
+  imports: [PrismaModule, SharedModule, FinanceModule],
   controllers: [
     PurchaseOrderController,
     GoodsReceiptController,
@@ -48,6 +50,7 @@ import { AuditLogService } from '../shared/services/audit-log.service';
     PurchaseInvoiceService,
     RFQService,
     SupplierQuotationService,
+    PurchasingFinanceService,
     AuditLogService,
   ],
   exports: [

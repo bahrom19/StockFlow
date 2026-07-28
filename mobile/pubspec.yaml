@@ -1,0 +1,82 @@
+name: stockflow
+description: StockFlow Enterprise ERP — Mobile Client
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  flutter: '>=3.16.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Navigation
+  go_router: ^14.6.1
+
+  # Networking
+  dio: ^5.7.0
+  connectivity_plus: ^6.1.0
+
+  # Code Generation
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # Storage
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.3.4
+
+  # UI
+  intl: ^0.19.0
+  flutter_native_splash: ^2.4.4
+  flutter_launcher_icons: ^0.14.3
+  cupertino_icons: ^1.0.8
+
+  # Utilities
+  logger: ^2.5.0
+  flutter_dotenv: ^5.2.1
+  package_info_plus: ^8.1.4
+  equatable: ^2.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+  # Code Generation
+  build_runner: ^2.4.13
+  freezed: ^2.5.7
+  json_serializable: ^6.9.0
+  riverpod_generator: ^2.6.3
+  test: ^1.25.7
+
+flutter:
+  uses-material-design: true
+
+  generate: true
+
+  assets:
+    - assets/icons/
+    - assets/images/
+    - env/.env.dev
+    - env/.env.prod
+
+flutter_native_splash:
+  color: '#1A73E8'
+  image: assets/images/splash_logo.png
+  android: true
+  ios: true
+  web: false
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icons/app_icon.png
+  adaptive_icon_background: '#1A73E8'
+  adaptive_icon_foreground: assets/icons/app_icon_foreground.png
