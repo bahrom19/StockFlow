@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { RedisService } from './redis.service';
 import Redis from 'ioredis';
 
 const ONE_SECOND = 1000;
@@ -11,37 +12,25 @@ type CacheValue = string | number | boolean | Record<string, unknown> | null;
 @Injectable()
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
-  private readonly client: Redis;
+  private readonly client: Redis | null;
   private readonly defaultTTL: number;
 
-  constructor(private readonly configService: ConfigService) {
-    this.client = new Redis(
-      this.configService.get<string>('redis.url', 'redis://localhost:6379'),
-      {
-        retryStrategy: (times: number) => {
-          if (times > 10) {
-            this.logger.error('Redis connection failed after 10 retries');
-            return null;
-          }
-          return Math.min(times * 100, 3000);
-        },
-        maxRetriesPerRequest: 3,
-        enableReadyCheck: true,
-      },
-    );
+  constructor(
+    private readonly redisService: RedisService,
+    private readonly configService: ConfigService,
+  ) {
+    this.client = this.redisService.getClient();
     this.defaultTTL = this.configService.get<number>('redis.defaultTTL', 300); // 5 min
 
-    this.client.on('error', (err) => {
-      this.logger.error(`Redis error: ${err.message}`);
-    });
-
-    this.client.on('connect', () => {
-      this.logger.log('Connected to Redis');
-    });
+    // Error handling is owned by RedisService — no duplicate listener needed here
   }
 
   /** Get a value from cache */
   async get<T extends CacheValue>(key: string): Promise<T | null> {
+    if (!this.client) {
+      return null;
+    }
+
     try {
       const value = await this.client.get(key);
       if (value === null) {
@@ -62,6 +51,10 @@ export class CacheService {
     value: CacheValue,
     ttlSeconds?: number,
   ): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+
     try {
       const serialized = JSON.stringify(value);
       const ttl = ttlSeconds ?? this.defaultTTL;
@@ -75,6 +68,10 @@ export class CacheService {
 
   /** Delete a cache key */
   async del(key: string): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+
     try {
       await this.client.del(key);
     } catch (error) {
@@ -86,6 +83,10 @@ export class CacheService {
 
   /** Delete all keys matching a pattern (e.g., "products:*") */
   async delPattern(pattern: string): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+
     try {
       let cursor = '0';
       do {
@@ -119,6 +120,10 @@ export class CacheService {
     ttlSeconds?: number,
     beta = 1.0,
   ): Promise<T> {
+    if (!this.client) {
+      return compute();
+    }
+
     const cached = await this.get<T>(key);
 
     if (cached !== null) {
@@ -143,6 +148,10 @@ export class CacheService {
 
   /** Ping Redis */
   async ping(): Promise<boolean> {
+    if (!this.client) {
+      return false;
+    }
+
     try {
       const result = await this.client.ping();
       return result === 'PONG';
@@ -153,6 +162,10 @@ export class CacheService {
 
   /** Flush all cache (use with caution) */
   async flushAll(): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+
     try {
       await this.client.flushall();
       this.logger.warn('Cache flushed entirely');

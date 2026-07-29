@@ -119,12 +119,30 @@ export class HealthService {
 
   private async checkRedis(): Promise<HealthCheck> {
     const start = Date.now();
-    try {
-      await this.redis.ping();
+
+    if (!this.redis.enabled || !this.redis.getClient()) {
       return {
         name: 'redis',
-        status: 'ok',
+        status: 'degraded',
         latency: Date.now() - start,
+        message: 'Redis disabled — no REDIS_URL configured',
+      };
+    }
+
+    try {
+      const healthy = await this.redis.ping();
+      if (healthy) {
+        return {
+          name: 'redis',
+          status: 'ok',
+          latency: Date.now() - start,
+        };
+      }
+      return {
+        name: 'redis',
+        status: 'degraded',
+        latency: Date.now() - start,
+        message: 'Redis ping failed — running without cache',
       };
     } catch (error) {
       this.logger.error(
@@ -133,7 +151,7 @@ export class HealthService {
       );
       return {
         name: 'redis',
-        status: 'down',
+        status: 'degraded',
         latency: Date.now() - start,
         message: error instanceof Error ? error.message : 'Connection failed',
       };
