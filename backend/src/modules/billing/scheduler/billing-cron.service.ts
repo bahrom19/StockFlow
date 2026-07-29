@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { CacheService } from '../../../infrastructure/cache/cache.service';
+import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { CompanySubscriptionRepository } from '../repositories/company-subscription.repository';
 import { CompanySubscriptionService } from '../services/company-subscription.service';
 import { InvoiceService } from '../services/invoice.service';
@@ -18,7 +18,7 @@ export class BillingCronService {
   private readonly logger = new Logger(BillingCronService.name);
 
   constructor(
-    private readonly cacheService: CacheService,
+    private readonly redisService: RedisService,
     private readonly prismaService: PrismaService,
     private readonly subscriptionRepository: CompanySubscriptionRepository,
     private readonly invoiceRepository: InvoiceRepository,
@@ -29,27 +29,17 @@ export class BillingCronService {
 
   /**
    * Acquire a distributed lock for a cron job using Redis atomic SET NX EX.
-   * Uses the underlying ioredis SET command with NX (set if not exists) and EX (expiry).
    * Falls back to running the job if Redis is unavailable.
    */
   private async acquireLock(lockKey: string): Promise<boolean> {
-    try {
-      const redis = (this.cacheService as any).client;
-      if (!redis) return true; // no Redis — run anyway
-
-      const result = await redis.set(LOCK_PREFIX + lockKey, '1', 'NX', 'EX', LOCK_TTL_SEC);
-      return result === 'OK';
-    } catch {
-      this.logger.warn('Redis unavailable — running cron job without distributed lock');
-      return true;
-    }
+    return this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_SEC);
   }
 
   /**
    * Release a distributed lock.
    */
   private async releaseLock(lockKey: string): Promise<void> {
-    await this.cacheService.del(LOCK_PREFIX + lockKey).catch(() => {});
+    await this.redisService.releaseLock(LOCK_PREFIX + lockKey);
   }
 
   /**

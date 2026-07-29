@@ -32,14 +32,22 @@ export class RedisService implements OnModuleDestroy {
         },
         maxRetriesPerRequest: 3,
         lazyConnect: true,
+        connectTimeout: 10000,
+        enableReadyCheck: false,
       });
 
+      // Error handler — prevents ANY unhandled error events
       this.client.on('error', (err: Error) => {
-        this.logger.error(`Redis connection error: ${err.message}`);
+        this.logger.error(`Redis error: ${err.message}`);
       });
 
+      // Connection lifecycle
       this.client.on('connect', () => {
         this.logger.log('Connected to Redis');
+      });
+
+      this.client.on('ready', () => {
+        this.logger.verbose('Redis ready');
       });
     } catch (error) {
       this.logger.error(
@@ -72,6 +80,45 @@ export class RedisService implements OnModuleDestroy {
       return result === 'PONG';
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Acquire a distributed lock using Redis SET NX EX.
+   * Returns true if the lock was acquired, false otherwise.
+   * When Redis is disabled, returns true (runs without lock).
+   */
+  async acquireLock(lockKey: string, ttlSeconds: number): Promise<boolean> {
+    if (!this.client) {
+      return true;
+    }
+
+    try {
+      const result = await this.client.set(lockKey, '1', 'EX', ttlSeconds, 'NX');
+      return result === 'OK';
+    } catch (error) {
+      this.logger.warn(
+        `Redis acquireLock error for ${lockKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      return true;
+    }
+  }
+
+  /**
+   * Release a distributed lock by deleting the key.
+   * Safe to call when Redis is disabled — no-op.
+   */
+  async releaseLock(lockKey: string): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+
+    try {
+      await this.client.del(lockKey);
+    } catch (error) {
+      this.logger.warn(
+        `Redis releaseLock error for ${lockKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 }
