@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { PrismaService } from '../../../common/prisma';
 import { PermissionsRepository } from '../repositories/permissions.repository';
 
 interface PermissionSeed {
@@ -40,9 +41,27 @@ const SEED_PERMISSIONS: PermissionSeed[] = [
   },
   // Inventory
   {
+    code: 'inventory:create',
+    name: 'Create Inventory Records',
+    description: 'Allows creating warehouses and inventory records',
+    module: 'inventory',
+  },
+  {
     code: 'inventory:read',
     name: 'Read Inventory',
     description: 'Allows viewing inventory levels',
+    module: 'inventory',
+  },
+  {
+    code: 'inventory:update',
+    name: 'Update Inventory',
+    description: 'Allows editing warehouses and inventory records',
+    module: 'inventory',
+  },
+  {
+    code: 'inventory:delete',
+    name: 'Delete Inventory',
+    description: 'Allows deleting warehouses and inventory records',
     module: 'inventory',
   },
   {
@@ -57,30 +76,30 @@ const SEED_PERMISSIONS: PermissionSeed[] = [
     description: 'Allows transferring stock between warehouses',
     module: 'inventory',
   },
-  // Customers
+  // Customers / CRM
   {
-    code: 'customers:create',
+    code: 'crm:create',
     name: 'Create Customers',
     description: 'Allows creating customers',
-    module: 'customers',
+    module: 'crm',
   },
   {
-    code: 'customers:read',
+    code: 'crm:read',
     name: 'Read Customers',
     description: 'Allows viewing customers',
-    module: 'customers',
+    module: 'crm',
   },
   {
-    code: 'customers:update',
+    code: 'crm:update',
     name: 'Update Customers',
     description: 'Allows editing customers',
-    module: 'customers',
+    module: 'crm',
   },
   {
-    code: 'customers:delete',
+    code: 'crm:delete',
     name: 'Delete Customers',
     description: 'Allows deleting customers',
-    module: 'customers',
+    module: 'crm',
   },
   // Suppliers
   {
@@ -325,13 +344,17 @@ const SEED_PERMISSIONS: PermissionSeed[] = [
 export class PermissionsSeedService implements OnModuleInit {
   private readonly logger = new Logger(PermissionsSeedService.name);
 
-  constructor(private readonly permissionsRepository: PermissionsRepository) {}
+  constructor(
+    private readonly permissionsRepository: PermissionsRepository,
+    private readonly prismaService: PrismaService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.seed();
   }
 
   async seed(): Promise<void> {
+    // Step 1: Upsert all seed permissions into the permission table
     let count = 0;
     for (const permission of SEED_PERMISSIONS) {
       await this.permissionsRepository.upsertByCode(permission.code, {
@@ -343,5 +366,76 @@ export class PermissionsSeedService implements OnModuleInit {
       count++;
     }
     this.logger.log(`Seeded ${count} permissions`);
+
+    // Step 2: Assign any new/updated permissions to existing Admin roles
+    await this.assignPermissionsToAdminRoles();
+  }
+
+  /**
+   * Ensures all existing Admin roles have all current permissions assigned.
+   * This handles the case where new permissions are added after an Admin
+   * role was already created (e.g. during company registration).
+   */
+  private async assignPermissionsToAdminRoles(): Promise<void> {
+    // Fetch all permissions currently in the database
+    const allPermissions = await this.prismaService.permission.findMany({
+      select: { id: true },
+    });
+
+    if (allPermissions.length === 0) {
+      return;
+    }
+
+    const allPermissionIds = allPermissions.map((p) => p.id);
+
+    // Find all Admin roles that are not deleted
+    const adminRoles = await this.prismaService.role.findMany({
+      where: {
+        name: 'Admin',
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    if (adminRoles.length === 0) {
+      return;
+    }
+
+    const adminRoleIds = adminRoles.map((r) => r.id);
+
+    // Find which permissions are already assigned to each Admin role
+    const existingAssignments =
+      await this.prismaService.rolePermission.findMany({
+        where: {
+          roleId: { in: adminRoleIds },
+        },
+        select: { roleId: true, permissionId: true },
+      });
+
+    // Build a set of (roleId, permissionId) pairs that already exist
+    const assignedSet = new Set(
+      existingAssignments.map((a) => `${a.roleId}:${a.permissionId}`),
+    );
+
+    // For each Admin role, find permissions not yet assigned
+    const newAssignments: { roleId: string; permissionId: string }[] = [];
+
+    for (const roleId of adminRoleIds) {
+      for (const permissionId of allPermissionIds) {
+        if (!assignedSet.has(`${roleId}:${permissionId}`)) {
+          newAssignments.push({ roleId, permissionId });
+        }
+      }
+    }
+
+    if (newAssignments.length > 0) {
+      await this.prismaService.rolePermission.createMany({
+        data: newAssignments,
+        skipDuplicates: true,
+      });
+      this.logger.log(
+        `Assigned ${newAssignments.length} new permissions to Admin roles`,
+      );
+    }
   }
 }

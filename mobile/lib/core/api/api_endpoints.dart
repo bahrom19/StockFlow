@@ -21,17 +21,17 @@ class ApiEndpoints {
   // Products
   // ──────────────────────────────────
   static const String products = '/products';
-  static const String productVariants = '/products/variants';
-  static const String productBarcodes = '/products/barcodes';
+  static const String productVariants = '/inventory/variants';
+  static const String productBarcodes = '/inventory/barcodes';
 
   // ──────────────────────────────────
   // Inventory
   // ──────────────────────────────────
   static const String inventory = '/inventory';
-  static const String stockMovements = '/inventory/movements';
+  static const String stockMovements = '/inventory/stock/movements';
   static const String warehouses = '/inventory/warehouses';
-  static const String stockAdjustments = '/inventory/adjustments';
-  static const String stockTransfers = '/inventory/transfers';
+  static const String stockAdjustments = '/inventory/stock/adjust';
+  static const String stockTransfers = '/inventory/stock/transfer';
 
   // ──────────────────────────────────
   // Sales
@@ -43,14 +43,14 @@ class ApiEndpoints {
   // ──────────────────────────────────
   // Purchasing
   // ──────────────────────────────────
-  static const String purchaseOrders = '/purchasing/orders';
-  static const String goodsReceipt = '/purchasing/goods-receipt';
-  static const String purchaseReturns = '/purchasing/returns';
+  static const String purchaseOrders = '/purchasing/purchase-orders';
+  static const String goodsReceipt = '/purchasing/goods-receipts';
+  static const String purchaseReturns = '/purchasing/purchase-returns';
 
   // ──────────────────────────────────
   // CRM
   // ──────────────────────────────────
-  static const String customers = '/crm/customers';
+  static const String customers = '/customers';
   static const String customerGroups = '/crm/customer-groups';
   static const String contacts = '/crm/contacts';
   static const String opportunities = '/crm/opportunities';
@@ -58,9 +58,9 @@ class ApiEndpoints {
   // ──────────────────────────────────
   // Finance
   // ──────────────────────────────────
-  static const String chartOfAccounts = '/finance/accounts';
+  static const String chartOfAccounts = '/finance/chart-of-accounts';
   static const String journalEntries = '/finance/journal-entries';
-  static const String financialPeriods = '/finance/periods';
+  static const String financialPeriods = '/finance/financial-periods';
   static const String cashAccounts = '/finance/cash-accounts';
 
   // ──────────────────────────────────

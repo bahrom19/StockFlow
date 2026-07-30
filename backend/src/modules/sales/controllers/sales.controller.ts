@@ -135,7 +135,19 @@ export class SalesController {
   @RequirePermission('sales:update')
   @ApiOperation({ summary: 'Transition sale status' })
   @ApiParam({ name: 'id', type: 'string' })
-  @ApiQuery({ name: 'status', enum: SaleStatus, required: true })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: Object.values(SaleStatus),
+          description: 'Target status to transition to',
+        },
+      },
+      required: ['status'],
+    },
+  })
   @ApiResponse({
     status: 200,
     description: 'Status transitioned',
@@ -143,7 +155,7 @@ export class SalesController {
   })
   async transitionStatus(
     @Param('id') id: string,
-    @Query('status') status: SaleStatus,
+    @Body('status') status: SaleStatus,
     @CurrentUser() user: JwtPayload,
   ): Promise<SaleEntity> {
     return this.salesService.transitionStatus(

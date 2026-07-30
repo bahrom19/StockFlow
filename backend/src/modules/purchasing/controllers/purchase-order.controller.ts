@@ -134,7 +134,19 @@ export class PurchaseOrderController {
   @RequirePermission('purchasing:update')
   @ApiOperation({ summary: 'Transition purchase order status' })
   @ApiParam({ name: 'id', type: 'string' })
-  @ApiQuery({ name: 'status', enum: PurchaseOrderStatus, required: true })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: Object.values(PurchaseOrderStatus),
+          description: 'Target status to transition to',
+        },
+      },
+      required: ['status'],
+    },
+  })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Status transitioned',
@@ -142,7 +154,7 @@ export class PurchaseOrderController {
   })
   async transitionStatus(
     @Param('id') id: string,
-    @Query('status') status: PurchaseOrderStatus,
+    @Body('status') status: PurchaseOrderStatus,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<PurchaseOrderEntity> {
     return this.purchaseOrderService.transitionStatus(

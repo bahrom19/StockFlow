@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsDate,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -30,10 +31,12 @@ export class CreateFinancialPeriodDto {
 
   @ApiProperty()
   @Type(() => Date)
+  @IsDate()
   startDate!: Date;
 
   @ApiProperty()
   @Type(() => Date)
+  @IsDate()
   endDate!: Date;
 
   @ApiPropertyOptional()

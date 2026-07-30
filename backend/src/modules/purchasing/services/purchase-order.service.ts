@@ -458,13 +458,14 @@ export class PurchaseOrderService {
 
     const allReceived = allItems.every((i) => i.receivedQuantity >= i.quantity);
     const anyReceived = allItems.some((i) => i.receivedQuantity > 0);
+    const rowVer = order.rowVersion ?? 0;
 
     if (allReceived) {
       await this.purchaseOrderRepository.update(
         id,
         { status: PurchaseOrderStatus.RECEIVED },
         companyId,
-        undefined, // rowVersion — use legacy path
+        rowVer,
         tx,
       );
     } else if (anyReceived) {
@@ -472,7 +473,7 @@ export class PurchaseOrderService {
         id,
         { status: PurchaseOrderStatus.PARTIALLY_RECEIVED },
         companyId,
-        undefined, // rowVersion — use legacy path
+        rowVer,
         tx,
       );
     }

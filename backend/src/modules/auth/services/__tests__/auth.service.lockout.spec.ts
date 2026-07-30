@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UserStatus } from '@prisma/client';
 import { AuthService } from '../auth.service';
 import { AuthRepository } from '../../repositories/auth.repository';
+import { RolesRepository } from '../../../rbac/repositories/roles.repository';
 import { LoginDto } from '../../dto/login.dto';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 
@@ -69,6 +70,7 @@ describe('AuthService — Account Lockout', () => {
       providers: [
         AuthService,
         { provide: AuthRepository, useValue: mockRepository },
+        { provide: RolesRepository, useValue: { findPermissionCodesByRoleNames: jest.fn().mockResolvedValue([]) } },
         {
           provide: JwtService,
           useValue: {
@@ -81,10 +83,12 @@ describe('AuthService — Account Lockout', () => {
           useValue: {
             get: jest.fn((key: string) => {
               if (key === 'jwt.secret') return 'test-secret';
+              if (key === 'jwt.refreshSecret') return 'test-refresh-secret';
               if (key === 'jwt.expiresIn') return '15m';
               if (key === 'jwt.refreshExpiresIn') return '30d';
               if (key === 'auth.maxFailedAttempts') return 3;
               if (key === 'auth.lockDurationMs') return 900000;
+              if (key === 'auth.bcryptRounds') return 10;
               return null;
             }),
           },

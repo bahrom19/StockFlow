@@ -25,7 +25,7 @@ import { SaleCompletedEvent } from '../events/sale-completed.event';
 import { SaleRefundedEvent } from '../events/sale-refunded.event';
 
 const VALID_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {
-  DRAFT: ['PENDING', 'CANCELLED'],
+  DRAFT: ['PENDING', 'CANCELLED', 'COMPLETED'],
   PENDING: ['COMPLETED', 'CANCELLED'],
   COMPLETED: ['REFUNDED', 'PARTIALLY_REFUNDED'],
   REFUNDED: [],

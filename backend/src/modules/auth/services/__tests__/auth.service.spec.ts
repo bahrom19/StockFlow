@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from '../auth.service';
 import { AuthRepository } from '../../repositories/auth.repository';
+import { RolesRepository } from '../../../rbac/repositories/roles.repository';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 
 jest.mock('bcrypt', () => ({
@@ -15,6 +16,7 @@ jest.mock('bcrypt', () => ({
 describe('AuthService', () => {
   let service: AuthService;
   let mockAuthRepo: jest.Mocked<AuthRepository>;
+  let mockRolesRepo: jest.Mocked<RolesRepository>;
   let mockJwtService: jest.Mocked<JwtService>;
   let mockConfigService: jest.Mocked<ConfigService>;
   let mockPrisma: Record<string, any>;
@@ -35,6 +37,10 @@ describe('AuthService', () => {
       findUserRoles: jest.fn(),
     } as unknown as jest.Mocked<AuthRepository>;
 
+    mockRolesRepo = {
+      findPermissionCodesByRoleNames: jest.fn().mockResolvedValue(['products:create', 'products:read']),
+    } as unknown as jest.Mocked<RolesRepository>;
+
     mockJwtService = {
       signAsync: jest.fn(),
       verifyAsync: jest.fn(),
@@ -50,6 +56,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: AuthRepository, useValue: mockAuthRepo },
+        { provide: RolesRepository, useValue: mockRolesRepo },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: PrismaService, useValue: mockPrisma },
@@ -235,6 +242,86 @@ describe('AuthService', () => {
       await expect(
         service.refresh({ refreshToken: 'invalid' }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // ─────────────────────────────────────────────
+  // GET PROFILE
+  // ─────────────────────────────────────────────
+  describe('getProfile', () => {
+    it('should return AuthUser with roles and permissions', async () => {
+      mockAuthRepo.findUserById.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
+        isActive: true,
+        deletedAt: null,
+      } as any);
+      mockAuthRepo.findUserRoles.mockResolvedValue(['Admin']);
+
+      const result = await service.getProfile('user-1', 'comp-1');
+
+      expect(result.id).toBe('user-1');
+      expect(result.email).toBe('test@example.com');
+      expect(result.companyId).toBe('comp-1');
+      expect(result.roles).toEqual(['Admin']);
+      expect(result.permissions).toEqual(['products:create', 'products:read']);
+      expect(mockRolesRepo.findPermissionCodesByRoleNames).toHaveBeenCalledWith(
+        ['Admin'],
+        'comp-1',
+      );
+    });
+
+    it('should throw UnauthorizedException when user is not found', async () => {
+      mockAuthRepo.findUserById.mockResolvedValue(null);
+
+      await expect(
+        service.getProfile('nonexistent', 'comp-1'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException when user is inactive', async () => {
+      mockAuthRepo.findUserById.mockResolvedValue({
+        id: 'user-1',
+        isActive: false,
+        deletedAt: null,
+      } as any);
+
+      await expect(
+        service.getProfile('user-1', 'comp-1'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException when user is deleted', async () => {
+      mockAuthRepo.findUserById.mockResolvedValue({
+        id: 'user-1',
+        isActive: true,
+        deletedAt: new Date(),
+      } as any);
+
+      await expect(
+        service.getProfile('user-1', 'comp-1'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should return empty permissions when user has no roles', async () => {
+      mockAuthRepo.findUserById.mockResolvedValue({
+        id: 'user-2',
+        email: 'test2@example.com',
+        isActive: true,
+        deletedAt: null,
+      } as any);
+      mockAuthRepo.findUserRoles.mockResolvedValue([]);
+
+      const result = await service.getProfile('user-2', 'comp-1');
+
+      expect(result.roles).toEqual([]);
+      expect(result.permissions).toEqual([]);
+      // Early return — should NOT query permissions when no roles
+      expect(
+        mockRolesRepo.findPermissionCodesByRoleNames,
+      ).not.toHaveBeenCalled();
     });
   });
 
