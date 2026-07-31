@@ -4,8 +4,10 @@
     "builder": "DOCKERFILE",
     "dockerfilePath": "Dockerfile",
     "watchPatterns": [
-      "src/**/*.ts",
-      "prisma/**/*"
+      "backend/src/**/*.ts",
+      "backend/prisma/**/*",
+      "backend/railway.json",
+      "backend/Dockerfile"
     ]
   },
   "deploy": {
