@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ProductsService } from '../services/products.service';
 import { ProductsRepository } from '../repositories/products.repository';
@@ -108,6 +108,76 @@ describe('ProductsService', () => {
       currentUser,
     );
     expect(result.name).toBe('Updated');
+  });
+
+  it('should not send undefined decimal fields on partial update', async () => {
+    mockRepo.findById.mockResolvedValue(baseProduct as any);
+    mockRepo.update.mockResolvedValue({
+      ...baseProduct,
+      name: 'Renamed',
+    } as any);
+
+    // Name-only update must NOT include price/costPrice keys at all
+    await service.update('prod-1', { name: 'Renamed' } as any, currentUser);
+
+    expect(mockRepo.update).toHaveBeenCalledWith(
+      'prod-1',
+      expect.objectContaining({ name: 'Renamed' }),
+      'comp-1',
+      0,
+    );
+    const data = mockRepo.update.mock.calls[0]![1] as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(data, 'price')).toBe(false);
+    expect(
+      Object.prototype.hasOwnProperty.call(data, 'costPrice'),
+    ).toBe(false);
+  });
+
+  it('should pass only explicitly provided fields to repository', async () => {
+    mockRepo.findById.mockResolvedValue(baseProduct as any);
+    mockRepo.update.mockResolvedValue({
+      ...baseProduct,
+      price: new Prisma.Decimal(88.88),
+    } as any);
+
+    await service.update(
+      'prod-1',
+      { name: 'Renamed', price: 88.88 } as any,
+      currentUser,
+    );
+
+    const data = mockRepo.update.mock.calls[0]![1] as Record<string, unknown>;
+    expect(data).toEqual({ name: 'Renamed', price: 88.88 });
+    expect(
+      Object.prototype.hasOwnProperty.call(data, 'costPrice'),
+    ).toBe(false);
+  });
+
+  it('should reject body companyId that mismatches the JWT company', async () => {
+    await expect(
+      service.create(
+        {
+          name: 'X',
+          price: 100,
+          companyId: 'other-company',
+        } as any,
+        currentUser,
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(mockRepo.create).not.toHaveBeenCalled();
+  });
+
+  it('should accept matching body companyId', async () => {
+    mockRepo.create.mockResolvedValue(baseProduct as any);
+    await service.create(
+      {
+        name: 'X',
+        price: 100,
+        companyId: 'comp-1',
+      } as any,
+      currentUser,
+    );
+    expect(mockRepo.create).toHaveBeenCalled();
   });
 
   it('should soft delete a product', async () => {

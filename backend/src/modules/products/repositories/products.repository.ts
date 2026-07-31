@@ -15,7 +15,9 @@ export class ProductsRepository {
     value: Decimal | string | number | null | undefined,
   ): Decimal | null | undefined {
     if (value === null || value === undefined) {
-      return value ?? null;
+      // Preserve `undefined` so Prisma skips the field on partial updates
+      // instead of erroring with "Argument price must not be null".
+      return value;
     }
 
     if (value instanceof Decimal) {
@@ -30,13 +32,19 @@ export class ProductsRepository {
   >(data: T): T {
     const payload = { ...(data as Record<string, unknown>) };
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'price')) {
+    if (
+      Object.prototype.hasOwnProperty.call(payload, 'price') &&
+      payload.price !== undefined
+    ) {
       payload.price = this.toDecimal(
         payload.price as Decimal | string | number | null | undefined,
       ) as Decimal | null | undefined;
     }
 
-    if (Object.prototype.hasOwnProperty.call(payload, 'costPrice')) {
+    if (
+      Object.prototype.hasOwnProperty.call(payload, 'costPrice') &&
+      payload.costPrice !== undefined
+    ) {
       payload.costPrice = this.toDecimal(
         payload.costPrice as Decimal | string | number | null | undefined,
       ) as Decimal | null | undefined;

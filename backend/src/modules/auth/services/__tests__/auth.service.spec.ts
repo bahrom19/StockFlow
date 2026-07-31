@@ -93,6 +93,7 @@ describe('AuthService', () => {
 
       // Mock $transaction to execute callback with mock tx containing role/permission methods
       const mockTx = {
+        chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
         role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
         permission: {
           findMany: jest

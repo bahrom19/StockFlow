@@ -24,6 +24,17 @@ export class SuppliersService {
     createSupplierDto: CreateSupplierDto,
     currentUser: JwtPayload,
   ): Promise<SupplierEntity> {
+    // Tenant is always derived from the JWT. An optional body companyId
+    // is accepted for backward compatibility but must match the JWT.
+    if (
+      createSupplierDto.companyId &&
+      createSupplierDto.companyId !== currentUser.companyId
+    ) {
+      throw new BadRequestException(
+        'companyId does not match the authenticated company',
+      );
+    }
+
     const existingSupplier = await this.suppliersRepository.findAll({
       companyId: currentUser.companyId,
       search:

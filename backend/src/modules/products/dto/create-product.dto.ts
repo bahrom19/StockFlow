@@ -12,10 +12,18 @@ import {
 } from 'class-validator';
 
 export class CreateProductDto {
-  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
+  /**
+   * Optional for backward compatibility: the tenant is always derived from
+   * the authenticated JWT. If provided, it must match the JWT companyId
+   * (enforced in ProductsService.create).
+   */
+  @ApiPropertyOptional({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Company ID (optional - derived from JWT when omitted)',
+  })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  companyId!: string;
+  companyId?: string;
 
   @ApiProperty({ example: 'Wireless Mouse' })
   @IsString()
@@ -71,11 +79,12 @@ export class CreateProductDto {
   @MaxLength(100)
   brand?: string;
 
-  @ApiProperty({ example: 25 })
+  @ApiPropertyOptional({ example: 25 })
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  stockQuantity!: number;
+  stockQuantity?: number;
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()

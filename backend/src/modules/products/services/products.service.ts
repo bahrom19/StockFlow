@@ -19,6 +19,8 @@ export class ProductsService {
     createProductDto: CreateProductDto,
     currentUser: JwtPayload,
   ): Promise<ProductEntity> {
+    this.assertCompanyId(createProductDto.companyId, currentUser.companyId);
+
     const product = await this.productsRepository.create({
       name: createProductDto.name,
       description: createProductDto.description,
@@ -101,12 +103,21 @@ export class ProductsService {
       throw new NotFoundException(`Product with id ${id} not found`);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: Record<string, unknown> = { ...updateProductDto };
-    delete updateData.stockQuantity;
-    if (updateData.unit !== undefined) {
-      delete updateData.unit;
+    // Build the update payload from only the fields the client actually sent.
+    // class-transformer materializes unset DTO fields as `undefined`; passing
+    // them through would turn `price: undefined` into `price: null` inside
+    // normalizeDecimalPayload, breaking partial updates with a Prisma
+    // "Argument price must not be null" error.
+    const updateData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updateProductDto)) {
+      if (value !== undefined) {
+        updateData[key] = value;
+      }
     }
+    // stockQuantity and unit are managed via the inventory module,
+    // not through product updates.
+    delete updateData.stockQuantity;
+    delete updateData.unit;
     const rowVer = existing.rowVersion ?? 0;
     const updatedProduct = await this.productsRepository.update(
       id,
@@ -116,6 +127,22 @@ export class ProductsService {
     );
 
     return ProductMapper.toEntity(updatedProduct);
+  }
+
+  /**
+   * Ensures an optional client-supplied companyId (kept for backward
+   * compatibility with existing clients) matches the authenticated tenant.
+   * The tenant is always derived from the JWT, never from the request body.
+   */
+  private assertCompanyId(
+    bodyCompanyId: string | undefined,
+    jwtCompanyId: string,
+  ): void {
+    if (bodyCompanyId && bodyCompanyId !== jwtCompanyId) {
+      throw new BadRequestException(
+        'companyId does not match the authenticated company',
+      );
+    }
   }
 
   async softDelete(
