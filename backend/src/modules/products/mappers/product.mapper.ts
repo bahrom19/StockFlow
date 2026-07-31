@@ -17,10 +17,20 @@ export class ProductMapper {
       barcode: product.barcode,
       price: this.toMoneyValue(product.price),
       costPrice: this.toMoneyValue(product.costPrice),
-      unit: product.unitId ?? product.unit ?? null,
+      // The unit relation is included on product reads; expose the unit NAME
+      // ("kg") rather than the raw unitId UUID.
+      unit: product.unit?.name ?? null,
       category: product.category,
       brand: product.brand,
-      stockQuantity: 0,
+      // Sum across warehouses — Product has no stockQuantity column; stock is
+      // tracked in the Stock table (relation included on reads).
+      stockQuantity: Array.isArray(product.stocks)
+        ? product.stocks.reduce(
+            (sum: number, s: { quantity?: number | null }) =>
+              sum + (s?.quantity ?? 0),
+            0,
+          )
+        : 0,
       isActive: product.isActive,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,

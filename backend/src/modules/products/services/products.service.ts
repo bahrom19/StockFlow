@@ -21,6 +21,18 @@ export class ProductsService {
   ): Promise<ProductEntity> {
     this.assertCompanyId(createProductDto.companyId, currentUser.companyId);
 
+    // Resolve the unit of measure by name (find-or-create scoped to the
+    // company) — the Product.unit field is a relation to UnitOfMeasure, so a
+    // name like "kg" must be mapped to a unitId.
+    let unitId: string | undefined;
+    if (createProductDto.unit) {
+      const unit = await this.productsRepository.findOrCreateUnitByName(
+        createProductDto.unit,
+        currentUser.companyId,
+      );
+      unitId = unit.id;
+    }
+
     const product = await this.productsRepository.create({
       name: createProductDto.name,
       description: createProductDto.description,
@@ -28,6 +40,7 @@ export class ProductsService {
       barcode: createProductDto.barcode,
       price: createProductDto.price,
       costPrice: createProductDto.costPrice,
+      unit: unitId ? { connect: { id: unitId } } : undefined,
       category: createProductDto.category,
       brand: createProductDto.brand,
       isActive: createProductDto.isActive ?? true,
@@ -36,7 +49,33 @@ export class ProductsService {
       },
     });
 
-    return ProductMapper.toEntity(product);
+    // Persist the initial stock quantity when requested. The Product model has
+    // no stockQuantity column — stock is tracked in the Stock table per
+    // warehouse. Attribute it to the company's default (or first) warehouse
+    // when one exists; otherwise the quantity simply cannot be attributed yet.
+    let created: typeof product = product;
+    if (createProductDto.stockQuantity && createProductDto.stockQuantity > 0) {
+      const warehouse = await this.productsRepository.findDefaultWarehouse(
+        currentUser.companyId,
+      );
+      if (warehouse) {
+        await this.productsRepository.createInitialStock({
+          productId: product.id,
+          warehouseId: warehouse.id,
+          companyId: currentUser.companyId,
+          quantity: createProductDto.stockQuantity,
+          userId: currentUser.userId,
+        });
+        // Re-read with relations so the response reflects the persisted stock.
+        const refreshed = await this.productsRepository.findById(
+          product.id,
+          currentUser.companyId,
+        );
+        if (refreshed) created = refreshed;
+      }
+    }
+
+    return ProductMapper.toEntity(created);
   }
 
   async findAll(

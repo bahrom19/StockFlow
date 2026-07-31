@@ -44,6 +44,9 @@ describe('ProductsService', () => {
       findById: jest.fn(),
       update: jest.fn(),
       softDelete: jest.fn(),
+      findOrCreateUnitByName: jest.fn(),
+      findDefaultWarehouse: jest.fn(),
+      createInitialStock: jest.fn(),
     } as unknown as jest.Mocked<ProductsRepository>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -71,6 +74,83 @@ describe('ProductsService', () => {
     expect(mockRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ company: { connect: { id: 'comp-1' } } }),
     );
+  });
+
+  it('should persist unit by resolving the UnitOfMeasure (find-or-create)', async () => {
+    mockRepo.findOrCreateUnitByName.mockResolvedValue({ id: 'uom-1' });
+    mockRepo.create.mockResolvedValue(baseProduct as any);
+
+    await service.create(
+      { name: 'Coffee', price: 100, unit: 'kg' } as any,
+      currentUser,
+    );
+
+    expect(mockRepo.findOrCreateUnitByName).toHaveBeenCalledWith(
+      'kg',
+      'comp-1',
+    );
+    expect(mockRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ unit: { connect: { id: 'uom-1' } } }),
+    );
+  });
+
+  it('should not resolve a unit when unit is omitted', async () => {
+    mockRepo.create.mockResolvedValue(baseProduct as any);
+
+    await service.create({ name: 'Coffee', price: 100 } as any, currentUser);
+
+    expect(mockRepo.findOrCreateUnitByName).not.toHaveBeenCalled();
+    const data = mockRepo.create.mock.calls[0]![0] as Record<string, unknown>;
+    expect(data.unit).toBeUndefined();
+  });
+
+  it('should persist initial stockQuantity in the default warehouse', async () => {
+    mockRepo.create.mockResolvedValue({ ...baseProduct, id: 'prod-1' } as any);
+    mockRepo.findDefaultWarehouse.mockResolvedValue({ id: 'wh-1' });
+    mockRepo.findById.mockResolvedValue({
+      ...baseProduct,
+      id: 'prod-1',
+      unit: { name: 'kg' },
+      stocks: [{ quantity: 15 }],
+    } as any);
+
+    const result = await service.create(
+      { name: 'Rice', price: 50, stockQuantity: 15 } as any,
+      currentUser,
+    );
+
+    expect(mockRepo.findDefaultWarehouse).toHaveBeenCalledWith('comp-1');
+    expect(mockRepo.createInitialStock).toHaveBeenCalledWith({
+      productId: 'prod-1',
+      warehouseId: 'wh-1',
+      companyId: 'comp-1',
+      quantity: 15,
+      userId: 'me',
+    });
+    // Response reflects the persisted stock + unit name.
+    expect(result.stockQuantity).toBe(15);
+    expect(result.unit).toBe('kg');
+  });
+
+  it('should skip initial stock when no warehouse exists', async () => {
+    mockRepo.create.mockResolvedValue(baseProduct as any);
+    mockRepo.findDefaultWarehouse.mockResolvedValue(null);
+
+    await service.create(
+      { name: 'Rice', price: 50, stockQuantity: 15 } as any,
+      currentUser,
+    );
+
+    expect(mockRepo.createInitialStock).not.toHaveBeenCalled();
+  });
+
+  it('should not create stock when stockQuantity is zero/absent', async () => {
+    mockRepo.create.mockResolvedValue(baseProduct as any);
+
+    await service.create({ name: 'Rice', price: 50 } as any, currentUser);
+
+    expect(mockRepo.findDefaultWarehouse).not.toHaveBeenCalled();
+    expect(mockRepo.createInitialStock).not.toHaveBeenCalled();
   });
 
   it('should find all products with pagination', async () => {

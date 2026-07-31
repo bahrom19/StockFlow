@@ -8,7 +8,11 @@ import { SalesService } from './services/sales.service';
 
 @Module({
   imports: [],
-  controllers: [SalesController, CashShiftController],
+  // CashShiftController must be registered BEFORE SalesController so that the
+  // literal route `sales/cash-shifts` wins over the parameterized `sales/:id`.
+  // Otherwise `GET /sales/cash-shifts` binds id="cash-shifts" and sale.findFirst()
+  // throws a Prisma UUID error ("Inconsistent column data").
+  controllers: [CashShiftController, SalesController],
   providers: [
     SalesRepository,
     CashShiftRepository,

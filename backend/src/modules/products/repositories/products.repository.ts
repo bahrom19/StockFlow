@@ -3,9 +3,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, Product } from '@prisma/client';
+import { Prisma, Product, UnitOfMeasure, Warehouse } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
+
+/**
+ * Relations included on every product read so the mapper can report the unit
+ * NAME (not the raw unitId UUID) and the real stock quantity.
+ */
+const PRODUCT_INCLUDE = {
+  unit: { select: { name: true } },
+  stocks: { select: { quantity: true } },
+} as const;
 
 @Injectable()
 export class ProductsRepository {
@@ -56,6 +65,7 @@ export class ProductsRepository {
   async create(data: Prisma.ProductCreateInput): Promise<Product> {
     return this.prismaService.product.create({
       data: this.normalizeDecimalPayload(data) as Prisma.ProductCreateInput,
+      include: PRODUCT_INCLUDE,
     });
   }
 
@@ -71,6 +81,7 @@ export class ProductsRepository {
         deletedAt: null,
         companyId,
       },
+      include: PRODUCT_INCLUDE,
     });
   }
 
@@ -127,6 +138,7 @@ export class ProductsRepository {
     const [items, total] = await this.prismaService.$transaction([
       this.prismaService.product.findMany({
         where,
+        include: PRODUCT_INCLUDE,
         orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
         take: limit,
@@ -169,6 +181,7 @@ export class ProductsRepository {
 
       return client.product.findUnique({
         where: { id },
+        include: PRODUCT_INCLUDE,
       }) as Promise<Product>;
     }
 
@@ -180,6 +193,7 @@ export class ProductsRepository {
     return client.product.update({
       where: { id },
       data: this.normalizeDecimalPayload(data) as Prisma.ProductUpdateInput,
+      include: PRODUCT_INCLUDE,
     });
   }
 
@@ -213,6 +227,7 @@ export class ProductsRepository {
       }
       return client.product.findUnique({
         where: { id },
+        include: PRODUCT_INCLUDE,
       }) as Promise<Product>;
     }
 
@@ -226,6 +241,103 @@ export class ProductsRepository {
         deletedAt: new Date(),
         isActive: false,
       },
+      include: PRODUCT_INCLUDE,
+    });
+  }
+
+  /**
+   * Find the company's unit of measure by name or create it. UnitOfMeasure has
+   * a unique constraint on [companyId, name], so this is idempotent.
+   */
+  async findOrCreateUnitByName(
+    name: string,
+    companyId: string,
+  ): Promise<{ id: string }> {
+    const existing = await this.prismaService.unitOfMeasure.findFirst({
+      where: { companyId, name, deletedAt: null },
+      select: { id: true },
+    });
+    if (existing) return existing;
+
+    return this.prismaService.unitOfMeasure.create({
+      data: {
+        companyId,
+        name,
+        abbreviation: name.slice(0, 20),
+        decimalPlaces: 2,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Find the company's default (or first) active warehouse used to attribute
+   * the initial stock quantity requested at product creation.
+   */
+  async findDefaultWarehouse(
+    companyId: string,
+  ): Promise<Pick<Warehouse, 'id'> | null> {
+    return this.prismaService.warehouse.findFirst({
+      where: { companyId, deletedAt: null, isActive: true },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Create (or top up) the Stock row for a product+warehouse and record an
+   * OPENING_BALANCE movement. Used to persist the initial stockQuantity sent
+   * with CreateProductDto.
+   */
+  async createInitialStock(params: {
+    productId: string;
+    warehouseId: string;
+    companyId: string;
+    quantity: number;
+    userId?: string;
+  }): Promise<void> {
+    const { productId, warehouseId, companyId, quantity, userId } = params;
+
+    await this.prismaService.$transaction(async (tx) => {
+      const existing = await tx.stock.findFirst({
+        where: { productId, warehouseId, companyId },
+      });
+      const beforeQuantity = existing?.quantity ?? 0;
+
+      await tx.stock.upsert({
+        where: {
+          productId_warehouseId: { productId, warehouseId },
+        },
+        create: {
+          companyId,
+          productId,
+          warehouseId,
+          quantity,
+          reservedQuantity: 0,
+          availableQuantity: quantity,
+        },
+        update: {
+          quantity: { increment: quantity },
+          availableQuantity: { increment: quantity },
+        },
+      });
+
+      await tx.stockMovement.create({
+        data: {
+          companyId,
+          productId,
+          warehouseId,
+          type: 'OPENING_BALANCE',
+          quantity,
+          beforeQuantity,
+          afterQuantity: beforeQuantity + quantity,
+          referenceType: 'PRODUCT',
+          referenceId: productId,
+          comment: 'Initial stock on product creation',
+          createdBy: userId,
+        },
+      });
     });
   }
 }

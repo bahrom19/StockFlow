@@ -19,37 +19,13 @@ import { LedgerQueryService } from '../services/ledger-query.service';
 export class LedgerQueryController {
   constructor(private readonly ledgerQuery: LedgerQueryService) {}
 
-  @Get(':accountId')
-  @RequirePermission('finance:read')
-  @ApiOperation({
-    summary: 'Get general ledger for an account with running balance',
-  })
-  @ApiParam({ name: 'accountId' })
-  @ApiQuery({ name: 'dateFrom', required: false })
-  @ApiQuery({ name: 'dateTo', required: false })
-  @ApiQuery({ name: 'page', required: false })
-  @ApiQuery({ name: 'limit', required: false })
-  @ApiResponse({
-    status: 200,
-    description: 'Ledger lines with running balance',
-  })
-  async getLedger(
-    @Param('accountId') accountId: string,
-    @Query('dateFrom') dateFrom: string | undefined,
-    @Query('dateTo') dateTo: string | undefined,
-    @Query('page') page: string | undefined,
-    @Query('limit') limit: string | undefined,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.ledgerQuery.getLedger({
-      companyId: user.companyId,
-      accountId,
-      dateFrom: dateFrom ? new Date(dateFrom) : undefined,
-      dateTo: dateTo ? new Date(dateTo) : undefined,
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 20,
-    });
-  }
+  /**
+   * NOTE: literal routes (`balances/account`, `trial-balance`) MUST be declared
+   * BEFORE the parameterized `:accountId` route. NestJS matches routes in
+   * declaration order — otherwise `GET /finance/ledger/trial-balance` binds
+   * accountId="trial-balance" and journalLine.findMany() throws a Prisma UUID
+   * error ("Inconsistent column data").
+   */
 
   @Get('balances/account')
   @RequirePermission('finance:read')
@@ -98,6 +74,38 @@ export class LedgerQueryController {
       companyId: user.companyId,
       asOfDate: asOfDate ? new Date(asOfDate) : undefined,
       accountType,
+    });
+  }
+
+  @Get(':accountId')
+  @RequirePermission('finance:read')
+  @ApiOperation({
+    summary: 'Get general ledger for an account with running balance',
+  })
+  @ApiParam({ name: 'accountId' })
+  @ApiQuery({ name: 'dateFrom', required: false })
+  @ApiQuery({ name: 'dateTo', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiResponse({
+    status: 200,
+    description: 'Ledger lines with running balance',
+  })
+  async getLedger(
+    @Param('accountId') accountId: string,
+    @Query('dateFrom') dateFrom: string | undefined,
+    @Query('dateTo') dateTo: string | undefined,
+    @Query('page') page: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.ledgerQuery.getLedger({
+      companyId: user.companyId,
+      accountId,
+      dateFrom: dateFrom ? new Date(dateFrom) : undefined,
+      dateTo: dateTo ? new Date(dateTo) : undefined,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
     });
   }
 }
