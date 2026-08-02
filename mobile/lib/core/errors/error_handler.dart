@@ -34,7 +34,7 @@ class ErrorHandler {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.receiveTimeout:
       case DioExceptionType.sendTimeout:
-        return NetworkFailure(message: 'Connection timed out. Please check your internet.');
+        return NetworkFailure(message: 'Connection timeout. Please check your internet.');
 
       case DioExceptionType.connectionError:
         return NetworkFailure(message: 'No internet connection. Please check your network.');

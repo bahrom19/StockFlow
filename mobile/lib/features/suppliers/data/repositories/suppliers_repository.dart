@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/api/api_client.dart';
+import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
@@ -21,9 +22,10 @@ class SuppliersFailure<T> extends SuppliersResult<T> {
 
 class SuppliersRepository {
   final ApiClient _api;
+  final Ref _ref;
   final ErrorHandler _errorHandler = ErrorHandler(AppLogger('SuppliersRepo'));
 
-  SuppliersRepository(this._api);
+  SuppliersRepository(this._api, this._ref);
 
   Future<SuppliersResult<SupplierListResponse>> list({
     int page = 1,
@@ -64,9 +66,16 @@ class SuppliersRepository {
 
   Future<SuppliersResult<Supplier>> create(CreateSupplierRequest request) async {
     try {
+      // The deployed CreateSupplierDto requires companyId in the request body.
+      final companyId = _ref.read(currentUserProvider)?.companyId;
+      final payload = <String, dynamic>{
+        ...request.toJson(),
+        if (companyId != null && companyId.isNotEmpty)
+          'companyId': companyId,
+      };
       final response = await _api.post<Map<String, dynamic>>(
         '/suppliers',
-        data: request.toJson(),
+        data: payload,
       );
       return SuppliersSuccess(Supplier.fromJson(response.data!));
     } catch (e) {
@@ -99,5 +108,5 @@ class SuppliersRepository {
 
 final suppliersRepositoryProvider = Provider<SuppliersRepository>((ref) {
   final api = ref.read(apiClientProvider);
-  return SuppliersRepository(api);
+  return SuppliersRepository(api, ref);
 });

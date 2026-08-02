@@ -123,8 +123,7 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
           onRetry: () =>
               ref.read(productsListProvider.notifier).loadProducts(),
         ),
-      ProductsLoaded(:final products, :final hasMore, :final isRefreshing,
-          :final isLoadingMore) =>
+      ProductsLoaded(:final products, :final isLoadingMore) =>
         RefreshIndicator(
           onRefresh: () => ref.read(productsListProvider.notifier).refresh(),
           child: ListView.builder(

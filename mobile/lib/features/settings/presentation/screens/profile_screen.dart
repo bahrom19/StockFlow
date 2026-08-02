@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
+import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 
@@ -41,7 +42,15 @@ class ProfileScreen extends ConsumerWidget {
           Card(
             child: Column(
               children: [
-                _ProfileTile(icon: Icons.badge_outlined, label: 'Role', value: Formatters.status(user?.role)),
+                _ProfileTile(
+                  icon: Icons.badge_outlined,
+                  label: 'Role',
+                  value: Formatters.status(
+                    user?.roles.isNotEmpty ?? false
+                        ? user!.roles.first
+                        : null,
+                  ),
+                ),
                 const Divider(height: 1, indent: 56),
                 _ProfileTile(icon: Icons.business_outlined, label: 'Company', value: 'StockFlow Enterprise'),
                 const Divider(height: 1, indent: 56),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
+import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/constants/app_constants.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';

@@ -10,7 +10,9 @@ class ApiEndpoints {
   static const String register = '/auth/register';
   static const String refreshToken = '/auth/refresh';
   static const String logout = '/auth/logout';
-  static const String me = '/auth/me';
+  // NOTE: Deployed backend (Railway) has NO GET /auth/me endpoint.
+  // Session restore uses POST /auth/refresh, which returns the user profile.
+  // See AuthStateNotifier.checkAuthStatus().
 
   // ──────────────────────────────────
   // Dashboard
@@ -81,5 +83,4 @@ class ApiEndpoints {
   static const String billingPlans = '/billing/plans';
   static const String billingSubscription = '/billing/subscription';
   static const String billingInvoices = '/billing/invoices';
-  static const String billingPortal = '/billing/portal';
 }

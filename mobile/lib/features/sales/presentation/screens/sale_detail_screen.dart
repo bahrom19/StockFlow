@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
 import 'package:stockflow/features/sales/presentation/widgets/sales_widgets.dart';
@@ -267,7 +266,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                         title: Text(r.receiptNumber),
                         subtitle: Text(r.status),
                         trailing: TextButton(
-                          onPressed: () => context.push('/sales/receipt/${r.id}'),
+                          onPressed: () => _showReceipt(context, r),
                           child: const Text('View'),
                         ),
                       ),
@@ -307,6 +306,48 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                 ?.copyWith(
                     fontWeight: bold ? FontWeight.bold : null, color: color),
           ),
+        ],
+      ),
+    );
+  }
+
+  void _showReceipt(BuildContext context, Receipt receipt) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(receipt.receiptNumber),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _dialogRow('Status', receipt.status),
+            _dialogRow('Printed', receipt.printed ? 'Yes' : 'No'),
+            _dialogRow('Emailed', receipt.emailed ? 'Yes' : 'No'),
+            _dialogRow('Created', _formatDate(receipt.createdAt)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dialogRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          Text(value,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
         ],
       ),
     );

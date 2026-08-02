@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/api/api_endpoints.dart';
+import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
@@ -72,9 +73,16 @@ class ProductsRepository {
   Future<ProductsResult<Product>> create(CreateProductRequest request) async {
     try {
       final client = _ref.read(apiClientProvider);
+      // The deployed CreateProductDto requires companyId in the request body.
+      final companyId = _ref.read(currentUserProvider)?.companyId;
+      final payload = <String, dynamic>{
+        ...request.toJson(),
+        if (companyId != null && companyId.isNotEmpty)
+          'companyId': companyId,
+      };
       final response = await client.post(
         ApiEndpoints.products,
-        data: request.toJson(),
+        data: payload,
       );
       final data = response.data as Map<String, dynamic>;
       return ProductsSuccess(Product.fromJson(data));

@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stockflow/features/purchasing/data/repositories/purchasing_repository.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
+import 'package:stockflow/features/suppliers/data/repositories/suppliers_repository.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 
 void main() {
@@ -135,7 +139,10 @@ void main() {
       final json = req.toJson();
       expect(json['supplierId'], 's-1');
       expect((json['items'] as List).length, 1);
-      expect((json['items'] as List)[0]['quantity'], 10);
+      // Freezed toJson keeps nested typed objects; jsonEncode resolves them
+      // to plain maps — this is the wire structure Dio sends to the backend.
+      final wire = jsonDecode(jsonEncode(json)) as Map<String, dynamic>;
+      expect((wire['items'] as List)[0]['quantity'], 10);
     });
   });
 

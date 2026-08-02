@@ -3,7 +3,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/navigation/app_router.dart';
 import 'core/theme/app_theme.dart';
-import 'core/theme/design_tokens.dart';
 
 /// StockFlow Enterprise Application Widget
 class StockFlowApp extends ConsumerWidget {

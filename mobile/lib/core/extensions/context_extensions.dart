@@ -25,12 +25,12 @@ extension ContextExtensions on BuildContext {
   bool get isKeyboardVisible => mediaQuery.viewInsets.bottom > 0;
 
   // ──────────────────────────────────
-  // Navigation
+  // Navigation (delegated to GoRouter to avoid extension ambiguity)
   // ──────────────────────────────────
-  void pop<T extends Object?>([T? result]) => context.pop<T>(result);
-  void go(String location) => context.go(location);
-  void push(String location) => context.push(location);
-  void replace(String location) => context.replace(location);
+  void pop<T extends Object?>([T? result]) => GoRouter.of(this).pop<T>(result);
+  void go(String location) => GoRouter.of(this).go(location);
+  void push(String location) => GoRouter.of(this).push(location);
+  void replace(String location) => GoRouter.of(this).replace(location);
 
   // ──────────────────────────────────
   // Safe Area

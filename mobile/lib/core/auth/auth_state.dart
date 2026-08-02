@@ -1,6 +1,5 @@
 import 'dart:async' show unawaited;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
@@ -58,13 +57,9 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
 
     state = const AuthLoading();
     try {
-      final repo = _ref.read(authRepositoryProvider);
-      final result = await repo.getProfile();
-      if (result is ApiSuccess<CurrentUser>) {
-        state = AuthAuthenticated(result.data);
-      } else {
-        await _tryRestoreFromRefresh(storage);
-      }
+      // Deployed backend has no GET /auth/me — restore the session via the
+      // refresh flow, which returns the user profile with new tokens.
+      await _tryRestoreFromRefresh(storage);
     } catch (e) {
       _logger.error('Auto-login failed', e);
       await storage.clearTokens();
@@ -107,7 +102,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       if (result is ApiSuccess<LoginResponse>) {
         state = AuthAuthenticated(result.data.user);
       } else {
-        final message = result is ApiFailure
+        final message = result is ApiFailure<LoginResponse>
             ? result.error.message
             : 'Login failed';
         state = AuthError(message);

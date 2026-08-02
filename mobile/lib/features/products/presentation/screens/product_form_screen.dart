@@ -110,14 +110,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           return;
         }
         final result = await repo.update(widget.product!.id, payload);
-        if (result is ProductsSuccess && mounted) {
+        if (result is ProductsSuccess<Product> && mounted) {
           AppSnackbar.success(context, 'Product updated');
           ref.read(productsListProvider.notifier).refresh();
           Navigator.of(context).pop();
         } else if (mounted) {
           AppSnackbar.error(
             context,
-            result is ProductsFail ? result.error.message : 'Update failed',
+            result is ProductsFail<Product>
+                ? result.error.message
+                : 'Update failed',
           );
         }
       } else {
@@ -140,14 +142,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           isActive: _isActive,
         );
         final result = await repo.create(request);
-        if (result is ProductsSuccess && mounted) {
+        if (result is ProductsSuccess<Product> && mounted) {
           AppSnackbar.success(context, 'Product created');
           ref.read(productsListProvider.notifier).refresh();
           Navigator.of(context).pop();
         } else if (mounted) {
           AppSnackbar.error(
             context,
-            result is ProductsFail ? result.error.message : 'Create failed',
+            result is ProductsFail<Product>
+                ? result.error.message
+                : 'Create failed',
           );
         }
       }

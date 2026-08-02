@@ -48,6 +48,35 @@ class AuthRepository {
     }
   }
 
+  Future<ApiResult<LoginResponse>> register({
+    required String email,
+    required String password,
+    required String companyName,
+    String? firstName,
+    String? lastName,
+    String? phone,
+  }) async {
+    try {
+      final client = _ref.read(apiClientProvider);
+      final response = await client.post(
+        ApiEndpoints.register,
+        data: {
+          'email': email,
+          'password': password,
+          'companyName': companyName,
+          if (firstName != null && firstName.isNotEmpty) 'firstName': firstName,
+          if (lastName != null && lastName.isNotEmpty) 'lastName': lastName,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+        },
+      );
+      final data = response.data as Map<String, dynamic>;
+      return ApiSuccess(LoginResponse.fromJson(data));
+    } catch (e) {
+      _logger.error('Register failed', e);
+      return ApiFailure(_errorHandler.handle(e));
+    }
+  }
+
   Future<ApiResult<RefreshResponse>> refreshToken({
     required String refreshTokenValue,
   }) async {
@@ -65,17 +94,9 @@ class AuthRepository {
     }
   }
 
-  Future<ApiResult<CurrentUser>> getProfile() async {
-    try {
-      final client = _ref.read(apiClientProvider);
-      final response = await client.get(ApiEndpoints.me);
-      final data = response.data as Map<String, dynamic>;
-      return ApiSuccess(CurrentUser.fromJson(data));
-    } catch (e) {
-      _logger.error('Get profile failed', e);
-      return ApiFailure(_errorHandler.handle(e));
-    }
-  }
+  // NOTE: The deployed backend (Railway) has no GET /auth/me endpoint.
+  // Session restore is handled by AuthStateNotifier.checkAuthStatus, which
+  // calls refreshToken() and uses the user returned in the refresh response.
 
   Future<ApiResult<void>> logout({String? refreshTokenValue}) async {
     try {

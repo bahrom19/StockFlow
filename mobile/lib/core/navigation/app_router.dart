@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../../features/inventory/presentation/screens/inventory_list_screen.dart';
+import '../../features/inventory/presentation/screens/movements_screen.dart';
 import '../../features/products/presentation/screens/product_detail_screen.dart';
 import '../../features/products/presentation/screens/product_form_screen.dart';
 import '../../features/products/presentation/screens/products_list_screen.dart';
@@ -65,10 +67,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: RouteNames.splash,
     debugLogDiagnostics: true,
     redirect: (context, state) {
-      final isAuthenticated = authState.maybeWhen(
-        authenticated: (_) => true,
-        orElse: () => false,
-      );
+      final isAuthenticated = authState is AuthAuthenticated;
       final isAuthRoute = state.matchedLocation == RouteNames.login;
       final isSplashRoute = state.matchedLocation == RouteNames.splash;
 
@@ -119,6 +118,18 @@ final routerProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => SaleDetailScreen(
                   saleId: state.pathParameters['id'] ?? '',
                 ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: RouteNames.inventory,
+            name: 'inventory',
+            builder: (context, state) => const InventoryListScreen(),
+            routes: [
+              GoRoute(
+                path: 'movements',
+                name: 'movements',
+                builder: (context, state) => const MovementsScreen(),
               ),
             ],
           ),
@@ -246,7 +257,7 @@ class _MaintenanceScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.construction, size: 80, color: theme.colorScheme.warning),
+              Icon(Icons.construction, size: 80, color: theme.colorScheme.tertiary),
               const SizedBox(height: 16),
               Text('Under Maintenance', style: theme.textTheme.headlineSmall),
               const SizedBox(height: 8),

@@ -34,6 +34,6 @@ class ApiConstants {
   // ──────────────────────────────────
   // API Version
   // ──────────────────────────────────
-  static const String apiVersion = 'v1';
-  static const String apiPrefix = '/api/$apiVersion';
+  // Production backend prefix is /api (no version segment).
+  static const String apiPrefix = '/api';
 }

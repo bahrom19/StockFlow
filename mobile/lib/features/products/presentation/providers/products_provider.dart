@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/features/products/data/repositories/products_repository.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 
@@ -60,7 +59,7 @@ class ProductsListNotifier extends StateNotifier<ProductsState> {
       search: _currentSearch.isNotEmpty ? _currentSearch : null,
     );
 
-    if (result is ProductsFail) {
+    if (result is ProductsFail<ProductListResponse>) {
       state = ProductsError(
         result.error.message,
         failure: result.error,
@@ -112,7 +111,9 @@ class ProductDetailNotifier extends StateNotifier<ProductsState> {
     state = result is ProductsSuccess<Product>
         ? ProductDetailLoaded(result.data)
         : ProductDetailError(
-            result is ProductsFail ? result.error.message : 'Failed to load');
+            result is ProductsFail<Product>
+                ? result.error.message
+                : 'Failed to load');
   }
 
   Future<bool> deleteProduct(String id) async {

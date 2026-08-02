@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stockflow/core/errors/failures.dart';
+import 'package:stockflow/features/products/data/repositories/products_repository.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 
 void main() {

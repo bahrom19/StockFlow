@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
@@ -214,9 +215,13 @@ void main() {
       expect(json['warehouseId'], 'wh-1');
       expect(json['items'], isA<List>());
       expect((json['items'] as List).length, 1);
-      expect((json['items'] as List)[0]['productId'], 'prod-1');
-      expect(json['payments'], isA<List>());
-      expect((json['payments'] as List).length, 1);
+      // Freezed toJson keeps nested typed objects; jsonEncode resolves them
+      // to plain maps — this is the wire structure Dio sends to the backend.
+      final wire = jsonDecode(jsonEncode(json)) as Map<String, dynamic>;
+      expect((wire['items'] as List)[0]['productId'], 'prod-1');
+      expect(wire['payments'], isA<List>());
+      expect((wire['payments'] as List).length, 1);
+      expect((wire['payments'] as List)[0]['method'], 'CASH');
     });
   });
 

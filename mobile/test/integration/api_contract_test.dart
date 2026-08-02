@@ -69,20 +69,27 @@ void main() {
       });
     });
 
-    group('GET /auth/me', () {
-      test('response contains CurrentUser fields', () {
+    group('Session restore (deployed backend has no GET /auth/me)', () {
+      test('POST /auth/refresh returns user alongside new tokens', () {
         final response = {
-          'id': 'uuid',
-          'email': 'test@test.com',
-          'firstName': 'John',
-          'lastName': 'Doe',
-          'companyId': 'uuid',
-          'roles': ['admin'],
-          'permissions': ['sales:create', 'sales:read'],
+          'accessToken': 'new-jwt',
+          'refreshToken': 'new-rt',
+          'user': {
+            'id': 'uuid',
+            'email': 'test@test.com',
+            'firstName': 'John',
+            'lastName': 'Doe',
+            'companyId': 'uuid',
+            'roles': ['admin'],
+            'permissions': ['sales:create', 'sales:read'],
+          },
         };
-        expect(response['id'], isA<String>());
-        expect(response['companyId'], isA<String>());
-        expect(response['roles'], isA<List>());
+        expect(response.containsKey('accessToken'), true);
+        expect(response['user'], isA<Map>());
+        final user = response['user'] as Map;
+        expect(user['id'], isA<String>());
+        expect(user['companyId'], isA<String>());
+        expect(user['roles'], isA<List>());
       });
     });
   });
@@ -432,7 +439,8 @@ void main() {
       expect(statusCode >= 500, true);
     });
     test('timeout maps to NetworkFailure', () {
-      const error = 'Connection timed out';
+      // Matches ErrorHandler._handleDioError message contract.
+      const error = 'Connection timeout';
       expect(error, contains('timeout'));
     });
     test('connection error maps to NetworkFailure', () {

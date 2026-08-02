@@ -11,17 +11,17 @@ class AppLightTheme {
     final colorScheme = ColorScheme.light(
       primary: DesignTokens.primary,
       onPrimary: DesignTokens.white,
-      primaryContainer: DesignTokens.primaryLight.withValues(alpha: 0.15),
+      primaryContainer: DesignTokens.primaryLight.withOpacity(0.15),
       onPrimaryContainer: DesignTokens.primaryDark,
       secondary: DesignTokens.secondary,
       onSecondary: DesignTokens.white,
-      secondaryContainer: DesignTokens.secondary.withValues(alpha: 0.15),
+      secondaryContainer: DesignTokens.secondary.withOpacity(0.15),
       onSecondaryContainer: DesignTokens.secondary,
       tertiary: DesignTokens.accent,
       onTertiary: DesignTokens.black,
       error: DesignTokens.error,
       onError: DesignTokens.white,
-      errorContainer: DesignTokens.error.withValues(alpha: 0.15),
+      errorContainer: DesignTokens.error.withOpacity(0.15),
       onErrorContainer: DesignTokens.error,
       surface: DesignTokens.surface,
       onSurface: DesignTokens.grey900,
@@ -32,7 +32,6 @@ class AppLightTheme {
       surfaceContainerLow: DesignTokens.white,
       surfaceContainer: DesignTokens.grey50,
       surfaceContainerHigh: DesignTokens.grey100,
-      surfaceContainerHighest: DesignTokens.grey200,
     );
 
     return ThemeData(

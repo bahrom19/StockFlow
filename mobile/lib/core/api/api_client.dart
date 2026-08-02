@@ -2,33 +2,34 @@ import 'dart:async' show Completer;
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
-import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/config/environment.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
 
 /// StockFlow Enterprise API Client
 class ApiClient {
-  final Dio _dio;
+  late final Dio _dio;
   final AppLogger _logger = AppLogger('ApiClient');
   final TokenStorage _tokenStorage;
   final _RefreshTokenQueue _refreshQueue = _RefreshTokenQueue();
 
   static const int _maxRetries = 3;
 
-  ApiClient({required TokenStorage tokenStorage})
+  /// [dio] is optional and allows tests to inject a mocked instance.
+  ApiClient({required TokenStorage tokenStorage, Dio? dio})
       : _tokenStorage = tokenStorage {
-    _dio = Dio(
-      BaseOptions(
-        baseUrl: Environment.apiBaseUrl,
-        connectTimeout: Duration(milliseconds: Environment.apiTimeout),
-        receiveTimeout: Duration(milliseconds: Environment.apiTimeout),
-        sendTimeout: Duration(milliseconds: Environment.apiTimeout),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ),
-    );
+    _dio = dio ??
+        Dio(
+          BaseOptions(
+            baseUrl: Environment.apiBaseUrl,
+            connectTimeout: Duration(milliseconds: Environment.apiTimeout),
+            receiveTimeout: Duration(milliseconds: Environment.apiTimeout),
+            sendTimeout: Duration(milliseconds: Environment.apiTimeout),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          ),
+        );
 
     _dio.interceptors.addAll([
       _AuthInterceptor(this, tokenStorage, _refreshQueue),
@@ -113,7 +114,6 @@ class ApiClient {
 // ──────────────────────────────────
 class _RefreshTokenQueue {
   bool _isRefreshing = false;
-  String? _lastToken;
   final List<_PendingRequest> _pending = [];
 
   bool get isRefreshing => _isRefreshing;
@@ -128,7 +128,7 @@ class _RefreshTokenQueue {
         final refreshTokenValue = await tokenStorage.getRefreshToken();
         if (refreshTokenValue == null || refreshTokenValue.isEmpty) {
           _isRefreshing = false;
-          _rejectAll(const Exception('No refresh token available'));
+          _rejectAll(Exception('No refresh token available'));
           return null;
         }
 
@@ -147,10 +147,11 @@ class _RefreshTokenQueue {
 
         await tokenStorage.saveTokens(
           accessToken: newAccessToken,
-          refreshToken: newRefreshToken.isNotEmpty ? newRefreshToken : null,
+          refreshToken: newRefreshToken != null && newRefreshToken.isNotEmpty
+              ? newRefreshToken
+              : null,
         );
 
-        _lastToken = newAccessToken;
         _isRefreshing = false;
         _resolveAll(newAccessToken);
         return newAccessToken;

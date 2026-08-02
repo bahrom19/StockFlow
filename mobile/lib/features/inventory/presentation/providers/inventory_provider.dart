@@ -137,11 +137,11 @@ class AdjustmentNotifier extends StateNotifier<AsyncValue<StockMovement?>> {
     state = const AsyncLoading();
     final repo = _ref.read(inventoryRepositoryProvider);
     final result = await repo.adjustStock(dto);
-    if (result is InvSuccess) {
+    if (result is InvSuccess<StockMovement>) {
       state = AsyncData(result.data);
       return result.data;
     }
-    final error = (result as InvFailure).error;
+    final error = (result as InvFailure<StockMovement>).error;
     state = AsyncError(error.message, StackTrace.current);
     return null;
   }
@@ -157,11 +157,11 @@ class TransferNotifier extends StateNotifier<AsyncValue<List<StockMovement>?>> {
     state = const AsyncLoading();
     final repo = _ref.read(inventoryRepositoryProvider);
     final result = await repo.transferStock(dto);
-    if (result is InvSuccess) {
+    if (result is InvSuccess<List<StockMovement>>) {
       state = AsyncData(result.data);
       return result.data;
     }
-    final error = (result as InvFailure).error;
+    final error = (result as InvFailure<List<StockMovement>>).error;
     state = AsyncError(error.message, StackTrace.current);
     return null;
   }

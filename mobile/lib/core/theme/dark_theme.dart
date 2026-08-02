@@ -11,17 +11,17 @@ class AppDarkTheme {
     final colorScheme = ColorScheme.dark(
       primary: DesignTokens.primaryLight,
       onPrimary: DesignTokens.white,
-      primaryContainer: DesignTokens.primaryDark.withValues(alpha: 0.4),
+      primaryContainer: DesignTokens.primaryDark.withOpacity(0.4),
       onPrimaryContainer: DesignTokens.primaryLight,
       secondary: DesignTokens.secondary,
       onSecondary: DesignTokens.white,
-      secondaryContainer: DesignTokens.secondary.withValues(alpha: 0.2),
+      secondaryContainer: DesignTokens.secondary.withOpacity(0.2),
       onSecondaryContainer: DesignTokens.secondary,
       tertiary: DesignTokens.accent,
       onTertiary: DesignTokens.black,
       error: DesignTokens.error,
       onError: DesignTokens.white,
-      errorContainer: DesignTokens.error.withValues(alpha: 0.2),
+      errorContainer: DesignTokens.error.withOpacity(0.2),
       onErrorContainer: DesignTokens.error,
       surface: DesignTokens.darkSurface,
       onSurface: DesignTokens.darkText,
@@ -32,7 +32,6 @@ class AppDarkTheme {
       surfaceContainerLow: DesignTokens.darkBackground,
       surfaceContainer: DesignTokens.darkSurface,
       surfaceContainerHigh: DesignTokens.darkSurfaceHigh,
-      surfaceContainerHighest: DesignTokens.grey700,
       inverseSurface: DesignTokens.grey100,
     );
 

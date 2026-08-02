@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stockflow/core/errors/failures.dart';
+import 'package:stockflow/features/inventory/data/repositories/inventory_repository.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 
 void main() {
@@ -254,7 +256,7 @@ void main() {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       );
-      expect(const InvSuccess(w).data, w);
+      expect(InvSuccess(w).data, w);
     });
 
     test('InvFailure stores error', () {

@@ -21,7 +21,7 @@ class OfflineStateWidget extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.wifi_off, size: 80, color: theme.colorScheme.error.withValues(alpha: 0.7)),
+            Icon(Icons.wifi_off, size: 80, color: theme.colorScheme.error.withOpacity(0.7)),
             const SizedBox(height: AppSpacing.lg),
             Text(
               message ?? 'No Internet Connection',

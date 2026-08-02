@@ -6,18 +6,20 @@ part of 'auth_models.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$$LoginRequestFromJson(Map<String, dynamic> json) => __LoginRequest(
+_$LoginRequestImpl _$$LoginRequestImplFromJson(Map<String, dynamic> json) =>
+    _$LoginRequestImpl(
       email: json['email'] as String,
       password: json['password'] as String,
     );
 
-Map<String, dynamic> _$$LoginRequestToJson(__LoginRequest instance) =>
+Map<String, dynamic> _$$LoginRequestImplToJson(_$LoginRequestImpl instance) =>
     <String, dynamic>{
       'email': instance.email,
       'password': instance.password,
     };
 
-_$$LoginResponseFromJson(Map<String, dynamic> json) => __LoginResponse(
+_$LoginResponseImpl _$$LoginResponseImplFromJson(Map<String, dynamic> json) =>
+    _$LoginResponseImpl(
       accessToken: json['accessToken'] as String,
       refreshToken: json['refreshToken'] as String,
       expiresIn: json['expiresIn'] as String?,
@@ -25,7 +27,7 @@ _$$LoginResponseFromJson(Map<String, dynamic> json) => __LoginResponse(
       user: CurrentUser.fromJson(json['user'] as Map<String, dynamic>),
     );
 
-Map<String, dynamic> _$$LoginResponseToJson(__LoginResponse instance) =>
+Map<String, dynamic> _$$LoginResponseImplToJson(_$LoginResponseImpl instance) =>
     <String, dynamic>{
       'accessToken': instance.accessToken,
       'refreshToken': instance.refreshToken,
@@ -34,16 +36,20 @@ Map<String, dynamic> _$$LoginResponseToJson(__LoginResponse instance) =>
       'user': instance.user,
     };
 
-_$$RefreshRequestFromJson(Map<String, dynamic> json) => __RefreshRequest(
+_$RefreshRequestImpl _$$RefreshRequestImplFromJson(Map<String, dynamic> json) =>
+    _$RefreshRequestImpl(
       refreshToken: json['refreshToken'] as String,
     );
 
-Map<String, dynamic> _$$RefreshRequestToJson(__RefreshRequest instance) =>
+Map<String, dynamic> _$$RefreshRequestImplToJson(
+        _$RefreshRequestImpl instance) =>
     <String, dynamic>{
       'refreshToken': instance.refreshToken,
     };
 
-_$$RefreshResponseFromJson(Map<String, dynamic> json) => __RefreshResponse(
+_$RefreshResponseImpl _$$RefreshResponseImplFromJson(
+        Map<String, dynamic> json) =>
+    _$RefreshResponseImpl(
       accessToken: json['accessToken'] as String,
       refreshToken: json['refreshToken'] as String,
       expiresIn: json['expiresIn'] as String?,
@@ -51,7 +57,8 @@ _$$RefreshResponseFromJson(Map<String, dynamic> json) => __RefreshResponse(
       user: CurrentUser.fromJson(json['user'] as Map<String, dynamic>),
     );
 
-Map<String, dynamic> _$$RefreshResponseToJson(__RefreshResponse instance) =>
+Map<String, dynamic> _$$RefreshResponseImplToJson(
+        _$RefreshResponseImpl instance) =>
     <String, dynamic>{
       'accessToken': instance.accessToken,
       'refreshToken': instance.refreshToken,
@@ -60,24 +67,24 @@ Map<String, dynamic> _$$RefreshResponseToJson(__RefreshResponse instance) =>
       'user': instance.user,
     };
 
-_$$CurrentUserFromJson(Map<String, dynamic> json) => __CurrentUser(
+_$CurrentUserImpl _$$CurrentUserImplFromJson(Map<String, dynamic> json) =>
+    _$CurrentUserImpl(
       id: json['id'] as String,
       email: json['email'] as String,
       firstName: json['firstName'] as String?,
       lastName: json['lastName'] as String?,
       companyId: json['companyId'] as String,
-      roles: (json['roles'] as List<dynamic>?)
-              ?.map((e) => e as String)
-              .toList() ??
-          <String>[],
+      roles:
+          (json['roles'] as List<dynamic>?)?.map((e) => e as String).toList() ??
+              const <String>[],
       permissions: (json['permissions'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
-          <String>[],
+          const <String>[],
       phone: json['phone'] as String?,
     );
 
-Map<String, dynamic> _$$CurrentUserToJson(__CurrentUser instance) =>
+Map<String, dynamic> _$$CurrentUserImplToJson(_$CurrentUserImpl instance) =>
     <String, dynamic>{
       'id': instance.id,
       'email': instance.email,

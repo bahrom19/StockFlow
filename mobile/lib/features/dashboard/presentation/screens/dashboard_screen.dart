@@ -37,6 +37,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final theme = Theme.of(context);
     final state = ref.watch(dashboardProvider);
     final user = ref.watch(currentUserProvider);
 
@@ -130,7 +131,6 @@ class _DashboardContentView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isDesktop = MediaQuery.of(context).size.width >= AppSpacing.breakpointDesktop;
 
     return ListView(

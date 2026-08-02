@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,9 +12,9 @@ import 'core/storage/preferences_storage.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
+  // Load environment variables (prod env for release builds)
   await Environment.init(
-    fileName: 'env/.env.dev', // Change to .env.prod for production
+    fileName: kReleaseMode ? 'env/.env.prod' : 'env/.env.dev',
   );
 
   // Initialize services

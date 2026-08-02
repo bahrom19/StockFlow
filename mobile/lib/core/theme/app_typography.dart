@@ -10,7 +10,6 @@ class AppTypography {
   // Font Families
   // ──────────────────────────────────
   static const String _primaryFont = 'Roboto';
-  static const String _monoFont = 'RobotoMono';
 
   // ──────────────────────────────────
   // Light Theme Text Theme

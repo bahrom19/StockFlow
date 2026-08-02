@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import '../../../core/auth/auth_state.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/design_tokens.dart';
+import '../../../../core/auth/auth_state.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/design_tokens.dart';
 
 /// StockFlow Splash Screen
 class SplashScreen extends ConsumerStatefulWidget {
@@ -46,8 +46,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     await Future.delayed(const Duration(seconds: 2));
 
-    if (mounted) {
-      ref.read(authStateProvider.notifier).checkAuthStatus();
+    if (!mounted) return;
+
+    // Restore session (validates JWT, falls back to refresh token).
+    await ref.read(authStateProvider.notifier).checkAuthStatus();
+
+    if (!mounted) return;
+
+    final authState = ref.read(authStateProvider);
+    if (authState is AuthAuthenticated) {
+      context.go('/dashboard');
+    } else {
       context.go('/login');
     }
   }
@@ -78,7 +87,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
                     boxShadow: [
                       BoxShadow(
-                        color: DesignTokens.primary.withValues(alpha: 0.3),
+                        color: DesignTokens.primary.withOpacity(0.3),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),

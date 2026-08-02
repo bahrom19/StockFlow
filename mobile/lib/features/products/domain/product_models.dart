@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:stockflow/core/errors/failures.dart';
 
 part 'product_models.freezed.dart';
 part 'product_models.g.dart';

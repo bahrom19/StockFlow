@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 /// StockFlow color utilities for consistent status/state colors.
 class StockFlowColors {
   StockFlowColors._();

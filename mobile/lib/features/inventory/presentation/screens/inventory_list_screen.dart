@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
-import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/widgets/empty_state_widget.dart';
 import 'package:stockflow/core/widgets/error_state_widget.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
@@ -107,11 +106,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
           onRetry: () =>
               ref.read(inventoryListProvider.notifier).loadInventory(),
         ),
-      InventoryLoaded(
-        :final items,
-        :final warehouses,
-        :final isRefreshing,
-      ) =>
+      InventoryLoaded(:final items) =>
         RefreshIndicator(
           onRefresh: () =>
               ref.read(inventoryListProvider.notifier).refresh(),

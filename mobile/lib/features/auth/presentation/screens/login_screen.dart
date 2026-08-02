@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/auth/auth_state.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/design_tokens.dart';
-import '../../../core/utils/validators.dart';
-import '../../../core/widgets/app_loading.dart';
-import '../../../core/widgets/app_snackbar.dart';
+import '../../../../core/auth/auth_state.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/design_tokens.dart';
+import '../../../../core/utils/validators.dart';
+import '../../../../core/widgets/app_loading.dart';
+import '../../../../core/widgets/app_snackbar.dart';
 
 /// StockFlow Login Screen
 class LoginScreen extends ConsumerStatefulWidget {
@@ -42,10 +42,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (mounted) {
       setState(() => _isLoading = false);
       final authState = ref.read(authStateProvider);
-      authState.maybeWhen(
-        error: (message) => AppSnackbar.error(context, message),
-        orElse: () {},
-      );
+      if (authState is AuthError) {
+        AppSnackbar.error(context, authState.message);
+      }
     }
   }
 
