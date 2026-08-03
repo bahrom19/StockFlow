@@ -1514,6 +1514,553 @@ abstract class _StockMovement implements StockMovement {
       throw _privateConstructorUsedError;
 }
 
+CreateWarehouseRequest _$CreateWarehouseRequestFromJson(
+    Map<String, dynamic> json) {
+  return _CreateWarehouseRequest.fromJson(json);
+}
+
+/// @nodoc
+mixin _$CreateWarehouseRequest {
+  String get name => throw _privateConstructorUsedError;
+  String get code => throw _privateConstructorUsedError;
+  String? get address => throw _privateConstructorUsedError;
+  String? get phone => throw _privateConstructorUsedError;
+  String? get managerName => throw _privateConstructorUsedError;
+  bool get isDefault => throw _privateConstructorUsedError;
+
+  /// Serializes this CreateWarehouseRequest to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of CreateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $CreateWarehouseRequestCopyWith<CreateWarehouseRequest> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $CreateWarehouseRequestCopyWith<$Res> {
+  factory $CreateWarehouseRequestCopyWith(CreateWarehouseRequest value,
+          $Res Function(CreateWarehouseRequest) then) =
+      _$CreateWarehouseRequestCopyWithImpl<$Res, CreateWarehouseRequest>;
+  @useResult
+  $Res call(
+      {String name,
+      String code,
+      String? address,
+      String? phone,
+      String? managerName,
+      bool isDefault});
+}
+
+/// @nodoc
+class _$CreateWarehouseRequestCopyWithImpl<$Res,
+        $Val extends CreateWarehouseRequest>
+    implements $CreateWarehouseRequestCopyWith<$Res> {
+  _$CreateWarehouseRequestCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of CreateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? name = null,
+    Object? code = null,
+    Object? address = freezed,
+    Object? phone = freezed,
+    Object? managerName = freezed,
+    Object? isDefault = null,
+  }) {
+    return _then(_value.copyWith(
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      code: null == code
+          ? _value.code
+          : code // ignore: cast_nullable_to_non_nullable
+              as String,
+      address: freezed == address
+          ? _value.address
+          : address // ignore: cast_nullable_to_non_nullable
+              as String?,
+      phone: freezed == phone
+          ? _value.phone
+          : phone // ignore: cast_nullable_to_non_nullable
+              as String?,
+      managerName: freezed == managerName
+          ? _value.managerName
+          : managerName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      isDefault: null == isDefault
+          ? _value.isDefault
+          : isDefault // ignore: cast_nullable_to_non_nullable
+              as bool,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$CreateWarehouseRequestImplCopyWith<$Res>
+    implements $CreateWarehouseRequestCopyWith<$Res> {
+  factory _$$CreateWarehouseRequestImplCopyWith(
+          _$CreateWarehouseRequestImpl value,
+          $Res Function(_$CreateWarehouseRequestImpl) then) =
+      __$$CreateWarehouseRequestImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String name,
+      String code,
+      String? address,
+      String? phone,
+      String? managerName,
+      bool isDefault});
+}
+
+/// @nodoc
+class __$$CreateWarehouseRequestImplCopyWithImpl<$Res>
+    extends _$CreateWarehouseRequestCopyWithImpl<$Res,
+        _$CreateWarehouseRequestImpl>
+    implements _$$CreateWarehouseRequestImplCopyWith<$Res> {
+  __$$CreateWarehouseRequestImplCopyWithImpl(
+      _$CreateWarehouseRequestImpl _value,
+      $Res Function(_$CreateWarehouseRequestImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of CreateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? name = null,
+    Object? code = null,
+    Object? address = freezed,
+    Object? phone = freezed,
+    Object? managerName = freezed,
+    Object? isDefault = null,
+  }) {
+    return _then(_$CreateWarehouseRequestImpl(
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      code: null == code
+          ? _value.code
+          : code // ignore: cast_nullable_to_non_nullable
+              as String,
+      address: freezed == address
+          ? _value.address
+          : address // ignore: cast_nullable_to_non_nullable
+              as String?,
+      phone: freezed == phone
+          ? _value.phone
+          : phone // ignore: cast_nullable_to_non_nullable
+              as String?,
+      managerName: freezed == managerName
+          ? _value.managerName
+          : managerName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      isDefault: null == isDefault
+          ? _value.isDefault
+          : isDefault // ignore: cast_nullable_to_non_nullable
+              as bool,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$CreateWarehouseRequestImpl implements _CreateWarehouseRequest {
+  const _$CreateWarehouseRequestImpl(
+      {required this.name,
+      required this.code,
+      this.address,
+      this.phone,
+      this.managerName,
+      this.isDefault = false});
+
+  factory _$CreateWarehouseRequestImpl.fromJson(Map<String, dynamic> json) =>
+      _$$CreateWarehouseRequestImplFromJson(json);
+
+  @override
+  final String name;
+  @override
+  final String code;
+  @override
+  final String? address;
+  @override
+  final String? phone;
+  @override
+  final String? managerName;
+  @override
+  @JsonKey()
+  final bool isDefault;
+
+  @override
+  String toString() {
+    return 'CreateWarehouseRequest(name: $name, code: $code, address: $address, phone: $phone, managerName: $managerName, isDefault: $isDefault)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$CreateWarehouseRequestImpl &&
+            (identical(other.name, name) || other.name == name) &&
+            (identical(other.code, code) || other.code == code) &&
+            (identical(other.address, address) || other.address == address) &&
+            (identical(other.phone, phone) || other.phone == phone) &&
+            (identical(other.managerName, managerName) ||
+                other.managerName == managerName) &&
+            (identical(other.isDefault, isDefault) ||
+                other.isDefault == isDefault));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType, name, code, address, phone, managerName, isDefault);
+
+  /// Create a copy of CreateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$CreateWarehouseRequestImplCopyWith<_$CreateWarehouseRequestImpl>
+      get copyWith => __$$CreateWarehouseRequestImplCopyWithImpl<
+          _$CreateWarehouseRequestImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$CreateWarehouseRequestImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _CreateWarehouseRequest implements CreateWarehouseRequest {
+  const factory _CreateWarehouseRequest(
+      {required final String name,
+      required final String code,
+      final String? address,
+      final String? phone,
+      final String? managerName,
+      final bool isDefault}) = _$CreateWarehouseRequestImpl;
+
+  factory _CreateWarehouseRequest.fromJson(Map<String, dynamic> json) =
+      _$CreateWarehouseRequestImpl.fromJson;
+
+  @override
+  String get name;
+  @override
+  String get code;
+  @override
+  String? get address;
+  @override
+  String? get phone;
+  @override
+  String? get managerName;
+  @override
+  bool get isDefault;
+
+  /// Create a copy of CreateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$CreateWarehouseRequestImplCopyWith<_$CreateWarehouseRequestImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+UpdateWarehouseRequest _$UpdateWarehouseRequestFromJson(
+    Map<String, dynamic> json) {
+  return _UpdateWarehouseRequest.fromJson(json);
+}
+
+/// @nodoc
+mixin _$UpdateWarehouseRequest {
+  String? get name => throw _privateConstructorUsedError;
+  String? get code => throw _privateConstructorUsedError;
+  String? get address => throw _privateConstructorUsedError;
+  String? get phone => throw _privateConstructorUsedError;
+  String? get managerName => throw _privateConstructorUsedError;
+  bool? get isDefault => throw _privateConstructorUsedError;
+  int get rowVersion => throw _privateConstructorUsedError;
+
+  /// Serializes this UpdateWarehouseRequest to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of UpdateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $UpdateWarehouseRequestCopyWith<UpdateWarehouseRequest> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $UpdateWarehouseRequestCopyWith<$Res> {
+  factory $UpdateWarehouseRequestCopyWith(UpdateWarehouseRequest value,
+          $Res Function(UpdateWarehouseRequest) then) =
+      _$UpdateWarehouseRequestCopyWithImpl<$Res, UpdateWarehouseRequest>;
+  @useResult
+  $Res call(
+      {String? name,
+      String? code,
+      String? address,
+      String? phone,
+      String? managerName,
+      bool? isDefault,
+      int rowVersion});
+}
+
+/// @nodoc
+class _$UpdateWarehouseRequestCopyWithImpl<$Res,
+        $Val extends UpdateWarehouseRequest>
+    implements $UpdateWarehouseRequestCopyWith<$Res> {
+  _$UpdateWarehouseRequestCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of UpdateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? name = freezed,
+    Object? code = freezed,
+    Object? address = freezed,
+    Object? phone = freezed,
+    Object? managerName = freezed,
+    Object? isDefault = freezed,
+    Object? rowVersion = null,
+  }) {
+    return _then(_value.copyWith(
+      name: freezed == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String?,
+      code: freezed == code
+          ? _value.code
+          : code // ignore: cast_nullable_to_non_nullable
+              as String?,
+      address: freezed == address
+          ? _value.address
+          : address // ignore: cast_nullable_to_non_nullable
+              as String?,
+      phone: freezed == phone
+          ? _value.phone
+          : phone // ignore: cast_nullable_to_non_nullable
+              as String?,
+      managerName: freezed == managerName
+          ? _value.managerName
+          : managerName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      isDefault: freezed == isDefault
+          ? _value.isDefault
+          : isDefault // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      rowVersion: null == rowVersion
+          ? _value.rowVersion
+          : rowVersion // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$UpdateWarehouseRequestImplCopyWith<$Res>
+    implements $UpdateWarehouseRequestCopyWith<$Res> {
+  factory _$$UpdateWarehouseRequestImplCopyWith(
+          _$UpdateWarehouseRequestImpl value,
+          $Res Function(_$UpdateWarehouseRequestImpl) then) =
+      __$$UpdateWarehouseRequestImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String? name,
+      String? code,
+      String? address,
+      String? phone,
+      String? managerName,
+      bool? isDefault,
+      int rowVersion});
+}
+
+/// @nodoc
+class __$$UpdateWarehouseRequestImplCopyWithImpl<$Res>
+    extends _$UpdateWarehouseRequestCopyWithImpl<$Res,
+        _$UpdateWarehouseRequestImpl>
+    implements _$$UpdateWarehouseRequestImplCopyWith<$Res> {
+  __$$UpdateWarehouseRequestImplCopyWithImpl(
+      _$UpdateWarehouseRequestImpl _value,
+      $Res Function(_$UpdateWarehouseRequestImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of UpdateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? name = freezed,
+    Object? code = freezed,
+    Object? address = freezed,
+    Object? phone = freezed,
+    Object? managerName = freezed,
+    Object? isDefault = freezed,
+    Object? rowVersion = null,
+  }) {
+    return _then(_$UpdateWarehouseRequestImpl(
+      name: freezed == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String?,
+      code: freezed == code
+          ? _value.code
+          : code // ignore: cast_nullable_to_non_nullable
+              as String?,
+      address: freezed == address
+          ? _value.address
+          : address // ignore: cast_nullable_to_non_nullable
+              as String?,
+      phone: freezed == phone
+          ? _value.phone
+          : phone // ignore: cast_nullable_to_non_nullable
+              as String?,
+      managerName: freezed == managerName
+          ? _value.managerName
+          : managerName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      isDefault: freezed == isDefault
+          ? _value.isDefault
+          : isDefault // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      rowVersion: null == rowVersion
+          ? _value.rowVersion
+          : rowVersion // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$UpdateWarehouseRequestImpl implements _UpdateWarehouseRequest {
+  const _$UpdateWarehouseRequestImpl(
+      {this.name,
+      this.code,
+      this.address,
+      this.phone,
+      this.managerName,
+      this.isDefault,
+      this.rowVersion = 0});
+
+  factory _$UpdateWarehouseRequestImpl.fromJson(Map<String, dynamic> json) =>
+      _$$UpdateWarehouseRequestImplFromJson(json);
+
+  @override
+  final String? name;
+  @override
+  final String? code;
+  @override
+  final String? address;
+  @override
+  final String? phone;
+  @override
+  final String? managerName;
+  @override
+  final bool? isDefault;
+  @override
+  @JsonKey()
+  final int rowVersion;
+
+  @override
+  String toString() {
+    return 'UpdateWarehouseRequest(name: $name, code: $code, address: $address, phone: $phone, managerName: $managerName, isDefault: $isDefault, rowVersion: $rowVersion)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$UpdateWarehouseRequestImpl &&
+            (identical(other.name, name) || other.name == name) &&
+            (identical(other.code, code) || other.code == code) &&
+            (identical(other.address, address) || other.address == address) &&
+            (identical(other.phone, phone) || other.phone == phone) &&
+            (identical(other.managerName, managerName) ||
+                other.managerName == managerName) &&
+            (identical(other.isDefault, isDefault) ||
+                other.isDefault == isDefault) &&
+            (identical(other.rowVersion, rowVersion) ||
+                other.rowVersion == rowVersion));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, name, code, address, phone,
+      managerName, isDefault, rowVersion);
+
+  /// Create a copy of UpdateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$UpdateWarehouseRequestImplCopyWith<_$UpdateWarehouseRequestImpl>
+      get copyWith => __$$UpdateWarehouseRequestImplCopyWithImpl<
+          _$UpdateWarehouseRequestImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$UpdateWarehouseRequestImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _UpdateWarehouseRequest implements UpdateWarehouseRequest {
+  const factory _UpdateWarehouseRequest(
+      {final String? name,
+      final String? code,
+      final String? address,
+      final String? phone,
+      final String? managerName,
+      final bool? isDefault,
+      final int rowVersion}) = _$UpdateWarehouseRequestImpl;
+
+  factory _UpdateWarehouseRequest.fromJson(Map<String, dynamic> json) =
+      _$UpdateWarehouseRequestImpl.fromJson;
+
+  @override
+  String? get name;
+  @override
+  String? get code;
+  @override
+  String? get address;
+  @override
+  String? get phone;
+  @override
+  String? get managerName;
+  @override
+  bool? get isDefault;
+  @override
+  int get rowVersion;
+
+  /// Create a copy of UpdateWarehouseRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$UpdateWarehouseRequestImplCopyWith<_$UpdateWarehouseRequestImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 AdjustStockDto _$AdjustStockDtoFromJson(Map<String, dynamic> json) {
   return _AdjustStockDto.fromJson(json);
 }

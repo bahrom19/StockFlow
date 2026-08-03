@@ -2,31 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
-import 'package:stockflow/core/theme/app_spacing.dart';
-import 'package:stockflow/core/widgets/error_state_widget.dart';
-import 'package:stockflow/core/widgets/empty_state_widget.dart';
+import 'package:stockflow/core/utils/formatters.dart';
+import 'package:stockflow/core/widgets/entity_table.dart';
+import 'package:stockflow/core/widgets/page_header.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/products/presentation/providers/products_provider.dart';
 import 'package:stockflow/features/products/presentation/widgets/product_card.dart';
 
+/// Products management screen — desktop-first DataTable with search,
+/// CSV export, status filter and pagination.
 class ProductsListScreen extends ConsumerStatefulWidget {
   const ProductsListScreen({super.key});
 
   @override
-  ConsumerState<ProductsListScreen> createState() => _ProductsListScreenState();
+  ConsumerState<ProductsListScreen> createState() =>
+      _ProductsListScreenState();
 }
 
 class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
-  final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     Future.microtask(() {
       ref.read(productsListProvider.notifier).loadProducts();
     });
-    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _onScroll() {
@@ -37,125 +46,142 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
   }
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = ref.watch(productsListProvider);
 
+    final loaded = state is ProductsLoaded ? state : null;
+    final items = loaded?.products ?? const <Product>[];
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Products'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {},
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _navigateToForm(),
-        child: const Icon(Icons.add),
-      ),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.xs,
-              AppSpacing.md,
-              AppSpacing.sm,
-            ),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search products...',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () {
-                          _searchController.clear();
-                          ref.read(productsListProvider.notifier).search('');
-                        },
-                      )
-                    : null,
-                isDense: true,
+          PageHeader(
+            title: 'Products',
+            subtitle: 'Manage your catalog, pricing and stock levels',
+          ),
+          Expanded(
+            child: EntityTable<Product>(
+              items: items,
+              total: loaded?.total ?? 0,
+              hasMore: loaded?.hasMore ?? false,
+              isLoading: state is ProductsLoading,
+              isRefreshing: loaded?.isRefreshing ?? false,
+              isLoadingMore: loaded?.isLoadingMore ?? false,
+              onLoadMore: _onScroll,
+              search: loaded?.search,
+              searchHint: 'Search by name, SKU or barcode…',
+              onSearch: (q) =>
+                  ref.read(productsListProvider.notifier).search(q),
+              onRefresh: () =>
+                  ref.read(productsListProvider.notifier).refresh(),
+              onCreate: () => context.push(RouteNames.productCreate),
+              createLabel: 'New Product',
+              exportFileName: 'products.csv',
+              exportHeaders: const [
+                'Name',
+                'SKU',
+                'Barcode',
+                'Category',
+                'Brand',
+                'Unit',
+                'Price',
+                'Cost',
+                'Stock',
+                'Status',
+              ],
+              exportRows: () => [
+                for (final p in items)
+                  [
+                    p.name,
+                    p.sku ?? '',
+                    p.barcode ?? '',
+                    p.category ?? '',
+                    p.brand ?? '',
+                    p.unit ?? '',
+                    p.price ?? '',
+                    p.costPrice ?? '',
+                    p.stockQuantity.toString(),
+                    p.isActive ? 'Active' : 'Inactive',
+                  ],
+              ],
+              columns: [
+                const DataColumn(label: Text('Product')),
+                const DataColumn(label: Text('SKU')),
+                const DataColumn(label: Text('Category')),
+                const DataColumn(label: Text('Unit')),
+                DataColumn(
+                  label: Text('Price', style: theme.textTheme.labelMedium),
+                  numeric: true,
+                ),
+                DataColumn(
+                  label: Text('Stock', style: theme.textTheme.labelMedium),
+                  numeric: true,
+                ),
+                const DataColumn(label: Text('Status')),
+              ],
+              buildRow: (p) => DataRow(
+                cells: [
+                  DataCell(
+                    Text(
+                      p.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  DataCell(Text(p.sku ?? '-')),
+                  DataCell(Text(p.category ?? '-')),
+                  DataCell(Text(p.unit ?? '-')),
+                  DataCell(Text(Formatters.currency(p.price))),
+                  DataCell(_StockCell(quantity: p.stockQuantity)),
+                  DataCell(StatusBadge(
+                    status: p.isActive ? 'ACTIVE' : 'INACTIVE',
+                  )),
+                ],
               ),
-              onChanged: (value) {
-                ref.read(productsListProvider.notifier).search(value);
-                setState(() {});
-              },
+              buildCard: (p) => ProductCard(
+                product: p,
+                onTap: () => _navigateToDetail(p.id),
+              ),
+              onRowTap: (p) => _navigateToDetail(p.id),
+              emptyTitle: 'No products found',
+              emptySubtitle: 'Add your first product to get started',
+              emptyIcon: Icons.inventory_2_outlined,
+              errorMessage: state is ProductsError
+                  ? (state as ProductsError).message
+                  : null,
+              onRetry: () =>
+                  ref.read(productsListProvider.notifier).loadProducts(),
             ),
           ),
-          // Content
-          Expanded(child: _buildContent(theme, state)),
         ],
       ),
     );
   }
 
-  Widget _buildContent(ThemeData theme, ProductsState state) {
-    return switch (state) {
-      ProductsLoading() => ListView.builder(
-          itemCount: 8,
-          padding: AppSpacing.screenPaddingHorizontal,
-          itemBuilder: (_, __) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: ProductCardSkeleton(),
-              ),
-        ),
-      ProductsEmpty(message: final msg) => EmptyStateWidget(
-          title: msg,
-          subtitle: 'Add your first product to get started',
-          icon: Icons.inventory_2_outlined,
-          actionLabel: 'Add Product',
-          onAction: () => _navigateToForm(),
-        ),
-      ProductsError(message: final msg) => ErrorStateWidget(
-          message: msg,
-          onRetry: () =>
-              ref.read(productsListProvider.notifier).loadProducts(),
-        ),
-      ProductsLoaded(:final products, :final isLoadingMore) =>
-        RefreshIndicator(
-          onRefresh: () => ref.read(productsListProvider.notifier).refresh(),
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: AppSpacing.screenPaddingHorizontal,
-            itemCount: products.length + (isLoadingMore ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == products.length) {
-                return const Padding(
-                  padding: EdgeInsets.all(AppSpacing.md),
-                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                );
-              }
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: ProductCard(
-                  product: products[index],
-                  onTap: () => _navigateToDetail(products[index].id),
-                ),
-              );
-            },
-          ),
-        ),
-      _ => const SizedBox.shrink(),
-    };
-  }
-
   void _navigateToDetail(String id) {
     context.push(RouteNames.productDetail.replaceAll(':id', id));
   }
+}
 
-  void _navigateToForm() {
-    context.push(RouteNames.productCreate);
+class _StockCell extends StatelessWidget {
+  final int quantity;
+
+  const _StockCell({required this.quantity});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = quantity <= 0
+        ? Theme.of(context).colorScheme.error
+        : quantity <= 5
+            ? const Color(0xFFFB8C00)
+            : Theme.of(context).colorScheme.primary;
+    return Text(
+      '$quantity',
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: color,
+      ),
+    );
   }
 }

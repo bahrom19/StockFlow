@@ -41,36 +41,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final state = ref.watch(dashboardProvider);
     final user = ref.watch(currentUserProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Hello, ${user?.fullName.split(' ').firstOrNull ?? 'User'}',
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            tooltip: 'Notifications',
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            tooltip: 'Profile',
-            onPressed: () {},
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        child: const Icon(Icons.add),
-      ),
-      body: RefreshIndicator(
-        onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
-        child: _buildBody(theme, state),
-      ),
+    // The Shell (TopBar) renders the page title and global actions;
+    // the dashboard renders only its content. The greeting is kept as a
+    // content header so the first screen still feels personal.
+    return RefreshIndicator(
+      onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
+      child: _buildBody(theme, state, user),
     );
   }
 
-  Widget _buildBody(ThemeData theme, DashboardUiState state) {
+  Widget _buildBody(
+    ThemeData theme,
+    DashboardUiState state,
+    CurrentUser? user,
+  ) {
     return switch (state) {
       DashboardLoading() => ListView(
           padding: AppSpacing.screenPadding,
@@ -94,6 +78,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         :final isRefreshing,
       ) =>
         _DashboardContentView(
+          userName: user?.fullName.split(' ').firstOrNull,
           summary: summary,
           recentSales: recentSales,
           chartData: chartData,
@@ -117,12 +102,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 }
 
 class _DashboardContentView extends StatelessWidget {
+  final String? userName;
   final DashboardSummary summary;
   final SalesReport? recentSales;
   final List<ChartDataPoint> chartData;
   final bool isRefreshing;
 
   const _DashboardContentView({
+    this.userName,
     required this.summary,
     this.recentSales,
     required this.chartData,
@@ -131,11 +118,20 @@ class _DashboardContentView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isDesktop = MediaQuery.of(context).size.width >= AppSpacing.breakpointDesktop;
 
     return ListView(
       padding: AppSpacing.screenPadding,
       children: [
+        // ── Greeting ──
+        Text(
+          'Hello, ${userName ?? 'User'}',
+          style: theme.textTheme.titleMedium
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: AppSpacing.md),
+
         // ── KPI Cards (2 columns on phone, 4 on desktop) ──
         if (isDesktop) ...[
           _KpiGrid(summary: summary),

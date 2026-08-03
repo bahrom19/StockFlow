@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/navigation/route_names.dart';
+import 'package:stockflow/core/utils/formatters.dart';
+import 'package:stockflow/core/widgets/entity_table.dart';
+import 'package:stockflow/core/widgets/page_header.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
+import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
 import 'package:stockflow/features/purchasing/presentation/providers/purchasing_provider.dart';
 import 'package:stockflow/features/purchasing/presentation/widgets/purchasing_widgets.dart';
 
 class PurchaseOrderListScreen extends ConsumerStatefulWidget {
   const PurchaseOrderListScreen({super.key});
   @override
-  ConsumerState<PurchaseOrderListScreen> createState() => _PurchaseOrderListScreenState();
+  ConsumerState<PurchaseOrderListScreen> createState() =>
+      _PurchaseOrderListScreenState();
 }
 
-class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScreen> {
-  final _scrollController = ScrollController();
+class _PurchaseOrderListScreenState
+    extends ConsumerState<PurchaseOrderListScreen> {
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -27,7 +35,8 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       ref.read(poListProvider.notifier).loadMore();
     }
   }
@@ -37,99 +46,113 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
     final theme = Theme.of(context);
     final state = ref.watch(poListProvider);
 
+    final loaded = state is POListLoaded ? state : null;
+    final items = loaded?.orders ?? const <PurchaseOrder>[];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Purchase Orders')),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search orders...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-              ),
-              onChanged: (q) => ref.read(poListProvider.notifier).search(q),
-            ),
+          PageHeader(
+            title: 'Purchasing',
+            subtitle: 'Purchase orders, goods receipts and returns',
           ),
-          SizedBox(
-            height: 48,
-            child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              children: [
-                _filterChip('All', null),
-                const SizedBox(width: 8),
-                _filterChip('Draft', 'DRAFT'),
-                const SizedBox(width: 8),
-                _filterChip('Approved', 'APPROVED'),
-                const SizedBox(width: 8),
-                _filterChip('Received', 'RECEIVED'),
-                const SizedBox(width: 8),
-                _filterChip('Cancelled', 'CANCELLED'),
+          Expanded(
+            child: EntityTable<PurchaseOrder>(
+              items: items,
+              total: loaded?.total ?? 0,
+              hasMore: loaded?.hasMore ?? false,
+              isLoading: state is POListLoading,
+              isRefreshing: loaded?.isRefreshing ?? false,
+              isLoadingMore: loaded?.isLoadingMore ?? false,
+              onLoadMore: _onScroll,
+              search: loaded?.search,
+              searchHint: 'Search by order number…',
+              onSearch: (q) => ref.read(poListProvider.notifier).search(q),
+              onRefresh: () => ref.read(poListProvider.notifier).refresh(),
+              onCreate: () => context.push(RouteNames.poNew),
+              createLabel: 'New Order',
+              filters: const [
+                EntityFilter('All', null),
+                EntityFilter('Draft', 'DRAFT'),
+                EntityFilter('Pending', 'PENDING'),
+                EntityFilter('Approved', 'APPROVED'),
+                EntityFilter('Received', 'RECEIVED'),
+                EntityFilter('Cancelled', 'CANCELLED'),
               ],
+              activeFilter: loaded?.search,
+              onFilter: (v) {
+                if (v != null) {
+                  ref.read(poListProvider.notifier).filterByStatus(v);
+                }
+              },
+              exportFileName: 'purchase_orders.csv',
+              exportHeaders: const [
+                'Number',
+                'Date',
+                'Status',
+                'Items',
+                'Grand Total',
+                'Paid',
+              ],
+              exportRows: () => [
+                for (final o in items)
+                  [
+                    o.orderNumber,
+                    o.orderDate.toIso8601String(),
+                    o.status,
+                    o.items.length.toString(),
+                    o.grandTotal,
+                    o.paidAmount,
+                  ],
+              ],
+              columns: [
+                const DataColumn(label: Text('Order')),
+                const DataColumn(label: Text('Date')),
+                const DataColumn(label: Text('Status')),
+                DataColumn(
+                  label: Text('Items', style: theme.textTheme.labelMedium),
+                  numeric: true,
+                ),
+                DataColumn(
+                  label: Text('Total', style: theme.textTheme.labelMedium),
+                  numeric: true,
+                ),
+                DataColumn(
+                  label: Text('Paid', style: theme.textTheme.labelMedium),
+                  numeric: true,
+                ),
+              ],
+              buildRow: (o) => DataRow(
+                cells: [
+                  DataCell(Text(
+                    o.orderNumber,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  )),
+                  DataCell(Text(Formatters.date(o.orderDate))),
+                  DataCell(StatusBadge(status: o.status)),
+                  DataCell(Text('${o.items.length}')),
+                  DataCell(Text(Formatters.currency(o.grandTotal))),
+                  DataCell(Text(Formatters.currency(o.paidAmount))),
+                ],
+              ),
+              buildCard: (o) => POCard(
+                order: o,
+                onTap: () =>
+                    context.push('${RouteNames.poDetail.replaceAll(':id', o.id)}'),
+              ),
+              onRowTap: (o) =>
+                  context.push('${RouteNames.poDetail.replaceAll(':id', o.id)}'),
+              emptyTitle: 'No purchase orders',
+              emptySubtitle: 'Create your first purchase order to start',
+              emptyIcon: Icons.receipt_outlined,
+              errorMessage:
+                  state is POListError ? (state as POListError).message : null,
+              onRetry: () => ref.read(poListProvider.notifier).loadOrders(),
             ),
           ),
-          Expanded(child: _buildContent(state, theme)),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/purchasing/new'),
-        child: const Icon(Icons.add),
-      ),
     );
-  }
-
-  Widget _filterChip(String label, String? status) {
-    return FilterChip(
-      label: Text(label),
-      selected: false,
-      onSelected: (_) => ref.read(poListProvider.notifier).filterByStatus(status),
-    );
-  }
-
-  Widget _buildContent(POListState state, ThemeData theme) {
-    switch (state) {
-      case POListLoading():
-        return const Center(child: CircularProgressIndicator());
-      case POListEmpty():
-        return Center(child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.receipt_outlined, size: 64, color: theme.colorScheme.outline),
-            const SizedBox(height: 16),
-            Text('No purchase orders', style: theme.textTheme.titleMedium),
-          ],
-        ));
-      case POListError():
-        final err = state as POListError;
-        return Center(child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
-            const SizedBox(height: 16),
-            Text(err.message, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton.tonalIcon(onPressed: () => ref.read(poListProvider.notifier).loadOrders(), icon: const Icon(Icons.refresh), label: const Text('Retry')),
-          ],
-        ));
-      case POListLoaded():
-        final loaded = state as POListLoaded;
-        return RefreshIndicator(
-          onRefresh: () => ref.read(poListProvider.notifier).refresh(),
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(8),
-            itemCount: loaded.orders.length + (loaded.isLoadingMore ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index >= loaded.orders.length) {
-                return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()));
-              }
-              return POCard(order: loaded.orders[index], onTap: () => context.push('/purchasing/${loaded.orders[index].id}'));
-            },
-          ),
-        );
-      default:
-        return const SizedBox.shrink();
-    }
   }
 }

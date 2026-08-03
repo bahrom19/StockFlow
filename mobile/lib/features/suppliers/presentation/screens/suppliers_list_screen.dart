@@ -1,23 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/navigation/route_names.dart';
+import 'package:stockflow/core/widgets/entity_table.dart';
+import 'package:stockflow/core/widgets/page_header.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 import 'package:stockflow/features/suppliers/presentation/providers/suppliers_provider.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/supplier_widgets.dart';
 
 class SuppliersListScreen extends ConsumerStatefulWidget {
   const SuppliersListScreen({super.key});
   @override
-  ConsumerState<SuppliersListScreen> createState() => _SuppliersListScreenState();
+  ConsumerState<SuppliersListScreen> createState() =>
+      _SuppliersListScreenState();
 }
 
 class _SuppliersListScreenState extends ConsumerState<SuppliersListScreen> {
-  final _scrollController = ScrollController();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    Future.microtask(() => ref.read(supplierListProvider.notifier).loadSuppliers());
+    Future.microtask(
+        () => ref.read(supplierListProvider.notifier).loadSuppliers());
   }
 
   @override
@@ -27,7 +34,8 @@ class _SuppliersListScreenState extends ConsumerState<SuppliersListScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       ref.read(supplierListProvider.notifier).loadMore();
     }
   }
@@ -37,84 +45,105 @@ class _SuppliersListScreenState extends ConsumerState<SuppliersListScreen> {
     final theme = Theme.of(context);
     final state = ref.watch(supplierListProvider);
 
+    final loaded = state is SupplierListLoaded ? state : null;
+    final items = loaded?.suppliers ?? const <Supplier>[];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Suppliers')),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search suppliers...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
+          PageHeader(
+            title: 'Suppliers',
+            subtitle: 'Manage vendors, contracts and purchasing partners',
+          ),
+          Expanded(
+            child: EntityTable<Supplier>(
+              items: items,
+              total: loaded?.total ?? 0,
+              hasMore: loaded?.hasMore ?? false,
+              isLoading: state is SupplierListLoading,
+              isRefreshing: loaded?.isRefreshing ?? false,
+              isLoadingMore: loaded?.isLoadingMore ?? false,
+              onLoadMore: _onScroll,
+              search: loaded?.search,
+              searchHint: 'Search by company name or BIN…',
+              onSearch: (q) =>
+                  ref.read(supplierListProvider.notifier).search(q),
+              onRefresh: () =>
+                  ref.read(supplierListProvider.notifier).refresh(),
+              onCreate: () => context.push(RouteNames.supplierNew),
+              createLabel: 'New Supplier',
+              exportFileName: 'suppliers.csv',
+              exportHeaders: const [
+                'Company',
+                'BIN',
+                'Phone',
+                'Email',
+                'Website',
+                'Status',
+              ],
+              exportRows: () => [
+                for (final s in items)
+                  [
+                    s.companyName,
+                    s.bin ?? '',
+                    s.phone ?? '',
+                    s.email ?? '',
+                    s.website ?? '',
+                    s.isActive ? 'Active' : 'Inactive',
+                  ],
+              ],
+              columns: [
+                const DataColumn(label: Text('Company')),
+                const DataColumn(label: Text('BIN')),
+                const DataColumn(label: Text('Phone')),
+                const DataColumn(label: Text('Email')),
+                const DataColumn(label: Text('Status')),
+                DataColumn(
+                  label: Text('Actions', style: theme.textTheme.labelMedium),
+                ),
+              ],
+              buildRow: (s) => DataRow(
+                cells: [
+                  DataCell(Text(
+                    s.companyName,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  )),
+                  DataCell(Text(s.bin ?? '-')),
+                  DataCell(Text(s.phone ?? '-')),
+                  DataCell(Text(s.email ?? '-')),
+                  DataCell(StatusBadge(
+                    status: s.isActive ? 'ACTIVE' : 'INACTIVE',
+                  )),
+                  DataCell(
+                    IconButton(
+                      tooltip: 'Edit',
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      onPressed: () =>
+                          context.push('${RouteNames.supplierDetail.replaceAll(':id', s.id)}'),
+                    ),
+                  ),
+                ],
               ),
-              onChanged: (q) => ref.read(supplierListProvider.notifier).search(q),
+              buildCard: (s) => SupplierCard(
+                supplier: s,
+                onTap: () =>
+                    context.push('${RouteNames.supplierDetail.replaceAll(':id', s.id)}'),
+              ),
+              onRowTap: (s) =>
+                  context.push('${RouteNames.supplierDetail.replaceAll(':id', s.id)}'),
+              emptyTitle: 'No suppliers found',
+              emptySubtitle: 'Add your first supplier to start purchasing',
+              emptyIcon: Icons.business_outlined,
+              errorMessage: state is SupplierListError
+                  ? (state as SupplierListError).message
+                  : null,
+              onRetry: () =>
+                  ref.read(supplierListProvider.notifier).loadSuppliers(),
             ),
           ),
-          Expanded(child: _buildContent(state, theme)),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/suppliers/new'),
-        child: const Icon(Icons.add),
-      ),
     );
-  }
-
-  Widget _buildContent(SupplierListState state, ThemeData theme) {
-    switch (state) {
-      case SupplierListLoading():
-        return const Center(child: CircularProgressIndicator());
-      case SupplierListEmpty():
-        return Center(child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.business_outlined, size: 64, color: theme.colorScheme.outline),
-            const SizedBox(height: 16),
-            Text('No suppliers found', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            FilledButton.tonalIcon(
-              onPressed: () => context.push('/suppliers/new'),
-              icon: const Icon(Icons.add), label: const Text('Add Supplier'),
-            ),
-          ],
-        ));
-      case SupplierListError():
-        final err = state as SupplierListError;
-        return Center(child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
-            const SizedBox(height: 16),
-            Text(err.message, style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton.tonalIcon(
-              onPressed: () => ref.read(supplierListProvider.notifier).loadSuppliers(),
-              icon: const Icon(Icons.refresh), label: const Text('Retry'),
-            ),
-          ],
-        ));
-      case SupplierListLoaded():
-        final loaded = state as SupplierListLoaded;
-        return RefreshIndicator(
-          onRefresh: () => ref.read(supplierListProvider.notifier).refresh(),
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(8),
-            itemCount: loaded.suppliers.length + (loaded.isLoadingMore ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index >= loaded.suppliers.length) {
-                return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()));
-              }
-              final supplier = loaded.suppliers[index];
-              return SupplierCard(supplier: supplier, onTap: () => context.push('/suppliers/${supplier.id}'));
-            },
-          ),
-        );
-      default:
-        return const SizedBox.shrink();
-    }
   }
 }

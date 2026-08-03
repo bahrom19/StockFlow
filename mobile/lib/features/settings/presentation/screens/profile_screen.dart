@@ -14,7 +14,6 @@ class ProfileScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [

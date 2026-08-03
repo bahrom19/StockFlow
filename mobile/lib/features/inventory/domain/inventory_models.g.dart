@@ -130,6 +130,52 @@ Map<String, dynamic> _$$StockMovementImplToJson(_$StockMovementImpl instance) =>
       'createdAt': instance.createdAt,
     };
 
+_$CreateWarehouseRequestImpl _$$CreateWarehouseRequestImplFromJson(
+        Map<String, dynamic> json) =>
+    _$CreateWarehouseRequestImpl(
+      name: json['name'] as String,
+      code: json['code'] as String,
+      address: json['address'] as String?,
+      phone: json['phone'] as String?,
+      managerName: json['managerName'] as String?,
+      isDefault: json['isDefault'] as bool? ?? false,
+    );
+
+Map<String, dynamic> _$$CreateWarehouseRequestImplToJson(
+        _$CreateWarehouseRequestImpl instance) =>
+    <String, dynamic>{
+      'name': instance.name,
+      'code': instance.code,
+      'address': instance.address,
+      'phone': instance.phone,
+      'managerName': instance.managerName,
+      'isDefault': instance.isDefault,
+    };
+
+_$UpdateWarehouseRequestImpl _$$UpdateWarehouseRequestImplFromJson(
+        Map<String, dynamic> json) =>
+    _$UpdateWarehouseRequestImpl(
+      name: json['name'] as String?,
+      code: json['code'] as String?,
+      address: json['address'] as String?,
+      phone: json['phone'] as String?,
+      managerName: json['managerName'] as String?,
+      isDefault: json['isDefault'] as bool?,
+      rowVersion: (json['rowVersion'] as num?)?.toInt() ?? 0,
+    );
+
+Map<String, dynamic> _$$UpdateWarehouseRequestImplToJson(
+        _$UpdateWarehouseRequestImpl instance) =>
+    <String, dynamic>{
+      'name': instance.name,
+      'code': instance.code,
+      'address': instance.address,
+      'phone': instance.phone,
+      'managerName': instance.managerName,
+      'isDefault': instance.isDefault,
+      'rowVersion': instance.rowVersion,
+    };
+
 _$AdjustStockDtoImpl _$$AdjustStockDtoImplFromJson(Map<String, dynamic> json) =>
     _$AdjustStockDtoImpl(
       productId: json['productId'] as String,

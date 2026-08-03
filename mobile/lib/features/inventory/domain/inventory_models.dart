@@ -95,6 +95,40 @@ class StockMovement with _$StockMovement {
 }
 
 // ──────────────────────────────────
+// Warehouse DTOs
+// ──────────────────────────────────
+@freezed
+class CreateWarehouseRequest with _$CreateWarehouseRequest {
+  const factory CreateWarehouseRequest({
+    required String name,
+    required String code,
+    String? address,
+    String? phone,
+    String? managerName,
+    @Default(false) bool isDefault,
+  }) = _CreateWarehouseRequest;
+
+  factory CreateWarehouseRequest.fromJson(Map<String, dynamic> json) =>
+      _$CreateWarehouseRequestFromJson(json);
+}
+
+@freezed
+class UpdateWarehouseRequest with _$UpdateWarehouseRequest {
+  const factory UpdateWarehouseRequest({
+    String? name,
+    String? code,
+    String? address,
+    String? phone,
+    String? managerName,
+    bool? isDefault,
+    @Default(0) int rowVersion,
+  }) = _UpdateWarehouseRequest;
+
+  factory UpdateWarehouseRequest.fromJson(Map<String, dynamic> json) =>
+      _$UpdateWarehouseRequestFromJson(json);
+}
+
+// ──────────────────────────────────
 // DTOs
 // ──────────────────────────────────
 @freezed

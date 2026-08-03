@@ -3,59 +3,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
+import '../../features/customers/presentation/screens/customer_form_screen.dart';
+import '../../features/customers/presentation/screens/customers_list_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../../features/finance/presentation/screens/finance_screen.dart';
 import '../../features/inventory/presentation/screens/inventory_list_screen.dart';
 import '../../features/inventory/presentation/screens/movements_screen.dart';
 import '../../features/products/presentation/screens/product_detail_screen.dart';
 import '../../features/products/presentation/screens/product_form_screen.dart';
 import '../../features/products/presentation/screens/products_list_screen.dart';
+import '../../features/purchasing/presentation/screens/purchase_order_list_screen.dart';
+import '../../features/purchasing/presentation/screens/purchase_order_detail_screen.dart';
+import '../../features/purchasing/presentation/screens/purchase_order_form_screen.dart';
+import '../../features/reports/presentation/screens/reports_screen.dart';
 import '../../features/sales/presentation/screens/pos_screen.dart';
 import '../../features/sales/presentation/screens/sale_history_screen.dart';
 import '../../features/sales/presentation/screens/sale_detail_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/settings/presentation/screens/profile_screen.dart';
-import '../../features/purchasing/presentation/screens/purchase_order_list_screen.dart';
-import '../../features/purchasing/presentation/screens/purchase_order_detail_screen.dart';
-import '../../features/purchasing/presentation/screens/purchase_order_form_screen.dart';
 import '../../features/suppliers/presentation/screens/suppliers_list_screen.dart';
 import '../../features/suppliers/presentation/screens/supplier_form_screen.dart';
+import '../../features/warehouses/presentation/screens/warehouse_form_screen.dart';
+import '../../features/warehouses/presentation/screens/warehouses_list_screen.dart';
 import '../auth/auth_state.dart';
+import '../shell/app_shell.dart';
 import 'route_names.dart';
-
-// ──────────────────────────────────
-// Shell Route for authenticated pages
-// ──────────────────────────────────
-class _MainShell extends ConsumerWidget {
-  final Widget child;
-  const _MainShell({required this.child});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      body: child,
-      bottomNavigationBar: NavigationBar(
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
-          NavigationDestination(icon: Icon(Icons.inventory_2_outlined), label: 'Products'),
-          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Sales'),
-          NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Settings'),
-        ],
-        onDestinationSelected: (index) {
-          switch (index) {
-            case 0:
-              context.go(RouteNames.dashboard);
-            case 1:
-              context.go(RouteNames.products);
-            case 2:
-              context.go(RouteNames.sales);
-            case 3:
-              context.go(RouteNames.settings);
-          }
-        },
-      ),
-    );
-  }
-}
 
 // ──────────────────────────────────
 // GoRouter Provider
@@ -95,7 +67,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
       ShellRoute(
-        builder: (context, state, child) => _MainShell(child: child),
+        builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(
             path: RouteNames.dashboard,
@@ -174,6 +146,54 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(path: 'new', name: 'supplierNew', builder: (context, state) => const SupplierFormScreen()),
               GoRoute(path: ':id', name: 'supplierDetail', builder: (context, state) => SupplierFormScreen(supplier: null)),
             ],
+          ),
+          GoRoute(
+            path: RouteNames.customers,
+            name: 'customers',
+            builder: (context, state) => const CustomersListScreen(),
+            routes: [
+              GoRoute(
+                path: 'new',
+                name: 'customerNew',
+                builder: (context, state) => const CustomerFormScreen(),
+              ),
+              GoRoute(
+                path: ':id',
+                name: 'customerDetail',
+                builder: (context, state) => CustomerFormScreen(
+                  customerId: state.pathParameters['id'],
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: RouteNames.warehouses,
+            name: 'warehouses',
+            builder: (context, state) => const WarehousesListScreen(),
+            routes: [
+              GoRoute(
+                path: 'new',
+                name: 'warehouseNew',
+                builder: (context, state) => const WarehouseFormScreen(),
+              ),
+              GoRoute(
+                path: ':id/edit',
+                name: 'warehouseEdit',
+                builder: (context, state) => WarehouseFormScreen(
+                  warehouseId: state.pathParameters['id'],
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: RouteNames.reports,
+            name: 'reports',
+            builder: (context, state) => const ReportsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.finance,
+            name: 'finance',
+            builder: (context, state) => const FinanceScreen(),
           ),
           GoRoute(
             path: RouteNames.settings,

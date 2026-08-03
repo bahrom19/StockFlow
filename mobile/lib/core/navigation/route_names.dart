@@ -29,8 +29,13 @@ class RouteNames {
   static const String supplierNew = '/suppliers/new';
   static const String supplierDetail = '/suppliers/:id';
   static const String customers = '/customers';
+  static const String customerNew = '/customers/new';
+  static const String customerDetail = '/customers/:id';
   static const String finance = '/finance';
   static const String reports = '/reports';
+  static const String warehouses = '/warehouses';
+  static const String warehouseNew = '/warehouses/new';
+  static const String warehouseEdit = '/warehouses/:id/edit';
 
   // System routes
   static const String notFound = '/404';

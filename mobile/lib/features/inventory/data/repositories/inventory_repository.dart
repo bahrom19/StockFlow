@@ -154,6 +154,61 @@ class InventoryRepository {
       return InvFailure(_errorHandler.handle(e));
     }
   }
+
+  Future<InvResult<Warehouse>> getWarehouseById(String id) async {
+    try {
+      final client = _ref.read(apiClientProvider);
+      final response = await client.get('${ApiEndpoints.inventory}/warehouses/$id');
+      return InvSuccess(Warehouse.fromJson(response.data as Map<String, dynamic>));
+    } catch (e) {
+      _logger.error('Warehouse by id failed', e);
+      return InvFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<InvResult<Warehouse>> createWarehouse(
+    CreateWarehouseRequest request,
+  ) async {
+    try {
+      final client = _ref.read(apiClientProvider);
+      final response = await client.post(
+        '${ApiEndpoints.inventory}/warehouses',
+        data: request.toJson(),
+      );
+      return InvSuccess(Warehouse.fromJson(response.data as Map<String, dynamic>));
+    } catch (e) {
+      _logger.error('Warehouse create failed', e);
+      return InvFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<InvResult<Warehouse>> updateWarehouse(
+    String id,
+    UpdateWarehouseRequest request,
+  ) async {
+    try {
+      final client = _ref.read(apiClientProvider);
+      final response = await client.patch(
+        '${ApiEndpoints.inventory}/warehouses/$id',
+        data: request.toJson(),
+      );
+      return InvSuccess(Warehouse.fromJson(response.data as Map<String, dynamic>));
+    } catch (e) {
+      _logger.error('Warehouse update failed', e);
+      return InvFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<InvResult<void>> deleteWarehouse(String id) async {
+    try {
+      final client = _ref.read(apiClientProvider);
+      await client.delete('${ApiEndpoints.inventory}/warehouses/$id');
+      return const InvSuccess(null);
+    } catch (e) {
+      _logger.error('Warehouse delete failed', e);
+      return InvFailure(_errorHandler.handle(e));
+    }
+  }
 }
 
 final inventoryRepositoryProvider = Provider<InventoryRepository>((ref) {

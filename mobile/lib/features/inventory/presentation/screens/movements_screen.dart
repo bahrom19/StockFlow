@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
-import 'package:stockflow/core/widgets/empty_state_widget.dart';
-import 'package:stockflow/core/widgets/error_state_widget.dart';
+import 'package:stockflow/core/utils/formatters.dart';
+import 'package:stockflow/core/widgets/entity_table.dart';
+import 'package:stockflow/core/widgets/page_header.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 import 'package:stockflow/features/inventory/presentation/providers/inventory_provider.dart';
-import 'package:stockflow/features/inventory/presentation/widgets/inventory_card.dart';
 
 class MovementsScreen extends ConsumerStatefulWidget {
   final String? productId;
@@ -33,44 +34,106 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
     final theme = Theme.of(context);
     final state = ref.watch(movementsProvider);
 
+    final loaded = state is MovementsLoaded ? state : null;
+    final items = loaded?.movements ?? const <StockMovement>[];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Stock Movements')),
-      body: switch (state) {
-        MovementsLoading() => const Center(
-            child: CircularProgressIndicator(strokeWidth: 2)),
-        MovementsEmpty() => const EmptyStateWidget(
-            title: 'No movements',
-            subtitle: 'Stock movements will appear here',
-            icon: Icons.history),
-        MovementsError(:final message) => ErrorStateWidget(
-            message: message,
-            onRetry: () => ref
-                .read(movementsProvider.notifier)
-                .loadMovements(
-                  productId: widget.productId,
-                  warehouseId: widget.warehouseId,
-                ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(
+            title: 'Stock Movements',
+            subtitle: 'Every change in stock — purchases, sales, transfers',
+            actions: [
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: () => ref.read(movementsProvider.notifier).loadMovements(
+                      productId: widget.productId,
+                      warehouseId: widget.warehouseId,
+                    ),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
           ),
-        MovementsLoaded(:final movements) => RefreshIndicator(
-            onRefresh: () => ref
-                .read(movementsProvider.notifier)
-                .loadMovements(
-                  productId: widget.productId,
-                  warehouseId: widget.warehouseId,
-                ),
-            child: ListView(
-              padding: AppSpacing.screenPadding,
-              children: [
-                Text('${movements.length} movements',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: AppSpacing.sm),
-                ...movements.map((m) => MovementTile(movement: m)),
+          Expanded(
+            child: EntityTable<StockMovement>(
+              items: items,
+              total: items.length,
+              isLoading: state is MovementsLoading,
+              searchHint: 'Search movements…',
+              exportFileName: 'stock_movements.csv',
+              exportHeaders: const [
+                'Date',
+                'Type',
+                'Product',
+                'Qty',
+                'Before',
+                'After',
+                'Reference',
               ],
+              exportRows: () => [
+                for (final m in items)
+                  [
+                    m.createdAt,
+                    m.type,
+                    m.productId,
+                    m.quantity.toString(),
+                    m.beforeQuantity.toString(),
+                    m.afterQuantity.toString(),
+                    m.referenceType ?? '',
+                  ],
+              ],
+              columns: [
+                const DataColumn(label: Text('Date')),
+                const DataColumn(label: Text('Type')),
+                const DataColumn(label: Text('Qty')),
+                DataColumn(
+                  label: Text('Before', style: theme.textTheme.labelMedium),
+                  numeric: true,
+                ),
+                DataColumn(
+                  label: Text('After', style: theme.textTheme.labelMedium),
+                  numeric: true,
+                ),
+                const DataColumn(label: Text('Reference')),
+              ],
+              buildRow: (m) => DataRow(
+                cells: [
+                  DataCell(Text(Formatters.dateTime(
+                    DateTime.tryParse(m.createdAt),
+                  ))),
+                  DataCell(StatusBadge(
+                    status: m.type,
+                    color: m.type == 'SALE' || m.type == 'TRANSFER_OUT'
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
+                  )),
+                  DataCell(Text(
+                    '${m.quantity}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  )),
+                  DataCell(Text('${m.beforeQuantity}')),
+                  DataCell(Text(
+                    '${m.afterQuantity}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  )),
+                  DataCell(Text(m.referenceType ?? '-')),
+                ],
+              ),
+              emptyTitle: 'No movements',
+              emptySubtitle: 'Stock movements will appear here',
+              emptyIcon: Icons.history,
+              errorMessage: state is MovementsError
+                  ? (state as MovementsError).message
+                  : null,
+              onRetry: () => ref.read(movementsProvider.notifier).loadMovements(
+                    productId: widget.productId,
+                    warehouseId: widget.warehouseId,
+                  ),
             ),
           ),
-        _ => const SizedBox.shrink(),
-      },
+        ],
+      ),
     );
   }
 }
