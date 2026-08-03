@@ -36,12 +36,24 @@ export class ProductsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a product' })
+  @ApiOperation({
+    summary: 'Create a product',
+    description:
+      'Creates a product. If stockQuantity is provided (>0), it is attributed ' +
+      'to the company default (or first) active warehouse; if no active ' +
+      'warehouse exists, the request fails with 422 so the initial stock is ' +
+      'never silently lost.',
+  })
   @ApiBody({ type: CreateProductDto })
   @ApiResponse({
     status: HttpStatus.CREATED,
     description: 'Product created successfully',
     type: ProductEntity,
+  })
+  @ApiResponse({
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    description:
+      'stockQuantity was requested but no active warehouse exists for the company',
   })
   async create(
     @Body() createProductDto: CreateProductDto,

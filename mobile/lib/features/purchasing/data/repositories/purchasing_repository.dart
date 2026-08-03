@@ -112,7 +112,7 @@ class PurchasingRepository {
     try {
       final response = await _api.patch<Map<String, dynamic>>(
         '/purchasing/purchase-orders/$id/status',
-        queryParameters: {'status': status},
+        data: {'status': status},
       );
       return PurchasingSuccess(PurchaseOrder.fromJson(response.data!));
     } catch (e) {

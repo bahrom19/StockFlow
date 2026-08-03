@@ -153,7 +153,7 @@ class SalesRepository {
     try {
       final response = await _api.patch<Map<String, dynamic>>(
         '/sales/$id/status',
-        queryParameters: {'status': status},
+        data: {'status': status},
       );
       return SalesSuccess(Sale.fromJson(response.data!));
     } catch (e) {

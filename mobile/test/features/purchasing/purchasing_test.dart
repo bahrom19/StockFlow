@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stockflow/core/api/api_client.dart';
+import 'package:stockflow/core/auth/token_storage.dart';
 import 'package:stockflow/features/purchasing/data/repositories/purchasing_repository.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
 import 'package:stockflow/features/suppliers/data/repositories/suppliers_repository.dart';
@@ -245,4 +248,62 @@ void main() {
       expect(result.data.companyName, 'Test');
     });
   });
+
+  // ── Repository: transitionStatus sends status in body ──
+  group('PurchasingRepository.transitionStatus', () {
+    test('sends status in request body, not query parameters', () async {
+      final api = _RecordingApiClient();
+      api.responseData = {
+        'id': 'po-1', 'companyId': 'c-1', 'supplierId': 's-1',
+        'orderNumber': 'PO-0001', 'orderDate': '2026-07-26T10:00:00Z',
+        'status': 'PENDING',
+        'subtotal': '1000.0000', 'discountAmount': '0.0000', 'taxAmount': '0.0000',
+        'grandTotal': '1000.0000', 'paidAmount': '0.0000',
+        'createdAt': '2026-07-26T10:00:00Z', 'updatedAt': '2026-07-26T10:00:00Z',
+        'items': [],
+      };
+      final repo = PurchasingRepository(api);
+
+      final result = await repo.transitionStatus('po-1', 'PENDING');
+
+      expect(result, isA<PurchasingSuccess<PurchaseOrder>>());
+      expect(api.patchCalls.length, 1);
+      final call = api.patchCalls.single;
+      expect(call['path'], '/purchasing/purchase-orders/po-1/status');
+      // Regression: status must travel in the JSON body so the backend
+      // @Body('status') DTO sees it — query params caused 400
+      // "Cannot transition from DRAFT to undefined".
+      expect(call['data'], {'status': 'PENDING'});
+      expect(call['queryParameters'], isNull);
+    });
+  });
+}
+
+/// Minimal ApiClient double that records PATCH invocations so repository
+/// tests can assert where `status` is placed (body vs query).
+class _RecordingApiClient extends ApiClient {
+  _RecordingApiClient() : super(tokenStorage: TokenStorage());
+
+  final List<Map<String, dynamic>> patchCalls = [];
+  Map<String, dynamic> responseData = {};
+
+  @override
+  Future<Response<T>> patch<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) async {
+    patchCalls.add({
+      'path': path,
+      'data': data,
+      'queryParameters': queryParameters,
+    });
+    return Response<T>(
+      data: responseData as T,
+      statusCode: 200,
+      requestOptions: RequestOptions(path: path),
+    );
+  }
 }

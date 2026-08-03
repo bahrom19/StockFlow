@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ProductQueryDto } from '../dto/product-query.dto';
 import { CreateProductDto } from '../dto/create-product.dto';
@@ -33,6 +34,26 @@ export class ProductsService {
       unitId = unit.id;
     }
 
+    // Resolve the target warehouse BEFORE creating the product so we can fail
+    // fast when an initial stock is requested but no warehouse exists — instead
+    // of silently dropping the quantity (previously data was lost: the Product
+    // was created, the Stock row never was). Stock is tracked per warehouse
+    // (Stock.warehouseId is a required FK), so an explicit stockQuantity has no
+    // home without a warehouse.
+    let targetWarehouse: { id: string } | null = null;
+    if (createProductDto.stockQuantity && createProductDto.stockQuantity > 0) {
+      targetWarehouse = await this.productsRepository.findDefaultWarehouse(
+        currentUser.companyId,
+      );
+      if (!targetWarehouse) {
+        throw new UnprocessableEntityException(
+          'Cannot persist stockQuantity: no active warehouse exists for this ' +
+            'company. Create a warehouse first, or create the product without ' +
+            'stockQuantity.',
+        );
+      }
+    }
+
     const product = await this.productsRepository.create({
       name: createProductDto.name,
       description: createProductDto.description,
@@ -49,30 +70,23 @@ export class ProductsService {
       },
     });
 
-    // Persist the initial stock quantity when requested. The Product model has
-    // no stockQuantity column — stock is tracked in the Stock table per
-    // warehouse. Attribute it to the company's default (or first) warehouse
-    // when one exists; otherwise the quantity simply cannot be attributed yet.
+    // Persist the initial stock quantity when requested, attributed to the
+    // warehouse resolved above (default or first active one).
     let created: typeof product = product;
-    if (createProductDto.stockQuantity && createProductDto.stockQuantity > 0) {
-      const warehouse = await this.productsRepository.findDefaultWarehouse(
+    if (targetWarehouse) {
+      await this.productsRepository.createInitialStock({
+        productId: product.id,
+        warehouseId: targetWarehouse.id,
+        companyId: currentUser.companyId,
+        quantity: createProductDto.stockQuantity as number,
+        userId: currentUser.userId,
+      });
+      // Re-read with relations so the response reflects the persisted stock.
+      const refreshed = await this.productsRepository.findById(
+        product.id,
         currentUser.companyId,
       );
-      if (warehouse) {
-        await this.productsRepository.createInitialStock({
-          productId: product.id,
-          warehouseId: warehouse.id,
-          companyId: currentUser.companyId,
-          quantity: createProductDto.stockQuantity,
-          userId: currentUser.userId,
-        });
-        // Re-read with relations so the response reflects the persisted stock.
-        const refreshed = await this.productsRepository.findById(
-          product.id,
-          currentUser.companyId,
-        );
-        if (refreshed) created = refreshed;
-      }
+      if (refreshed) created = refreshed;
     }
 
     return ProductMapper.toEntity(created);

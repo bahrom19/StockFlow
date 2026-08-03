@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stockflow/core/api/api_client.dart';
+import 'package:stockflow/core/auth/token_storage.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
@@ -334,6 +336,49 @@ void main() {
   });
 
   // ──────────────────────────────
+  // Repository: transitionStatus sends status in body
+  // ──────────────────────────────
+  group('SalesRepository.transitionStatus', () {
+    test('sends status in request body, not query parameters', () async {
+      final api = _RecordingApiClient();
+      api.responseData = {
+        'id': 'sale-1',
+        'companyId': 'c-1',
+        'warehouseId': 'wh-1',
+        'cashierId': 'u-1',
+        'saleNumber': 'SALE-001',
+        'status': 'COMPLETED',
+        'subtotal': '0',
+        'discount': '0',
+        'tax': '0',
+        'total': '0',
+        'paidAmount': '0',
+        'changeAmount': '0',
+        'currency': 'KZT',
+        'rowVersion': 1,
+        'createdAt': '2026-07-26T10:00:00Z',
+        'updatedAt': '2026-07-26T10:00:00Z',
+        'items': [],
+        'payments': [],
+        'receipts': [],
+      };
+      final repo = SalesRepository(api);
+
+      final result = await repo.transitionStatus('sale-1', 'COMPLETED');
+
+      expect(result, isA<SalesSuccess<Sale>>());
+      expect(api.patchCalls.length, 1);
+      final call = api.patchCalls.single;
+      expect(call['path'], '/sales/sale-1/status');
+      // Regression: status must travel in the JSON body so the backend
+      // @Body('status') DTO sees it — query params caused 400
+      // "Cannot transition from DRAFT to undefined".
+      expect(call['data'], {'status': 'COMPLETED'});
+      expect(call['queryParameters'], isNull);
+    });
+  });
+
+  // ──────────────────────────────
   // Error Mapping Tests
   // ──────────────────────────────
   group('Error mapping', () {
@@ -392,5 +437,34 @@ void main() {
       expect(error, isA<NetworkFailure>());
     });
   });
+}
+
+/// Minimal ApiClient double that records PATCH invocations so repository
+/// tests can assert where `status` is placed (body vs query).
+class _RecordingApiClient extends ApiClient {
+  _RecordingApiClient() : super(tokenStorage: TokenStorage());
+
+  final List<Map<String, dynamic>> patchCalls = [];
+  Map<String, dynamic> responseData = {};
+
+  @override
+  Future<Response<T>> patch<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) async {
+    patchCalls.add({
+      'path': path,
+      'data': data,
+      'queryParameters': queryParameters,
+    });
+    return Response<T>(
+      data: responseData as T,
+      statusCode: 200,
+      requestOptions: RequestOptions(path: path),
+    );
+  }
 }
 

@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ProductsService } from '../services/products.service';
 import { ProductsRepository } from '../repositories/products.repository';
@@ -120,6 +124,8 @@ describe('ProductsService', () => {
     );
 
     expect(mockRepo.findDefaultWarehouse).toHaveBeenCalledWith('comp-1');
+    // The warehouse is resolved BEFORE the product is created (fail fast).
+    expect(mockRepo.create).toHaveBeenCalled();
     expect(mockRepo.createInitialStock).toHaveBeenCalledWith({
       productId: 'prod-1',
       warehouseId: 'wh-1',
@@ -132,25 +138,41 @@ describe('ProductsService', () => {
     expect(result.unit).toBe('kg');
   });
 
-  it('should skip initial stock when no warehouse exists', async () => {
+  it('should fail fast with 422 when stockQuantity requested but no warehouse exists', async () => {
     mockRepo.create.mockResolvedValue(baseProduct as any);
     mockRepo.findDefaultWarehouse.mockResolvedValue(null);
 
-    await service.create(
-      { name: 'Rice', price: 50, stockQuantity: 15 } as any,
-      currentUser,
-    );
+    await expect(
+      service.create(
+        { name: 'Rice', price: 50, stockQuantity: 15 } as any,
+        currentUser,
+      ),
+    ).rejects.toThrow(UnprocessableEntityException);
 
+    // Fail fast: the product must NOT be created, and no stock row written.
+    expect(mockRepo.create).not.toHaveBeenCalled();
     expect(mockRepo.createInitialStock).not.toHaveBeenCalled();
   });
 
-  it('should not create stock when stockQuantity is zero/absent', async () => {
+  it('should not create stock when stockQuantity is zero/absent (warehouse not needed)', async () => {
     mockRepo.create.mockResolvedValue(baseProduct as any);
 
     await service.create({ name: 'Rice', price: 50 } as any, currentUser);
 
     expect(mockRepo.findDefaultWarehouse).not.toHaveBeenCalled();
     expect(mockRepo.createInitialStock).not.toHaveBeenCalled();
+  });
+
+  it('should still create product without warehouse when stockQuantity is 0', async () => {
+    mockRepo.create.mockResolvedValue(baseProduct as any);
+
+    await service.create(
+      { name: 'Rice', price: 50, stockQuantity: 0 } as any,
+      currentUser,
+    );
+
+    expect(mockRepo.findDefaultWarehouse).not.toHaveBeenCalled();
+    expect(mockRepo.create).toHaveBeenCalled();
   });
 
   it('should find all products with pagination', async () => {

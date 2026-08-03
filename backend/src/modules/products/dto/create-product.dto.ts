@@ -79,7 +79,13 @@ export class CreateProductDto {
   @MaxLength(100)
   brand?: string;
 
-  @ApiPropertyOptional({ example: 25 })
+  @ApiPropertyOptional({
+    example: 25,
+    description:
+      'Initial stock quantity. Persisted as a Stock row in the company\'s ' +
+      'default (or first) active warehouse. If > 0 and no active warehouse ' +
+      'exists, the request is rejected with 422.',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
