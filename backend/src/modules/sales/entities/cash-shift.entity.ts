@@ -20,4 +20,5 @@ export class CashShiftEntity {
   @ApiPropertyOptional() notes!: string | null;
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
+  @ApiProperty({ example: 0 }) rowVersion!: number;
 }

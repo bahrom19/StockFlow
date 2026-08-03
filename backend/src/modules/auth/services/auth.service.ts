@@ -5,7 +5,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { AccountType, NormalBalance, Prisma, UserStatus } from '@prisma/client';
+import {
+  AccountType,
+  FinancialPeriodStatus,
+  NormalBalance,
+  Prisma,
+  UserStatus,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../../common/prisma';
 import { RegisterDto } from '../dto/register.dto';
@@ -64,6 +70,11 @@ export class AuthService {
 
       // Create default Chart of Accounts for the new company
       await this.seedChartOfAccounts(company.id, tx);
+
+      // Create the first OPEN financial period for the current month so that
+      // sale completion, journal posting and fiscal year close work immediately
+      // after registration (idempotent — skips if a period already exists).
+      await this.seedFinancialPeriod(company.id, tx);
 
       const passwordHash = await bcrypt.hash(registerDto.password, this.bcryptRounds);
 
@@ -149,145 +160,183 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponse> {
-    return this.prismaService.$transaction(async (tx) => {
-      const user = await this.authRepository.findUserByEmail(
-        loginDto.email,
-        tx,
-      );
+    type LoginOutcome =
+      | { ok: true; result: AuthResponse }
+      | { ok: false; reason: 'INVALID_CREDENTIALS' | 'ACCOUNT_LOCKED' | 'NO_COMPANY'; remainingMin?: number };
 
-      if (!user) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      // ── Account Lockout Check ──────────────────────────────────
-      // If the account is locked and lock duration hasn't expired, reject
-      if (
-        user.status === UserStatus.BLOCKED &&
-        user.lockedUntil &&
-        user.lockedUntil > new Date()
-      ) {
-        const remainingMs = user.lockedUntil.getTime() - Date.now();
-        const remainingMin = Math.ceil(remainingMs / 60000);
-        throw new UnauthorizedException(
-          `Account is locked. Try again in ${remainingMin} minute(s).`,
+    const outcome: LoginOutcome = await this.prismaService.$transaction(
+      async (tx) => {
+        const user = await this.authRepository.findUserByEmail(
+          loginDto.email,
+          tx,
         );
-      }
 
-      // If lock has expired, unlock the account automatically
-      if (
-        user.status === UserStatus.BLOCKED &&
-        user.lockedUntil &&
-        user.lockedUntil <= new Date()
-      ) {
+        if (!user) {
+          return { ok: false as const, reason: 'INVALID_CREDENTIALS' };
+        }
+
+        // ── Account Lockout Check ──────────────────────────────────
+        // If the account is locked and lock duration hasn't expired, reject
+        if (
+          user.status === UserStatus.BLOCKED &&
+          user.lockedUntil &&
+          user.lockedUntil > new Date()
+        ) {
+          const remainingMs = user.lockedUntil.getTime() - Date.now();
+          const remainingMin = Math.ceil(remainingMs / 60000);
+          return {
+            ok: false as const,
+            reason: 'ACCOUNT_LOCKED',
+            remainingMin,
+          };
+        }
+
+        // If lock has expired, unlock the account automatically
+        if (
+          user.status === UserStatus.BLOCKED &&
+          user.lockedUntil &&
+          user.lockedUntil <= new Date()
+        ) {
+          await tx.user.update({
+            where: { id: user.id },
+            data: {
+              status: UserStatus.ACTIVE,
+              failedLoginAttempts: 0,
+              lockedUntil: null,
+            },
+          });
+        }
+
+        // ── Password Validation ────────────────────────────────────
+        const isPasswordValid = await bcrypt.compare(
+          loginDto.password,
+          user.passwordHash,
+        );
+
+        if (!isPasswordValid) {
+          // Increment failed attempts. These writes must COMMIT even though
+          // we reject the login below — throwing inside the $transaction
+          // callback would roll back the lockout counter AND the audit row.
+          const newAttempts = (user.failedLoginAttempts ?? 0) + 1;
+          const shouldLock = newAttempts >= this.maxFailedAttempts;
+
+          await tx.user.update({
+            where: { id: user.id },
+            data: {
+              failedLoginAttempts: newAttempts,
+              ...(shouldLock
+                ? {
+                    status: UserStatus.BLOCKED,
+                    lockedUntil: new Date(Date.now() + this.lockDurationMs),
+                  }
+                : {}),
+            },
+          });
+
+          // Audit log for failed login — resolve the user's real company via
+          // their CompanyMember (AuditLog.companyId is NOT NULL FK; a zero
+          // UUID would raise P2003, roll back the lockout counters above, and
+          // turn the 401 into a 500/400). If the user has no company member,
+          // skip the audit write rather than fail the whole transaction.
+          const failedLoginMember =
+            await this.authRepository.findCompanyMemberByUserId(user.id, tx);
+          if (failedLoginMember) {
+            await tx.auditLog.create({
+              data: {
+                userId: user.id,
+                companyId: failedLoginMember.companyId,
+                entity: 'User',
+                entityId: user.id,
+                action: shouldLock ? 'ACCOUNT_LOCKED' : 'LOGIN_FAILED',
+                newValues: {
+                  failedLoginAttempts: newAttempts,
+                  ...(shouldLock ? { status: 'BLOCKED' } : {}),
+                },
+              },
+            });
+          }
+
+          return { ok: false as const, reason: 'INVALID_CREDENTIALS' };
+        }
+
+        // ── Successful Login — Reset counters ──────────────────────
         await tx.user.update({
           where: { id: user.id },
           data: {
-            status: UserStatus.ACTIVE,
             failedLoginAttempts: 0,
             lockedUntil: null,
-          },
-        });
-      }
-
-      // ── Password Validation ────────────────────────────────────
-      const isPasswordValid = await bcrypt.compare(
-        loginDto.password,
-        user.passwordHash,
-      );
-
-      if (!isPasswordValid) {
-        // Increment failed attempts
-        const newAttempts = (user.failedLoginAttempts ?? 0) + 1;
-        const shouldLock = newAttempts >= this.maxFailedAttempts;
-
-        await tx.user.update({
-          where: { id: user.id },
-          data: {
-            failedLoginAttempts: newAttempts,
-            ...(shouldLock
-              ? {
-                  status: UserStatus.BLOCKED,
-                  lockedUntil: new Date(Date.now() + this.lockDurationMs),
-                }
-              : {}),
+            status: UserStatus.ACTIVE,
+            lastLoginAt: new Date(),
           },
         });
 
-        // Audit log for failed login (companyId is empty string because
-        // login happens before company context is established)
-        await tx.auditLog.create({
-          data: {
-            userId: user.id,
-            entity: 'User',
-            entityId: user.id,
-            action: shouldLock ? 'ACCOUNT_LOCKED' : 'LOGIN_FAILED',
-            newValues: {
-              failedLoginAttempts: newAttempts,
-              ...(shouldLock ? { status: 'BLOCKED' } : {}),
-            },
-            companyId: '00000000-0000-0000-0000-000000000000',
-          },
-        });
+        const companyMember =
+          await this.authRepository.findCompanyMemberByUserId(user.id, tx);
 
-        throw new UnauthorizedException('Invalid credentials');
-      }
+        if (!companyMember) {
+          return { ok: false as const, reason: 'NO_COMPANY' };
+        }
 
-      // ── Successful Login — Reset counters ──────────────────────
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-          status: UserStatus.ACTIVE,
-          lastLoginAt: new Date(),
-        },
-      });
+        // Load roles dynamically from the database
+        const roles = await this.authRepository.findUserRoles(
+          user.id,
+          companyMember.companyId,
+        );
 
-      const companyMember = await this.authRepository.findCompanyMemberByUserId(
-        user.id,
-        tx,
-      );
+        const permissions = await this.loadPermissions(
+          roles,
+          companyMember.companyId,
+        );
 
-      if (!companyMember) {
-        throw new UnauthorizedException('User is not assigned to any company');
-      }
-
-      // Load roles dynamically from the database
-      const roles = await this.authRepository.findUserRoles(
-        user.id,
-        companyMember.companyId,
-      );
-
-      const permissions = await this.loadPermissions(roles, companyMember.companyId);
-
-      const payload: JwtPayload = {
-        userId: user.id,
-        companyId: companyMember.companyId,
-        roles,
-        email: user.email,
-      };
-
-      const accessToken = await this.signAccessToken(payload);
-      const refreshToken = await this.signRefreshToken(payload);
-      await this.storeRefreshToken(user.id, refreshToken, tx);
-
-      return {
-        accessToken,
-        refreshToken,
-        expiresIn: this.configService.get<string>('jwt.expiresIn') ?? '15m',
-        refreshExpiresIn:
-          this.configService.get<string>('jwt.refreshExpiresIn') ?? '30d',
-        user: this.buildAuthUser({
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
+        const payload: JwtPayload = {
+          userId: user.id,
           companyId: companyMember.companyId,
           roles,
-          permissions,
-        }),
-      };
-    });
+          email: user.email,
+        };
+
+        const accessToken = await this.signAccessToken(payload);
+        const refreshToken = await this.signRefreshToken(payload);
+        await this.storeRefreshToken(user.id, refreshToken, tx);
+
+        return {
+          ok: true as const,
+          result: {
+            accessToken,
+            refreshToken,
+            expiresIn:
+              this.configService.get<string>('jwt.expiresIn') ?? '15m',
+            refreshExpiresIn:
+              this.configService.get<string>('jwt.refreshExpiresIn') ?? '30d',
+            user: this.buildAuthUser({
+              id: user.id,
+              email: user.email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              companyId: companyMember.companyId,
+              roles,
+              permissions,
+            }),
+          },
+        };
+      },
+    );
+
+    if (!outcome.ok) {
+      if (outcome.reason === 'ACCOUNT_LOCKED') {
+        throw new UnauthorizedException(
+          `Account is locked. Try again in ${outcome.remainingMin} minute(s).`,
+        );
+      }
+      if (outcome.reason === 'NO_COMPANY') {
+        throw new UnauthorizedException(
+          'User is not assigned to any company',
+        );
+      }
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    return outcome.result;
   }
 
   async refresh(refreshTokenDto: RefreshTokenDto): Promise<AuthResponse> {
@@ -445,6 +494,49 @@ export class AuthService {
       companyId,
       roles,
       permissions,
+    });
+  }
+
+  /**
+   * Create the first OPEN financial period for a new company covering the
+   * current calendar month. Runs inside the register transaction.
+   *
+   * Idempotent: if a period for the current year/month already exists
+   * (e.g. retried registration or imported company), it is left untouched.
+   * Without an OPEN period, completing a sale throws
+   * "No open financial period for company ..." (finance-integration.service).
+   */
+  private async seedFinancialPeriod(
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    const existing = await tx.financialPeriod.findFirst({
+      where: { companyId, year, month },
+      select: { id: true },
+    });
+    if (existing) {
+      return;
+    }
+
+    const startDate = new Date(Date.UTC(year, month - 1, 1));
+    const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+    await tx.financialPeriod.create({
+      data: {
+        companyId,
+        name: `${year}-${String(month).padStart(2, '0')}`,
+        year,
+        month,
+        startDate,
+        endDate,
+        status: FinancialPeriodStatus.OPEN,
+        openedBy: null,
+        notes: 'Auto-created on company registration',
+      },
     });
   }
 

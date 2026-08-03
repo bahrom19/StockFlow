@@ -18,6 +18,10 @@ import { PurchaseOrderRepository } from '../repositories/purchase-order.reposito
 import { PurchaseOrderCreatedEvent } from '../events/purchase-order-created.event';
 import { PurchaseOrderApprovedEvent } from '../events/purchase-order-approved.event';
 import { AuditLogService } from '../../shared/services/audit-log.service';
+import {
+  DocumentSequenceService,
+  DocumentSequenceType,
+} from '../../shared/services/document-sequence.service';
 
 const VALID_TRANSITIONS: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
   DRAFT: ['PENDING', 'CANCELLED'],
@@ -49,6 +53,7 @@ export class PurchaseOrderService {
     private readonly purchaseOrderRepository: PurchaseOrderRepository,
     private readonly prismaService: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly documentSequenceService: DocumentSequenceService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
 
@@ -58,8 +63,17 @@ export class PurchaseOrderService {
     companyId: string,
   ): Promise<PurchaseOrderEntity> {
     return this.prismaService.$transaction(async (tx) => {
+      // M2: atomic per-company counter — the old Date.now()-based generator
+      // collided for two orders created in the same millisecond (P2002 → 400).
       const orderNumber =
-        dto.orderNumber ?? nextOrderNumber(companyId, Date.now());
+        dto.orderNumber ??
+        nextOrderNumber(
+          companyId,
+          await this.documentSequenceService.nextNumber(
+            companyId,
+            DocumentSequenceType.PURCHASE_ORDER,
+          ),
+        );
       const existing = await this.purchaseOrderRepository.findByOrderNumber(
         orderNumber,
         companyId,
@@ -481,7 +495,12 @@ export class PurchaseOrderService {
 
   // Internal: generate next order number sequence
   async getNextOrderNumber(companyId: string): Promise<string> {
-    const count = await this.purchaseOrderRepository.countByCompany(companyId);
-    return nextOrderNumber(companyId, count + 1);
+    // M2: atomic counter — the old count+1 raced and two parallel calls
+    // returned the same number (P2002 → HTTP 400 on the second create).
+    const seq = await this.documentSequenceService.nextNumber(
+      companyId,
+      DocumentSequenceType.PURCHASE_ORDER,
+    );
+    return nextOrderNumber(companyId, seq);
   }
 }

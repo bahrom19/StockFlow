@@ -6,6 +6,13 @@ import {
 import { Prisma, PurchaseOrder, PurchaseOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
+// Scalar field names of the PurchaseOrder model — used to separate scalar
+// updates from relation writes in update() because updateMany accepts only
+// scalar fields (PurchaseOrderUpdateManyMutationInput).
+const PURCHASE_ORDER_SCALAR_KEYS = new Set<string>(
+  Object.values(Prisma.PurchaseOrderScalarFieldEnum),
+);
+
 @Injectable()
 export class PurchaseOrderRepository {
   constructor(private readonly prismaService: PrismaService) {}
@@ -18,13 +25,29 @@ export class PurchaseOrderRepository {
     data: Prisma.PurchaseOrderCreateInput,
     tx?: Prisma.TransactionClient,
   ): Promise<PurchaseOrder> {
-    return this.getClient(tx).purchaseOrder.create({
-      data,
-      include: {
-        items: true,
-        supplier: true,
-      },
-    });
+    try {
+      return await this.getClient(tx).purchaseOrder.create({
+        data,
+        include: {
+          items: true,
+          supplier: true,
+        },
+      });
+    } catch (err) {
+      // M2: a user-supplied orderNumber colliding with an existing one is a
+      // concurrency conflict → 409, not a generic 400/500.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        Array.isArray(err.meta?.target) &&
+        err.meta.target.includes('orderNumber')
+      ) {
+        throw new ConflictException(
+          'Order number already exists. Please refresh and retry.',
+        );
+      }
+      throw err;
+    }
   }
 
   async findById(
@@ -125,9 +148,24 @@ export class PurchaseOrderRepository {
     const client = this.getClient(tx);
 
     if (rowVersion !== undefined) {
+      // updateMany only accepts scalar fields
+      // (PurchaseOrderUpdateManyMutationInput). Relation writes (e.g.
+      // supplier: { connect }) must be applied via purchaseOrder.update after
+      // the optimistic-lock check succeeds, otherwise Prisma throws
+      // "Unknown argument `supplier`" (Blocker B1 pattern).
+      const scalarData: Record<string, unknown> = {};
+      const relationData: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (PURCHASE_ORDER_SCALAR_KEYS.has(key)) {
+          scalarData[key] = value;
+        } else {
+          relationData[key] = value;
+        }
+      }
+
       const result = await client.purchaseOrder.updateMany({
         where: { id, companyId, rowVersion },
-        data: { ...data, rowVersion: { increment: 1 } },
+        data: { ...scalarData, rowVersion: { increment: 1 } },
       });
 
       if (result.count === 0) {
@@ -140,6 +178,14 @@ export class PurchaseOrderRepository {
         throw new ConflictException(
           `Purchase order ${id} was modified by another user. Please refresh and retry.`,
         );
+      }
+
+      // Apply relation writes (updateMany cannot touch relations)
+      if (Object.keys(relationData).length > 0) {
+        await client.purchaseOrder.update({
+          where: { id },
+          data: relationData,
+        });
       }
 
       return client.purchaseOrder.findUnique({

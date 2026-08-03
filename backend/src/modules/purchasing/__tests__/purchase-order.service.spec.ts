@@ -5,6 +5,7 @@ import { PurchaseOrderService } from '../services/purchase-order.service';
 import { PurchaseOrderRepository } from '../repositories/purchase-order.repository';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
+import { DocumentSequenceService } from '../../shared/services/document-sequence.service';
 import { EVENT_BUS } from '../../../common/events';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import { UpdatePurchaseOrderDto } from '../dto/update-purchase-order.dto';
@@ -65,6 +66,7 @@ describe('PurchaseOrderService', () => {
   let mockPrisma: Record<string, jest.Mock>;
   let mockAuditLog: jest.Mocked<AuditLogService>;
   let mockEventBus: { publish: jest.Mock };
+  let mockSeq: { nextNumber: jest.Mock };
 
   const mockTransaction = jest.fn();
 
@@ -88,6 +90,10 @@ describe('PurchaseOrderService', () => {
       publish: jest.fn().mockResolvedValue(undefined),
     };
 
+    mockSeq = {
+      nextNumber: jest.fn().mockResolvedValue(1),
+    };
+
     mockPrisma = {
       $transaction: mockTransaction,
     };
@@ -98,6 +104,7 @@ describe('PurchaseOrderService', () => {
         { provide: PurchaseOrderRepository, useValue: mockRepo },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: AuditLogService, useValue: mockAuditLog },
+        { provide: DocumentSequenceService, useValue: mockSeq },
         { provide: EVENT_BUS, useValue: mockEventBus },
       ],
     }).compile();
@@ -165,6 +172,19 @@ describe('PurchaseOrderService', () => {
 
       const result = await service.create(multiDto, userId, companyId);
       expect(result).toBeDefined();
+    });
+  });
+
+  // ── M2: getNextOrderNumber uses the atomic sequence ──
+  describe('getNextOrderNumber', () => {
+    it('should return a PO number from the atomic sequence (M2)', async () => {
+      mockSeq.nextNumber.mockResolvedValue(7);
+
+      const result = await service.getNextOrderNumber(companyId);
+
+      expect(mockSeq.nextNumber).toHaveBeenCalledWith(companyId, 'PURCHASE_ORDER');
+      expect(mockRepo.countByCompany).not.toHaveBeenCalled();
+      expect(result).toBe('PO-COMP-1-0007');
     });
   });
 

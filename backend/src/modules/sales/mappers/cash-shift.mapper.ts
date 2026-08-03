@@ -30,6 +30,7 @@ export class CashShiftMapper {
       notes: shift.notes,
       createdAt: shift.createdAt,
       updatedAt: shift.updatedAt,
+      rowVersion: shift.rowVersion ?? 0,
     };
   }
 

@@ -20,7 +20,11 @@ export class SubscriptionPlanService {
     private readonly prismaService: PrismaService,
   ) {}
 
-  async create(dto: CreateSubscriptionPlanDto): Promise<SubscriptionPlanEntity> {
+  async create(
+    dto: CreateSubscriptionPlanDto,
+    companyId: string,
+    userId: string,
+  ): Promise<SubscriptionPlanEntity> {
     const existing = await this.planRepository.findByCode(dto.code);
     if (existing) {
       throw new ConflictException(`Plan with code ${dto.code} already exists`);
@@ -49,7 +53,8 @@ export class SubscriptionPlanService {
         entity: 'SubscriptionPlan',
         entityId: plan.id,
         newValues: { code: plan.code, name: plan.name, priceMonthly: plan.priceMonthly.toString() },
-        companyId: '',
+        companyId,
+        userId,
       },
     });
     return SubscriptionPlanMapper.toEntity(plan);
@@ -94,7 +99,12 @@ export class SubscriptionPlanService {
     return SubscriptionPlanMapper.toEntity(plan);
   }
 
-  async update(id: string, dto: UpdateSubscriptionPlanDto): Promise<SubscriptionPlanEntity> {
+  async update(
+    id: string,
+    dto: UpdateSubscriptionPlanDto,
+    companyId: string,
+    userId: string,
+  ): Promise<SubscriptionPlanEntity> {
     const existing = await this.planRepository.findById(id);
     if (!existing) throw new NotFoundException(`Plan ${id} not found`);
 
@@ -121,7 +131,8 @@ export class SubscriptionPlanService {
         entityId: id,
         oldValues: { name: existing.name },
         newValues: { name: updated.name },
-        companyId: '',
+        companyId,
+        userId,
       },
     });
     return SubscriptionPlanMapper.toEntity(updated);

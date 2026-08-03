@@ -104,6 +104,10 @@ describe('AuthService', () => {
           createMany: jest.fn().mockResolvedValue({ count: 2 }),
         },
         userRole: { create: jest.fn().mockResolvedValue({}) },
+        financialPeriod: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'fp-1' }),
+        },
       };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
@@ -115,6 +119,92 @@ describe('AuthService', () => {
       expect(result.user.email).toBe('test@example.com');
       expect(result.user.companyId).toBe('comp-1');
       expect(result.user.roles).toEqual(['Admin']);
+    });
+
+    it('should create the first OPEN financial period on registration (idempotent)', async () => {
+      const dto = {
+        email: 'fp@example.com',
+        password: 'Password123!',
+        firstName: 'John',
+        lastName: 'Doe',
+        companyName: 'FPCorp',
+      };
+
+      mockAuthRepo.findUserByEmail.mockResolvedValue(null);
+      mockAuthRepo.createCompany.mockResolvedValue({ id: 'comp-1' } as any);
+      mockAuthRepo.createUser.mockResolvedValue({ id: 'user-1' } as any);
+      mockAuthRepo.createCompanyMember.mockResolvedValue({ id: 'cm-1' } as any);
+
+      const financialPeriod = {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'fp-1' }),
+      };
+      const mockTx = {
+        chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
+        role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
+        permission: { findMany: jest.fn().mockResolvedValue([]) },
+        rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        userRole: { create: jest.fn().mockResolvedValue({}) },
+        financialPeriod,
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockJwtService.signAsync.mockResolvedValue('access-token');
+      mockConfigService.get.mockReturnValue('15m');
+      mockAuthRepo.createRefreshToken.mockResolvedValue({} as any);
+
+      await service.register(dto);
+
+      expect(financialPeriod.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ companyId: 'comp-1' }),
+        }),
+      );
+      expect(financialPeriod.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          companyId: 'comp-1',
+          status: 'OPEN',
+          year: expect.any(Number),
+          month: expect.any(Number),
+          startDate: expect.any(Date),
+          endDate: expect.any(Date),
+        }),
+      });
+    });
+
+    it('should skip financial period creation when it already exists (idempotent)', async () => {
+      const dto = {
+        email: 'fp2@example.com',
+        password: 'Password123!',
+        firstName: 'John',
+        lastName: 'Doe',
+        companyName: 'FPCorp2',
+      };
+
+      mockAuthRepo.findUserByEmail.mockResolvedValue(null);
+      mockAuthRepo.createCompany.mockResolvedValue({ id: 'comp-1' } as any);
+      mockAuthRepo.createUser.mockResolvedValue({ id: 'user-1' } as any);
+      mockAuthRepo.createCompanyMember.mockResolvedValue({ id: 'cm-1' } as any);
+
+      const financialPeriod = {
+        findFirst: jest.fn().mockResolvedValue({ id: 'existing-fp' }),
+        create: jest.fn(),
+      };
+      const mockTx = {
+        chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
+        role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
+        permission: { findMany: jest.fn().mockResolvedValue([]) },
+        rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        userRole: { create: jest.fn().mockResolvedValue({}) },
+        financialPeriod,
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockJwtService.signAsync.mockResolvedValue('access-token');
+      mockConfigService.get.mockReturnValue('15m');
+      mockAuthRepo.createRefreshToken.mockResolvedValue({} as any);
+
+      await service.register(dto);
+
+      expect(financialPeriod.create).not.toHaveBeenCalled();
     });
 
     it('should throw ConflictException when email already exists', async () => {
@@ -188,6 +278,65 @@ describe('AuthService', () => {
       await expect(
         service.login({ email: 'test@example.com', password: 'wrong' }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should write failed-login audit log with the user\'s real companyId (not zero UUID)', async () => {
+      const loginTx = {
+        user: { update: jest.fn().mockResolvedValue({}) },
+        auditLog: { create: jest.fn().mockResolvedValue({}) },
+      };
+      mockTransaction.mockImplementation(
+        (cb: (tx: any) => any) => cb(loginTx),
+      );
+
+      mockAuthRepo.findUserByEmail.mockResolvedValue({
+        id: 'user-1',
+        passwordHash: 'hashed',
+        status: 'ACTIVE',
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      } as any);
+      mockAuthRepo.findCompanyMemberByUserId.mockResolvedValue({
+        companyId: 'comp-1',
+      } as any);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.login({ email: 'test@example.com', password: 'wrong' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(loginTx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          companyId: 'comp-1',
+          userId: 'user-1',
+          action: 'LOGIN_FAILED',
+        }),
+      });
+    });
+
+    it('should still throw UnauthorizedException when user has no company member (audit skipped)', async () => {
+      const loginTx = {
+        user: { update: jest.fn().mockResolvedValue({}) },
+        auditLog: { create: jest.fn().mockResolvedValue({}) },
+      };
+      mockTransaction.mockImplementation(
+        (cb: (tx: any) => any) => cb(loginTx),
+      );
+
+      mockAuthRepo.findUserByEmail.mockResolvedValue({
+        id: 'user-1',
+        passwordHash: 'hashed',
+        status: 'ACTIVE',
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      } as any);
+      mockAuthRepo.findCompanyMemberByUserId.mockResolvedValue(null);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.login({ email: 'test@example.com', password: 'wrong' }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(loginTx.auditLog.create).not.toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException when user not found', async () => {

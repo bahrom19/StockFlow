@@ -2,6 +2,13 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { CompanySubscription, Prisma, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
+// Scalar field names of the CompanySubscription model — used to separate scalar
+// updates from relation writes in updateByCompany() because updateMany accepts
+// only scalar fields (CompanySubscriptionUpdateManyMutationInput).
+const COMPANY_SUBSCRIPTION_SCALAR_KEYS = new Set<string>(
+  Object.values(Prisma.CompanySubscriptionScalarFieldEnum),
+);
+
 @Injectable()
 export class CompanySubscriptionRepository {
   constructor(private readonly prismaService: PrismaService) {}
@@ -78,15 +85,39 @@ export class CompanySubscriptionRepository {
     const client = this.getClient(tx);
 
     if (rowVersion !== undefined) {
+      // updateMany only accepts scalar fields
+      // (CompanySubscriptionUpdateManyMutationInput). Relation writes (e.g.
+      // plan: { connect }) must be applied via companySubscription.update after
+      // the optimistic-lock check succeeds, otherwise Prisma throws
+      // "Unknown argument `plan`" (Blocker B1 pattern).
+      const scalarData: Record<string, unknown> = {};
+      const relationData: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (COMPANY_SUBSCRIPTION_SCALAR_KEYS.has(key)) {
+          scalarData[key] = value;
+        } else {
+          relationData[key] = value;
+        }
+      }
+
       const result = await client.companySubscription.updateMany({
         where: { companyId, rowVersion },
-        data: { ...data, rowVersion: { increment: 1 } },
+        data: { ...scalarData, rowVersion: { increment: 1 } },
       });
       if (result.count === 0) {
         const existing = await client.companySubscription.findUnique({ where: { companyId } });
         if (!existing) throw new NotFoundException(`Subscription for company ${companyId} not found`);
         throw new ConflictException(`Subscription was modified by another user. Please refresh and retry.`);
       }
+
+      // Apply relation writes (updateMany cannot touch relations)
+      if (Object.keys(relationData).length > 0) {
+        await client.companySubscription.update({
+          where: { companyId },
+          data: relationData,
+        });
+      }
+
       return client.companySubscription.findUnique({
         where: { companyId },
         include: { plan: true },

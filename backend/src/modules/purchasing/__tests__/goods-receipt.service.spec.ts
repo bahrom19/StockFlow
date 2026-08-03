@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma, GoodsReceiptStatus, PurchaseOrderStatus } from '@prisma/client';
 import { GoodsReceiptService } from '../services/goods-receipt.service';
 import { GoodsReceiptRepository } from '../repositories/goods-receipt.repository';
@@ -80,10 +80,10 @@ describe('GoodsReceiptService', () => {
       items: [{ purchaseOrderItemId: poItemId, productId, quantity: 5, unitCost: 10.00 }],
     };
 
-    it('should create goods receipt and update stock', async () => {
+    it('should create goods receipt and publish purchase.received WITHOUT mutating stock directly (B7 fix)', async () => {
       const mockTx = {
         warehouse: { findFirst: jest.fn().mockResolvedValue({ id: warehouseId, companyId, deletedAt: null, isActive: true }) },
-        purchaseOrderItem: { findFirst: jest.fn().mockResolvedValue(basePo.items[0]), findUnique: jest.fn().mockResolvedValue(basePo.items[0]), update: jest.fn() },
+        purchaseOrderItem: { findFirst: jest.fn().mockResolvedValue(basePo.items[0]), findUnique: jest.fn().mockResolvedValue(basePo.items[0]), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         stock: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: 's-1' }), update: jest.fn() },
         stockMovement: { create: jest.fn() },
         goodsReceiptItem: { create: jest.fn() },
@@ -100,6 +100,67 @@ describe('GoodsReceiptService', () => {
       expect(mockEventBus.publish).toHaveBeenCalled();
       expect(mockFinanceService.createGoodsReceiptJournal).toHaveBeenCalled();
       expect(mockPoService.updateStatusAfterReceipt).toHaveBeenCalledWith(poId, companyId, mockTx);
+
+      // B7 regression: the service must NOT touch stock/stockMovement directly —
+      // PurchaseReceivedEventHandler is the single source of truth. Direct mutation
+      // here + handler double-posted stock on every receipt.
+      expect(mockTx.stock.findFirst).not.toHaveBeenCalled();
+      expect(mockTx.stock.create).not.toHaveBeenCalled();
+      expect(mockTx.stock.update).not.toHaveBeenCalled();
+      expect(mockTx.stockMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('should propagate purchase.received handler failure (B7 fail-fast — no silent stock loss)', async () => {
+      const mockTx = {
+        warehouse: { findFirst: jest.fn().mockResolvedValue({ id: warehouseId, companyId, deletedAt: null, isActive: true }) },
+        purchaseOrderItem: { findFirst: jest.fn().mockResolvedValue(basePo.items[0]), findUnique: jest.fn().mockResolvedValue(basePo.items[0]), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        goodsReceiptItem: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockGrRepo.create.mockResolvedValue(baseReceipt as any);
+      mockGrRepo.updateStatus.mockResolvedValue({} as any);
+      mockGrRepo.findById.mockResolvedValue(baseReceipt as any);
+      // Handler throws → the goods-receipt transaction must fail (roll back),
+      // NOT commit a receipt whose stock was never updated.
+      mockEventBus.publish.mockRejectedValue(new Error('stock write failed'));
+
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        'stock write failed',
+      );
+      // The transaction callback is re-invoked by the mock on retry; assert the
+      // error was NOT swallowed (no fallback commit path).
+      expect(mockEventBus.publish).toHaveBeenCalled();
+    });
+
+    it('should publish purchase.received with the received items payload (B7 single source)', async () => {
+      const mockTx = {
+        warehouse: { findFirst: jest.fn().mockResolvedValue({ id: warehouseId, companyId, deletedAt: null, isActive: true }) },
+        purchaseOrderItem: { findFirst: jest.fn().mockResolvedValue(basePo.items[0]), findUnique: jest.fn().mockResolvedValue(basePo.items[0]), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        goodsReceiptItem: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockGrRepo.create.mockResolvedValue(baseReceipt as any);
+      mockGrRepo.updateStatus.mockResolvedValue({} as any);
+      mockGrRepo.findById.mockResolvedValue(baseReceipt as any);
+
+      await service.create(validDto, userId, companyId);
+
+      expect(mockEventBus.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventName: 'purchase.received',
+          payload: expect.objectContaining({
+            purchaseOrderId: poId,
+            companyId,
+            warehouseId,
+            items: [
+              { productId, quantity: 5, unitCost: '10' },
+            ],
+          }),
+        }),
+        expect.objectContaining({ context: expect.anything() }),
+      );
     });
 
     it('should throw NotFoundException when PO does not exist', async () => {
@@ -133,7 +194,7 @@ describe('GoodsReceiptService', () => {
     it('should handle zero items gracefully', async () => {
       const mockTx = {
         warehouse: { findFirst: jest.fn().mockResolvedValue({ id: warehouseId, companyId, deletedAt: null, isActive: true }) },
-        purchaseOrderItem: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+        purchaseOrderItem: { findFirst: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         stock: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
         stockMovement: { create: jest.fn() },
       };
@@ -145,6 +206,86 @@ describe('GoodsReceiptService', () => {
 
       const result = await service.create({ purchaseOrderId: poId, warehouseId, items: [] }, userId, companyId);
       expect(result).toBeDefined();
+    });
+  });
+
+  describe('create — H3 atomic receivedQuantity (optimistic locking)', () => {
+    const dto: CreateGoodsReceiptDto = {
+      purchaseOrderId: poId, warehouseId,
+      items: [{ purchaseOrderItemId: poItemId, productId, quantity: 5, unitCost: 10.00 }],
+    };
+
+    function buildTx(overrides: Record<string, any> = {}) {
+      return {
+        warehouse: { findFirst: jest.fn().mockResolvedValue({ id: warehouseId, companyId, deletedAt: null, isActive: true }) },
+        purchaseOrderItem: {
+          findFirst: jest.fn().mockResolvedValue(basePo.items[0]),
+          findUnique: jest.fn().mockResolvedValue(basePo.items[0]),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        goodsReceiptItem: { create: jest.fn() },
+        ...overrides,
+      };
+    }
+
+    beforeEach(() => {
+      mockTransaction.mockImplementation((cb: any) => cb(buildTx()));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockGrRepo.create.mockResolvedValue(baseReceipt as any);
+      mockGrRepo.updateStatus.mockResolvedValue({} as any);
+      mockGrRepo.findById.mockResolvedValue(baseReceipt as any);
+    });
+
+    it('should apply receivedQuantity via updateMany guarded by rowVersion and quantity (H3)', async () => {
+      let capturedTx: any = null;
+      mockTransaction.mockImplementation((cb: any) => {
+        capturedTx = buildTx();
+        return cb(capturedTx);
+      });
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockGrRepo.create.mockResolvedValue(baseReceipt as any);
+      mockGrRepo.updateStatus.mockResolvedValue({} as any);
+      mockGrRepo.findById.mockResolvedValue(baseReceipt as any);
+
+      await service.create(dto, userId, companyId);
+
+      expect(capturedTx.purchaseOrderItem.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: poItemId,
+          rowVersion: 0,
+          quantity: { gte: 5 },
+        },
+        data: {
+          receivedQuantity: 5,
+          rowVersion: { increment: 1 },
+        },
+      });
+    });
+
+    it('should throw ConflictException (409) when receivedQuantity was modified concurrently (H3)', async () => {
+      let updateManyCalls = 0;
+      const fakeTx = {
+        warehouse: { findFirst: jest.fn().mockResolvedValue({ id: warehouseId, companyId, deletedAt: null, isActive: true }) },
+        purchaseOrderItem: {
+          findFirst: jest.fn().mockResolvedValue(basePo.items[0]),
+          findUnique: jest
+            .fn()
+            .mockResolvedValueOnce(basePo.items[0]) // first read (validate)
+            .mockResolvedValueOnce(basePo.items[0]) // second read (update loop)
+            .mockResolvedValueOnce({ ...basePo.items[0], receivedQuantity: 5 }), // conflict re-read
+          updateMany: jest.fn().mockImplementation(() => {
+            updateManyCalls += 1;
+            return updateManyCalls === 1 ? Promise.resolve({ count: 0 }) : Promise.resolve({ count: 1 });
+          }),
+        },
+        goodsReceiptItem: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(fakeTx));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(service.create(dto, userId, companyId)).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 

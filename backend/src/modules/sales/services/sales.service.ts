@@ -301,16 +301,28 @@ export class SalesService {
       }
       const saleTotal = new Decimal(sale.total.toString());
 
-      await tx.cashShift.update({
-        where: { id: cashShift.id },
-        data: {
-          cashSales: new Decimal(cashShift.cashSales.toString()).add(cashTotal),
-          cardSales: new Decimal(cashShift.cardSales.toString()).add(cardTotal),
+      // H2: update shift totals through optimistic locking. The repository
+      // write is guarded by rowVersion, so two sales completing concurrently
+      // on the same shift cannot silently lose each other's amounts. On a
+      // conflict the repository throws ConflictException and this sale's
+      // transaction rolls back (HTTP 409, not a lost update).
+      await this.cashShiftRepository.update(
+        cashShift.id,
+        {
+          cashSales: new Decimal(cashShift.cashSales.toString()).add(
+            cashTotal,
+          ),
+          cardSales: new Decimal(cashShift.cardSales.toString()).add(
+            cardTotal,
+          ),
           totalSales: new Decimal(cashShift.totalSales.toString()).add(
             saleTotal,
           ),
         },
-      });
+        companyId,
+        cashShift.rowVersion ?? 0,
+        tx,
+      );
     }
 
     // Publish SaleCompletedEvent — handlers (Finance, Inventory, Loyalty, etc.)

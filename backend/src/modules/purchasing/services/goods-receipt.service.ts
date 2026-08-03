@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -9,9 +10,9 @@ import {
   GoodsReceiptStatus,
   Prisma,
   PurchaseOrderStatus,
-  StockMovementType,
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
 import { CreateGoodsReceiptDto } from '../dto/create-goods-receipt.dto';
@@ -135,90 +136,85 @@ export class GoodsReceiptService {
         });
       }
 
-      // Create the goods receipt
+      // Create the goods receipt. receiptNumber must be unique even for two
+      // concurrent requests in the same millisecond (Date.now() alone collided
+      // and surfaced as P2002 → 400 instead of the rowVersion 409 conflict).
       const receiptNumber =
         dto.receiptNumber ??
-        `GR-${companyId.substring(0, 8).toUpperCase()}-${Date.now()}`;
+        `GR-${companyId.substring(0, 8).toUpperCase()}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
-      const receipt = await this.goodsReceiptRepository.create(
-        {
-          receiptNumber,
-          receiptDate: dto.receiptDate ? new Date(dto.receiptDate) : new Date(),
-          status: GoodsReceiptStatus.DRAFT,
-          notes: dto.notes,
-          company: { connect: { id: companyId } },
-          purchaseOrder: { connect: { id: dto.purchaseOrderId } },
-          warehouse: { connect: { id: dto.warehouseId } },
-          receivedBy: userId,
-          items: { create: receiptItemsData },
-        },
-        tx,
-      );
+      let receipt: Awaited<ReturnType<GoodsReceiptRepository['create']>> | null = null;
+      try {
+        receipt = await this.goodsReceiptRepository.create(
+          {
+            receiptNumber,
+            receiptDate: dto.receiptDate ? new Date(dto.receiptDate) : new Date(),
+            status: GoodsReceiptStatus.DRAFT,
+            notes: dto.notes,
+            company: { connect: { id: companyId } },
+            purchaseOrder: { connect: { id: dto.purchaseOrderId } },
+            warehouse: { connect: { id: dto.warehouseId } },
+            receivedBy: userId,
+            items: { create: receiptItemsData },
+          },
+          tx,
+        );
+      } catch (err) {
+        // Rare defense-in-depth: any unique collision (e.g. a client-supplied
+        // duplicate receiptNumber) is a concurrency conflict → 409, not 400/500.
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          throw new ConflictException(
+            'Goods receipt number already exists. Please refresh and retry.',
+          );
+        }
+        throw err;
+      }
 
-      // Update PO items received quantities
+      // Update PO items received quantities — atomically (H3).
+      // The check (remaining capacity) and the increment happen in one
+      // updateMany guarded by rowVersion, so two concurrent goods receipts
+      // for the same PO item cannot both pass the remaining check and
+      // double-receive. The loser gets HTTP 409 Conflict instead of 500.
       for (const update of poItemUpdates) {
         const poItem = await tx.purchaseOrderItem.findUnique({
           where: { id: update.id },
         });
-        if (poItem) {
-          const newReceived = poItem.receivedQuantity + update.receivedQuantity;
-          await tx.purchaseOrderItem.update({
+        if (!poItem) continue;
+        const newReceived =
+          poItem.receivedQuantity + update.receivedQuantity;
+        const result = await tx.purchaseOrderItem.updateMany({
+          where: {
+            id: update.id,
+            rowVersion: poItem.rowVersion ?? 0,
+            // DB-level guard: never exceed the ordered quantity
+            quantity: { gte: newReceived },
+          },
+          data: {
+            receivedQuantity: newReceived,
+            rowVersion: { increment: 1 },
+          },
+        });
+        if (result.count === 0) {
+          const fresh = await tx.purchaseOrderItem.findUnique({
             where: { id: update.id },
-            data: { receivedQuantity: newReceived },
           });
-
-          // Update stock (upsert since product+warehouse unique)
-          const stock = await tx.stock.findFirst({
-            where: {
-              productId: poItem.productId,
-              warehouseId: dto.warehouseId,
-              companyId,
-            },
-          });
-
-          const beforeQty = stock?.quantity ?? 0;
-          const afterQty = beforeQty + update.receivedQuantity;
-
-          if (stock) {
-            await tx.stock.update({
-              where: { id: stock.id },
-              data: {
-                quantity: afterQty,
-                availableQuantity: afterQty - stock.reservedQuantity,
-              },
-            });
-          } else {
-            await tx.stock.create({
-              data: {
-                companyId,
-                productId: poItem.productId,
-                warehouseId: dto.warehouseId,
-                quantity: afterQty,
-                availableQuantity: afterQty,
-                minQuantity: 0,
-                maxQuantity: 0,
-              },
-            });
-          }
-
-          // Create stock movement
-          await tx.stockMovement.create({
-            data: {
-              companyId,
-              productId: poItem.productId,
-              warehouseId: dto.warehouseId,
-              type: StockMovementType.PURCHASE,
-              quantity: update.receivedQuantity,
-              beforeQuantity: beforeQty,
-              afterQuantity: afterQty,
-              referenceType: 'GOODS_RECEIPT',
-              referenceId: receipt.id,
-              comment: `Received via goods receipt ${receiptNumber}`,
-              createdBy: userId,
-            },
-          });
+          if (!fresh) continue;
+          const remaining = fresh.quantity - fresh.receivedQuantity;
+          throw new ConflictException(
+            `Purchase order item ${update.id} was modified concurrently. Only ${remaining} remaining. Please refresh and retry.`,
+          );
         }
       }
+
+      // NOTE (Blocker B7): Stock + stock movements are NOT mutated here.
+      // They are applied once by PurchaseReceivedEventHandler (subscribed to
+      // `purchase.received` in InventoryModule), which runs synchronously
+      // inside this same transaction via the eventBus context.transactionClient.
+      // Mutating stock both here AND in the handler double-posted every
+      // receipt (stock increased by 2× quantity, two movements).
 
       // Complete the goods receipt automatically
       await this.goodsReceiptRepository.updateStatus(
@@ -242,23 +238,21 @@ export class GoodsReceiptService {
         unitCost: i.unitCost.toString(),
       }));
 
-      try {
-        await this.eventBus.publish(
-          new PurchaseReceivedEvent({
-            purchaseOrderId: dto.purchaseOrderId,
-            companyId,
-            warehouseId: dto.warehouseId,
-            receivedBy: userId,
-            receiptNumber,
-            items,
-          }),
-          { context: { transactionClient: tx } },
-        );
-      } catch (err) {
-        this.logger.warn(
-          `Failed to publish purchase.received: ${(err as Error).message}`,
-        );
-      }
+      // NOTE: no try/catch here on purpose (Blocker B7). The handler
+      // PurchaseReceivedEventHandler is the single source of truth for stock —
+      // if it fails, the whole goods-receipt transaction must roll back rather
+      // than commit a receipt whose stock was never updated (fail fast).
+      await this.eventBus.publish(
+        new PurchaseReceivedEvent({
+          purchaseOrderId: dto.purchaseOrderId,
+          companyId,
+          warehouseId: dto.warehouseId,
+          receivedBy: userId,
+          receiptNumber,
+          items,
+        }),
+        { context: { transactionClient: tx } },
+      );
 
       // Create finance journal entries
       try {

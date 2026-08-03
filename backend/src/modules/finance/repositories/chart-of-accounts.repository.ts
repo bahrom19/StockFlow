@@ -6,6 +6,13 @@ import {
 import { Prisma, ChartOfAccount } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
+// Scalar field names of the ChartOfAccount model — used to separate scalar
+// updates from relation writes in update() because updateMany accepts only
+// scalar fields (ChartOfAccountUpdateManyMutationInput).
+const CHART_OF_ACCOUNT_SCALAR_KEYS = new Set<string>(
+  Object.values(Prisma.ChartOfAccountScalarFieldEnum),
+);
+
 @Injectable()
 export class ChartOfAccountsRepository {
   constructor(private readonly prismaService: PrismaService) {}
@@ -93,9 +100,25 @@ export class ChartOfAccountsRepository {
     tx?: Prisma.TransactionClient,
   ): Promise<ChartOfAccount> {
     const prisma = this.prisma(tx);
+
+    // updateMany only accepts scalar fields
+    // (ChartOfAccountUpdateManyMutationInput). Relation writes (e.g.
+    // parent: { connect }) must be applied via chartOfAccount.update after the
+    // optimistic-lock check succeeds, otherwise Prisma throws
+    // "Unknown argument `parent`" (Blocker B1 pattern).
+    const scalarData: Record<string, unknown> = {};
+    const relationData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (CHART_OF_ACCOUNT_SCALAR_KEYS.has(key)) {
+        scalarData[key] = value;
+      } else {
+        relationData[key] = value;
+      }
+    }
+
     const result = await prisma.chartOfAccount.updateMany({
       where: { id, companyId, rowVersion, deletedAt: null },
-      data: { ...data, rowVersion: { increment: 1 } },
+      data: { ...scalarData, rowVersion: { increment: 1 } },
     });
 
     if (result.count === 0) {
@@ -106,6 +129,11 @@ export class ChartOfAccountsRepository {
       throw new ConflictException(
         'Chart of account was modified by another user',
       );
+    }
+
+    // Apply relation writes (updateMany cannot touch relations)
+    if (Object.keys(relationData).length > 0) {
+      await prisma.chartOfAccount.update({ where: { id }, data: relationData });
     }
 
     return prisma.chartOfAccount.findFirst({

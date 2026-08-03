@@ -18,7 +18,10 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "postinstall": "prisma generate || true"
+    "postinstall": "prisma generate || true",
+    "backfill:financial-periods": "ts-node scripts/backfill-financial-periods.ts",
+    "e2e:financial-period-workday": "ts-node scripts/e2e-financial-period-workday.ts",
+    "e2e:concurrency-hardening": "ts-node scripts/e2e-concurrency-hardening.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

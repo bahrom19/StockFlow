@@ -6,6 +6,13 @@ import {
 import { Prisma, FinancialPeriod } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
+// Scalar field names of the FinancialPeriod model — used to separate scalar
+// updates from relation writes in update() because updateMany accepts only
+// scalar fields (FinancialPeriodUpdateManyMutationInput).
+const FINANCIAL_PERIOD_SCALAR_KEYS = new Set<string>(
+  Object.values(Prisma.FinancialPeriodScalarFieldEnum),
+);
+
 @Injectable()
 export class FinancialPeriodsRepository {
   constructor(private readonly prismaService: PrismaService) {}
@@ -103,9 +110,25 @@ export class FinancialPeriodsRepository {
     tx?: Prisma.TransactionClient,
   ): Promise<FinancialPeriod> {
     const prisma = this.prisma(tx);
+
+    // updateMany only accepts scalar fields
+    // (FinancialPeriodUpdateManyMutationInput). Relation writes (e.g.
+    // closedByUser: { connect }) must be applied via financialPeriod.update
+    // after the optimistic-lock check succeeds, otherwise Prisma throws
+    // "Unknown argument `closedByUser`" (Blocker B1 pattern).
+    const scalarData: Record<string, unknown> = {};
+    const relationData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (FINANCIAL_PERIOD_SCALAR_KEYS.has(key)) {
+        scalarData[key] = value;
+      } else {
+        relationData[key] = value;
+      }
+    }
+
     const result = await prisma.financialPeriod.updateMany({
       where: { id, companyId, rowVersion },
-      data: { ...data, rowVersion: { increment: 1 } },
+      data: { ...scalarData, rowVersion: { increment: 1 } },
     });
 
     if (result.count === 0) {
@@ -116,6 +139,11 @@ export class FinancialPeriodsRepository {
       throw new ConflictException(
         'Financial period was modified by another user',
       );
+    }
+
+    // Apply relation writes (updateMany cannot touch relations)
+    if (Object.keys(relationData).length > 0) {
+      await prisma.financialPeriod.update({ where: { id }, data: relationData });
     }
 
     return prisma.financialPeriod.findFirst({

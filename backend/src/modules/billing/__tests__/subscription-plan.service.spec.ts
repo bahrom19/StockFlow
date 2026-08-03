@@ -6,6 +6,7 @@ import { PrismaService } from '../../../common/prisma';
 
 describe('SubscriptionPlanService', () => {
   let service: SubscriptionPlanService;
+  let prisma: PrismaService;
   let mockRepo: jest.Mocked<SubscriptionPlanRepository>;
 
   const mockPlan = {
@@ -49,6 +50,7 @@ describe('SubscriptionPlanService', () => {
     }).compile();
 
     service = module.get<SubscriptionPlanService>(SubscriptionPlanService);
+    prisma = module.get<PrismaService>(PrismaService);
   });
 
   describe('create', () => {
@@ -56,25 +58,53 @@ describe('SubscriptionPlanService', () => {
       mockRepo.findByCode.mockResolvedValue(null);
       mockRepo.create.mockResolvedValue(mockPlan as any);
 
-      const result = await service.create({
-        code: 'starter',
-        name: 'Starter',
-        priceMonthly: 29.99,
-        priceYearly: 290.00,
-      });
+      const result = await service.create(
+        {
+          code: 'starter',
+          name: 'Starter',
+          priceMonthly: 29.99,
+          priceYearly: 290.00,
+        },
+        'comp-1',
+        'user-1',
+      );
 
       expect(result.code).toBe('starter');
       expect(mockRepo.create).toHaveBeenCalled();
     });
 
+    it('should write audit log with a real companyId (not empty string)', async () => {
+      mockRepo.findByCode.mockResolvedValue(null);
+      mockRepo.create.mockResolvedValue(mockPlan as any);
+
+      await service.create(
+        { code: 'starter', name: 'Starter', priceMonthly: 29.99, priceYearly: 290.0 },
+        'comp-1',
+        'user-1',
+      );
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'PLAN_CREATED',
+          entity: 'SubscriptionPlan',
+          companyId: 'comp-1',
+          userId: 'user-1',
+        }),
+      });
+    });
+
     it('should throw ConflictException if code exists', async () => {
       mockRepo.findByCode.mockResolvedValue(mockPlan as any);
-      await expect(service.create({
-        code: 'starter',
-        name: 'Starter',
-        priceMonthly: 29.99,
-        priceYearly: 290.00,
-      })).rejects.toThrow(ConflictException);
+      await expect(service.create(
+        {
+          code: 'starter',
+          name: 'Starter',
+          priceMonthly: 29.99,
+          priceYearly: 290.00,
+        },
+        'comp-1',
+        'user-1',
+      )).rejects.toThrow(ConflictException);
     });
   });
 
@@ -109,13 +139,29 @@ describe('SubscriptionPlanService', () => {
       mockRepo.findById.mockResolvedValue(mockPlan as any);
       mockRepo.update.mockResolvedValue({ ...mockPlan, name: 'Starter Plus' } as any);
 
-      const result = await service.update('plan-1', { name: 'Starter Plus' });
+      const result = await service.update('plan-1', { name: 'Starter Plus' }, 'comp-1', 'user-1');
       expect(result.name).toBe('Starter Plus');
+    });
+
+    it('should write audit log with a real companyId (not empty string)', async () => {
+      mockRepo.findById.mockResolvedValue(mockPlan as any);
+      mockRepo.update.mockResolvedValue({ ...mockPlan, name: 'Starter Plus' } as any);
+
+      await service.update('plan-1', { name: 'Starter Plus' }, 'comp-1', 'user-1');
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'PLAN_UPDATED',
+          entity: 'SubscriptionPlan',
+          companyId: 'comp-1',
+          userId: 'user-1',
+        }),
+      });
     });
 
     it('should throw if plan not found', async () => {
       mockRepo.findById.mockResolvedValue(null);
-      await expect(service.update('missing', { name: 'Test' })).rejects.toThrow(NotFoundException);
+      await expect(service.update('missing', { name: 'Test' }, 'comp-1', 'user-1')).rejects.toThrow(NotFoundException);
     });
   });
 

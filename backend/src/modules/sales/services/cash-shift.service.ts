@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 import { CashShiftEntity } from '../entities/cash-shift.entity';
 import { CashShiftMapper } from '../mappers/cash-shift.mapper';
@@ -21,33 +23,60 @@ export class CashShiftService {
     private readonly prismaService: PrismaService,
   ) {}
 
+  /**
+   * Open a cash shift atomically.
+   *
+   * Race protection (H1): the duplicate-OPEN check AND the insert run inside a
+   * single DB transaction, and a partial unique index
+   * `CashShift_open_shift_unique` on (warehouseId, cashierId, companyId) WHERE
+   * status='OPEN' rejects a second concurrent OPEN shift at the DB level
+   * (P2002). Both the pre-check and the P2002 path map to HTTP 409 Conflict.
+   */
   async openShift(
     dto: OpenShiftDto,
     userId: string,
     companyId: string,
   ): Promise<CashShiftEntity> {
-    const existing = await this.cashShiftRepository.findOpenShift(
-      dto.warehouseId,
-      userId,
-      companyId,
-    );
-    if (existing) {
-      throw new BadRequestException(
-        'An open shift already exists for this warehouse and cashier',
+    return this.prismaService.$transaction(async (tx) => {
+      const existing = await this.cashShiftRepository.findOpenShift(
+        dto.warehouseId,
+        userId,
+        companyId,
+        tx,
       );
-    }
+      if (existing) {
+        throw new ConflictException(
+          'An open shift already exists for this warehouse and cashier',
+        );
+      }
 
-    const shift = await this.cashShiftRepository.create({
-      openingBalance: new Decimal(dto.openingBalance),
-      closingBalance: new Decimal(dto.openingBalance),
-      expectedClosing: new Decimal(dto.openingBalance),
-      notes: dto.notes,
-      company: { connect: { id: companyId } },
-      warehouse: { connect: { id: dto.warehouseId } },
-      cashier: { connect: { id: userId } },
+      try {
+        const shift = await this.cashShiftRepository.create(
+          {
+            openingBalance: new Decimal(dto.openingBalance),
+            closingBalance: new Decimal(dto.openingBalance),
+            expectedClosing: new Decimal(dto.openingBalance),
+            notes: dto.notes,
+            company: { connect: { id: companyId } },
+            warehouse: { connect: { id: dto.warehouseId } },
+            cashier: { connect: { id: userId } },
+          },
+          tx,
+        );
+        return CashShiftMapper.toEntity(shift);
+      } catch (err) {
+        // DB-level protection: a concurrent request already opened a shift
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          throw new ConflictException(
+            'An open shift already exists for this warehouse and cashier',
+          );
+        }
+        throw err;
+      }
     });
-
-    return CashShiftMapper.toEntity(shift);
   }
 
   async closeShift(
@@ -56,42 +85,47 @@ export class CashShiftService {
     companyId: string,
     warehouseId: string,
   ): Promise<CashShiftEntity> {
-    const shift = await this.cashShiftRepository.findOpenShift(
-      warehouseId,
-      userId,
-      companyId,
-    );
-    if (!shift) throw new NotFoundException('No open shift found');
+    return this.prismaService.$transaction(async (tx) => {
+      const shift = await this.cashShiftRepository.findOpenShift(
+        warehouseId,
+        userId,
+        companyId,
+        tx,
+      );
+      if (!shift) throw new NotFoundException('No open shift found');
 
-    const openingBalance = new Decimal(shift.openingBalance.toString());
-    const cashSales = new Decimal(shift.cashSales.toString());
-    const cardSales = new Decimal(shift.cardSales.toString());
-    const cashIn = new Decimal(shift.cashIn.toString());
-    const cashOut = new Decimal(shift.cashOut.toString());
-    const expectedClosing = openingBalance
-      .add(cashSales)
-      .add(cashIn)
-      .sub(cashOut);
-    const actualClosing =
-      dto.actualClosingBalance != null
-        ? new Decimal(dto.actualClosingBalance)
-        : expectedClosing;
-    const difference = actualClosing.sub(expectedClosing);
+      const openingBalance = new Decimal(shift.openingBalance.toString());
+      const cashSales = new Decimal(shift.cashSales.toString());
+      const cardSales = new Decimal(shift.cardSales.toString());
+      const cashIn = new Decimal(shift.cashIn.toString());
+      const cashOut = new Decimal(shift.cashOut.toString());
+      const expectedClosing = openingBalance
+        .add(cashSales)
+        .add(cashIn)
+        .sub(cashOut);
+      const actualClosing =
+        dto.actualClosingBalance != null
+          ? new Decimal(dto.actualClosingBalance)
+          : expectedClosing;
+      const difference = actualClosing.sub(expectedClosing);
 
-    const updated = await this.cashShiftRepository.update(
-      shift.id,
-      {
-        status: 'CLOSED',
-        closedAt: new Date(),
-        closingBalance: actualClosing,
-        expectedClosing,
-        difference,
-        notes: dto.notes ?? shift.notes,
-      },
-      companyId,
-    );
+      const updated = await this.cashShiftRepository.update(
+        shift.id,
+        {
+          status: 'CLOSED',
+          closedAt: new Date(),
+          closingBalance: actualClosing,
+          expectedClosing,
+          difference,
+          notes: dto.notes ?? shift.notes,
+        },
+        companyId,
+        shift.rowVersion ?? 0,
+        tx,
+      );
 
-    return CashShiftMapper.toEntity(updated);
+      return CashShiftMapper.toEntity(updated);
+    });
   }
 
   async cashIn(
@@ -100,26 +134,13 @@ export class CashShiftService {
     companyId: string,
     warehouseId: string,
   ): Promise<CashShiftEntity> {
-    const shift = await this.cashShiftRepository.findOpenShift(
-      warehouseId,
+    return this.cashShiftServiceMutation(
+      dto,
       userId,
       companyId,
+      warehouseId,
+      'cashIn',
     );
-    if (!shift) throw new NotFoundException('No open shift found');
-
-    const currentCashIn = new Decimal(shift.cashIn.toString());
-    const updated = await this.cashShiftRepository.update(
-      shift.id,
-      {
-        cashIn: currentCashIn.add(new Decimal(dto.amount)),
-        notes: dto.reason
-          ? `${shift.notes ?? ''} In: ${dto.reason}`.trim()
-          : shift.notes,
-      },
-      companyId,
-    );
-
-    return CashShiftMapper.toEntity(updated);
   }
 
   async cashOut(
@@ -128,26 +149,61 @@ export class CashShiftService {
     companyId: string,
     warehouseId: string,
   ): Promise<CashShiftEntity> {
-    const shift = await this.cashShiftRepository.findOpenShift(
-      warehouseId,
+    return this.cashShiftServiceMutation(
+      dto,
       userId,
       companyId,
+      warehouseId,
+      'cashOut',
     );
-    if (!shift) throw new NotFoundException('No open shift found');
+  }
 
-    const currentCashOut = new Decimal(shift.cashOut.toString());
-    const updated = await this.cashShiftRepository.update(
-      shift.id,
-      {
-        cashOut: currentCashOut.add(new Decimal(dto.amount)),
-        notes: dto.reason
-          ? `${shift.notes ?? ''} Out: ${dto.reason}`.trim()
-          : shift.notes,
-      },
-      companyId,
-    );
+  /**
+   * Shared atomic read-modify-write for cashIn/cashOut (H2). The read, the
+   * Decimal arithmetic and the rowVersion-guarded write all happen inside one
+   * transaction, so a concurrent mutation cannot be silently lost.
+   */
+  private async cashShiftServiceMutation(
+    dto: CashInOutDto,
+    userId: string,
+    companyId: string,
+    warehouseId: string,
+    kind: 'cashIn' | 'cashOut',
+  ): Promise<CashShiftEntity> {
+    return this.prismaService.$transaction(async (tx) => {
+      const shift = await this.cashShiftRepository.findOpenShift(
+        warehouseId,
+        userId,
+        companyId,
+        tx,
+      );
+      if (!shift) throw new NotFoundException('No open shift found');
 
-    return CashShiftMapper.toEntity(updated);
+      const amount = new Decimal(dto.amount);
+      if (amount.isNegative()) {
+        throw new BadRequestException('Amount must not be negative');
+      }
+
+      const current =
+        kind === 'cashIn'
+          ? new Decimal(shift.cashIn.toString())
+          : new Decimal(shift.cashOut.toString());
+
+      const updated = await this.cashShiftRepository.update(
+        shift.id,
+        {
+          [kind]: current.add(amount),
+          notes: dto.reason
+            ? `${shift.notes ?? ''} ${kind === 'cashIn' ? 'In' : 'Out'}: ${dto.reason}`.trim()
+            : shift.notes,
+        },
+        companyId,
+        shift.rowVersion ?? 0,
+        tx,
+      );
+
+      return CashShiftMapper.toEntity(updated);
+    });
   }
 
   async getXReport(

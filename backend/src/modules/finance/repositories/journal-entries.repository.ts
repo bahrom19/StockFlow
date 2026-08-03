@@ -7,12 +7,23 @@ import { Prisma, JournalEntry, JournalLine } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { toDecimal } from '../../../common/utils/decimal.util';
+import { DocumentSequenceService } from '../../shared/services/document-sequence.service';
 
 type JournalEntryWithLines = JournalEntry & { lines?: JournalLine[] };
 
+// Scalar field names of the JournalEntry model — used to separate scalar
+// updates from relation writes in update() because updateMany accepts only
+// scalar fields (JournalEntryUpdateManyMutationInput).
+const JOURNAL_ENTRY_SCALAR_KEYS = new Set<string>(
+  Object.values(Prisma.JournalEntryScalarFieldEnum),
+);
+
 @Injectable()
 export class JournalEntriesRepository {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly documentSequenceService: DocumentSequenceService,
+  ) {}
 
   private prisma(tx?: Prisma.TransactionClient): Prisma.TransactionClient {
     return tx ?? this.prismaService;
@@ -71,11 +82,14 @@ export class JournalEntriesRepository {
     companyId: string,
     financialPeriodId: string,
   ): Promise<number> {
-    const result = await tx.journalEntry.aggregate({
-      where: { companyId, financialPeriodId },
-      _max: { entryNumber: true },
-    });
-    return (result._max.entryNumber || 0) + 1;
+    // M2: atomic per-(company, period) counter. The old max()+1 raced: two
+    // parallel postings both computed the same entryNumber and the second hit
+    // P2002 on @@unique([companyId, financialPeriodId, entryNumber]) → 400/500.
+    return this.documentSequenceService.nextNumber(
+      companyId,
+      `JE:${financialPeriodId}`,
+      tx,
+    );
   }
 
   async create(
@@ -191,9 +205,24 @@ export class JournalEntriesRepository {
     tx?: Prisma.TransactionClient,
   ): Promise<JournalEntryWithLines> {
     const prisma = this.prisma(tx);
+
+    // updateMany only accepts scalar fields (JournalEntryUpdateManyMutationInput).
+    // Relation writes (e.g. postedByUser: { connect }) must be applied via
+    // journalEntry.update after the optimistic-lock check succeeds, otherwise
+    // Prisma throws "Unknown argument `postedByUser`" (Blocker B1 pattern).
+    const scalarData: Record<string, unknown> = {};
+    const relationData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (JOURNAL_ENTRY_SCALAR_KEYS.has(key)) {
+        scalarData[key] = value;
+      } else {
+        relationData[key] = value;
+      }
+    }
+
     const result = await prisma.journalEntry.updateMany({
       where: { id, companyId, rowVersion },
-      data: { ...data, rowVersion: { increment: 1 } },
+      data: { ...scalarData, rowVersion: { increment: 1 } },
     });
 
     if (result.count === 0) {
@@ -202,6 +231,11 @@ export class JournalEntriesRepository {
       });
       if (!existing) throw new NotFoundException('Journal entry not found');
       throw new ConflictException('Journal entry was modified by another user');
+    }
+
+    // Apply relation writes (updateMany cannot touch relations)
+    if (Object.keys(relationData).length > 0) {
+      await prisma.journalEntry.update({ where: { id }, data: relationData });
     }
 
     return prisma.journalEntry.findFirst({

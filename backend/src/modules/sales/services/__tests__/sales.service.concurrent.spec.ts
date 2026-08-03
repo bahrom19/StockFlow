@@ -6,6 +6,7 @@ import { SalesService } from '../sales.service';
 import { CashShiftRepository } from '../../repositories/cash-shift.repository';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { EVENT_BUS } from '../../../../common/events';
+import { DocumentSequenceService } from '../../../shared/services/document-sequence.service';
 
 const companyId = 'comp-1';
 const saleId = 'sale-1';
@@ -81,6 +82,7 @@ describe('SalesRepository — Optimistic Locking', () => {
       providers: [
         SalesRepository,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: DocumentSequenceService, useValue: { nextNumber: jest.fn() } },
       ],
     }).compile();
 
@@ -314,6 +316,7 @@ describe('SalesService — Concurrent Completion (Optimistic Locking)', () => {
         { provide: SalesRepository, useValue: mockSalesRepo },
         { provide: CashShiftRepository, useValue: mockCashShiftRepo },
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: DocumentSequenceService, useValue: { nextNumber: jest.fn() } },
         { provide: EVENT_BUS, useValue: mockEventBus },
       ],
     }).compile();

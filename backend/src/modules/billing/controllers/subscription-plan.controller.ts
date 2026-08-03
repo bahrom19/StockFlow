@@ -45,8 +45,9 @@ export class SubscriptionPlanController {
   @ApiResponse({ status: 201, description: 'Plan created', type: SubscriptionPlanEntity })
   async create(
     @Body() dto: CreateSubscriptionPlanDto,
+    @CurrentUser() user: JwtPayload,
   ): Promise<SubscriptionPlanEntity> {
-    return this.planService.create(dto);
+    return this.planService.create(dto, user.companyId, user.userId);
   }
 
   @Get()
@@ -85,8 +86,9 @@ export class SubscriptionPlanController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateSubscriptionPlanDto,
+    @CurrentUser() user: JwtPayload,
   ): Promise<SubscriptionPlanEntity> {
-    return this.planService.update(id, dto);
+    return this.planService.update(id, dto, user.companyId, user.userId);
   }
 
   @Delete(':id')

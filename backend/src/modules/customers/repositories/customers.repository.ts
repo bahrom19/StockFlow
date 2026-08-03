@@ -6,6 +6,13 @@ import {
 import { Customer, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
+// Scalar field names of the Customer model — used to separate scalar updates
+// from relation writes in update() because updateMany accepts only scalar
+// fields (CustomerUpdateManyMutationInput).
+const CUSTOMER_SCALAR_KEYS = new Set<string>(
+  Object.values(Prisma.CustomerScalarFieldEnum),
+);
+
 @Injectable()
 export class CustomersRepository {
   constructor(private readonly prismaService: PrismaService) {}
@@ -114,9 +121,23 @@ export class CustomersRepository {
 
     // If rowVersion is provided, use optimistic locking
     if (rowVersion !== undefined) {
+      // updateMany only accepts scalar fields (CustomerUpdateManyMutationInput).
+      // Relation writes (e.g. group: { connect }) must be applied via
+      // customer.update after the optimistic-lock check succeeds, otherwise
+      // Prisma throws "Unknown argument `group`" (Blocker B1 pattern).
+      const scalarData: Record<string, unknown> = {};
+      const relationData: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (CUSTOMER_SCALAR_KEYS.has(key)) {
+          scalarData[key] = value;
+        } else {
+          relationData[key] = value;
+        }
+      }
+
       const result = await client.customer.updateMany({
         where: { id, companyId, rowVersion },
-        data: { ...data, rowVersion: { increment: 1 } },
+        data: { ...scalarData, rowVersion: { increment: 1 } },
       });
 
       if (result.count === 0) {
@@ -129,6 +150,11 @@ export class CustomersRepository {
         throw new ConflictException(
           `Customer ${id} was modified by another user. Please refresh and retry.`,
         );
+      }
+
+      // Apply relation writes (updateMany cannot touch relations)
+      if (Object.keys(relationData).length > 0) {
+        await client.customer.update({ where: { id }, data: relationData });
       }
 
       return client.customer.findUnique({

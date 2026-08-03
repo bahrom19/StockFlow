@@ -1,6 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CashShift, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
+
+// Scalar field names of the CashShift model — used to separate scalar updates
+// from relation writes in update() because updateMany accepts only scalar
+// fields (CashShiftUpdateManyMutationInput).
+const CASH_SHIFT_SCALAR_KEYS = new Set<string>(
+  Object.values(Prisma.CashShiftScalarFieldEnum),
+);
 
 @Injectable()
 export class CashShiftRepository {
@@ -31,23 +42,72 @@ export class CashShiftRepository {
     warehouseId: string,
     cashierId: string,
     companyId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<CashShift | null> {
-    return this.prismaService.cashShift.findFirst({
+    return this.getClient(tx).cashShift.findFirst({
       where: { warehouseId, cashierId, companyId, status: 'OPEN' },
     });
   }
 
+  /**
+   * Optimistic-locking update (Blocker B1 pattern): uses updateMany with a
+   * rowVersion guard so concurrent writers cannot silently overwrite each
+   * other (lost updates). Relation writes are applied via a separate
+   * cashShift.update after the lock check succeeds, because updateMany
+   * accepts only scalar fields.
+   */
   async update(
     id: string,
     data: Prisma.CashShiftUpdateInput,
     companyId: string,
+    rowVersion?: number,
     tx?: Prisma.TransactionClient,
   ): Promise<CashShift> {
+    const client = this.getClient(tx);
+
+    if (rowVersion !== undefined) {
+      const scalarData: Record<string, unknown> = {};
+      const relationData: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (CASH_SHIFT_SCALAR_KEYS.has(key)) {
+          scalarData[key] = value;
+        } else {
+          relationData[key] = value;
+        }
+      }
+
+      const result = await client.cashShift.updateMany({
+        where: { id, companyId, rowVersion },
+        data: { ...scalarData, rowVersion: { increment: 1 } },
+      });
+
+      if (result.count === 0) {
+        const existing = await client.cashShift.findFirst({
+          where: { id, companyId },
+        });
+        if (!existing) {
+          throw new NotFoundException(`Cash shift with id ${id} not found`);
+        }
+        throw new ConflictException(
+          `Cash shift ${id} was modified by another user. Please refresh and retry.`,
+        );
+      }
+
+      if (Object.keys(relationData).length > 0) {
+        await client.cashShift.update({ where: { id }, data: relationData });
+      }
+
+      return client.cashShift.findUnique({
+        where: { id },
+      }) as unknown as CashShift;
+    }
+
+    // Legacy path without rowVersion
     const existing = await this.findById(id, companyId, tx);
     if (!existing) {
       throw new NotFoundException(`Cash shift with id ${id} not found`);
     }
-    return this.getClient(tx).cashShift.update({ where: { id }, data });
+    return client.cashShift.update({ where: { id }, data });
   }
 
   async listByCompany(

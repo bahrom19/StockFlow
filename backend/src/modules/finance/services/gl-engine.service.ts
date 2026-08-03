@@ -1,10 +1,4 @@
-import {
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { JournalEntryStatus, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
@@ -321,66 +315,45 @@ export class GlEngineService {
       const debit = new Decimal(line.debit || '0');
       const credit = new Decimal(line.credit || '0');
 
-      // Upsert account balance for this period
-      const existing = await tx.accountBalance.findFirst({
+      // M1: atomic upsert on the compound unique (companyId, accountId,
+      // financialPeriodId). The previous findFirst + create() was a
+      // check-then-act race: two concurrent postings for a NEW account+period
+      // both observed "no balance" and both called create(), the second hitting
+      // P2002 (unique violation) which surfaced as HTTP 400/500. Upsert is a
+      // single atomic statement — the create branch initializes the snapshot,
+      // the update branch atomically increments the running totals. No lost
+      // update, no spurious conflict, and accounting stays exact because
+      // openingDebit/openingCredit are always 0 and never change, so closing ==
+      // opening(0) + cumulative period totals.
+      await tx.accountBalance.upsert({
         where: {
-          companyId,
-          accountId: line.accountId,
-          financialPeriodId,
-        },
-      });
-
-      if (existing) {
-        const newPeriodDebit = new Decimal(existing.periodDebit.toString()).add(
-          debit,
-        );
-        const newPeriodCredit = new Decimal(
-          existing.periodCredit.toString(),
-        ).add(credit);
-        const currentOpeningDebit = new Decimal(
-          existing.openingDebit.toString(),
-        );
-        const currentOpeningCredit = new Decimal(
-          existing.openingCredit.toString(),
-        );
-
-        // Atomic update with optimistic locking via rowVersion
-        const result = await tx.accountBalance.updateMany({
-          where: {
-            id: existing.id,
-            rowVersion: existing.rowVersion,
-          },
-          data: {
-            periodDebit: newPeriodDebit,
-            periodCredit: newPeriodCredit,
-            closingDebit: currentOpeningDebit.add(newPeriodDebit),
-            closingCredit: currentOpeningCredit.add(newPeriodCredit),
-            rowVersion: { increment: 1 },
-          },
-        });
-
-        if (result.count === 0) {
-          throw new ConflictException(
-            `Account balance for ${line.accountId} was modified concurrently. Please retry the transaction.`,
-          );
-        }
-      } else {
-        await tx.accountBalance.create({
-          data: {
+          companyId_accountId_financialPeriodId: {
             companyId,
             accountId: line.accountId,
             financialPeriodId,
-            year,
-            month,
-            openingDebit: new Decimal(0),
-            openingCredit: new Decimal(0),
-            periodDebit: debit,
-            periodCredit: credit,
-            closingDebit: debit,
-            closingCredit: credit,
           },
-        });
-      }
+        },
+        create: {
+          companyId,
+          accountId: line.accountId,
+          financialPeriodId,
+          year,
+          month,
+          openingDebit: new Decimal(0),
+          openingCredit: new Decimal(0),
+          periodDebit: debit,
+          periodCredit: credit,
+          closingDebit: debit,
+          closingCredit: credit,
+        },
+        update: {
+          periodDebit: { increment: debit },
+          periodCredit: { increment: credit },
+          closingDebit: { increment: debit },
+          closingCredit: { increment: credit },
+          rowVersion: { increment: 1 },
+        },
+      });
     }
   }
 }
