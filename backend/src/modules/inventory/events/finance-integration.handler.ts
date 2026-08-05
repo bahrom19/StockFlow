@@ -104,6 +104,16 @@ export class InventoryFinanceHandler implements EventHandler {
       ? new Decimal(payload.unitCost)
       : new Decimal(0);
     const amount = unitCost.mul(Math.abs(diff));
+
+    // Zero-value adjustments (e.g. product without a cost price) have nothing
+    // to post — skip rather than fail the whole inventory transaction.
+    if (amount.isZero()) {
+      this.logger.warn(
+        `Zero amount for inventory adjustment (product ${payload.productId}) — skipping journal`,
+      );
+      return;
+    }
+
     const isIncrease = diff > 0;
     const description = `Inventory adjustment: ${payload.reason ?? 'manual'}`;
 

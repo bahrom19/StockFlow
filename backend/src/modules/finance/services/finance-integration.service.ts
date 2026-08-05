@@ -108,13 +108,28 @@ export class FinanceIntegrationService {
     // 1. Revenue recognition: Debit Cash/Bank/AR, Credit Sales Revenue
     const totalReceived = new Decimal(event.total);
 
+    // Net cash received = cash tendered − change dispensed. Change is always
+    // paid out of the cash drawer, so it reduces the cash line (never the
+    // revenue line). If change exceeds cash tendered (partly drawn from the
+    // drawer float), the excess is posted as a cash credit — the entry still
+    // balances.
+    const changeAmount = new Decimal(event.changeAmount);
+    const cashNet = cashAmount.sub(changeAmount);
+
     // Debit side — one line per payment method
-    if (cashAmount.gt(0) && cashAccountId) {
+    if (cashNet.gt(0) && cashAccountId) {
       lines.push({
         accountId: cashAccountId,
-        debit: cashAmount.toString(),
+        debit: cashNet.toString(),
         credit: '0',
-        description: `Cash payment — ${saleDescription}`,
+        description: `Cash payment (net of change) — ${saleDescription}`,
+      });
+    } else if (cashNet.isNegative() && cashAccountId) {
+      lines.push({
+        accountId: cashAccountId,
+        debit: '0',
+        credit: cashNet.abs().toString(),
+        description: `Change dispensed from float — ${saleDescription}`,
       });
     }
 

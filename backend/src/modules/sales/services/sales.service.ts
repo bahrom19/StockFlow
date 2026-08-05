@@ -129,6 +129,16 @@ export class SalesService {
       for (const p of paymentsData) {
         paidAmount = paidAmount.add(p.amount as Decimal);
       }
+
+      // Business validation: a sale cannot be paid for less than its total.
+      // Reject at creation (before any journal entry exists) with a clear 400,
+      // instead of failing later with an opaque "journal entry is unbalanced".
+      if (paidAmount.lt(total)) {
+        throw new BadRequestException(
+          `Insufficient payment: paid ${paidAmount.toString()} is less than sale total ${total.toString()}`,
+        );
+      }
+
       const changeAmount = paidAmount.gt(total)
         ? paidAmount.sub(total)
         : new Decimal(0);
@@ -300,6 +310,14 @@ export class SalesService {
         else cardTotal = cardTotal.add(p.amount);
       }
       const saleTotal = new Decimal(sale.total.toString());
+      // Change is dispensed from the cash drawer: shift cash sales must be
+      // net of change (tendered − change), matching the journal posting.
+      // When change exceeds cash tendered (partly drawn from the drawer
+      // float), cashSalesNet is intentionally negative — this mirrors the
+      // journal's "change dispensed from float" credit and keeps the shift
+      // reconciled with the GL. Do not clamp: clamping would desync them.
+      const changeAmount = new Decimal(sale.changeAmount.toString());
+      const cashSalesNet = cashTotal.sub(changeAmount);
 
       // H2: update shift totals through optimistic locking. The repository
       // write is guarded by rowVersion, so two sales completing concurrently
@@ -310,7 +328,7 @@ export class SalesService {
         cashShift.id,
         {
           cashSales: new Decimal(cashShift.cashSales.toString()).add(
-            cashTotal,
+            cashSalesNet,
           ),
           cardSales: new Decimal(cashShift.cardSales.toString()).add(
             cardTotal,

@@ -13,6 +13,8 @@ export interface InventoryAdjustedPayload {
   referenceType?: string;
   referenceId?: string;
   comment?: string;
+  /** Unit cost used for the finance journal (product costPrice at adjust time). */
+  unitCost?: string;
 }
 
 export class InventoryAdjustedEvent implements DomainEvent<InventoryAdjustedPayload> {

@@ -447,6 +447,99 @@ describe('FinanceIntegrationService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
+  // ─────────────────────────────────────────────
+  // 11. Overpayment (change) — cash posted net of change
+  // ─────────────────────────────────────────────
+  it('should post cash net of change for an overpaid cash sale', async () => {
+    await service.onSaleCompleted(
+      baseSaleEvent({
+        subtotal: '1500.00',
+        total: '1500.00',
+        paidAmount: '1800.00',
+        changeAmount: '300.00',
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: '1500.00',
+            costPrice: '900.00',
+            discount: '0',
+            subtotal: '1500.00',
+            total: '1500.00',
+            margin: '600.00',
+          },
+        ],
+        payments: [{ method: 'CASH', amount: '1800.00' }],
+      }),
+      mockTx as unknown as Prisma.TransactionClient,
+    );
+
+    const journal = getPostedJournal();
+    const lines = journal.lines;
+
+    const cashDebit = lines.find(
+      (l) => l.accountId === cashAccountId && Number.parseFloat(l.debit) > 0,
+    );
+    // Cash must be tendered − change (1800 − 300 = 1500), NOT gross tendered.
+    expect(cashDebit).toBeDefined();
+    expect(Number.parseFloat(cashDebit!.debit)).toBe(1500);
+
+    const { totalDebit, totalCredit } = getBalanceTotals(journal);
+    expect(totalDebit).toBe(totalCredit);
+    expect(totalDebit).toBe(2400); // 1500 cash + 900 COGS
+  });
+
+  // ─────────────────────────────────────────────
+  // 12. Overpayment — change greater than cash tendered (from float)
+  // ─────────────────────────────────────────────
+  it('should post cash credit when change exceeds cash tendered', async () => {
+    await service.onSaleCompleted(
+      baseSaleEvent({
+        subtotal: '1500.00',
+        total: '1500.00',
+        paidAmount: '1800.00',
+        changeAmount: '300.00',
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: '1500.00',
+            costPrice: '900.00',
+            discount: '0',
+            subtotal: '1500.00',
+            total: '1500.00',
+            margin: '600.00',
+          },
+        ],
+        // Cash 200 + CARD 1600 = 1800 paid, change 300 > cash 200
+        payments: [
+          { method: 'CASH', amount: '200.00' },
+          { method: 'CARD', amount: '1600.00' },
+        ],
+      }),
+      mockTx as unknown as Prisma.TransactionClient,
+    );
+
+    const journal = getPostedJournal();
+    const lines = journal.lines;
+
+    // No cash debit line (net cash would be negative)
+    const cashDebit = lines.find(
+      (l) => l.accountId === cashAccountId && Number.parseFloat(l.debit) > 0,
+    );
+    expect(cashDebit).toBeUndefined();
+    // Cash credited 100 (change 300 − cash 200) drawn from float
+    const cashCredit = lines.find(
+      (l) => l.accountId === cashAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(cashCredit).toBeDefined();
+    expect(Number.parseFloat(cashCredit!.credit)).toBe(100);
+
+    const { totalDebit, totalCredit } = getBalanceTotals(journal);
+    expect(totalDebit).toBe(totalCredit);
+    expect(totalDebit).toBe(2500); // 1600 bank + 900 COGS
+  });
+
   it('should pass balanced journal entries (debit == credit)', async () => {
     await service.onSaleCompleted(
       baseSaleEvent({
