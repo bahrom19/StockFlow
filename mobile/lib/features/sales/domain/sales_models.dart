@@ -47,6 +47,8 @@ enum PaymentMethodType {
   qr,
   @JsonValue('BANK_TRANSFER')
   bankTransfer,
+  @JsonValue('MOBILE_WALLET')
+  mobileWallet,
   @JsonValue('GIFT_CARD')
   giftCard,
   @JsonValue('STORE_CREDIT')
@@ -62,12 +64,25 @@ enum PaymentMethodType {
         return 'QR';
       case PaymentMethodType.bankTransfer:
         return 'Bank Transfer';
+      case PaymentMethodType.mobileWallet:
+        return 'Mobile Wallet';
       case PaymentMethodType.giftCard:
         return 'Gift Card';
       case PaymentMethodType.storeCredit:
         return 'Store Credit';
     }
   }
+
+  /// Wire value used by the API.
+  String get wire => switch (this) {
+        PaymentMethodType.cash => 'CASH',
+        PaymentMethodType.card => 'CARD',
+        PaymentMethodType.qr => 'QR',
+        PaymentMethodType.bankTransfer => 'BANK_TRANSFER',
+        PaymentMethodType.mobileWallet => 'MOBILE_WALLET',
+        PaymentMethodType.giftCard => 'GIFT_CARD',
+        PaymentMethodType.storeCredit => 'STORE_CREDIT',
+      };
 }
 
 // ──────────────────────────────────

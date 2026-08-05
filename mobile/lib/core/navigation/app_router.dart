@@ -25,6 +25,8 @@ import '../../features/suppliers/presentation/screens/suppliers_list_screen.dart
 import '../../features/suppliers/presentation/screens/supplier_form_screen.dart';
 import '../../features/warehouses/presentation/screens/warehouse_form_screen.dart';
 import '../../features/warehouses/presentation/screens/warehouses_list_screen.dart';
+import '../../features/payments/presentation/screens/payment_analytics_screen.dart';
+import '../../features/payments/presentation/screens/payment_details_screen.dart';
 import '../auth/auth_state.dart';
 import '../shell/app_shell.dart';
 import 'route_names.dart';
@@ -194,6 +196,22 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: RouteNames.finance,
             name: 'finance',
             builder: (context, state) => const FinanceScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.payments,
+            name: 'payments',
+            builder: (context, state) => const PaymentAnalyticsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.paymentDetails,
+            name: 'paymentDetails',
+            builder: (context, state) => PaymentDetailsScreen(
+              initialMethod: state.uri.queryParameters['method'],
+              from: DateTime.tryParse(
+                state.uri.queryParameters['from'] ?? '',
+              ),
+              to: DateTime.tryParse(state.uri.queryParameters['to'] ?? ''),
+            ),
           ),
           GoRoute(
             path: RouteNames.settings,

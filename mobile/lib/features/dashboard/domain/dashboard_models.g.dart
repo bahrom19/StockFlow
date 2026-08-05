@@ -124,7 +124,9 @@ _$PaymentBreakdownImpl _$$PaymentBreakdownImplFromJson(
       cash: json['cash'] as String,
       card: json['card'] as String,
       qr: json['qr'] as String,
-      other: json['other'] as String,
+      bankTransfer: json['bankTransfer'] as String? ?? '0.0000',
+      mobileWallet: json['mobileWallet'] as String? ?? '0.0000',
+      other: json['other'] as String? ?? '0.0000',
     );
 
 Map<String, dynamic> _$$PaymentBreakdownImplToJson(
@@ -133,6 +135,8 @@ Map<String, dynamic> _$$PaymentBreakdownImplToJson(
       'cash': instance.cash,
       'card': instance.card,
       'qr': instance.qr,
+      'bankTransfer': instance.bankTransfer,
+      'mobileWallet': instance.mobileWallet,
       'other': instance.other,
     };
 

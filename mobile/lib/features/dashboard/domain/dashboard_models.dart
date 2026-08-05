@@ -93,11 +93,29 @@ class PaymentBreakdown with _$PaymentBreakdown {
     required String cash,
     required String card,
     required String qr,
-    required String other,
+    @Default('0.0000') String bankTransfer,
+    @Default('0.0000') String mobileWallet,
+    @Default('0.0000') String other,
   }) = _PaymentBreakdown;
 
   factory PaymentBreakdown.fromJson(Map<String, dynamic> json) =>
       _$PaymentBreakdownFromJson(json);
+
+  const PaymentBreakdown._();
+
+  /// Total of all per-method buckets (invariant: == total sales revenue).
+  double get total {
+    return (double.tryParse(cash) ?? 0) +
+        (double.tryParse(card) ?? 0) +
+        (double.tryParse(qr) ?? 0) +
+        (double.tryParse(bankTransfer) ?? 0) +
+        (double.tryParse(mobileWallet) ?? 0) +
+        (double.tryParse(other) ?? 0);
+  }
+
+  /// Share of [total] for a given amount (0 when total is zero).
+  double percentOf(double amount) =>
+      total <= 0 ? 0 : (amount / total) * 100;
 }
 
 // ──────────────────────────────────

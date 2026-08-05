@@ -12,6 +12,7 @@ import 'package:stockflow/features/dashboard/presentation/widgets/ai_insights_ca
 import 'package:stockflow/features/dashboard/presentation/widgets/kpi_card.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/recent_sales_list.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/sales_chart.dart';
+import 'package:stockflow/features/payments/presentation/widgets/today_payments_card.dart';
 
 /// Production Dashboard Screen
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -147,6 +148,11 @@ class _DashboardContentView extends StatelessWidget {
           title: 'Sales — Last ${chartData.length} Days',
           showProfit: true,
         ),
+
+        const SizedBox(height: AppSpacing.md),
+
+        // ── Today's Payments (v1.2) ──
+        TodayPaymentsCard(),
 
         const SizedBox(height: AppSpacing.md),
 

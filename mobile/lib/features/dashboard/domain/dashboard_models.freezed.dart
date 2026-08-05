@@ -1453,6 +1453,8 @@ mixin _$PaymentBreakdown {
   String get cash => throw _privateConstructorUsedError;
   String get card => throw _privateConstructorUsedError;
   String get qr => throw _privateConstructorUsedError;
+  String get bankTransfer => throw _privateConstructorUsedError;
+  String get mobileWallet => throw _privateConstructorUsedError;
   String get other => throw _privateConstructorUsedError;
 
   /// Serializes this PaymentBreakdown to a JSON map.
@@ -1471,7 +1473,13 @@ abstract class $PaymentBreakdownCopyWith<$Res> {
           PaymentBreakdown value, $Res Function(PaymentBreakdown) then) =
       _$PaymentBreakdownCopyWithImpl<$Res, PaymentBreakdown>;
   @useResult
-  $Res call({String cash, String card, String qr, String other});
+  $Res call(
+      {String cash,
+      String card,
+      String qr,
+      String bankTransfer,
+      String mobileWallet,
+      String other});
 }
 
 /// @nodoc
@@ -1492,6 +1500,8 @@ class _$PaymentBreakdownCopyWithImpl<$Res, $Val extends PaymentBreakdown>
     Object? cash = null,
     Object? card = null,
     Object? qr = null,
+    Object? bankTransfer = null,
+    Object? mobileWallet = null,
     Object? other = null,
   }) {
     return _then(_value.copyWith(
@@ -1506,6 +1516,14 @@ class _$PaymentBreakdownCopyWithImpl<$Res, $Val extends PaymentBreakdown>
       qr: null == qr
           ? _value.qr
           : qr // ignore: cast_nullable_to_non_nullable
+              as String,
+      bankTransfer: null == bankTransfer
+          ? _value.bankTransfer
+          : bankTransfer // ignore: cast_nullable_to_non_nullable
+              as String,
+      mobileWallet: null == mobileWallet
+          ? _value.mobileWallet
+          : mobileWallet // ignore: cast_nullable_to_non_nullable
               as String,
       other: null == other
           ? _value.other
@@ -1523,7 +1541,13 @@ abstract class _$$PaymentBreakdownImplCopyWith<$Res>
       __$$PaymentBreakdownImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String cash, String card, String qr, String other});
+  $Res call(
+      {String cash,
+      String card,
+      String qr,
+      String bankTransfer,
+      String mobileWallet,
+      String other});
 }
 
 /// @nodoc
@@ -1542,6 +1566,8 @@ class __$$PaymentBreakdownImplCopyWithImpl<$Res>
     Object? cash = null,
     Object? card = null,
     Object? qr = null,
+    Object? bankTransfer = null,
+    Object? mobileWallet = null,
     Object? other = null,
   }) {
     return _then(_$PaymentBreakdownImpl(
@@ -1557,6 +1583,14 @@ class __$$PaymentBreakdownImplCopyWithImpl<$Res>
           ? _value.qr
           : qr // ignore: cast_nullable_to_non_nullable
               as String,
+      bankTransfer: null == bankTransfer
+          ? _value.bankTransfer
+          : bankTransfer // ignore: cast_nullable_to_non_nullable
+              as String,
+      mobileWallet: null == mobileWallet
+          ? _value.mobileWallet
+          : mobileWallet // ignore: cast_nullable_to_non_nullable
+              as String,
       other: null == other
           ? _value.other
           : other // ignore: cast_nullable_to_non_nullable
@@ -1567,12 +1601,15 @@ class __$$PaymentBreakdownImplCopyWithImpl<$Res>
 
 /// @nodoc
 @JsonSerializable()
-class _$PaymentBreakdownImpl implements _PaymentBreakdown {
+class _$PaymentBreakdownImpl extends _PaymentBreakdown {
   const _$PaymentBreakdownImpl(
       {required this.cash,
       required this.card,
       required this.qr,
-      required this.other});
+      this.bankTransfer = '0.0000',
+      this.mobileWallet = '0.0000',
+      this.other = '0.0000'})
+      : super._();
 
   factory _$PaymentBreakdownImpl.fromJson(Map<String, dynamic> json) =>
       _$$PaymentBreakdownImplFromJson(json);
@@ -1584,11 +1621,18 @@ class _$PaymentBreakdownImpl implements _PaymentBreakdown {
   @override
   final String qr;
   @override
+  @JsonKey()
+  final String bankTransfer;
+  @override
+  @JsonKey()
+  final String mobileWallet;
+  @override
+  @JsonKey()
   final String other;
 
   @override
   String toString() {
-    return 'PaymentBreakdown(cash: $cash, card: $card, qr: $qr, other: $other)';
+    return 'PaymentBreakdown(cash: $cash, card: $card, qr: $qr, bankTransfer: $bankTransfer, mobileWallet: $mobileWallet, other: $other)';
   }
 
   @override
@@ -1599,12 +1643,17 @@ class _$PaymentBreakdownImpl implements _PaymentBreakdown {
             (identical(other.cash, cash) || other.cash == cash) &&
             (identical(other.card, card) || other.card == card) &&
             (identical(other.qr, qr) || other.qr == qr) &&
+            (identical(other.bankTransfer, bankTransfer) ||
+                other.bankTransfer == bankTransfer) &&
+            (identical(other.mobileWallet, mobileWallet) ||
+                other.mobileWallet == mobileWallet) &&
             (identical(other.other, this.other) || other.other == this.other));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, cash, card, qr, other);
+  int get hashCode => Object.hash(
+      runtimeType, cash, card, qr, bankTransfer, mobileWallet, other);
 
   /// Create a copy of PaymentBreakdown
   /// with the given fields replaced by the non-null parameter values.
@@ -1623,12 +1672,15 @@ class _$PaymentBreakdownImpl implements _PaymentBreakdown {
   }
 }
 
-abstract class _PaymentBreakdown implements PaymentBreakdown {
+abstract class _PaymentBreakdown extends PaymentBreakdown {
   const factory _PaymentBreakdown(
       {required final String cash,
       required final String card,
       required final String qr,
-      required final String other}) = _$PaymentBreakdownImpl;
+      final String bankTransfer,
+      final String mobileWallet,
+      final String other}) = _$PaymentBreakdownImpl;
+  const _PaymentBreakdown._() : super._();
 
   factory _PaymentBreakdown.fromJson(Map<String, dynamic> json) =
       _$PaymentBreakdownImpl.fromJson;
@@ -1639,6 +1691,10 @@ abstract class _PaymentBreakdown implements PaymentBreakdown {
   String get card;
   @override
   String get qr;
+  @override
+  String get bankTransfer;
+  @override
+  String get mobileWallet;
   @override
   String get other;
 

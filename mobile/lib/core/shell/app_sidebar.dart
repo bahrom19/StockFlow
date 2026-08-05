@@ -156,6 +156,12 @@ class _SidebarNav {
     icon: Icons.account_balance_outlined,
     selectedIcon: Icons.account_balance,
   );
+  static const _payments = _SidebarNavItem(
+    label: 'Payments',
+    path: RouteNames.payments,
+    icon: Icons.payments_outlined,
+    selectedIcon: Icons.payments,
+  );
   static const _settings = _SidebarNavItem(
     label: 'Settings',
     path: RouteNames.settings,
@@ -179,7 +185,7 @@ class _SidebarNav {
     ),
     _SidebarNavSection(
       title: 'INSIGHTS',
-      items: [_reports, _finance],
+      items: [_reports, _payments, _finance],
     ),
     _SidebarNavSection(title: 'SYSTEM', items: [_settings]),
   ];
