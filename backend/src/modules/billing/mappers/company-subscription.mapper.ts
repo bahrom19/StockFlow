@@ -31,7 +31,9 @@ export class CompanySubscriptionMapper {
     };
   }
 
-  static toEntityList(subs: CompanySubscription[]): CompanySubscriptionEntity[] {
+  static toEntityList(
+    subs: CompanySubscription[],
+  ): CompanySubscriptionEntity[] {
     return subs.map((s) => CompanySubscriptionMapper.toEntity(s));
   }
 }

@@ -8,10 +8,14 @@ export interface PaymentProvider {
   readonly name: string;
 
   /** Create a Checkout Session for subscription purchase */
-  createCheckoutSession(params: CheckoutSessionParams): Promise<CheckoutSessionResult>;
+  createCheckoutSession(
+    params: CheckoutSessionParams,
+  ): Promise<CheckoutSessionResult>;
 
   /** Create a Billing Portal session for managing payment methods */
-  createBillingPortalSession(params: PortalSessionParams): Promise<PortalSessionResult>;
+  createBillingPortalSession(
+    params: PortalSessionParams,
+  ): Promise<PortalSessionResult>;
 
   /** Retrieve a Checkout Session by id */
   retrieveCheckoutSession(sessionId: string): Promise<CheckoutSessionResult>;
@@ -20,7 +24,9 @@ export interface PaymentProvider {
   createRefund(params: RefundParams): Promise<RefundResult>;
 
   /** Retrieve customer by provider customer id */
-  retrieveCustomer(providerCustomerId: string): Promise<ProviderCustomer | null>;
+  retrieveCustomer(
+    providerCustomerId: string,
+  ): Promise<ProviderCustomer | null>;
 
   /** Create or retrieve a customer in the payment provider */
   ensureCustomer(params: EnsureCustomerParams): Promise<ProviderCustomer>;

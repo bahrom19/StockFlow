@@ -28,9 +28,7 @@ export class InvoiceMapper {
     return lines.map((l) => InvoiceMapper.toLineEntity(l));
   }
 
-  static toEntity(
-    invoice: Invoice & { lines?: InvoiceLine[] },
-  ): InvoiceEntity {
+  static toEntity(invoice: Invoice & { lines?: InvoiceLine[] }): InvoiceEntity {
     return {
       id: invoice.id,
       companyId: invoice.companyId,
@@ -51,7 +49,9 @@ export class InvoiceMapper {
       createdAt: invoice.createdAt,
       updatedAt: invoice.updatedAt,
       deletedAt: invoice.deletedAt,
-      lines: invoice.lines ? InvoiceMapper.toLineEntityList(invoice.lines) : undefined,
+      lines: invoice.lines
+        ? InvoiceMapper.toLineEntityList(invoice.lines)
+        : undefined,
     };
   }
 

@@ -94,7 +94,13 @@ export class RedisService implements OnModuleDestroy {
     }
 
     try {
-      const result = await this.client.set(lockKey, '1', 'EX', ttlSeconds, 'NX');
+      const result = await this.client.set(
+        lockKey,
+        '1',
+        'EX',
+        ttlSeconds,
+        'NX',
+      );
       return result === 'OK';
     } catch (error) {
       this.logger.warn(

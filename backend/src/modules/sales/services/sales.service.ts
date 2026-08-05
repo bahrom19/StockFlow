@@ -330,9 +330,7 @@ export class SalesService {
           cashSales: new Decimal(cashShift.cashSales.toString()).add(
             cashSalesNet,
           ),
-          cardSales: new Decimal(cashShift.cardSales.toString()).add(
-            cardTotal,
-          ),
+          cardSales: new Decimal(cashShift.cardSales.toString()).add(cardTotal),
           totalSales: new Decimal(cashShift.totalSales.toString()).add(
             saleTotal,
           ),

@@ -1,5 +1,13 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { CompanySubscription, Prisma, SubscriptionStatus } from '@prisma/client';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  CompanySubscription,
+  Prisma,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
 // Scalar field names of the CompanySubscription model — used to separate scalar
@@ -17,18 +25,28 @@ export class CompanySubscriptionRepository {
     return tx || this.prismaService;
   }
 
-  async create(data: Prisma.CompanySubscriptionCreateInput, tx?: Prisma.TransactionClient): Promise<CompanySubscription> {
+  async create(
+    data: Prisma.CompanySubscriptionCreateInput,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CompanySubscription> {
     return this.getClient(tx).companySubscription.create({ data });
   }
 
-  async findByCompany(companyId: string, tx?: Prisma.TransactionClient): Promise<CompanySubscription | null> {
+  async findByCompany(
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CompanySubscription | null> {
     return this.getClient(tx).companySubscription.findUnique({
       where: { companyId },
       include: { plan: true },
     });
   }
 
-  async findById(id: string, companyId: string, tx?: Prisma.TransactionClient): Promise<CompanySubscription | null> {
+  async findById(
+    id: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CompanySubscription | null> {
     return this.getClient(tx).companySubscription.findFirst({
       where: { id, companyId, deletedAt: null },
       include: { plan: true },
@@ -105,9 +123,16 @@ export class CompanySubscriptionRepository {
         data: { ...scalarData, rowVersion: { increment: 1 } },
       });
       if (result.count === 0) {
-        const existing = await client.companySubscription.findUnique({ where: { companyId } });
-        if (!existing) throw new NotFoundException(`Subscription for company ${companyId} not found`);
-        throw new ConflictException(`Subscription was modified by another user. Please refresh and retry.`);
+        const existing = await client.companySubscription.findUnique({
+          where: { companyId },
+        });
+        if (!existing)
+          throw new NotFoundException(
+            `Subscription for company ${companyId} not found`,
+          );
+        throw new ConflictException(
+          `Subscription was modified by another user. Please refresh and retry.`,
+        );
       }
 
       // Apply relation writes (updateMany cannot touch relations)
@@ -125,7 +150,10 @@ export class CompanySubscriptionRepository {
     }
 
     const existing = await this.findByCompany(companyId, tx);
-    if (!existing) throw new NotFoundException(`Subscription for company ${companyId} not found`);
+    if (!existing)
+      throw new NotFoundException(
+        `Subscription for company ${companyId} not found`,
+      );
     return client.companySubscription.update({
       where: { companyId },
       data,
@@ -142,7 +170,9 @@ export class CompanySubscriptionRepository {
     return this.updateByCompany(companyId, { status }, rowVersion, tx);
   }
 
-  async findExpiredTrials(tx?: Prisma.TransactionClient): Promise<CompanySubscription[]> {
+  async findExpiredTrials(
+    tx?: Prisma.TransactionClient,
+  ): Promise<CompanySubscription[]> {
     return this.getClient(tx).companySubscription.findMany({
       where: {
         status: 'TRIAL',
@@ -153,9 +183,19 @@ export class CompanySubscriptionRepository {
     });
   }
 
-  async findExpiringToday(tx?: Prisma.TransactionClient): Promise<CompanySubscription[]> {
+  async findExpiringToday(
+    tx?: Prisma.TransactionClient,
+  ): Promise<CompanySubscription[]> {
     const today = new Date();
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
     return this.getClient(tx).companySubscription.findMany({
       where: {
         status: 'ACTIVE',
@@ -167,7 +207,9 @@ export class CompanySubscriptionRepository {
     });
   }
 
-  async findOverdueGracePeriod(tx?: Prisma.TransactionClient): Promise<CompanySubscription[]> {
+  async findOverdueGracePeriod(
+    tx?: Prisma.TransactionClient,
+  ): Promise<CompanySubscription[]> {
     const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
     return this.getClient(tx).companySubscription.findMany({
       where: {
@@ -179,7 +221,9 @@ export class CompanySubscriptionRepository {
     });
   }
 
-  async findExpiredSuspensions(tx?: Prisma.TransactionClient): Promise<CompanySubscription[]> {
+  async findExpiredSuspensions(
+    tx?: Prisma.TransactionClient,
+  ): Promise<CompanySubscription[]> {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     return this.getClient(tx).companySubscription.findMany({
       where: {
@@ -191,7 +235,10 @@ export class CompanySubscriptionRepository {
     });
   }
 
-  async findPendingRetries(params: { maxRetries: number }, tx?: Prisma.TransactionClient): Promise<CompanySubscription[]> {
+  async findPendingRetries(
+    params: { maxRetries: number },
+    tx?: Prisma.TransactionClient,
+  ): Promise<CompanySubscription[]> {
     return this.getClient(tx).companySubscription.findMany({
       where: {
         status: 'PAST_DUE',

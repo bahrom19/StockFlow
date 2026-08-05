@@ -44,7 +44,7 @@ export class VariantService {
       productId,
       companyId,
     );
-    return variants.map((v: any) => ({
+    return variants.map((v) => ({
       id: v.id,
       productId: v.productId,
       sku: v.sku,
@@ -56,7 +56,7 @@ export class VariantService {
         : null,
       attributes: v.attributes,
       isActive: v.isActive,
-      rowVersion: (v as Record<string, any>).rowVersion ?? 0,
+      rowVersion: v.rowVersion ?? 0,
       createdAt: v.createdAt,
       updatedAt: v.updatedAt,
     }));
@@ -127,7 +127,7 @@ export class VariantService {
         costPrice: variant.costPrice?.toString() ?? null,
         attributes: variant.attributes,
         isActive: variant.isActive,
-        rowVersion: (variant as Record<string, any>).rowVersion ?? 0,
+        rowVersion: variant.rowVersion ?? 0,
         createdAt: variant.createdAt,
         updatedAt: variant.updatedAt,
       };
@@ -197,7 +197,7 @@ export class VariantService {
         costPrice: updated.costPrice?.toString() ?? null,
         attributes: updated.attributes,
         isActive: updated.isActive,
-        rowVersion: (updated as Record<string, any>).rowVersion ?? 0,
+        rowVersion: updated.rowVersion ?? 0,
         createdAt: updated.createdAt,
         updatedAt: updated.updatedAt,
       };

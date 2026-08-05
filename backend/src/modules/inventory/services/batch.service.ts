@@ -39,7 +39,7 @@ export class BatchService {
       receivedDate: b.receivedDate,
       status: b.status,
       notes: b.notes,
-      rowVersion: (b as Record<string, any>).rowVersion ?? 0,
+      rowVersion: b.rowVersion ?? 0,
       createdAt: b.createdAt,
       updatedAt: b.updatedAt,
     }));
@@ -101,7 +101,7 @@ export class BatchService {
         receivedDate: batch.receivedDate,
         status: batch.status,
         notes: batch.notes,
-        rowVersion: (batch as Record<string, any>).rowVersion ?? 0,
+        rowVersion: batch.rowVersion ?? 0,
         createdAt: batch.createdAt,
         updatedAt: batch.updatedAt,
       };

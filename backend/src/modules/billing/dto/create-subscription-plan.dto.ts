@@ -30,7 +30,7 @@ export class CreateSubscriptionPlanDto {
   @Min(0)
   priceMonthly!: number;
 
-  @ApiProperty({ example: 290.00 })
+  @ApiProperty({ example: 290.0 })
   @IsNumber()
   @Min(0)
   priceYearly!: number;

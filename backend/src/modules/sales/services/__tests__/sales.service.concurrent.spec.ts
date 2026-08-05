@@ -82,7 +82,10 @@ describe('SalesRepository — Optimistic Locking', () => {
       providers: [
         SalesRepository,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: DocumentSequenceService, useValue: { nextNumber: jest.fn() } },
+        {
+          provide: DocumentSequenceService,
+          useValue: { nextNumber: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -316,7 +319,10 @@ describe('SalesService — Concurrent Completion (Optimistic Locking)', () => {
         { provide: SalesRepository, useValue: mockSalesRepo },
         { provide: CashShiftRepository, useValue: mockCashShiftRepo },
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: DocumentSequenceService, useValue: { nextNumber: jest.fn() } },
+        {
+          provide: DocumentSequenceService,
+          useValue: { nextNumber: jest.fn() },
+        },
         { provide: EVENT_BUS, useValue: mockEventBus },
       ],
     }).compile();

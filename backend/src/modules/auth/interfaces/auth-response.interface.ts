@@ -15,4 +15,3 @@ export interface AuthResponse {
   refreshExpiresIn: string;
   user: AuthUser;
 }
-

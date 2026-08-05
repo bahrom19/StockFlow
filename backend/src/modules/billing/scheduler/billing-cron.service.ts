@@ -52,15 +52,21 @@ export class BillingCronService {
     if (!(await this.acquireLock(lockKey))) return;
 
     try {
-      const expiredTrials = await this.subscriptionRepository.findExpiredTrials();
+      const expiredTrials =
+        await this.subscriptionRepository.findExpiredTrials();
       for (const sub of expiredTrials) {
         try {
           if (!sub.providerCustomerId) {
-            await this.companySubscriptionService.downgradeToFree(sub.companyId, SYSTEM_USER);
+            await this.companySubscriptionService.downgradeToFree(
+              sub.companyId,
+              SYSTEM_USER,
+            );
             this.logger.log(`Trial expired: company ${sub.companyId} → FREE`);
           }
         } catch (error) {
-          this.logger.error(`Trial expiry failed for ${sub.companyId}: ${error}`);
+          this.logger.error(
+            `Trial expiry failed for ${sub.companyId}: ${error}`,
+          );
         }
       }
       if (expiredTrials.length > 0) {
@@ -80,12 +86,17 @@ export class BillingCronService {
     if (!(await this.acquireLock(lockKey))) return;
 
     try {
-      const expiringToday = await this.subscriptionRepository.findExpiringToday();
+      const expiringToday =
+        await this.subscriptionRepository.findExpiringToday();
       let generated = 0;
 
       for (const sub of expiringToday) {
         try {
-          await this.invoiceService.generateInvoice(sub.id, sub.companyId, SYSTEM_USER);
+          await this.invoiceService.generateInvoice(
+            sub.id,
+            sub.companyId,
+            SYSTEM_USER,
+          );
           // Extend current period
           await this.prismaService.companySubscription.update({
             where: { companyId: sub.companyId },
@@ -95,7 +106,9 @@ export class BillingCronService {
           });
           generated++;
         } catch (error) {
-          this.logger.error(`Invoice generation failed for ${sub.companyId}: ${error}`);
+          this.logger.error(
+            `Invoice generation failed for ${sub.companyId}: ${error}`,
+          );
         }
       }
       if (generated > 0) {
@@ -115,11 +128,14 @@ export class BillingCronService {
     if (!(await this.acquireLock(lockKey))) return;
 
     try {
-      const pendingRetries = await this.subscriptionRepository.findPendingRetries({ maxRetries: 3 });
+      const pendingRetries =
+        await this.subscriptionRepository.findPendingRetries({ maxRetries: 3 });
       for (const sub of pendingRetries) {
         try {
           const retryCount = sub.paymentRetryCount + 1;
-          this.logger.log(`Retry ${retryCount}/3: payment for company ${sub.companyId}`);
+          this.logger.log(
+            `Retry ${retryCount}/3: payment for company ${sub.companyId}`,
+          );
 
           await this.prismaService.companySubscription.update({
             where: { companyId: sub.companyId },
@@ -130,11 +146,19 @@ export class BillingCronService {
           });
 
           if (retryCount >= 3) {
-            await this.companySubscriptionService.transitionStatus(sub.companyId, 'SUSPENDED', SYSTEM_USER);
-            this.logger.log(`Suspended: company ${sub.companyId} (max retries)`);
+            await this.companySubscriptionService.transitionStatus(
+              sub.companyId,
+              'SUSPENDED',
+              SYSTEM_USER,
+            );
+            this.logger.log(
+              `Suspended: company ${sub.companyId} (max retries)`,
+            );
           }
         } catch (error) {
-          this.logger.error(`Payment retry failed for ${sub.companyId}: ${error}`);
+          this.logger.error(
+            `Payment retry failed for ${sub.companyId}: ${error}`,
+          );
         }
       }
       if (pendingRetries.length > 0) {
@@ -154,10 +178,15 @@ export class BillingCronService {
     if (!(await this.acquireLock(lockKey))) return;
 
     try {
-      const overdue = await this.subscriptionRepository.findOverdueGracePeriod();
+      const overdue =
+        await this.subscriptionRepository.findOverdueGracePeriod();
       for (const sub of overdue) {
         try {
-          await this.companySubscriptionService.transitionStatus(sub.companyId, 'SUSPENDED', SYSTEM_USER);
+          await this.companySubscriptionService.transitionStatus(
+            sub.companyId,
+            'SUSPENDED',
+            SYSTEM_USER,
+          );
           this.logger.log(`Suspended: company ${sub.companyId} (overdue)`);
         } catch (error) {
           this.logger.error(`Suspension failed for ${sub.companyId}: ${error}`);
@@ -180,10 +209,15 @@ export class BillingCronService {
     if (!(await this.acquireLock(lockKey))) return;
 
     try {
-      const expired = await this.subscriptionRepository.findExpiredSuspensions();
+      const expired =
+        await this.subscriptionRepository.findExpiredSuspensions();
       for (const sub of expired) {
         try {
-          await this.companySubscriptionService.transitionStatus(sub.companyId, 'EXPIRED', SYSTEM_USER);
+          await this.companySubscriptionService.transitionStatus(
+            sub.companyId,
+            'EXPIRED',
+            SYSTEM_USER,
+          );
           await this.eventBus.publish(
             new SubscriptionExpiredEvent({
               companyId: sub.companyId,
@@ -240,17 +274,26 @@ export class BillingCronService {
       for (const sub of pastDueSubs.items) {
         try {
           // Check if there's a recent successful payment transaction
-          const recentPayment = await this.prismaService.paymentTransaction.findFirst({
-            where: {
-              subscriptionId: sub.id,
-              status: 'SUCCEEDED',
-              createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-            },
-          });
+          const recentPayment =
+            await this.prismaService.paymentTransaction.findFirst({
+              where: {
+                subscriptionId: sub.id,
+                status: 'SUCCEEDED',
+                createdAt: {
+                  gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                },
+              },
+            });
 
           if (recentPayment) {
-            await this.companySubscriptionService.transitionStatus(sub.companyId, 'ACTIVE', SYSTEM_USER);
-            this.logger.log(`Resumed: company ${sub.companyId} (payment received)`);
+            await this.companySubscriptionService.transitionStatus(
+              sub.companyId,
+              'ACTIVE',
+              SYSTEM_USER,
+            );
+            this.logger.log(
+              `Resumed: company ${sub.companyId} (payment received)`,
+            );
             resumed++;
           }
         } catch (error) {
@@ -284,17 +327,20 @@ export class BillingCronService {
       });
 
       // Reset payment retry counts for ACTIVE subscriptions with old failed attempts
-      const staleRetries = await this.prismaService.companySubscription.updateMany({
-        where: {
-          status: 'ACTIVE',
-          paymentRetryCount: { gt: 0 },
-          lastPaymentAttempt: { lt: cutoff },
-        },
-        data: { paymentRetryCount: 0, lastPaymentAttempt: null },
-      });
+      const staleRetries =
+        await this.prismaService.companySubscription.updateMany({
+          where: {
+            status: 'ACTIVE',
+            paymentRetryCount: { gt: 0 },
+            lastPaymentAttempt: { lt: cutoff },
+          },
+          data: { paymentRetryCount: 0, lastPaymentAttempt: null },
+        });
 
       if (deletedWebhooks.count > 0 || staleRetries.count > 0) {
-        this.logger.log(`Cleanup: ${deletedWebhooks.count} webhook events deleted, ${staleRetries.count} retry counters reset`);
+        this.logger.log(
+          `Cleanup: ${deletedWebhooks.count} webhook events deleted, ${staleRetries.count} retry counters reset`,
+        );
       }
     } finally {
       await this.releaseLock(lockKey);

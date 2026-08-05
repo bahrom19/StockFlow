@@ -79,12 +79,7 @@ describe('CustomersRepository — update with relation writes + optimistic locki
     mockPrisma.customer.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.customer.findUnique.mockResolvedValue(baseCustomer as any);
 
-    await repo.update(
-      'cust-1',
-      { type: CustomerType.COMPANY },
-      'comp-1',
-      0,
-    );
+    await repo.update('cust-1', { type: CustomerType.COMPANY }, 'comp-1', 0);
 
     expect(mockPrisma.customer.updateMany).toHaveBeenCalledWith({
       where: { id: 'cust-1', companyId: 'comp-1', rowVersion: 0 },
@@ -101,12 +96,7 @@ describe('CustomersRepository — update with relation writes + optimistic locki
     });
 
     await expect(
-      repo.update(
-        'cust-1',
-        { type: CustomerType.COMPANY },
-        'comp-1',
-        0,
-      ),
+      repo.update('cust-1', { type: CustomerType.COMPANY }, 'comp-1', 0),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -115,12 +105,7 @@ describe('CustomersRepository — update with relation writes + optimistic locki
     mockPrisma.customer.findFirst.mockResolvedValue(null);
 
     await expect(
-      repo.update(
-        'cust-1',
-        { type: CustomerType.COMPANY },
-        'comp-1',
-        0,
-      ),
+      repo.update('cust-1', { type: CustomerType.COMPANY }, 'comp-1', 0),
     ).rejects.toThrow(NotFoundException);
   });
 

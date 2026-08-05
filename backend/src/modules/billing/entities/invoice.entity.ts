@@ -18,7 +18,10 @@ export class InvoiceEntity {
   @ApiProperty() companyId!: string;
   @ApiProperty() subscriptionId!: string;
   @ApiProperty({ example: 'INV-20260801-0001' }) invoiceNumber!: string;
-  @ApiProperty({ enum: ['DRAFT', 'PENDING', 'PAID', 'REFUNDED', 'DISPUTED', 'CANCELLED'] }) status!: string;
+  @ApiProperty({
+    enum: ['DRAFT', 'PENDING', 'PAID', 'REFUNDED', 'DISPUTED', 'CANCELLED'],
+  })
+  status!: string;
   @ApiProperty({ example: '29.0000' }) subtotal!: string;
   @ApiProperty({ example: '0.0000' }) discountAmount!: string;
   @ApiProperty({ example: '0.0000' }) taxAmount!: string;
@@ -33,5 +36,6 @@ export class InvoiceEntity {
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
   @ApiPropertyOptional() deletedAt!: Date | null;
-  @ApiPropertyOptional({ type: [InvoiceLineEntity] }) lines?: InvoiceLineEntity[];
+  @ApiPropertyOptional({ type: [InvoiceLineEntity] })
+  lines?: InvoiceLineEntity[];
 }

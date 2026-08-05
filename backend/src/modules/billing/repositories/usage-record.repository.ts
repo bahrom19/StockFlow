@@ -11,8 +11,11 @@ export class UsageRecordRepository {
   }
 
   async upsert(
-    companyId: string, subscriptionId: string, metric: string,
-    periodStart: Date, periodEnd: Date | null,
+    companyId: string,
+    subscriptionId: string,
+    metric: string,
+    periodStart: Date,
+    periodEnd: Date | null,
     increment: number = 1,
     tx?: Prisma.TransactionClient,
   ): Promise<UsageRecord> {
@@ -28,13 +31,23 @@ export class UsageRecordRepository {
     }
 
     return this.getClient(tx).usageRecord.create({
-      data: { companyId, subscriptionId, metric, value: increment, periodStart, periodEnd },
+      data: {
+        companyId,
+        subscriptionId,
+        metric,
+        value: increment,
+        periodStart,
+        periodEnd,
+      },
     });
   }
 
   async getCurrentUsage(
-    companyId: string, subscriptionId: string, metric: string,
-    periodStart: Date, tx?: Prisma.TransactionClient,
+    companyId: string,
+    subscriptionId: string,
+    metric: string,
+    periodStart: Date,
+    tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const record = await this.getClient(tx).usageRecord.findFirst({
       where: { companyId, subscriptionId, metric, periodStart },
@@ -42,7 +55,10 @@ export class UsageRecordRepository {
     return record?.value ?? 0;
   }
 
-  async findByCompany(companyId: string, tx?: Prisma.TransactionClient): Promise<UsageRecord[]> {
+  async findByCompany(
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<UsageRecord[]> {
     return this.getClient(tx).usageRecord.findMany({
       where: { companyId },
       orderBy: { createdAt: 'desc' },
@@ -50,7 +66,9 @@ export class UsageRecordRepository {
   }
 
   async resetMetric(
-    companyId: string, subscriptionId: string, metric: string,
+    companyId: string,
+    subscriptionId: string,
+    metric: string,
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
     await this.getClient(tx).usageRecord.deleteMany({

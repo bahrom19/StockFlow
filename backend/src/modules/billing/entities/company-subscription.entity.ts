@@ -4,7 +4,18 @@ export class CompanySubscriptionEntity {
   @ApiProperty() id!: string;
   @ApiProperty() companyId!: string;
   @ApiProperty() planId!: string;
-  @ApiProperty({ enum: ['TRIAL', 'ACTIVE', 'PAST_DUE', 'SUSPENDED', 'CANCELLED', 'EXPIRED', 'FREE'] }) status!: string;
+  @ApiProperty({
+    enum: [
+      'TRIAL',
+      'ACTIVE',
+      'PAST_DUE',
+      'SUSPENDED',
+      'CANCELLED',
+      'EXPIRED',
+      'FREE',
+    ],
+  })
+  status!: string;
   @ApiPropertyOptional() trialStartsAt!: Date | null;
   @ApiPropertyOptional() trialEndsAt!: Date | null;
   @ApiProperty() currentPeriodStart!: Date;

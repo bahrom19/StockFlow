@@ -329,7 +329,10 @@ describe('PurchaseOrderService — updateStatusAfterReceipt (Blocker B1 fix)', (
         { provide: PurchaseOrderRepository, useValue: mockRepo },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: AuditLogService, useValue: mockAuditLog },
-        { provide: DocumentSequenceService, useValue: { nextNumber: jest.fn() } },
+        {
+          provide: DocumentSequenceService,
+          useValue: { nextNumber: jest.fn() },
+        },
         { provide: EVENT_BUS, useValue: mockEventBus },
       ],
     }).compile();

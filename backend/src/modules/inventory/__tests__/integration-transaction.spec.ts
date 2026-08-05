@@ -235,9 +235,9 @@ describe('Critical Transaction Flows', () => {
         return { id: existing.id };
       });
 
-    await expect(
-      mockPrisma.$transaction(async () => {}),
-    ).rejects.toThrow('Customer cust-1');
+    await expect(mockPrisma.$transaction(async () => {})).rejects.toThrow(
+      'Customer cust-1',
+    );
   });
 
   // ── Test 3: Supplier update with optimistic locking ────────
@@ -259,9 +259,9 @@ describe('Critical Transaction Flows', () => {
         return { id: existing.id };
       });
 
-    await expect(
-      mockPrisma.$transaction(async () => {}),
-    ).rejects.toThrow('Supplier supp-1');
+    await expect(mockPrisma.$transaction(async () => {})).rejects.toThrow(
+      'Supplier supp-1',
+    );
   });
 
   // ── Test 4: AccountBalance concurrent update protection ────
@@ -293,9 +293,9 @@ describe('Critical Transaction Flows', () => {
     ).resolves.toBeDefined();
 
     // Second call with stale data fails
-    await expect(
-      mockPrisma.$transaction(async () => {}),
-    ).rejects.toThrow('concurrently');
+    await expect(mockPrisma.$transaction(async () => {})).rejects.toThrow(
+      'concurrently',
+    );
   });
 
   // ── Test 5: Audit log in transaction ───────────────────────
@@ -319,9 +319,9 @@ describe('Critical Transaction Flows', () => {
         }
       });
 
-    await expect(
-      mockPrisma.$transaction(async () => {}),
-    ).rejects.toThrow('Rolled back');
+    await expect(mockPrisma.$transaction(async () => {})).rejects.toThrow(
+      'Rolled back',
+    );
     expect(auditLogCreated).toBe(false); // Audit log was rolled back
   });
 });

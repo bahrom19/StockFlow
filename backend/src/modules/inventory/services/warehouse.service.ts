@@ -85,8 +85,8 @@ export class WarehouseService {
       );
       if (!before) throw new BadRequestException('Warehouse not found');
 
-      const rowVer: number = (before as Record<string, any>).rowVersion ?? 0;
-      const data: any = {};
+      const rowVer: number = before.rowVersion ?? 0;
+      const data: Record<string, unknown> = {};
       if (dto.name !== undefined) data.name = dto.name;
       if (dto.code !== undefined) data.code = dto.code;
       if (dto.address !== undefined) data.address = dto.address;

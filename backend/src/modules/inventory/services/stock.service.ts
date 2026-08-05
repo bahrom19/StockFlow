@@ -65,7 +65,7 @@ export class StockService {
       companyId,
     );
     return StockMapper.toEntityList(
-      stock.map((s: any) => ({ ...s, product: { name: '', sku: '' } })),
+      stock.map((s) => ({ ...s, product: { name: '', sku: '' } })),
     );
   }
 
@@ -132,7 +132,7 @@ export class StockService {
         throw new BadRequestException('Stock quantity cannot become negative');
       }
 
-      const rowVer = (stock as Record<string, any>).rowVersion ?? 0;
+      const rowVer = stock.rowVersion ?? 0;
       const updated = await this.inventoryRepository.updateStock(
         stock.id,
         {
@@ -299,7 +299,7 @@ export class StockService {
       const destBefore = destStock?.quantity ?? 0;
       const destAfter = destBefore + dto.quantity;
 
-      const srcRowVer = (sourceStock as Record<string, any>).rowVersion ?? 0;
+      const srcRowVer = sourceStock.rowVersion ?? 0;
       await this.inventoryRepository.updateStock(
         sourceStock.id,
         {
@@ -315,7 +315,7 @@ export class StockService {
       );
 
       if (destStock) {
-        const dstRowVer = (destStock as Record<string, any>).rowVersion ?? 0;
+        const dstRowVer = destStock.rowVersion ?? 0;
         await this.inventoryRepository.updateStock(
           destStock.id,
           {

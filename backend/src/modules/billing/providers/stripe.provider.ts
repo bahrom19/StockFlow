@@ -34,12 +34,18 @@ export class StripeProvider implements PaymentProvider {
   constructor(private readonly configService: ConfigService) {
     this.isDevelopment = !this.configService.get<string>('app.stripeSecretKey');
     if (this.isDevelopment) {
-      this.logger.warn('Stripe running in SIMULATION mode — no real charges will occur');
+      this.logger.warn(
+        'Stripe running in SIMULATION mode — no real charges will occur',
+      );
     }
   }
 
-  async createCheckoutSession(params: CheckoutSessionParams): Promise<CheckoutSessionResult> {
-    this.logger.log(`Creating checkout session for plan ${params.planCode}, company ${params.companyId}`);
+  async createCheckoutSession(
+    params: CheckoutSessionParams,
+  ): Promise<CheckoutSessionResult> {
+    this.logger.log(
+      `Creating checkout session for plan ${params.planCode}, company ${params.companyId}`,
+    );
 
     if (this.isDevelopment) {
       return {
@@ -62,11 +68,17 @@ export class StripeProvider implements PaymentProvider {
     // const stripe = await this.getClient();
     // const session = await stripe.checkout.sessions.create({ ... });
     // return this.mapCheckoutSession(session);
-    throw new Error('Production Stripe mode requires stripe SDK. Set STRIPE_SECRET_KEY and install stripe package.');
+    throw new Error(
+      'Production Stripe mode requires stripe SDK. Set STRIPE_SECRET_KEY and install stripe package.',
+    );
   }
 
-  async createBillingPortalSession(params: PortalSessionParams): Promise<PortalSessionResult> {
-    this.logger.log(`Creating billing portal for customer ${params.customerId}`);
+  async createBillingPortalSession(
+    params: PortalSessionParams,
+  ): Promise<PortalSessionResult> {
+    this.logger.log(
+      `Creating billing portal for customer ${params.customerId}`,
+    );
 
     if (this.isDevelopment) {
       return {
@@ -78,7 +90,9 @@ export class StripeProvider implements PaymentProvider {
     throw new Error('Production Stripe mode requires stripe SDK.');
   }
 
-  async retrieveCheckoutSession(sessionId: string): Promise<CheckoutSessionResult> {
+  async retrieveCheckoutSession(
+    sessionId: string,
+  ): Promise<CheckoutSessionResult> {
     this.logger.log(`Retrieving checkout session ${sessionId}`);
 
     if (this.isDevelopment) {
@@ -113,7 +127,9 @@ export class StripeProvider implements PaymentProvider {
     throw new Error('Production Stripe mode requires stripe SDK.');
   }
 
-  async retrieveCustomer(providerCustomerId: string): Promise<ProviderCustomer | null> {
+  async retrieveCustomer(
+    providerCustomerId: string,
+  ): Promise<ProviderCustomer | null> {
     if (this.isDevelopment) {
       return {
         id: providerCustomerId,
@@ -125,7 +141,9 @@ export class StripeProvider implements PaymentProvider {
     throw new Error('Production Stripe mode requires stripe SDK.');
   }
 
-  async ensureCustomer(params: EnsureCustomerParams): Promise<ProviderCustomer> {
+  async ensureCustomer(
+    params: EnsureCustomerParams,
+  ): Promise<ProviderCustomer> {
     this.logger.log(`Ensuring customer for ${params.email}`);
 
     if (this.isDevelopment) {
@@ -139,8 +157,12 @@ export class StripeProvider implements PaymentProvider {
     throw new Error('Production Stripe mode requires stripe SDK.');
   }
 
-  async cancelProviderSubscription(providerSubscriptionId: string): Promise<void> {
-    this.logger.log(`Cancelling provider subscription ${providerSubscriptionId}`);
+  async cancelProviderSubscription(
+    providerSubscriptionId: string,
+  ): Promise<void> {
+    this.logger.log(
+      `Cancelling provider subscription ${providerSubscriptionId}`,
+    );
 
     if (this.isDevelopment) {
       return;

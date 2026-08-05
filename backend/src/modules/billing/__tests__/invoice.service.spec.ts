@@ -83,7 +83,10 @@ describe('InvoiceService', () => {
         { provide: InvoiceRepository, useValue: mockInvoiceRepo },
         { provide: CompanySubscriptionRepository, useValue: mockSubRepo },
         { provide: PaymentTransactionRepository, useValue: mockPaymentRepo },
-        { provide: PrismaService, useValue: { $transaction: jest.fn((cb: any) => cb(mockTx)) } },
+        {
+          provide: PrismaService,
+          useValue: { $transaction: jest.fn((cb: any) => cb(mockTx)) },
+        },
         { provide: EVENT_BUS, useValue: mockEventBus },
       ],
     }).compile();
@@ -93,14 +96,19 @@ describe('InvoiceService', () => {
 
   describe('findAll', () => {
     it('should return paginated invoices', async () => {
-      mockInvoiceRepo.findAll.mockResolvedValue({ items: [mockInvoice as any], total: 1 });
+      mockInvoiceRepo.findAll.mockResolvedValue({
+        items: [mockInvoice as any],
+        total: 1,
+      });
       const result = await service.findAll({}, 'comp-1');
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1);
     });
 
     it('should reject negative page', async () => {
-      await expect(service.findAll({ page: -1 }, 'comp-1')).rejects.toThrow(BadRequestException);
+      await expect(service.findAll({ page: -1 }, 'comp-1')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -113,15 +121,22 @@ describe('InvoiceService', () => {
 
     it('should throw if not found', async () => {
       mockInvoiceRepo.findById.mockResolvedValue(null);
-      await expect(service.findById('missing', 'comp-1')).rejects.toThrow(NotFoundException);
+      await expect(service.findById('missing', 'comp-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('generateInvoice', () => {
     it('should generate an invoice for a subscription', async () => {
       mockSubRepo.findById.mockResolvedValue(mockSubscription as any);
-      mockInvoiceRepo.getNextInvoiceNumber.mockResolvedValue('INV-20260801-A3F2C9');
-      mockInvoiceRepo.create.mockResolvedValue({ ...mockInvoice, lines: [] } as any);
+      mockInvoiceRepo.getNextInvoiceNumber.mockResolvedValue(
+        'INV-20260801-A3F2C9',
+      );
+      mockInvoiceRepo.create.mockResolvedValue({
+        ...mockInvoice,
+        lines: [],
+      } as any);
 
       const result = await service.generateInvoice('sub-1', 'comp-1', 'user-1');
       expect(result.invoiceNumber).toBe('INV-20260801-A3F2C9');
@@ -131,15 +146,19 @@ describe('InvoiceService', () => {
 
     it('should throw if subscription not found', async () => {
       mockSubRepo.findById.mockResolvedValue(null);
-      await expect(service.generateInvoice('missing', 'comp-1', 'user-1'))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.generateInvoice('missing', 'comp-1', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('markPaid', () => {
     it('should mark invoice as paid and create payment transaction', async () => {
       mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
-      mockInvoiceRepo.update.mockResolvedValue({ ...mockInvoice, status: 'PAID' } as any);
+      mockInvoiceRepo.update.mockResolvedValue({
+        ...mockInvoice,
+        status: 'PAID',
+      } as any);
       mockPaymentRepo.create.mockResolvedValue({ id: 'pmt-1' } as any);
 
       const result = await service.markPaid('inv-1', 'comp-1', '29.99');
@@ -150,16 +169,23 @@ describe('InvoiceService', () => {
     });
 
     it('should throw for non-pending invoice', async () => {
-      mockInvoiceRepo.findById.mockResolvedValue({ ...mockInvoice, status: 'PAID' } as any);
-      await expect(service.markPaid('inv-1', 'comp-1', '29.99'))
-        .rejects.toThrow(BadRequestException);
+      mockInvoiceRepo.findById.mockResolvedValue({
+        ...mockInvoice,
+        status: 'PAID',
+      } as any);
+      await expect(
+        service.markPaid('inv-1', 'comp-1', '29.99'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('voidInvoice', () => {
     it('should void a pending invoice', async () => {
       mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
-      mockInvoiceRepo.update.mockResolvedValue({ ...mockInvoice, status: 'CANCELLED' } as any);
+      mockInvoiceRepo.update.mockResolvedValue({
+        ...mockInvoice,
+        status: 'CANCELLED',
+      } as any);
 
       const result = await service.voidInvoice('inv-1', 'comp-1');
       expect(result.status).toBe('CANCELLED');
@@ -167,8 +193,13 @@ describe('InvoiceService', () => {
     });
 
     it('should throw for non-pending invoice', async () => {
-      mockInvoiceRepo.findById.mockResolvedValue({ ...mockInvoice, status: 'PAID' } as any);
-      await expect(service.voidInvoice('inv-1', 'comp-1')).rejects.toThrow(BadRequestException);
+      mockInvoiceRepo.findById.mockResolvedValue({
+        ...mockInvoice,
+        status: 'PAID',
+      } as any);
+      await expect(service.voidInvoice('inv-1', 'comp-1')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });

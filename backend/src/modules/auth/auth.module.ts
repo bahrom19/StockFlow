@@ -26,7 +26,13 @@ import { RolesRepository } from '../rbac/repositories/roles.repository';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthRepository, JwtStrategy, JwtAuthGuard, RolesRepository],
+  providers: [
+    AuthService,
+    AuthRepository,
+    JwtStrategy,
+    JwtAuthGuard,
+    RolesRepository,
+  ],
   exports: [JwtAuthGuard, JwtStrategy, AuthService],
 })
 export class AuthModule {}

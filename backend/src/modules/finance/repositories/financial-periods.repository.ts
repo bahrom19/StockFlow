@@ -143,7 +143,10 @@ export class FinancialPeriodsRepository {
 
     // Apply relation writes (updateMany cannot touch relations)
     if (Object.keys(relationData).length > 0) {
-      await prisma.financialPeriod.update({ where: { id }, data: relationData });
+      await prisma.financialPeriod.update({
+        where: { id },
+        data: relationData,
+      });
     }
 
     return prisma.financialPeriod.findFirst({

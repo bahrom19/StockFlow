@@ -43,12 +43,10 @@ describe('SalesService — create payment validation (change/overpayment Phase 1
       },
       customer: { findFirst: jest.fn().mockResolvedValue(null) },
       product: {
-        findFirst: jest
-          .fn()
-          .mockResolvedValue({
-            id: productId,
-            costPrice: new Prisma.Decimal('900'),
-          }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: productId,
+          costPrice: new Prisma.Decimal('900'),
+        }),
       },
     };
 
@@ -117,9 +115,9 @@ describe('SalesService — create payment validation (change/overpayment Phase 1
     await expect(service.create(dto, userId, companyId)).rejects.toThrow(
       BadRequestException,
     );
-    await expect(
-      service.create(dto, userId, companyId),
-    ).rejects.toThrow(/Insufficient payment/);
+    await expect(service.create(dto, userId, companyId)).rejects.toThrow(
+      /Insufficient payment/,
+    );
     expect(mockSalesRepo.create).not.toHaveBeenCalled();
   });
 

@@ -23,10 +23,13 @@ export class UsageTrackingService {
     const plan = await this.planRepository.findById(sub.planId);
     if (!plan) throw new NotFoundException('Plan not found');
 
-    const limit = (plan.featureFlags as Record<string, unknown>)?.[metric] as number | undefined;
+    const limit = (plan.featureFlags as Record<string, unknown>)?.[metric] as
+      | number
+      | undefined;
     if (limit === undefined) return; // No limit configured
     if (limit === -1) return; // Unlimited
-    if (limit === 0) throw new Error(`Feature ${metric} not available on your plan`);
+    if (limit === 0)
+      throw new Error(`Feature ${metric} not available on your plan`);
 
     const periodStart = sub.currentPeriodStart;
     const current = await this.usageRepository.getCurrentUsage(
@@ -37,7 +40,9 @@ export class UsageTrackingService {
     );
 
     if (current + increment > limit) {
-      throw new Error(`Monthly ${metric} limit (${limit}) exceeded. Upgrade your plan.`);
+      throw new Error(
+        `Monthly ${metric} limit (${limit}) exceeded. Upgrade your plan.`,
+      );
     }
   }
 

@@ -1,8 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CashShiftService } from '../services/cash-shift.service';
 import { CashShiftRepository } from '../repositories/cash-shift.repository';
@@ -98,7 +95,11 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
     repo.findOpenShift.mockResolvedValue(baseShift);
 
     await expect(
-      service.openShift({ warehouseId, openingBalance: 100 }, userId, companyId),
+      service.openShift(
+        { warehouseId, openingBalance: 100 },
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -111,7 +112,11 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
     repo.create.mockRejectedValue(p2002);
 
     await expect(
-      service.openShift({ warehouseId, openingBalance: 100 }, userId, companyId),
+      service.openShift(
+        { warehouseId, openingBalance: 100 },
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -120,7 +125,11 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
     repo.create.mockRejectedValue(new Error('db down'));
 
     await expect(
-      service.openShift({ warehouseId, openingBalance: 100 }, userId, companyId),
+      service.openShift(
+        { warehouseId, openingBalance: 100 },
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow('db down');
   });
 
@@ -177,7 +186,8 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
       5,
       expect.anything(),
     );
-    const updateData = (repo.update.mock.calls[0]![1] as any).cashIn as Prisma.Decimal;
+    const updateData = (repo.update.mock.calls[0]![1] as any)
+      .cashIn as Prisma.Decimal;
     expect(updateData.toString()).toBe('15');
   });
 

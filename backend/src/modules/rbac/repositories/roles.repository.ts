@@ -103,7 +103,13 @@ export class RolesRepository {
 
       const updated = await client.role.findUnique({
         where: { id },
-        include: { permissions: { include: { permission: { select: { id: true, code: true, name: true } } } } },
+        include: {
+          permissions: {
+            include: {
+              permission: { select: { id: true, code: true, name: true } },
+            },
+          },
+        },
       });
       return updated as Role;
     }
@@ -126,7 +132,11 @@ export class RolesRepository {
     if (rowVersion !== undefined) {
       const result = await client.role.updateMany({
         where: { id, companyId, rowVersion },
-        data: { deletedAt: new Date(), isActive: false, rowVersion: { increment: 1 } },
+        data: {
+          deletedAt: new Date(),
+          isActive: false,
+          rowVersion: { increment: 1 },
+        },
       });
 
       if (result.count === 0) {
@@ -143,7 +153,13 @@ export class RolesRepository {
 
       const updated = await client.role.findUnique({
         where: { id },
-        include: { permissions: { include: { permission: { select: { id: true, code: true, name: true } } } } },
+        include: {
+          permissions: {
+            include: {
+              permission: { select: { id: true, code: true, name: true } },
+            },
+          },
+        },
       });
       return updated as Role;
     }

@@ -119,7 +119,13 @@ export class RolesService {
 
       if (Object.keys(updateData).length > 0) {
         const rowVer = existing.rowVersion ?? 0;
-        await this.rolesRepository.update(id, updateData, companyId, rowVer, tx);
+        await this.rolesRepository.update(
+          id,
+          updateData,
+          companyId,
+          rowVer,
+          tx,
+        );
       }
 
       if (dto.permissionIds !== undefined) {

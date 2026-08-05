@@ -4,7 +4,9 @@ export class SubscriptionPlanEntity {
   @ApiProperty() id!: string;
   @ApiProperty({ example: 'starter' }) code!: string;
   @ApiProperty({ example: 'Starter' }) name!: string;
-  @ApiPropertyOptional({ example: 'For small businesses' }) description!: string | null;
+  @ApiPropertyOptional({ example: 'For small businesses' }) description!:
+    | string
+    | null;
   @ApiProperty({ example: '29.0000' }) priceMonthly!: string;
   @ApiProperty({ example: '290.0000' }) priceYearly!: string;
   @ApiProperty({ example: 'USD' }) currency!: string;

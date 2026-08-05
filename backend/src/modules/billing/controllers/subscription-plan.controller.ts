@@ -42,7 +42,11 @@ export class SubscriptionPlanController {
   @RequirePermission('admin:billing')
   @ApiOperation({ summary: 'Create a subscription plan' })
   @ApiBody({ type: CreateSubscriptionPlanDto })
-  @ApiResponse({ status: 201, description: 'Plan created', type: SubscriptionPlanEntity })
+  @ApiResponse({
+    status: 201,
+    description: 'Plan created',
+    type: SubscriptionPlanEntity,
+  })
   async create(
     @Body() dto: CreateSubscriptionPlanDto,
     @CurrentUser() user: JwtPayload,
@@ -54,9 +58,12 @@ export class SubscriptionPlanController {
   @RequirePermission('billing:read')
   @ApiOperation({ summary: 'List subscription plans' })
   @ApiResponse({ status: 200, description: 'Plans retrieved' })
-  async findAll(
-    @Query() query: SubscriptionPlanQueryDto,
-  ): Promise<{ items: SubscriptionPlanEntity[]; total: number; page: number; limit: number }> {
+  async findAll(@Query() query: SubscriptionPlanQueryDto): Promise<{
+    items: SubscriptionPlanEntity[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.planService.findAll(query);
   }
 
@@ -64,7 +71,11 @@ export class SubscriptionPlanController {
   @RequirePermission('billing:read')
   @ApiOperation({ summary: 'Get plan by id' })
   @ApiParam({ name: 'id', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Plan retrieved', type: SubscriptionPlanEntity })
+  @ApiResponse({
+    status: 200,
+    description: 'Plan retrieved',
+    type: SubscriptionPlanEntity,
+  })
   async findById(@Param('id') id: string): Promise<SubscriptionPlanEntity> {
     return this.planService.findById(id);
   }
@@ -73,8 +84,14 @@ export class SubscriptionPlanController {
   @RequirePermission('billing:read')
   @ApiOperation({ summary: 'Get plan by code' })
   @ApiParam({ name: 'code', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Plan retrieved', type: SubscriptionPlanEntity })
-  async findByCode(@Param('code') code: string): Promise<SubscriptionPlanEntity> {
+  @ApiResponse({
+    status: 200,
+    description: 'Plan retrieved',
+    type: SubscriptionPlanEntity,
+  })
+  async findByCode(
+    @Param('code') code: string,
+  ): Promise<SubscriptionPlanEntity> {
     return this.planService.findByCode(code);
   }
 
@@ -82,7 +99,11 @@ export class SubscriptionPlanController {
   @RequirePermission('admin:billing')
   @ApiOperation({ summary: 'Update a subscription plan' })
   @ApiBody({ type: UpdateSubscriptionPlanDto })
-  @ApiResponse({ status: 200, description: 'Plan updated', type: SubscriptionPlanEntity })
+  @ApiResponse({
+    status: 200,
+    description: 'Plan updated',
+    type: SubscriptionPlanEntity,
+  })
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateSubscriptionPlanDto,

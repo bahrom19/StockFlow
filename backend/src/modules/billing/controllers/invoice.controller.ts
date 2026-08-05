@@ -41,7 +41,12 @@ export class InvoiceController {
   async findAll(
     @Query() query: InvoiceQueryDto,
     @CurrentUser() user: JwtPayload,
-  ): Promise<{ items: InvoiceEntity[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    items: InvoiceEntity[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.invoiceService.findAll(query, user.companyId);
   }
 
@@ -49,7 +54,11 @@ export class InvoiceController {
   @RequirePermission('billing:read')
   @ApiOperation({ summary: 'Get invoice by id' })
   @ApiParam({ name: 'id', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Invoice retrieved', type: InvoiceEntity })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice retrieved',
+    type: InvoiceEntity,
+  })
   async findById(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -70,21 +79,34 @@ export class InvoiceController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Invoice marked as paid', type: InvoiceEntity })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice marked as paid',
+    type: InvoiceEntity,
+  })
   async markPaid(
     @Param('id') id: string,
     @Body('paidAmount') paidAmount: string,
     @Body('providerInvoiceId') providerInvoiceId: string | undefined,
     @CurrentUser() user: JwtPayload,
   ): Promise<InvoiceEntity> {
-    return this.invoiceService.markPaid(id, user.companyId, paidAmount, providerInvoiceId);
+    return this.invoiceService.markPaid(
+      id,
+      user.companyId,
+      paidAmount,
+      providerInvoiceId,
+    );
   }
 
   @Post(':id/void')
   @HttpCode(HttpStatus.OK)
   @RequirePermission('admin:billing')
   @ApiOperation({ summary: 'Void a pending invoice' })
-  @ApiResponse({ status: 200, description: 'Invoice voided', type: InvoiceEntity })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice voided',
+    type: InvoiceEntity,
+  })
   async voidInvoice(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,

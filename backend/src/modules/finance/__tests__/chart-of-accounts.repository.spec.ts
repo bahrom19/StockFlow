@@ -69,7 +69,12 @@ describe('ChartOfAccountsRepository — update with relation writes + optimistic
     const result = await repo.update('acc-1', data, 'comp-1', 0);
 
     expect(mockPrisma.chartOfAccount.updateMany).toHaveBeenCalledWith({
-      where: { id: 'acc-1', companyId: 'comp-1', rowVersion: 0, deletedAt: null },
+      where: {
+        id: 'acc-1',
+        companyId: 'comp-1',
+        rowVersion: 0,
+        deletedAt: null,
+      },
       data: { name: 'Cash Desk', rowVersion: { increment: 1 } },
     });
     // parent connect goes through a follow-up update
@@ -86,15 +91,15 @@ describe('ChartOfAccountsRepository — update with relation writes + optimistic
       baseAccount as ChartOfAccount,
     );
 
-    await repo.update(
-      'acc-1',
-      { parent: { disconnect: true } },
-      'comp-1',
-      0,
-    );
+    await repo.update('acc-1', { parent: { disconnect: true } }, 'comp-1', 0);
 
     expect(mockPrisma.chartOfAccount.updateMany).toHaveBeenCalledWith({
-      where: { id: 'acc-1', companyId: 'comp-1', rowVersion: 0, deletedAt: null },
+      where: {
+        id: 'acc-1',
+        companyId: 'comp-1',
+        rowVersion: 0,
+        deletedAt: null,
+      },
       data: { rowVersion: { increment: 1 } },
     });
     expect(mockPrisma.chartOfAccount.update).toHaveBeenCalledWith({
@@ -112,7 +117,12 @@ describe('ChartOfAccountsRepository — update with relation writes + optimistic
     await repo.update('acc-1', { name: 'X' }, 'comp-1', 0);
 
     expect(mockPrisma.chartOfAccount.updateMany).toHaveBeenCalledWith({
-      where: { id: 'acc-1', companyId: 'comp-1', rowVersion: 0, deletedAt: null },
+      where: {
+        id: 'acc-1',
+        companyId: 'comp-1',
+        rowVersion: 0,
+        deletedAt: null,
+      },
       data: { name: 'X', rowVersion: { increment: 1 } },
     });
     expect(mockPrisma.chartOfAccount.update).not.toHaveBeenCalled();

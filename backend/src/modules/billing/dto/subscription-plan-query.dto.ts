@@ -33,7 +33,11 @@ export class SubscriptionPlanQueryDto {
   @IsString()
   sortBy?: string;
 
-  @ApiPropertyOptional({ description: 'Sort order', enum: ['asc', 'desc'], default: 'asc' })
+  @ApiPropertyOptional({
+    description: 'Sort order',
+    enum: ['asc', 'desc'],
+    default: 'asc',
+  })
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc';

@@ -33,12 +33,12 @@ export class BarcodeService {
       productId,
       companyId,
     );
-    return barcodes.map((b: any) => ({
+    return barcodes.map((b) => ({
       id: b.id,
       productId: b.productId,
       barcode: b.barcode,
       isPrimary: b.isPrimary,
-      rowVersion: (b as Record<string, any>).rowVersion ?? 0,
+      rowVersion: b.rowVersion ?? 0,
       createdAt: b.createdAt,
       updatedAt: b.updatedAt,
     }));
@@ -132,7 +132,7 @@ export class BarcodeService {
         productId: barcode.productId,
         barcode: barcode.barcode,
         isPrimary: barcode.isPrimary,
-        rowVersion: (barcode as Record<string, any>).rowVersion ?? 0,
+        rowVersion: barcode.rowVersion ?? 0,
         createdAt: barcode.createdAt,
         updatedAt: barcode.updatedAt,
       };
@@ -212,7 +212,7 @@ export class BarcodeService {
         productId: updated.productId,
         barcode: updated.barcode,
         isPrimary: updated.isPrimary,
-        rowVersion: (updated as Record<string, any>).rowVersion ?? 0,
+        rowVersion: updated.rowVersion ?? 0,
         createdAt: updated.createdAt,
         updatedAt: updated.updatedAt,
       };

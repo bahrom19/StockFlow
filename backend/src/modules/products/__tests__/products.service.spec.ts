@@ -230,9 +230,7 @@ describe('ProductsService', () => {
     );
     const data = mockRepo.update.mock.calls[0]![1] as Record<string, unknown>;
     expect(Object.prototype.hasOwnProperty.call(data, 'price')).toBe(false);
-    expect(
-      Object.prototype.hasOwnProperty.call(data, 'costPrice'),
-    ).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(data, 'costPrice')).toBe(false);
   });
 
   it('should pass only explicitly provided fields to repository', async () => {
@@ -250,9 +248,7 @@ describe('ProductsService', () => {
 
     const data = mockRepo.update.mock.calls[0]![1] as Record<string, unknown>;
     expect(data).toEqual({ name: 'Renamed', price: 88.88 });
-    expect(
-      Object.prototype.hasOwnProperty.call(data, 'costPrice'),
-    ).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(data, 'costPrice')).toBe(false);
   });
 
   it('should reject body companyId that mismatches the JWT company', async () => {

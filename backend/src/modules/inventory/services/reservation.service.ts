@@ -62,7 +62,7 @@ export class ReservationService {
       const newReserved = stock.reservedQuantity + dto.quantity;
       const newAvailable = stock.quantity - newReserved;
 
-      const rowVer = (stock as Record<string, any>).rowVersion ?? 0;
+      const rowVer = stock.rowVersion ?? 0;
       await this.inventoryRepository.updateStock(
         stock.id,
         {
@@ -134,7 +134,7 @@ export class ReservationService {
       const newReserved = stock.reservedQuantity - releaseQty;
       const newAvailable = stock.quantity - newReserved;
 
-      const rowVer = (stock as Record<string, any>).rowVersion ?? 0;
+      const rowVer = stock.rowVersion ?? 0;
       await this.inventoryRepository.updateStock(
         stock.id,
         {

@@ -123,7 +123,13 @@ describe('PurchaseOrderService', () => {
     const validDto: CreatePurchaseOrderDto = {
       supplierId,
       items: [
-        { productId, quantity: 10, unitCost: 10.00, discountPercent: 0, taxPercent: 12 },
+        {
+          productId,
+          quantity: 10,
+          unitCost: 10.0,
+          discountPercent: 0,
+          taxPercent: 12,
+        },
       ],
     };
 
@@ -149,9 +155,14 @@ describe('PurchaseOrderService', () => {
 
     it('should throw BadRequestException when order number already exists', async () => {
       mockRepo.findByOrderNumber.mockResolvedValue(basePo as any);
-      const dto: CreatePurchaseOrderDto = { ...validDto, orderNumber: 'PO-EXISTING' };
+      const dto: CreatePurchaseOrderDto = {
+        ...validDto,
+        orderNumber: 'PO-EXISTING',
+      };
 
-      await expect(service.create(dto, userId, companyId)).rejects.toThrow(BadRequestException);
+      await expect(service.create(dto, userId, companyId)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should calculate totals correctly for multiple items', async () => {
@@ -161,13 +172,32 @@ describe('PurchaseOrderService', () => {
       const multiDto: CreatePurchaseOrderDto = {
         supplierId,
         items: [
-          { productId: 'p1', quantity: 5, unitCost: 100.00, discountPercent: 10, taxPercent: 12 },
-          { productId: 'p2', quantity: 3, unitCost: 50.00, discountPercent: 0, taxPercent: 12 },
+          {
+            productId: 'p1',
+            quantity: 5,
+            unitCost: 100.0,
+            discountPercent: 10,
+            taxPercent: 12,
+          },
+          {
+            productId: 'p2',
+            quantity: 3,
+            unitCost: 50.0,
+            discountPercent: 0,
+            taxPercent: 12,
+          },
         ],
       };
 
-      mockRepo.create.mockImplementation((data: Prisma.PurchaseOrderCreateInput) =>
-        Promise.resolve({ ...basePo, subtotal: data.subtotal, discountAmount: data.discountAmount, taxAmount: data.taxAmount, grandTotal: data.grandTotal } as any),
+      mockRepo.create.mockImplementation(
+        (data: Prisma.PurchaseOrderCreateInput) =>
+          Promise.resolve({
+            ...basePo,
+            subtotal: data.subtotal,
+            discountAmount: data.discountAmount,
+            taxAmount: data.taxAmount,
+            grandTotal: data.grandTotal,
+          } as any),
       );
 
       const result = await service.create(multiDto, userId, companyId);
@@ -182,7 +212,10 @@ describe('PurchaseOrderService', () => {
 
       const result = await service.getNextOrderNumber(companyId);
 
-      expect(mockSeq.nextNumber).toHaveBeenCalledWith(companyId, 'PURCHASE_ORDER');
+      expect(mockSeq.nextNumber).toHaveBeenCalledWith(
+        companyId,
+        'PURCHASE_ORDER',
+      );
       expect(mockRepo.countByCompany).not.toHaveBeenCalled();
       expect(result).toBe('PO-COMP-1-0007');
     });
@@ -199,13 +232,35 @@ describe('PurchaseOrderService', () => {
 
     it('should pass query filters to repository', async () => {
       mockRepo.findAll.mockResolvedValue({ items: [], total: 0 });
-      await service.findAll({ supplierId, status: PurchaseOrderStatus.DRAFT, page: 2, limit: 10, sortBy: 'orderDate', sortOrder: 'asc' }, companyId);
-      expect(mockRepo.findAll).toHaveBeenCalledWith(expect.objectContaining({ companyId, supplierId, status: PurchaseOrderStatus.DRAFT, page: 2, limit: 10 }));
+      await service.findAll(
+        {
+          supplierId,
+          status: PurchaseOrderStatus.DRAFT,
+          page: 2,
+          limit: 10,
+          sortBy: 'orderDate',
+          sortOrder: 'asc',
+        },
+        companyId,
+      );
+      expect(mockRepo.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId,
+          supplierId,
+          status: PurchaseOrderStatus.DRAFT,
+          page: 2,
+          limit: 10,
+        }),
+      );
     });
 
     it('should throw on invalid pagination', async () => {
-      await expect(service.findAll({ page: 0, limit: 20 }, companyId)).rejects.toThrow(BadRequestException);
-      await expect(service.findAll({ page: 1, limit: 0 }, companyId)).rejects.toThrow(BadRequestException);
+      await expect(
+        service.findAll({ page: 0, limit: 20 }, companyId),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.findAll({ page: 1, limit: 0 }, companyId),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -219,7 +274,9 @@ describe('PurchaseOrderService', () => {
 
     it('should throw NotFoundException when not found', async () => {
       mockRepo.findById.mockResolvedValue(null);
-      await expect(service.findById('x', companyId)).rejects.toThrow(NotFoundException);
+      await expect(service.findById('x', companyId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -228,7 +285,9 @@ describe('PurchaseOrderService', () => {
     const updateDto: UpdatePurchaseOrderDto = { notes: 'Updated' };
 
     it('should update a DRAFT purchase order', async () => {
-      const mockTx = { purchaseOrderItem: { deleteMany: jest.fn(), createMany: jest.fn() } };
+      const mockTx = {
+        purchaseOrderItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(basePo as any);
       mockRepo.update.mockResolvedValue({ ...basePo, notes: 'Updated' } as any);
@@ -240,13 +299,17 @@ describe('PurchaseOrderService', () => {
 
     it('should throw NotFoundException when order does not exist', async () => {
       mockRepo.findById.mockResolvedValue(null);
-      await expect(service.update('x', updateDto, userId, companyId)).rejects.toThrow(NotFoundException);
+      await expect(
+        service.update('x', updateDto, userId, companyId),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException when order is not DRAFT', async () => {
       const approvedPo = { ...basePo, status: PurchaseOrderStatus.APPROVED };
       mockRepo.findById.mockResolvedValue(approvedPo as any);
-      await expect(service.update('po-1', updateDto, userId, companyId)).rejects.toThrow(BadRequestException);
+      await expect(
+        service.update('po-1', updateDto, userId, companyId),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -260,76 +323,171 @@ describe('PurchaseOrderService', () => {
     });
 
     it('should throw BadRequestException for non-DRAFT', async () => {
-      mockRepo.findById.mockResolvedValue({ ...basePo, status: PurchaseOrderStatus.APPROVED } as any);
-      await expect(service.softDelete('po-1', companyId)).rejects.toThrow(BadRequestException);
+      mockRepo.findById.mockResolvedValue({
+        ...basePo,
+        status: PurchaseOrderStatus.APPROVED,
+      } as any);
+      await expect(service.softDelete('po-1', companyId)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw NotFoundException when not found', async () => {
       mockRepo.findById.mockResolvedValue(null);
-      await expect(service.softDelete('x', companyId)).rejects.toThrow(NotFoundException);
+      await expect(service.softDelete('x', companyId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
   // ── TRANSITION STATUS ────────────────────────
   describe('transitionStatus', () => {
     it('should transition DRAFT to PENDING', async () => {
-      const mockTx = { purchaseOrderItem: { findMany: jest.fn().mockResolvedValue(basePo.items) } };
+      const mockTx = {
+        purchaseOrderItem: {
+          findMany: jest.fn().mockResolvedValue(basePo.items),
+        },
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(basePo as any);
-      mockRepo.update.mockResolvedValue({ ...basePo, status: PurchaseOrderStatus.PENDING } as any);
+      mockRepo.update.mockResolvedValue({
+        ...basePo,
+        status: PurchaseOrderStatus.PENDING,
+      } as any);
 
-      const result = await service.transitionStatus('po-1', PurchaseOrderStatus.PENDING, userId, companyId);
+      const result = await service.transitionStatus(
+        'po-1',
+        PurchaseOrderStatus.PENDING,
+        userId,
+        companyId,
+      );
       expect(result).toBeDefined();
     });
 
     it('should transition PENDING to APPROVED and set approvedBy', async () => {
       const pendingPo = { ...basePo, status: PurchaseOrderStatus.PENDING };
-      const mockTx = { purchaseOrderItem: { findMany: jest.fn().mockResolvedValue(basePo.items) } };
+      const mockTx = {
+        purchaseOrderItem: {
+          findMany: jest.fn().mockResolvedValue(basePo.items),
+        },
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(pendingPo as any);
-      mockRepo.update.mockResolvedValue({ ...pendingPo, status: PurchaseOrderStatus.APPROVED, approvedBy: userId } as any);
+      mockRepo.update.mockResolvedValue({
+        ...pendingPo,
+        status: PurchaseOrderStatus.APPROVED,
+        approvedBy: userId,
+      } as any);
 
-      const result = await service.transitionStatus('po-1', PurchaseOrderStatus.APPROVED, userId, companyId);
+      const result = await service.transitionStatus(
+        'po-1',
+        PurchaseOrderStatus.APPROVED,
+        userId,
+        companyId,
+      );
       expect(result).toBeDefined();
-      expect(mockRepo.update).toHaveBeenCalledWith('po-1', expect.objectContaining({ status: PurchaseOrderStatus.APPROVED, approvedBy: userId }), companyId, expect.any(Number), mockTx);
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'po-1',
+        expect.objectContaining({
+          status: PurchaseOrderStatus.APPROVED,
+          approvedBy: userId,
+        }),
+        companyId,
+        expect.any(Number),
+        mockTx,
+      );
       expect(mockEventBus.publish).toHaveBeenCalled();
     });
 
     it('should transition ORDERED to RECEIVED', async () => {
       const orderedPo = { ...basePo, status: PurchaseOrderStatus.ORDERED };
-      const mockTx = { purchaseOrderItem: { findMany: jest.fn().mockResolvedValue([]) } };
+      const mockTx = {
+        purchaseOrderItem: { findMany: jest.fn().mockResolvedValue([]) },
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(orderedPo as any);
-      mockRepo.update.mockResolvedValue({ ...orderedPo, status: PurchaseOrderStatus.RECEIVED } as any);
+      mockRepo.update.mockResolvedValue({
+        ...orderedPo,
+        status: PurchaseOrderStatus.RECEIVED,
+      } as any);
 
-      const result = await service.transitionStatus('po-1', PurchaseOrderStatus.RECEIVED, userId, companyId);
+      const result = await service.transitionStatus(
+        'po-1',
+        PurchaseOrderStatus.RECEIVED,
+        userId,
+        companyId,
+      );
       expect(result).toBeDefined();
     });
 
     it('should cancel DRAFT order', async () => {
-      const mockTx = { purchaseOrderItem: { findMany: jest.fn().mockResolvedValue([]) } };
+      const mockTx = {
+        purchaseOrderItem: { findMany: jest.fn().mockResolvedValue([]) },
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(basePo as any);
-      mockRepo.update.mockResolvedValue({ ...basePo, status: PurchaseOrderStatus.CANCELLED, cancelledBy: userId } as any);
+      mockRepo.update.mockResolvedValue({
+        ...basePo,
+        status: PurchaseOrderStatus.CANCELLED,
+        cancelledBy: userId,
+      } as any);
 
-      const result = await service.transitionStatus('po-1', PurchaseOrderStatus.CANCELLED, userId, companyId);
+      const result = await service.transitionStatus(
+        'po-1',
+        PurchaseOrderStatus.CANCELLED,
+        userId,
+        companyId,
+      );
       expect(result).toBeDefined();
-      expect(mockRepo.update).toHaveBeenCalledWith('po-1', expect.objectContaining({ status: PurchaseOrderStatus.CANCELLED, cancelledBy: userId }), companyId, expect.any(Number), mockTx);
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'po-1',
+        expect.objectContaining({
+          status: PurchaseOrderStatus.CANCELLED,
+          cancelledBy: userId,
+        }),
+        companyId,
+        expect.any(Number),
+        mockTx,
+      );
     });
 
     it('should throw BadRequestException for invalid transition (DRAFT→RECEIVED)', async () => {
       mockRepo.findById.mockResolvedValue(basePo as any);
-      await expect(service.transitionStatus('po-1', PurchaseOrderStatus.RECEIVED, userId, companyId)).rejects.toThrow(BadRequestException);
+      await expect(
+        service.transitionStatus(
+          'po-1',
+          PurchaseOrderStatus.RECEIVED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException from terminal state (RECEIVED)', async () => {
-      mockRepo.findById.mockResolvedValue({ ...basePo, status: PurchaseOrderStatus.RECEIVED } as any);
-      await expect(service.transitionStatus('po-1', PurchaseOrderStatus.DRAFT, userId, companyId)).rejects.toThrow(BadRequestException);
+      mockRepo.findById.mockResolvedValue({
+        ...basePo,
+        status: PurchaseOrderStatus.RECEIVED,
+      } as any);
+      await expect(
+        service.transitionStatus(
+          'po-1',
+          PurchaseOrderStatus.DRAFT,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw NotFoundException when not found', async () => {
       mockRepo.findById.mockResolvedValue(null);
-      await expect(service.transitionStatus('x', PurchaseOrderStatus.PENDING, userId, companyId)).rejects.toThrow(NotFoundException);
+      await expect(
+        service.transitionStatus(
+          'x',
+          PurchaseOrderStatus.PENDING,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

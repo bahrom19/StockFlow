@@ -143,12 +143,16 @@ export class GoodsReceiptService {
         dto.receiptNumber ??
         `GR-${companyId.substring(0, 8).toUpperCase()}-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
-      let receipt: Awaited<ReturnType<GoodsReceiptRepository['create']>> | null = null;
+      let receipt: Awaited<
+        ReturnType<GoodsReceiptRepository['create']>
+      > | null = null;
       try {
         receipt = await this.goodsReceiptRepository.create(
           {
             receiptNumber,
-            receiptDate: dto.receiptDate ? new Date(dto.receiptDate) : new Date(),
+            receiptDate: dto.receiptDate
+              ? new Date(dto.receiptDate)
+              : new Date(),
             status: GoodsReceiptStatus.DRAFT,
             notes: dto.notes,
             company: { connect: { id: companyId } },
@@ -183,8 +187,7 @@ export class GoodsReceiptService {
           where: { id: update.id },
         });
         if (!poItem) continue;
-        const newReceived =
-          poItem.receivedQuantity + update.receivedQuantity;
+        const newReceived = poItem.receivedQuantity + update.receivedQuantity;
         const result = await tx.purchaseOrderItem.updateMany({
           where: {
             id: update.id,

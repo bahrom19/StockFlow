@@ -37,7 +37,7 @@ export class SaleCompletedEventHandler implements EventHandler<SaleCompletedEven
       const afterQty = Math.max(0, beforeQty - item.quantity);
 
       if (stock) {
-        const rowVer = (stock as Record<string, any>).rowVersion ?? 0;
+        const rowVer = stock.rowVersion ?? 0;
         await this.inventoryRepository.updateStock(
           stock.id,
           {

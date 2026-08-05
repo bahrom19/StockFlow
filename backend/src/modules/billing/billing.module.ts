@@ -22,9 +22,7 @@ import { WebhookEngineService } from './webhooks/webhook-engine.service';
 import { BillingCronService } from './scheduler/billing-cron.service';
 
 @Module({
-  imports: [
-    ScheduleModule.forRoot(),
-  ],
+  imports: [ScheduleModule.forRoot()],
   controllers: [
     SubscriptionPlanController,
     CompanySubscriptionController,
@@ -78,12 +76,30 @@ export class BillingModule implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.eventBus.subscribe('billing.subscription.created', this.billingAuditLogger);
-    this.eventBus.subscribe('billing.subscription.changed', this.billingAuditLogger);
-    this.eventBus.subscribe('billing.subscription.cancelled', this.billingAuditLogger);
-    this.eventBus.subscribe('billing.subscription.expired', this.billingAuditLogger);
-    this.eventBus.subscribe('billing.payment.succeeded', this.billingAuditLogger);
+    this.eventBus.subscribe(
+      'billing.subscription.created',
+      this.billingAuditLogger,
+    );
+    this.eventBus.subscribe(
+      'billing.subscription.changed',
+      this.billingAuditLogger,
+    );
+    this.eventBus.subscribe(
+      'billing.subscription.cancelled',
+      this.billingAuditLogger,
+    );
+    this.eventBus.subscribe(
+      'billing.subscription.expired',
+      this.billingAuditLogger,
+    );
+    this.eventBus.subscribe(
+      'billing.payment.succeeded',
+      this.billingAuditLogger,
+    );
     this.eventBus.subscribe('billing.payment.failed', this.billingAuditLogger);
-    this.eventBus.subscribe('billing.invoice.generated', this.billingAuditLogger);
+    this.eventBus.subscribe(
+      'billing.invoice.generated',
+      this.billingAuditLogger,
+    );
   }
 }

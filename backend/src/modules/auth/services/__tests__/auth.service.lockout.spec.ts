@@ -70,7 +70,12 @@ describe('AuthService — Account Lockout', () => {
       providers: [
         AuthService,
         { provide: AuthRepository, useValue: mockRepository },
-        { provide: RolesRepository, useValue: { findPermissionCodesByRoleNames: jest.fn().mockResolvedValue([]) } },
+        {
+          provide: RolesRepository,
+          useValue: {
+            findPermissionCodesByRoleNames: jest.fn().mockResolvedValue([]),
+          },
+        },
         {
           provide: JwtService,
           useValue: {

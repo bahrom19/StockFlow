@@ -41,7 +41,8 @@ export class SubscriptionPlanService {
       maxUsers: dto.maxUsers ?? 3,
       maxWarehouses: dto.maxWarehouses ?? 1,
       maxProducts: dto.maxProducts ?? 500,
-      featureFlags: (dto.featureFlags ?? {}) as unknown as Prisma.InputJsonValue,
+      featureFlags: (dto.featureFlags ??
+        {}) as unknown as Prisma.InputJsonValue,
       isActive: dto.isActive ?? true,
       sortOrder: dto.sortOrder ?? 0,
     };
@@ -52,7 +53,11 @@ export class SubscriptionPlanService {
         action: 'PLAN_CREATED',
         entity: 'SubscriptionPlan',
         entityId: plan.id,
-        newValues: { code: plan.code, name: plan.name, priceMonthly: plan.priceMonthly.toString() },
+        newValues: {
+          code: plan.code,
+          name: plan.name,
+          priceMonthly: plan.priceMonthly.toString(),
+        },
         companyId,
         userId,
       },
@@ -68,7 +73,8 @@ export class SubscriptionPlanService {
   }> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    if (page < 1 || limit < 1) throw new BadRequestException('Page and limit must be positive');
+    if (page < 1 || limit < 1)
+      throw new BadRequestException('Page and limit must be positive');
 
     const result = await this.planRepository.findAll({
       search: query.search,
@@ -118,7 +124,8 @@ export class SubscriptionPlanService {
     if (dto.maxUsers !== undefined) data.maxUsers = dto.maxUsers;
     if (dto.maxWarehouses !== undefined) data.maxWarehouses = dto.maxWarehouses;
     if (dto.maxProducts !== undefined) data.maxProducts = dto.maxProducts;
-    if (dto.featureFlags !== undefined) data.featureFlags = dto.featureFlags as unknown as Prisma.InputJsonValue;
+    if (dto.featureFlags !== undefined)
+      data.featureFlags = dto.featureFlags as unknown as Prisma.InputJsonValue;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
 

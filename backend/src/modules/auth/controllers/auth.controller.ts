@@ -1,5 +1,10 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from '../services/auth.service';
 import { RegisterDto } from '../dto/register.dto';
@@ -49,7 +54,11 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user profile (roles + permissions)' })
-  @ApiResponse({ status: 200, description: 'Current user profile', type: Object })
+  @ApiResponse({
+    status: 200,
+    description: 'Current user profile',
+    type: Object,
+  })
   async getProfile(@CurrentUser() user: JwtPayload): Promise<AuthUser> {
     return this.authService.getProfile(user.userId, user.companyId);
   }

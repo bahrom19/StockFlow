@@ -32,7 +32,10 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: UsersRepository, useValue: mockRepo },
-        { provide: PrismaService, useValue: { $transaction: jest.fn((cb: any) => cb({})) } },
+        {
+          provide: PrismaService,
+          useValue: { $transaction: jest.fn((cb: any) => cb({})) },
+        },
         { provide: AuditLogService, useValue: { log: jest.fn() } },
       ],
     }).compile();

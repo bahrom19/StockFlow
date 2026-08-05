@@ -1,11 +1,27 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class SubscriptionQueryDto {
   @ApiPropertyOptional({ description: 'Filter by status' })
   @IsOptional()
-  @IsEnum(['TRIAL', 'ACTIVE', 'PAST_DUE', 'SUSPENDED', 'CANCELLED', 'EXPIRED', 'FREE'])
+  @IsEnum([
+    'TRIAL',
+    'ACTIVE',
+    'PAST_DUE',
+    'SUSPENDED',
+    'CANCELLED',
+    'EXPIRED',
+    'FREE',
+  ])
   status?: string;
 
   @ApiPropertyOptional({ description: 'Filter by plan code' })
@@ -23,7 +39,10 @@ export class SubscriptionQueryDto {
   @IsDateString()
   expiresAfter?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by active status', default: true })
+  @ApiPropertyOptional({
+    description: 'Filter by active status',
+    default: true,
+  })
   @IsOptional()
   @IsBoolean()
   @Type(() => Boolean)
@@ -48,7 +67,11 @@ export class SubscriptionQueryDto {
   @IsString()
   sortBy?: string;
 
-  @ApiPropertyOptional({ description: 'Sort order', enum: ['asc', 'desc'], default: 'desc' })
+  @ApiPropertyOptional({
+    description: 'Sort order',
+    enum: ['asc', 'desc'],
+    default: 'desc',
+  })
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc';

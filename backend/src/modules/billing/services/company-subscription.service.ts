@@ -47,31 +47,39 @@ export class CompanySubscriptionService {
     userId: string,
   ): Promise<CompanySubscriptionEntity> {
     return this.prismaService.$transaction(async (tx) => {
-      const existing = await this.subscriptionRepository.findByCompany(companyId, tx);
+      const existing = await this.subscriptionRepository.findByCompany(
+        companyId,
+        tx,
+      );
       if (existing) {
         throw new ConflictException('Company already has a subscription');
       }
 
       const planRecord = await this.planRepository.findByCode(dto.planCode);
-      if (!planRecord) throw new NotFoundException(`Plan ${dto.planCode} not found`);
+      if (!planRecord)
+        throw new NotFoundException(`Plan ${dto.planCode} not found`);
 
       const trialDays = dto.trialDays ?? planRecord.trialDays;
       const now = new Date();
-      const trialEndsAt = trialDays > 0
-        ? new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000)
-        : null;
+      const trialEndsAt =
+        trialDays > 0
+          ? new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000)
+          : null;
 
-      const sub = await this.subscriptionRepository.create({
-        company: { connect: { id: companyId } },
-        plan: { connect: { id: planRecord.id } },
-        status: 'TRIAL',
-        trialStartsAt: trialDays > 0 ? now : null,
-        trialEndsAt,
-        currentPeriodStart: now,
-        currentPeriodEnd: trialEndsAt,
-        isActive: true,
-        notes: dto.notes,
-      }, tx);
+      const sub = await this.subscriptionRepository.create(
+        {
+          company: { connect: { id: companyId } },
+          plan: { connect: { id: planRecord.id } },
+          status: 'TRIAL',
+          trialStartsAt: trialDays > 0 ? now : null,
+          trialEndsAt,
+          currentPeriodStart: now,
+          currentPeriodEnd: trialEndsAt,
+          isActive: true,
+          notes: dto.notes,
+        },
+        tx,
+      );
 
       await this.eventBus.publish(
         new SubscriptionCreatedEvent({
@@ -111,7 +119,10 @@ export class CompanySubscriptionService {
     return CompanySubscriptionMapper.toEntity(sub);
   }
 
-  async findById(id: string, companyId: string): Promise<CompanySubscriptionEntity> {
+  async findById(
+    id: string,
+    companyId: string,
+  ): Promise<CompanySubscriptionEntity> {
     const sub = await this.subscriptionRepository.findById(id, companyId);
     if (!sub) throw new NotFoundException(`Subscription ${id} not found`);
     return CompanySubscriptionMapper.toEntity(sub);
@@ -153,17 +164,24 @@ export class CompanySubscriptionService {
     userId: string,
   ): Promise<CompanySubscriptionEntity> {
     return this.prismaService.$transaction(async (tx) => {
-      const companySub = await this.subscriptionRepository.findByCompany(companyId, tx);
+      const companySub = await this.subscriptionRepository.findByCompany(
+        companyId,
+        tx,
+      );
       if (!companySub) throw new NotFoundException('Subscription not found');
-      const oldPlan = (companySub as unknown as { plan: { code: string } }).plan;
+      const oldPlan = (companySub as unknown as { plan: { code: string } })
+        .plan;
 
       const newPlan = await this.planRepository.findByCode(newPlanCode);
-      if (!newPlan) throw new NotFoundException(`Plan ${newPlanCode} not found`);
+      if (!newPlan)
+        throw new NotFoundException(`Plan ${newPlanCode} not found`);
 
       const rowVer = companySub.rowVersion ?? 0;
       const updated = await this.subscriptionRepository.updateByCompany(
         companyId,
-        { plan: { connect: { id: newPlan.id } } } as Prisma.CompanySubscriptionUpdateInput,
+        {
+          plan: { connect: { id: newPlan.id } },
+        } as Prisma.CompanySubscriptionUpdateInput,
         rowVer,
         tx,
       );
@@ -202,7 +220,10 @@ export class CompanySubscriptionService {
     userId?: string,
   ): Promise<CompanySubscriptionEntity> {
     return this.prismaService.$transaction(async (tx) => {
-      const sub = await this.subscriptionRepository.findByCompany(companyId, tx);
+      const sub = await this.subscriptionRepository.findByCompany(
+        companyId,
+        tx,
+      );
       if (!sub) throw new NotFoundException('Subscription not found');
       if (sub.status === 'CANCELLED' || sub.status === 'EXPIRED') {
         throw new BadRequestException(`Subscription is already ${sub.status}`);
@@ -248,12 +269,20 @@ export class CompanySubscriptionService {
     });
   }
 
-  async resume(companyId: string, userId?: string): Promise<CompanySubscriptionEntity> {
+  async resume(
+    companyId: string,
+    userId?: string,
+  ): Promise<CompanySubscriptionEntity> {
     return this.prismaService.$transaction(async (tx) => {
-      const sub = await this.subscriptionRepository.findByCompany(companyId, tx);
+      const sub = await this.subscriptionRepository.findByCompany(
+        companyId,
+        tx,
+      );
       if (!sub) throw new NotFoundException('Subscription not found');
       if (sub.status !== 'CANCELLED') {
-        throw new BadRequestException('Only cancelled subscriptions can be resumed');
+        throw new BadRequestException(
+          'Only cancelled subscriptions can be resumed',
+        );
       }
 
       const rowVer = sub.rowVersion ?? 0;
@@ -292,7 +321,10 @@ export class CompanySubscriptionService {
     userId: string,
   ): Promise<CompanySubscriptionEntity> {
     return this.prismaService.$transaction(async (tx) => {
-      const sub = await this.subscriptionRepository.findByCompany(companyId, tx);
+      const sub = await this.subscriptionRepository.findByCompany(
+        companyId,
+        tx,
+      );
       if (!sub) throw new NotFoundException('Subscription not found');
 
       const allowed = VALID_TRANSITIONS[sub.status];
@@ -337,12 +369,18 @@ export class CompanySubscriptionService {
     });
   }
 
-  async downgradeToFree(companyId: string, userId?: string): Promise<CompanySubscriptionEntity> {
+  async downgradeToFree(
+    companyId: string,
+    userId?: string,
+  ): Promise<CompanySubscriptionEntity> {
     const freePlan = await this.planRepository.findByCode('free');
     if (!freePlan) throw new NotFoundException('Free plan not found');
 
     return this.prismaService.$transaction(async (tx) => {
-      const sub = await this.subscriptionRepository.findByCompany(companyId, tx);
+      const sub = await this.subscriptionRepository.findByCompany(
+        companyId,
+        tx,
+      );
       if (!sub) throw new NotFoundException('Subscription not found');
 
       const rowVer = sub.rowVersion ?? 0;

@@ -67,7 +67,11 @@ describe('FinancialPeriodsRepository — update with relation writes + optimisti
 
     expect(mockPrisma.financialPeriod.updateMany).toHaveBeenCalledWith({
       where: { id: 'fp-1', companyId: 'comp-1', rowVersion: 0 },
-      data: { status: 'CLOSED', closedAt: expect.any(Date), rowVersion: { increment: 1 } },
+      data: {
+        status: 'CLOSED',
+        closedAt: expect.any(Date),
+        rowVersion: { increment: 1 },
+      },
     });
     // closedByUser connect goes through a follow-up update
     expect(mockPrisma.financialPeriod.update).toHaveBeenCalledWith({

@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, SubscriptionPlan } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
@@ -10,17 +14,26 @@ export class SubscriptionPlanRepository {
     return tx || this.prismaService;
   }
 
-  async create(data: Prisma.SubscriptionPlanCreateInput, tx?: Prisma.TransactionClient): Promise<SubscriptionPlan> {
+  async create(
+    data: Prisma.SubscriptionPlanCreateInput,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SubscriptionPlan> {
     return this.getClient(tx).subscriptionPlan.create({ data });
   }
 
-  async findById(id: string, tx?: Prisma.TransactionClient): Promise<SubscriptionPlan | null> {
+  async findById(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SubscriptionPlan | null> {
     return this.getClient(tx).subscriptionPlan.findFirst({
       where: { id, deletedAt: null },
     });
   }
 
-  async findByCode(code: string, tx?: Prisma.TransactionClient): Promise<SubscriptionPlan | null> {
+  async findByCode(
+    code: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SubscriptionPlan | null> {
     return this.getClient(tx).subscriptionPlan.findFirst({
       where: { code, deletedAt: null },
     });
@@ -82,19 +95,31 @@ export class SubscriptionPlanRepository {
         data: { ...data, rowVersion: { increment: 1 } },
       });
       if (result.count === 0) {
-        const existing = await client.subscriptionPlan.findFirst({ where: { id } });
-        if (!existing) throw new NotFoundException(`SubscriptionPlan ${id} not found`);
-        throw new ConflictException(`SubscriptionPlan ${id} was modified by another user`);
+        const existing = await client.subscriptionPlan.findFirst({
+          where: { id },
+        });
+        if (!existing)
+          throw new NotFoundException(`SubscriptionPlan ${id} not found`);
+        throw new ConflictException(
+          `SubscriptionPlan ${id} was modified by another user`,
+        );
       }
-      return client.subscriptionPlan.findUnique({ where: { id } }) as unknown as SubscriptionPlan;
+      return client.subscriptionPlan.findUnique({
+        where: { id },
+      }) as unknown as SubscriptionPlan;
     }
 
     const existing = await this.findById(id, tx);
-    if (!existing) throw new NotFoundException(`SubscriptionPlan ${id} not found`);
+    if (!existing)
+      throw new NotFoundException(`SubscriptionPlan ${id} not found`);
     return client.subscriptionPlan.update({ where: { id }, data });
   }
 
-  async softDelete(id: string, rowVersion?: number, tx?: Prisma.TransactionClient): Promise<SubscriptionPlan> {
+  async softDelete(
+    id: string,
+    rowVersion?: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SubscriptionPlan> {
     return this.update(id, { deletedAt: new Date() }, rowVersion, tx);
   }
 

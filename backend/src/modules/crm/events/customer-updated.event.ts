@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 export interface CustomerUpdatedPayload {
   customerId: string;
   companyId: string;
-  changes: Record<string, any>;
+  changes: Record<string, unknown>;
   updatedBy: string | null;
 }
 

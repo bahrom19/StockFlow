@@ -76,7 +76,10 @@ export class AuthService {
       // after registration (idempotent — skips if a period already exists).
       await this.seedFinancialPeriod(company.id, tx);
 
-      const passwordHash = await bcrypt.hash(registerDto.password, this.bcryptRounds);
+      const passwordHash = await bcrypt.hash(
+        registerDto.password,
+        this.bcryptRounds,
+      );
 
       const user = await this.authRepository.createUser(
         {
@@ -162,7 +165,11 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<AuthResponse> {
     type LoginOutcome =
       | { ok: true; result: AuthResponse }
-      | { ok: false; reason: 'INVALID_CREDENTIALS' | 'ACCOUNT_LOCKED' | 'NO_COMPANY'; remainingMin?: number };
+      | {
+          ok: false;
+          reason: 'INVALID_CREDENTIALS' | 'ACCOUNT_LOCKED' | 'NO_COMPANY';
+          remainingMin?: number;
+        };
 
     const outcome: LoginOutcome = await this.prismaService.$transaction(
       async (tx) => {
@@ -304,8 +311,7 @@ export class AuthService {
           result: {
             accessToken,
             refreshToken,
-            expiresIn:
-              this.configService.get<string>('jwt.expiresIn') ?? '15m',
+            expiresIn: this.configService.get<string>('jwt.expiresIn') ?? '15m',
             refreshExpiresIn:
               this.configService.get<string>('jwt.refreshExpiresIn') ?? '30d',
             user: this.buildAuthUser({
@@ -329,9 +335,7 @@ export class AuthService {
         );
       }
       if (outcome.reason === 'NO_COMPANY') {
-        throw new UnauthorizedException(
-          'User is not assigned to any company',
-        );
+        throw new UnauthorizedException('User is not assigned to any company');
       }
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -361,7 +365,10 @@ export class AuthService {
       companyMember.companyId,
     );
 
-    const permissions = await this.loadPermissions(roles, companyMember.companyId);
+    const permissions = await this.loadPermissions(
+      roles,
+      companyMember.companyId,
+    );
 
     const newPayload: JwtPayload = {
       userId: user.id,
@@ -660,7 +667,10 @@ export class AuthService {
     companyId: string,
   ): Promise<string[]> {
     if (roleNames.length === 0) return [];
-    return this.rolesRepository.findPermissionCodesByRoleNames(roleNames, companyId);
+    return this.rolesRepository.findPermissionCodesByRoleNames(
+      roleNames,
+      companyId,
+    );
   }
 
   private buildAuthUser(params: AuthUser): AuthUser {

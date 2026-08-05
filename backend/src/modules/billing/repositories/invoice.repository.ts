@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Invoice, InvoiceLine, InvoiceStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
@@ -12,18 +16,29 @@ export class InvoiceRepository {
     return tx || this.prismaService;
   }
 
-  async create(data: Prisma.InvoiceCreateInput, tx?: Prisma.TransactionClient): Promise<Invoice & { lines?: InvoiceLine[] }> {
+  async create(
+    data: Prisma.InvoiceCreateInput,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Invoice & { lines?: InvoiceLine[] }> {
     return this.getClient(tx).invoice.create({ data, include: invoiceInclude });
   }
 
-  async findById(id: string, companyId: string, tx?: Prisma.TransactionClient): Promise<(Invoice & { lines?: InvoiceLine[] }) | null> {
+  async findById(
+    id: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<(Invoice & { lines?: InvoiceLine[] }) | null> {
     return this.getClient(tx).invoice.findFirst({
       where: { id, companyId, deletedAt: null },
       include: invoiceInclude,
     });
   }
 
-  async findBySubscription(subscriptionId: string, companyId: string, tx?: Prisma.TransactionClient): Promise<(Invoice & { lines?: InvoiceLine[] })[]> {
+  async findBySubscription(
+    subscriptionId: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<(Invoice & { lines?: InvoiceLine[] })[]> {
     return this.getClient(tx).invoice.findMany({
       where: { subscriptionId, companyId, deletedAt: null },
       include: invoiceInclude,
@@ -40,10 +55,19 @@ export class InvoiceRepository {
     limit?: number;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
-  }): Promise<{ items: (Invoice & { lines?: InvoiceLine[] })[]; total: number }> {
+  }): Promise<{
+    items: (Invoice & { lines?: InvoiceLine[] })[];
+    total: number;
+  }> {
     const {
-      companyId, status, dateFrom, dateTo,
-      page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc',
+      companyId,
+      status,
+      dateFrom,
+      dateTo,
+      page = 1,
+      limit = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
     } = params;
 
     const where: Prisma.InvoiceWhereInput = { companyId, deletedAt: null };
@@ -56,9 +80,11 @@ export class InvoiceRepository {
 
     const [items, total] = await this.prismaService.$transaction([
       this.prismaService.invoice.findMany({
-        where, include: invoiceInclude,
+        where,
+        include: invoiceInclude,
         orderBy: { [sortBy]: sortOrder },
-        skip: (page - 1) * limit, take: limit,
+        skip: (page - 1) * limit,
+        take: limit,
       }),
       this.prismaService.invoice.count({ where }),
     ]);
@@ -66,8 +92,11 @@ export class InvoiceRepository {
   }
 
   async update(
-    id: string, data: Prisma.InvoiceUpdateInput, companyId: string,
-    rowVersion?: number, tx?: Prisma.TransactionClient,
+    id: string,
+    data: Prisma.InvoiceUpdateInput,
+    companyId: string,
+    rowVersion?: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<Invoice & { lines?: InvoiceLine[] }> {
     const client = this.getClient(tx);
     if (rowVersion !== undefined) {
@@ -76,22 +105,47 @@ export class InvoiceRepository {
         data: { ...data, rowVersion: { increment: 1 } },
       });
       if (result.count === 0) {
-        const existing = await client.invoice.findFirst({ where: { id, companyId } });
+        const existing = await client.invoice.findFirst({
+          where: { id, companyId },
+        });
         if (!existing) throw new NotFoundException(`Invoice ${id} not found`);
-        throw new ConflictException(`Invoice ${id} was modified by another user`);
+        throw new ConflictException(
+          `Invoice ${id} was modified by another user`,
+        );
       }
-      return client.invoice.findUnique({ where: { id }, include: invoiceInclude }) as unknown as Invoice & { lines?: InvoiceLine[] };
+      return client.invoice.findUnique({
+        where: { id },
+        include: invoiceInclude,
+      }) as unknown as Invoice & { lines?: InvoiceLine[] };
     }
     const existing = await this.findById(id, companyId, tx);
     if (!existing) throw new NotFoundException(`Invoice ${id} not found`);
-    return client.invoice.update({ where: { id }, data, include: invoiceInclude });
+    return client.invoice.update({
+      where: { id },
+      data,
+      include: invoiceInclude,
+    });
   }
 
-  async softDelete(id: string, companyId: string, rowVersion?: number, tx?: Prisma.TransactionClient): Promise<Invoice & { lines?: InvoiceLine[] }> {
-    return this.update(id, { deletedAt: new Date() }, companyId, rowVersion, tx);
+  async softDelete(
+    id: string,
+    companyId: string,
+    rowVersion?: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Invoice & { lines?: InvoiceLine[] }> {
+    return this.update(
+      id,
+      { deletedAt: new Date() },
+      companyId,
+      rowVersion,
+      tx,
+    );
   }
 
-  async getNextInvoiceNumber(companyId: string, tx?: Prisma.TransactionClient): Promise<string> {
+  async getNextInvoiceNumber(
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<string> {
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     // Use millisecond timestamp suffix to prevent race conditions under concurrent invoice generation.
     // The invoiceNumber is @unique in the schema, so duplicate writes will fail with

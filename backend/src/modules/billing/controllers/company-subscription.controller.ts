@@ -35,14 +35,20 @@ import { CompanySubscriptionEntity } from '../entities/company-subscription.enti
 @Controller('billing/subscription')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class CompanySubscriptionController {
-  constructor(private readonly subscriptionService: CompanySubscriptionService) {}
+  constructor(
+    private readonly subscriptionService: CompanySubscriptionService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RequirePermission('billing:create')
   @ApiOperation({ summary: 'Create subscription (trial) for company' })
   @ApiBody({ type: CreateSubscriptionDto })
-  @ApiResponse({ status: 201, description: 'Subscription created', type: CompanySubscriptionEntity })
+  @ApiResponse({
+    status: 201,
+    description: 'Subscription created',
+    type: CompanySubscriptionEntity,
+  })
   async create(
     @Body() dto: CreateSubscriptionDto,
     @CurrentUser() user: JwtPayload,
@@ -53,7 +59,11 @@ export class CompanySubscriptionController {
   @Get()
   @RequirePermission('billing:read')
   @ApiOperation({ summary: 'Get current company subscription' })
-  @ApiResponse({ status: 200, description: 'Subscription retrieved', type: CompanySubscriptionEntity })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription retrieved',
+    type: CompanySubscriptionEntity,
+  })
   async getMySubscription(
     @CurrentUser() user: JwtPayload,
   ): Promise<CompanySubscriptionEntity> {
@@ -66,7 +76,12 @@ export class CompanySubscriptionController {
   async findAll(
     @Query() query: SubscriptionQueryDto,
     @CurrentUser() user: JwtPayload,
-  ): Promise<{ items: CompanySubscriptionEntity[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    items: CompanySubscriptionEntity[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const isAdmin = user.roles?.includes('admin');
     const companyId = isAdmin ? undefined : user.companyId;
     return this.subscriptionService.findAll(query, companyId);
@@ -83,12 +98,20 @@ export class CompanySubscriptionController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Plan changed', type: CompanySubscriptionEntity })
+  @ApiResponse({
+    status: 200,
+    description: 'Plan changed',
+    type: CompanySubscriptionEntity,
+  })
   async changePlan(
     @Body('planCode') planCode: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<CompanySubscriptionEntity> {
-    return this.subscriptionService.changePlan(user.companyId, planCode, user.userId);
+    return this.subscriptionService.changePlan(
+      user.companyId,
+      planCode,
+      user.userId,
+    );
   }
 
   @Post('cancel')
@@ -103,7 +126,11 @@ export class CompanySubscriptionController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Subscription cancelled', type: CompanySubscriptionEntity })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription cancelled',
+    type: CompanySubscriptionEntity,
+  })
   async cancel(
     @Body('reason') reason: string | undefined,
     @CurrentUser() user: JwtPayload,
@@ -115,8 +142,14 @@ export class CompanySubscriptionController {
   @HttpCode(HttpStatus.OK)
   @RequirePermission('billing:update')
   @ApiOperation({ summary: 'Resume cancelled subscription' })
-  @ApiResponse({ status: 200, description: 'Subscription resumed', type: CompanySubscriptionEntity })
-  async resume(@CurrentUser() user: JwtPayload): Promise<CompanySubscriptionEntity> {
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription resumed',
+    type: CompanySubscriptionEntity,
+  })
+  async resume(
+    @CurrentUser() user: JwtPayload,
+  ): Promise<CompanySubscriptionEntity> {
     return this.subscriptionService.resume(user.companyId, user.userId);
   }
 
@@ -124,20 +157,36 @@ export class CompanySubscriptionController {
   @HttpCode(HttpStatus.OK)
   @RequirePermission('admin:billing')
   @ApiOperation({ summary: 'Transition subscription status (admin)' })
-  @ApiQuery({ name: 'status', required: true, enum: ['ACTIVE', 'SUSPENDED', 'EXPIRED'] })
-  @ApiResponse({ status: 200, description: 'Status transitioned', type: CompanySubscriptionEntity })
+  @ApiQuery({
+    name: 'status',
+    required: true,
+    enum: ['ACTIVE', 'SUSPENDED', 'EXPIRED'],
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Status transitioned',
+    type: CompanySubscriptionEntity,
+  })
   async transitionStatus(
     @CurrentUser() user: JwtPayload,
     @Query('status') status: string,
   ): Promise<CompanySubscriptionEntity> {
-    return this.subscriptionService.transitionStatus(user.companyId, status, user.userId);
+    return this.subscriptionService.transitionStatus(
+      user.companyId,
+      status,
+      user.userId,
+    );
   }
 
   @Get(':id')
   @RequirePermission('billing:read')
   @ApiOperation({ summary: 'Get subscription by id' })
   @ApiParam({ name: 'id', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Subscription retrieved', type: CompanySubscriptionEntity })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription retrieved',
+    type: CompanySubscriptionEntity,
+  })
   async findById(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,

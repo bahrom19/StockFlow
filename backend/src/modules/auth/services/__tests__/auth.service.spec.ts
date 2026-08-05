@@ -38,7 +38,9 @@ describe('AuthService', () => {
     } as unknown as jest.Mocked<AuthRepository>;
 
     mockRolesRepo = {
-      findPermissionCodesByRoleNames: jest.fn().mockResolvedValue(['products:create', 'products:read']),
+      findPermissionCodesByRoleNames: jest
+        .fn()
+        .mockResolvedValue(['products:create', 'products:read']),
     } as unknown as jest.Mocked<RolesRepository>;
 
     mockJwtService = {
@@ -143,7 +145,9 @@ describe('AuthService', () => {
         chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
         role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
         permission: { findMany: jest.fn().mockResolvedValue([]) },
-        rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        rolePermission: {
+          createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
         userRole: { create: jest.fn().mockResolvedValue({}) },
         financialPeriod,
       };
@@ -193,7 +197,9 @@ describe('AuthService', () => {
         chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
         role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
         permission: { findMany: jest.fn().mockResolvedValue([]) },
-        rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        rolePermission: {
+          createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
         userRole: { create: jest.fn().mockResolvedValue({}) },
         financialPeriod,
       };
@@ -231,9 +237,7 @@ describe('AuthService', () => {
         user: { update: jest.fn().mockResolvedValue({}) },
         auditLog: { create: jest.fn().mockResolvedValue({}) },
       };
-      mockTransaction.mockImplementation(
-        (cb: (tx: any) => any) => cb(loginTx),
-      );
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(loginTx));
     });
 
     it('should login and return auth response with tokens', async () => {
@@ -280,14 +284,12 @@ describe('AuthService', () => {
       ).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should write failed-login audit log with the user\'s real companyId (not zero UUID)', async () => {
+    it("should write failed-login audit log with the user's real companyId (not zero UUID)", async () => {
       const loginTx = {
         user: { update: jest.fn().mockResolvedValue({}) },
         auditLog: { create: jest.fn().mockResolvedValue({}) },
       };
-      mockTransaction.mockImplementation(
-        (cb: (tx: any) => any) => cb(loginTx),
-      );
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(loginTx));
 
       mockAuthRepo.findUserByEmail.mockResolvedValue({
         id: 'user-1',
@@ -319,9 +321,7 @@ describe('AuthService', () => {
         user: { update: jest.fn().mockResolvedValue({}) },
         auditLog: { create: jest.fn().mockResolvedValue({}) },
       };
-      mockTransaction.mockImplementation(
-        (cb: (tx: any) => any) => cb(loginTx),
-      );
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(loginTx));
 
       mockAuthRepo.findUserByEmail.mockResolvedValue({
         id: 'user-1',
@@ -426,9 +426,9 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException when user is not found', async () => {
       mockAuthRepo.findUserById.mockResolvedValue(null);
 
-      await expect(
-        service.getProfile('nonexistent', 'comp-1'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.getProfile('nonexistent', 'comp-1')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw UnauthorizedException when user is inactive', async () => {
@@ -438,9 +438,9 @@ describe('AuthService', () => {
         deletedAt: null,
       } as any);
 
-      await expect(
-        service.getProfile('user-1', 'comp-1'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.getProfile('user-1', 'comp-1')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw UnauthorizedException when user is deleted', async () => {
@@ -450,9 +450,9 @@ describe('AuthService', () => {
         deletedAt: new Date(),
       } as any);
 
-      await expect(
-        service.getProfile('user-1', 'comp-1'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.getProfile('user-1', 'comp-1')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should return empty permissions when user has no roles', async () => {

@@ -31,7 +31,7 @@ export class InventoryCountMapper {
       actualQuantity: model.actualQuantity,
       difference: model.difference,
       notes: model.notes,
-      rowVersion: (model as Record<string, any>).rowVersion ?? 0,
+      rowVersion: model.rowVersion ?? 0,
       createdAt: model.createdAt,
       updatedAt: model.updatedAt,
     };

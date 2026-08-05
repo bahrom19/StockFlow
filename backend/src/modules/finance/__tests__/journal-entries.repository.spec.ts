@@ -74,7 +74,11 @@ describe('JournalEntriesRepository — update with relation writes + optimistic 
 
     expect(mockPrisma.journalEntry.updateMany).toHaveBeenCalledWith({
       where: { id: 'je-1', companyId: 'comp-1', rowVersion: 0 },
-      data: { status: 'POSTED', postedAt: expect.any(Date), rowVersion: { increment: 1 } },
+      data: {
+        status: 'POSTED',
+        postedAt: expect.any(Date),
+        rowVersion: { increment: 1 },
+      },
     });
     // postedByUser connect goes through a follow-up update
     expect(mockPrisma.journalEntry.update).toHaveBeenCalledWith({

@@ -62,10 +62,15 @@ export class WebhookEngineService {
     private readonly paymentTransactionRepository: PaymentTransactionRepository,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {
-    this.webhookSecret = this.configService.get<string>('app.stripeWebhookSecret', '');
+    this.webhookSecret = this.configService.get<string>(
+      'app.stripeWebhookSecret',
+      '',
+    );
     this.isDevelopment = !this.webhookSecret;
     if (this.isDevelopment) {
-      this.logger.warn('Webhook engine in DEVELOPMENT mode — signature verification disabled');
+      this.logger.warn(
+        'Webhook engine in DEVELOPMENT mode — signature verification disabled',
+      );
     }
   }
 
@@ -77,11 +82,13 @@ export class WebhookEngineService {
     if (this.isDevelopment) return true;
 
     try {
-      const parts = signature.split(',').reduce<Record<string, string>>((acc, part) => {
-        const [key, value] = part.split('=');
-        if (key) acc[key] = value ?? '';
-        return acc;
-      }, {});
+      const parts = signature
+        .split(',')
+        .reduce<Record<string, string>>((acc, part) => {
+          const [key, value] = part.split('=');
+          if (key) acc[key] = value ?? '';
+          return acc;
+        }, {});
 
       const timestamp = parts['t'];
       const expectedSig = parts['v1'];
@@ -105,7 +112,9 @@ export class WebhookEngineService {
   /**
    * Process an incoming webhook event with idempotency and dispatch.
    */
-  async handleWebhook(payload: WebhookPayload): Promise<{ handled: boolean; eventType: string }> {
+  async handleWebhook(
+    payload: WebhookPayload,
+  ): Promise<{ handled: boolean; eventType: string }> {
     const { id: eventId, type } = payload;
 
     if (!SUPPORTED_EVENTS.includes(type as StripeEventType)) {
@@ -158,7 +167,9 @@ export class WebhookEngineService {
 
   // ─── Individual Event Handlers ──────────────────────────────────
 
-  private async handleCheckoutSessionCompleted(object: Record<string, unknown>): Promise<void> {
+  private async handleCheckoutSessionCompleted(
+    object: Record<string, unknown>,
+  ): Promise<void> {
     const sessionId = object.id as string;
     const customerId = object.customer as string;
     const subscriptionId = object.subscription as string;
@@ -172,21 +183,29 @@ export class WebhookEngineService {
     }
 
     // Activate subscription (trial → active) if currently in trial or past_due
-    const existingSub = await this.subscriptionRepository.findByCompany(companyId);
+    const existingSub =
+      await this.subscriptionRepository.findByCompany(companyId);
     if (existingSub && existingSub.status !== 'ACTIVE') {
-      await this.companySubscriptionService.transitionStatus(companyId, 'ACTIVE', SYSTEM_USER);
+      await this.companySubscriptionService.transitionStatus(
+        companyId,
+        'ACTIVE',
+        SYSTEM_USER,
+      );
     }
 
     // Store provider references
     if (existingSub && (customerId || subscriptionId)) {
       await this.subscriptionRepository.updateByCompany(companyId, {
         providerCustomerId: customerId ?? existingSub.providerCustomerId,
-        providerSubscriptionId: subscriptionId ?? existingSub.providerSubscriptionId,
+        providerSubscriptionId:
+          subscriptionId ?? existingSub.providerSubscriptionId,
       });
     }
   }
 
-  private async handleInvoicePaid(object: Record<string, unknown>): Promise<void> {
+  private async handleInvoicePaid(
+    object: Record<string, unknown>,
+  ): Promise<void> {
     const providerInvoiceId = object.id as string;
     const paymentIntentId = object.payment_intent as string;
     const amountPaid = (object.amount_paid as number) ?? 0;
@@ -199,11 +218,18 @@ export class WebhookEngineService {
     if (invoice) {
       // Stripe amounts are in cents — convert to decimal string
       const amountStr = (amountPaid / 100).toFixed(4);
-      await this.invoiceService.markPaid(invoice.id, invoice.companyId, amountStr, providerInvoiceId);
+      await this.invoiceService.markPaid(
+        invoice.id,
+        invoice.companyId,
+        amountStr,
+        providerInvoiceId,
+      );
     }
   }
 
-  private async handleInvoicePaymentFailed(object: Record<string, unknown>): Promise<void> {
+  private async handleInvoicePaymentFailed(
+    object: Record<string, unknown>,
+  ): Promise<void> {
     const providerInvoiceId = object.id as string;
     const attemptCount = (object.attempt_count as number) ?? 0;
 
@@ -221,11 +247,17 @@ export class WebhookEngineService {
           reason: `Payment failed after ${attemptCount} attempts`,
         }),
       );
-      await this.companySubscriptionService.transitionStatus(invoice.companyId, 'PAST_DUE', SYSTEM_USER);
+      await this.companySubscriptionService.transitionStatus(
+        invoice.companyId,
+        'PAST_DUE',
+        SYSTEM_USER,
+      );
     }
   }
 
-  private async handleSubscriptionUpdated(object: Record<string, unknown>): Promise<void> {
+  private async handleSubscriptionUpdated(
+    object: Record<string, unknown>,
+  ): Promise<void> {
     const status = object.status as string;
     const providerSubscriptionId = object.id as string;
 
@@ -236,13 +268,23 @@ export class WebhookEngineService {
     if (!sub) return;
 
     if (status === 'past_due') {
-      await this.companySubscriptionService.transitionStatus(sub.companyId, 'PAST_DUE', SYSTEM_USER);
+      await this.companySubscriptionService.transitionStatus(
+        sub.companyId,
+        'PAST_DUE',
+        SYSTEM_USER,
+      );
     } else if (status === 'active' && sub.status === 'PAST_DUE') {
-      await this.companySubscriptionService.transitionStatus(sub.companyId, 'ACTIVE', SYSTEM_USER);
+      await this.companySubscriptionService.transitionStatus(
+        sub.companyId,
+        'ACTIVE',
+        SYSTEM_USER,
+      );
     }
   }
 
-  private async handleSubscriptionDeleted(object: Record<string, unknown>): Promise<void> {
+  private async handleSubscriptionDeleted(
+    object: Record<string, unknown>,
+  ): Promise<void> {
     const providerSubscriptionId = object.id as string;
 
     const subs = await this.prismaService.companySubscription.findMany({
@@ -251,7 +293,11 @@ export class WebhookEngineService {
     const sub = subs[0];
     if (!sub) return;
 
-    await this.companySubscriptionService.cancel(sub.companyId, 'Provider subscription deleted', SYSTEM_USER);
+    await this.companySubscriptionService.cancel(
+      sub.companyId,
+      'Provider subscription deleted',
+      SYSTEM_USER,
+    );
     await this.eventBus.publish(
       new SubscriptionCancelledEvent({
         companyId: sub.companyId,
@@ -261,16 +307,21 @@ export class WebhookEngineService {
     );
   }
 
-  private async handleChargeRefunded(object: Record<string, unknown>): Promise<void> {
+  private async handleChargeRefunded(
+    object: Record<string, unknown>,
+  ): Promise<void> {
     const paymentIntentId = object.payment_intent as string;
     const amountRefunded = (object.amount_refunded as number) ?? 0;
     const currency = (object.currency as string) ?? 'usd';
 
-    const tx = await this.paymentTransactionRepository.findByInvoice(paymentIntentId);
+    const tx =
+      await this.paymentTransactionRepository.findByInvoice(paymentIntentId);
     const paymentTx = tx[0];
     if (!paymentTx?.invoiceId) return;
 
-    const invoice = await this.prismaService.invoice.findUnique({ where: { id: paymentTx.invoiceId } });
+    const invoice = await this.prismaService.invoice.findUnique({
+      where: { id: paymentTx.invoiceId },
+    });
     if (!invoice) return;
 
     // Create refund transaction via repository
@@ -287,18 +338,24 @@ export class WebhookEngineService {
     });
   }
 
-  private async handlePaymentIntentSucceeded(_object: Record<string, unknown>): Promise<void> {
+  private async handlePaymentIntentSucceeded(
+    _object: Record<string, unknown>,
+  ): Promise<void> {
     // Handled by invoice.paid event — no action needed
   }
 
-  private async handlePaymentIntentFailed(object: Record<string, unknown>): Promise<void> {
+  private async handlePaymentIntentFailed(
+    object: Record<string, unknown>,
+  ): Promise<void> {
     const paymentIntentId = object.id as string;
-    const lastError = (object.last_payment_error as Record<string, unknown>) ?? {};
+    const lastError =
+      (object.last_payment_error as Record<string, unknown>) ?? {};
     const message = (lastError.message as string) ?? 'Unknown error';
 
     this.logger.warn(`Payment intent ${paymentIntentId} failed: ${message}`);
 
-    const tx = await this.paymentTransactionRepository.findByInvoice(paymentIntentId);
+    const tx =
+      await this.paymentTransactionRepository.findByInvoice(paymentIntentId);
     const paymentTx = tx[0];
     if (!paymentTx?.invoiceId) return;
 
@@ -333,7 +390,11 @@ export class WebhookEngineService {
    * Mark a webhook event as processed in both Redis and DB.
    */
   private async markProcessed(key: string): Promise<void> {
-    await this.cacheService.set(`webhook:idem:${key}`, 'processed', IDEMPOTENCY_TTL_SEC);
+    await this.cacheService.set(
+      `webhook:idem:${key}`,
+      'processed',
+      IDEMPOTENCY_TTL_SEC,
+    );
 
     await this.prismaService.webhookEvent
       .upsert({

@@ -61,15 +61,17 @@ describe('GlEngineService — atomic AccountBalance upsert (M1)', () => {
   });
 
   it('should upsert atomically (no findFirst/create race) for every line', async () => {
-    await (service as unknown as {
-      updateAccountBalances: (
-        c: string,
-        p: string,
-        d: Date,
-        l: typeof lines,
-        t: typeof tx,
-      ) => Promise<void>;
-    }).updateAccountBalances(companyId, financialPeriodId, entryDate, lines, tx);
+    await (
+      service as unknown as {
+        updateAccountBalances: (
+          c: string,
+          p: string,
+          d: Date,
+          l: typeof lines,
+          t: typeof tx,
+        ) => Promise<void>;
+      }
+    ).updateAccountBalances(companyId, financialPeriodId, entryDate, lines, tx);
 
     expect(tx.accountBalance.upsert).toHaveBeenCalledTimes(1);
     expect(tx.accountBalance.findFirst).not.toHaveBeenCalled();
@@ -78,15 +80,17 @@ describe('GlEngineService — atomic AccountBalance upsert (M1)', () => {
   });
 
   it('should initialize the balance snapshot in the create branch', async () => {
-    await (service as unknown as {
-      updateAccountBalances: (
-        c: string,
-        p: string,
-        d: Date,
-        l: typeof lines,
-        t: typeof tx,
-      ) => Promise<void>;
-    }).updateAccountBalances(companyId, financialPeriodId, entryDate, lines, tx);
+    await (
+      service as unknown as {
+        updateAccountBalances: (
+          c: string,
+          p: string,
+          d: Date,
+          l: typeof lines,
+          t: typeof tx,
+        ) => Promise<void>;
+      }
+    ).updateAccountBalances(companyId, financialPeriodId, entryDate, lines, tx);
 
     const call = tx.accountBalance.upsert.mock.calls[0][0];
     expect(call.where).toEqual({
@@ -113,15 +117,23 @@ describe('GlEngineService — atomic AccountBalance upsert (M1)', () => {
 
   it('should atomically increment running totals in the update branch', async () => {
     const creditLine = [{ accountId: 'acct-2', debit: '0', credit: '50' }];
-    await (service as unknown as {
-      updateAccountBalances: (
-        c: string,
-        p: string,
-        d: Date,
-        l: typeof creditLine,
-        t: typeof tx,
-      ) => Promise<void>;
-    }).updateAccountBalances(companyId, financialPeriodId, entryDate, creditLine, tx);
+    await (
+      service as unknown as {
+        updateAccountBalances: (
+          c: string,
+          p: string,
+          d: Date,
+          l: typeof creditLine,
+          t: typeof tx,
+        ) => Promise<void>;
+      }
+    ).updateAccountBalances(
+      companyId,
+      financialPeriodId,
+      entryDate,
+      creditLine,
+      tx,
+    );
 
     const call = tx.accountBalance.upsert.mock.calls[0][0];
     expect(call.update).toEqual({
@@ -138,15 +150,23 @@ describe('GlEngineService — atomic AccountBalance upsert (M1)', () => {
       { accountId: 'a1', debit: '100', credit: '0' },
       { accountId: 'a2', debit: '0', credit: '100' },
     ];
-    await (service as unknown as {
-      updateAccountBalances: (
-        c: string,
-        p: string,
-        d: Date,
-        l: typeof multiLines,
-        t: typeof tx,
-      ) => Promise<void>;
-    }).updateAccountBalances(companyId, financialPeriodId, entryDate, multiLines, tx);
+    await (
+      service as unknown as {
+        updateAccountBalances: (
+          c: string,
+          p: string,
+          d: Date,
+          l: typeof multiLines,
+          t: typeof tx,
+        ) => Promise<void>;
+      }
+    ).updateAccountBalances(
+      companyId,
+      financialPeriodId,
+      entryDate,
+      multiLines,
+      tx,
+    );
 
     expect(tx.accountBalance.upsert).toHaveBeenCalledTimes(2);
   });

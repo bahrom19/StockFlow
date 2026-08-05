@@ -18,7 +18,7 @@ describe('CompanySubscriptionService', () => {
     code: 'starter',
     name: 'Starter',
     priceMonthly: 29.99,
-    priceYearly: 290.00,
+    priceYearly: 290.0,
     currency: 'USD',
     trialDays: 14,
     maxUsers: 3,
@@ -92,12 +92,17 @@ describe('CompanySubscriptionService', () => {
         CompanySubscriptionService,
         { provide: CompanySubscriptionRepository, useValue: mockSubRepo },
         { provide: SubscriptionPlanRepository, useValue: mockPlanRepo },
-        { provide: PrismaService, useValue: { $transaction: jest.fn((cb: any) => cb(mockTx)) } },
+        {
+          provide: PrismaService,
+          useValue: { $transaction: jest.fn((cb: any) => cb(mockTx)) },
+        },
         { provide: EVENT_BUS, useValue: mockEventBus },
       ],
     }).compile();
 
-    service = module.get<CompanySubscriptionService>(CompanySubscriptionService);
+    service = module.get<CompanySubscriptionService>(
+      CompanySubscriptionService,
+    );
   });
 
   describe('create', () => {
@@ -106,7 +111,11 @@ describe('CompanySubscriptionService', () => {
       mockPlanRepo.findByCode.mockResolvedValue(mockPlan as any);
       mockSubRepo.create.mockResolvedValue(mockSubscription as any);
 
-      const result = await service.create('comp-1', { planCode: 'starter' }, 'user-1');
+      const result = await service.create(
+        'comp-1',
+        { planCode: 'starter' },
+        'user-1',
+      );
       expect(result.status).toBe('TRIAL');
       expect(mockEventBus.publish).toHaveBeenCalled();
       expect(mockTx.auditLog.create).toHaveBeenCalled(); // Audit log created
@@ -114,15 +123,17 @@ describe('CompanySubscriptionService', () => {
 
     it('should throw if company already has subscription', async () => {
       mockSubRepo.findByCompany.mockResolvedValue(mockSubscription as any);
-      await expect(service.create('comp-1', { planCode: 'starter' }, 'user-1'))
-        .rejects.toThrow(ConflictException);
+      await expect(
+        service.create('comp-1', { planCode: 'starter' }, 'user-1'),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('should throw if plan not found', async () => {
       mockSubRepo.findByCompany.mockResolvedValue(null);
       mockPlanRepo.findByCode.mockResolvedValue(null);
-      await expect(service.create('comp-1', { planCode: 'invalid' }, 'user-1'))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.create('comp-1', { planCode: 'invalid' }, 'user-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -135,7 +146,9 @@ describe('CompanySubscriptionService', () => {
 
     it('should throw if not found', async () => {
       mockSubRepo.findByCompany.mockResolvedValue(null);
-      await expect(service.findByCompany('missing')).rejects.toThrow(NotFoundException);
+      await expect(service.findByCompany('missing')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -143,7 +156,10 @@ describe('CompanySubscriptionService', () => {
     it('should cancel an active subscription with audit log', async () => {
       const activeSub = { ...mockSubscription, status: 'ACTIVE' };
       mockSubRepo.findByCompany.mockResolvedValue(activeSub as any);
-      mockSubRepo.updateByCompany.mockResolvedValue({ ...activeSub, status: 'CANCELLED' } as any);
+      mockSubRepo.updateByCompany.mockResolvedValue({
+        ...activeSub,
+        status: 'CANCELLED',
+      } as any);
 
       const result = await service.cancel('comp-1', 'Too expensive');
       expect(result.status).toBe('CANCELLED');
@@ -162,7 +178,10 @@ describe('CompanySubscriptionService', () => {
     it('should resume a cancelled subscription with audit log', async () => {
       const cancelledSub = { ...mockSubscription, status: 'CANCELLED' };
       mockSubRepo.findByCompany.mockResolvedValue(cancelledSub as any);
-      mockSubRepo.updateByCompany.mockResolvedValue({ ...cancelledSub, status: 'ACTIVE' } as any);
+      mockSubRepo.updateByCompany.mockResolvedValue({
+        ...cancelledSub,
+        status: 'ACTIVE',
+      } as any);
 
       const result = await service.resume('comp-1');
       expect(result.status).toBe('ACTIVE');
@@ -177,7 +196,11 @@ describe('CompanySubscriptionService', () => {
 
   describe('changePlan', () => {
     it('should change plan with audit log', async () => {
-      const activeSub = { ...mockSubscription, status: 'ACTIVE', plan: mockPlan };
+      const activeSub = {
+        ...mockSubscription,
+        status: 'ACTIVE',
+        plan: mockPlan,
+      };
       mockSubRepo.findByCompany.mockResolvedValue(activeSub as any);
       mockPlanRepo.findByCode.mockResolvedValue(mockPlan as any);
       mockSubRepo.updateByCompany.mockResolvedValue(activeSub as any);
@@ -190,8 +213,9 @@ describe('CompanySubscriptionService', () => {
 
     it('should throw if subscription not found', async () => {
       mockSubRepo.findByCompany.mockResolvedValue(null);
-      await expect(service.changePlan('comp-1', 'starter', 'user-1'))
-        .rejects.toThrow(NotFoundException);
+      await expect(
+        service.changePlan('comp-1', 'starter', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

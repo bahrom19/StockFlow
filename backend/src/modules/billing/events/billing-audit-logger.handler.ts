@@ -28,7 +28,10 @@ type BillingEvent =
 export class BillingAuditLoggerHandler implements EventHandler<DomainEvent> {
   private readonly logger = new Logger(BillingAuditLoggerHandler.name);
 
-  async handle(event: BillingEvent, _context?: Record<string, unknown>): Promise<void> {
+  async handle(
+    event: BillingEvent,
+    _context?: Record<string, unknown>,
+  ): Promise<void> {
     const { eventName, eventId, payload } = event;
 
     this.logger.log(`Billing event: ${eventName}`, {

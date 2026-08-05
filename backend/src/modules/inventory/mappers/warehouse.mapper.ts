@@ -13,7 +13,7 @@ export class WarehouseMapper {
       managerName: model.managerName,
       isDefault: model.isDefault,
       isActive: model.isActive,
-      rowVersion: (model as Record<string, any>).rowVersion ?? 0,
+      rowVersion: model.rowVersion ?? 0,
       createdAt: model.createdAt,
       updatedAt: model.updatedAt,
       deletedAt: model.deletedAt,
