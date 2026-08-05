@@ -1,0 +1,7 @@
+-- AlterEnum
+ALTER TYPE "PaymentMethod" ADD VALUE 'MOBILE_WALLET';
+
+-- AlterTable
+ALTER TABLE "CashShift" ADD COLUMN     "bankTransferSales" DECIMAL(18,4) NOT NULL DEFAULT 0,
+ADD COLUMN     "mobileWalletSales" DECIMAL(18,4) NOT NULL DEFAULT 0,
+ADD COLUMN     "qrSales" DECIMAL(18,4) NOT NULL DEFAULT 0;

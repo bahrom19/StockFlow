@@ -54,10 +54,26 @@ export class SaleQueryDto {
 
   @ApiPropertyOptional({
     description: 'Filter by payment method',
-    enum: ['CASH', 'CARD', 'QR', 'BANK_TRANSFER', 'GIFT_CARD', 'STORE_CREDIT'],
+    enum: [
+      'CASH',
+      'CARD',
+      'QR',
+      'BANK_TRANSFER',
+      'MOBILE_WALLET',
+      'GIFT_CARD',
+      'STORE_CREDIT',
+    ],
   })
   @IsOptional()
-  @IsEnum(['CASH', 'CARD', 'QR', 'BANK_TRANSFER', 'GIFT_CARD', 'STORE_CREDIT'])
+  @IsEnum([
+    'CASH',
+    'CARD',
+    'QR',
+    'BANK_TRANSFER',
+    'MOBILE_WALLET',
+    'GIFT_CARD',
+    'STORE_CREDIT',
+  ])
   paymentMethod?: string;
 
   @ApiPropertyOptional({ description: 'Filter by date from' })

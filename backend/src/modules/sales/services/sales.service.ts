@@ -17,6 +17,7 @@ import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
 import { CashShiftRepository } from '../repositories/cash-shift.repository';
 import { SalesRepository } from '../repositories/sales.repository';
+import { allocateShiftSales } from './payment-allocation';
 import { CreateSaleDto } from '../dto/create-sale.dto';
 import { SaleQueryDto } from '../dto/sale-query.dto';
 import { SaleEntity } from '../entities/sale.entity';
@@ -303,12 +304,10 @@ export class SalesService {
       const payments = await tx.payment.findMany({
         where: { saleId: sale.id },
       });
-      let cashTotal = new Decimal(0);
-      let cardTotal = new Decimal(0);
-      for (const p of payments) {
-        if (p.method === 'CASH') cashTotal = cashTotal.add(p.amount);
-        else cardTotal = cardTotal.add(p.amount);
-      }
+      // v1.2: explicit per-method allocation — CASH/CARD/QR/BANK_TRANSFER/
+      // MOBILE_WALLET each land in their own shift bucket. Any unknown method
+      // throws 400 before the shift is touched (no silent mis-bucketing).
+      const alloc = allocateShiftSales(payments);
       const saleTotal = new Decimal(sale.total.toString());
       // Change is dispensed from the cash drawer: shift cash sales must be
       // net of change (tendered − change), matching the journal posting.
@@ -317,7 +316,7 @@ export class SalesService {
       // journal's "change dispensed from float" credit and keeps the shift
       // reconciled with the GL. Do not clamp: clamping would desync them.
       const changeAmount = new Decimal(sale.changeAmount.toString());
-      const cashSalesNet = cashTotal.sub(changeAmount);
+      const cashSalesNet = alloc.cash.sub(changeAmount);
 
       // H2: update shift totals through optimistic locking. The repository
       // write is guarded by rowVersion, so two sales completing concurrently
@@ -330,7 +329,16 @@ export class SalesService {
           cashSales: new Decimal(cashShift.cashSales.toString()).add(
             cashSalesNet,
           ),
-          cardSales: new Decimal(cashShift.cardSales.toString()).add(cardTotal),
+          cardSales: new Decimal(cashShift.cardSales.toString()).add(
+            alloc.card,
+          ),
+          qrSales: new Decimal(cashShift.qrSales.toString()).add(alloc.qr),
+          bankTransferSales: new Decimal(
+            cashShift.bankTransferSales.toString(),
+          ).add(alloc.bankTransfer),
+          mobileWalletSales: new Decimal(
+            cashShift.mobileWalletSales.toString(),
+          ).add(alloc.mobileWallet),
           totalSales: new Decimal(cashShift.totalSales.toString()).add(
             saleTotal,
           ),
@@ -423,14 +431,12 @@ export class SalesService {
         const payments = await tx.payment.findMany({
           where: { saleId: sale.id },
         });
-        let cashTotal = new Decimal(0);
-        let cardTotal = new Decimal(0);
-        for (const p of payments) {
-          if (p.method === 'CASH') cashTotal = cashTotal.add(p.amount);
-          else cardTotal = cardTotal.add(p.amount);
-        }
+        // v1.2: refund reverses the EXACT original payment composition — each
+        // method is subtracted from its own shift bucket, so the shift stays
+        // perfectly consistent (Cash Shift == Sales after refunds).
+        const alloc = allocateShiftSales(payments);
         const changeAmount = new Decimal(sale.changeAmount.toString());
-        const cashSalesNet = cashTotal.sub(changeAmount);
+        const cashSalesNet = alloc.cash.sub(changeAmount);
         const saleTotal = new Decimal(sale.total.toString());
 
         await this.cashShiftRepository.update(
@@ -439,7 +445,14 @@ export class SalesService {
             cashSales: new Decimal(shift.cashSales.toString()).sub(
               cashSalesNet,
             ),
-            cardSales: new Decimal(shift.cardSales.toString()).sub(cardTotal),
+            cardSales: new Decimal(shift.cardSales.toString()).sub(alloc.card),
+            qrSales: new Decimal(shift.qrSales.toString()).sub(alloc.qr),
+            bankTransferSales: new Decimal(
+              shift.bankTransferSales.toString(),
+            ).sub(alloc.bankTransfer),
+            mobileWalletSales: new Decimal(
+              shift.mobileWalletSales.toString(),
+            ).sub(alloc.mobileWallet),
             totalSales: new Decimal(shift.totalSales.toString()).sub(saleTotal),
           },
           companyId,

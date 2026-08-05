@@ -150,18 +150,46 @@ export class ReportsService {
       }
     }
 
+    // v1.2: per-method payment breakdown. Cash/Card/QR/Bank/Wallet are counted
+    // explicitly; everything else (legacy GIFT_CARD / STORE_CREDIT) is "other".
     let cashTotal = new Prisma.Decimal(0);
     let cardTotal = new Prisma.Decimal(0);
     let qrTotal = new Prisma.Decimal(0);
+    let bankTotal = new Prisma.Decimal(0);
+    let walletTotal = new Prisma.Decimal(0);
+    let otherTotal = new Prisma.Decimal(0);
     for (const sale of sales) {
+      // Cash is reported NET of change dispensed (cashTendered − change),
+      // mirroring sales.service.ts (cashSalesNet = alloc.cash − changeAmount).
+      // This keeps  cash+card+qr+bank+wallet == revenue  in every report.
+      const changeAmount = sale.changeAmount
+        ? new Prisma.Decimal(sale.changeAmount.toString())
+        : new Prisma.Decimal(0);
+      let cashForSale = new Prisma.Decimal(0);
       for (const p of sale.payments ?? []) {
         const amt = new Prisma.Decimal(p.amount.toString());
-        if (p.method === 'CASH') cashTotal = cashTotal.add(amt);
-        else if (p.method === 'CARD') cardTotal = cardTotal.add(amt);
-        else if (p.method === 'QR') qrTotal = qrTotal.add(amt);
+        switch (p.method) {
+          case 'CASH':
+            cashForSale = cashForSale.add(amt);
+            break;
+          case 'CARD':
+            cardTotal = cardTotal.add(amt);
+            break;
+          case 'QR':
+            qrTotal = qrTotal.add(amt);
+            break;
+          case 'BANK_TRANSFER':
+            bankTotal = bankTotal.add(amt);
+            break;
+          case 'MOBILE_WALLET':
+            walletTotal = walletTotal.add(amt);
+            break;
+          default:
+            otherTotal = otherTotal.add(amt);
+        }
       }
+      cashTotal = cashTotal.add(cashForSale).sub(changeAmount);
     }
-    const otherTotal = agg._sum.paidAmount ?? new Prisma.Decimal(0);
 
     const revenue = agg._sum.total ?? new Prisma.Decimal(0);
     const profit = revenue.sub(totalCost);
@@ -190,6 +218,8 @@ export class ReportsService {
           cash: cashTotal.toString(),
           card: cardTotal.toString(),
           qr: qrTotal.toString(),
+          bankTransfer: bankTotal.toString(),
+          mobileWallet: walletTotal.toString(),
           other: otherTotal.toString(),
         },
       },
@@ -458,6 +488,9 @@ export class ReportsService {
         closingBalance: s.closingBalance.toString(),
         cashSales: s.cashSales.toString(),
         cardSales: s.cardSales.toString(),
+        qrSales: s.qrSales.toString(),
+        bankTransferSales: s.bankTransferSales.toString(),
+        mobileWalletSales: s.mobileWalletSales.toString(),
         totalSales: s.totalSales.toString(),
         cashIn: s.cashIn.toString(),
         cashOut: s.cashOut.toString(),

@@ -63,6 +63,9 @@ describe('SalesService — refund cash shift netting (v1.1.1)', () => {
     openingBalance: { toString: () => '0' } as any,
     cashSales: { toString: () => '4800' } as any,
     cardSales: { toString: () => '0' } as any,
+    qrSales: { toString: () => '0' } as any,
+    bankTransferSales: { toString: () => '0' } as any,
+    mobileWalletSales: { toString: () => '0' } as any,
     totalSales: { toString: () => '4800' } as any,
     cashIn: { toString: () => '0' } as any,
     cashOut: { toString: () => '0' } as any,
@@ -157,7 +160,7 @@ describe('SalesService — refund cash shift netting (v1.1.1)', () => {
     expect(rowVersionArg).toBe(2);
   });
 
-  it('nets mixed payment allocation (cash → cashSales, card/QR → cardSales)', async () => {
+  it('nets mixed payment allocation per-method (v1.2: QR → qrSales)', async () => {
     const mockSale = createMockSale({
       total: { toString: () => '900' } as any,
       paidAmount: { toString: () => '900' } as any,
@@ -173,10 +176,12 @@ describe('SalesService — refund cash shift netting (v1.1.1)', () => {
       ...mockSale,
       status: SaleStatus.REFUNDED,
     });
+    // Shift reflects the completed state: card 400 + qr 200 were added.
     mockPrisma.cashShift.findFirst.mockResolvedValue(
       createOpenShift({
         cashSales: '1000',
         cardSales: '2000',
+        qrSales: '200',
         totalSales: '3000',
       }),
     );
@@ -190,8 +195,65 @@ describe('SalesService — refund cash shift netting (v1.1.1)', () => {
 
     const data = (mockCashShiftRepo.update as jest.Mock).mock.calls[0][1];
     expect(data.cashSales.toString()).toBe('700'); // 1000 − 300
-    expect(data.cardSales.toString()).toBe('1400'); // 2000 − (400+200)
+    expect(data.cardSales.toString()).toBe('1600'); // 2000 − 400 (card only)
+    expect(data.qrSales.toString()).toBe('0'); // 200 − 200 (qr bucket)
     expect(data.totalSales.toString()).toBe('2100'); // 3000 − 900
+  });
+
+  it('nets bank transfer and mobile wallet into their own buckets (v1.2)', async () => {
+    const mockSale = createMockSale({
+      total: { toString: () => '800' } as any,
+      paidAmount: { toString: () => '800' } as any,
+      changeAmount: { toString: () => '0' } as any,
+      payments: [
+        { method: 'BANK_TRANSFER', amount: 500 },
+        { method: 'MOBILE_WALLET', amount: 300 },
+      ],
+    });
+    mockSalesRepo.findById.mockResolvedValue(mockSale);
+    mockSalesRepo.update.mockResolvedValue({
+      ...mockSale,
+      status: SaleStatus.REFUNDED,
+    });
+    mockPrisma.cashShift.findFirst.mockResolvedValue(
+      createOpenShift({
+        bankTransferSales: '500',
+        mobileWalletSales: '300',
+        totalSales: '800',
+      }),
+    );
+    mockPrisma.payment.findMany.mockResolvedValue([
+      { method: 'BANK_TRANSFER', amount: 500 },
+      { method: 'MOBILE_WALLET', amount: 300 },
+    ]);
+
+    await transitionToRefunded(mockSale);
+
+    const data = (mockCashShiftRepo.update as jest.Mock).mock.calls[0][1];
+    expect(data.bankTransferSales.toString()).toBe('0'); // 500 − 500
+    expect(data.mobileWalletSales.toString()).toBe('0'); // 300 − 300
+    expect(data.totalSales.toString()).toBe('0'); // 800 − 800
+  });
+
+  it('rejects unknown payment methods during refund netting (v1.2)', async () => {
+    const { BadRequestException } = await import('@nestjs/common');
+    const mockSale = createMockSale({
+      payments: [{ method: 'GIFT_CARD', amount: 900 }],
+    });
+    mockSalesRepo.findById.mockResolvedValue(mockSale);
+    mockSalesRepo.update.mockResolvedValue({
+      ...mockSale,
+      status: SaleStatus.REFUNDED,
+    });
+    mockPrisma.cashShift.findFirst.mockResolvedValue(createOpenShift());
+    mockPrisma.payment.findMany.mockResolvedValue([
+      { method: 'GIFT_CARD', amount: 900 },
+    ]);
+
+    await expect(transitionToRefunded(mockSale)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(mockCashShiftRepo.update).not.toHaveBeenCalled();
   });
 
   it('does not decrement when the sale has no linked shift', async () => {

@@ -178,6 +178,223 @@ describe('ReportsService — net refunds (P1)', () => {
     expect(where.status).toBe('REFUNDED');
   });
 
+  it('sales report payments breakdown is per-method (v1.2)', async () => {
+    repo.salesReportData.mockResolvedValue([
+      [
+        {
+          id: 's1',
+          saleNumber: 'S-1',
+          createdAt: new Date(),
+          status: 'COMPLETED',
+          total: dec('2400.0000'),
+          paidAmount: dec('2400.0000'),
+          items: [],
+          payments: [
+            { method: 'CASH', amount: dec('1000.0000') },
+            { method: 'CARD', amount: dec('500.0000') },
+            { method: 'QR', amount: dec('400.0000') },
+            { method: 'BANK_TRANSFER', amount: dec('200.0000') },
+            { method: 'MOBILE_WALLET', amount: dec('300.0000') },
+          ],
+        },
+      ],
+      {
+        _sum: {
+          total: dec('2400.0000'),
+          subtotal: dec('2400.0000'),
+          paidAmount: dec('2400.0000'),
+          discount: dec('0'),
+        },
+        _count: { id: 1 },
+        _avg: { total: dec('2400.0000') },
+      },
+      { _sum: {} },
+    ]);
+    const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
+    const p = result.summary.payments;
+    expect(p.cash).toBe('1000');
+    expect(p.card).toBe('500');
+    expect(p.qr).toBe('400');
+    expect(p.bankTransfer).toBe('200');
+    expect(p.mobileWallet).toBe('300');
+    expect(p.other).toBe('0');
+  });
+
+  // ── Payment breakdown invariant: sum(payments) == revenue (v1.2 High fix) ──
+
+  const salesReportRow = (over: {
+    id: string;
+    total: string;
+    paidAmount: string;
+    changeAmount?: string;
+    payments: { method: string; amount: string }[];
+  }) => ({
+    id: over.id,
+    saleNumber: `S-${over.id}`,
+    createdAt: new Date(),
+    status: 'COMPLETED',
+    total: dec(over.total),
+    paidAmount: dec(over.paidAmount),
+    changeAmount: dec(over.changeAmount ?? '0'),
+    items: [],
+    payments: over.payments.map((p) => ({
+      method: p.method,
+      amount: dec(p.amount),
+    })),
+  });
+
+  const salesReportMock = (rows: ReturnType<typeof salesReportRow>[]) => {
+    const revenue = rows.reduce(
+      (a, r) => a + parseFloat(r.total.toString()),
+      0,
+    );
+    repo.salesReportData.mockResolvedValue([
+      rows,
+      {
+        _sum: {
+          total: dec(revenue),
+          subtotal: dec(revenue),
+          paidAmount: dec(revenue),
+          discount: dec('0'),
+        },
+        _count: { id: rows.length },
+        _avg: { total: dec(revenue) },
+      },
+      { _sum: {} },
+    ]);
+  };
+
+  const paymentsSum = (p: {
+    cash: string;
+    card: string;
+    qr: string;
+    bankTransfer: string;
+    mobileWallet: string;
+    other: string;
+  }) =>
+    ['cash', 'card', 'qr', 'bankTransfer', 'mobileWallet', 'other'].reduce(
+      (a, k) => a + parseFloat(p[k as keyof typeof p]),
+      0,
+    );
+
+  it('payments: exact payment — cash unchanged, sum == revenue', async () => {
+    salesReportMock([
+      salesReportRow({
+        id: 's1',
+        total: '1500',
+        paidAmount: '1500',
+        changeAmount: '0',
+        payments: [{ method: 'CASH', amount: '1500' }],
+      }),
+    ]);
+    const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
+    expect(result.summary.payments.cash).toBe('1500');
+    expect(paymentsSum(result.summary.payments)).toBe(
+      parseFloat(result.summary.revenue),
+    );
+  });
+
+  it('payments: overpayment — cash is NET of change (High fix)', async () => {
+    // total 900, cash tendered 1800, change 900 → reported cash must be 900.
+    salesReportMock([
+      salesReportRow({
+        id: 's1',
+        total: '900',
+        paidAmount: '1800',
+        changeAmount: '900',
+        payments: [{ method: 'CASH', amount: '1800' }],
+      }),
+    ]);
+    const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
+    expect(result.summary.payments.cash).toBe('900');
+    expect(result.summary.revenue).toBe('900');
+    expect(paymentsSum(result.summary.payments)).toBe(
+      parseFloat(result.summary.revenue),
+    );
+  });
+
+  it('payments: mixed payment — each method counted, sum == revenue', async () => {
+    salesReportMock([
+      salesReportRow({
+        id: 's1',
+        total: '1900',
+        paidAmount: '1900',
+        changeAmount: '0',
+        payments: [
+          { method: 'CASH', amount: '1000' },
+          { method: 'CARD', amount: '500' },
+          { method: 'QR', amount: '400' },
+        ],
+      }),
+    ]);
+    const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
+    const p = result.summary.payments;
+    expect(p.cash).toBe('1000');
+    expect(p.card).toBe('500');
+    expect(p.qr).toBe('400');
+    expect(paymentsSum(p)).toBe(parseFloat(result.summary.revenue));
+  });
+
+  it('payments: mixed payment with overpayment — only cash is netted', async () => {
+    // total 900, paid CASH 1000 + CARD 800, change 900 → cash 100, card 800.
+    salesReportMock([
+      salesReportRow({
+        id: 's1',
+        total: '900',
+        paidAmount: '1800',
+        changeAmount: '900',
+        payments: [
+          { method: 'CASH', amount: '1000' },
+          { method: 'CARD', amount: '800' },
+        ],
+      }),
+    ]);
+    const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
+    const p = result.summary.payments;
+    expect(p.cash).toBe('100');
+    expect(p.card).toBe('800');
+    expect(paymentsSum(p)).toBe(parseFloat(result.summary.revenue));
+  });
+
+  it('payments: change drawn from float (no cash tendered) — invariant still holds', async () => {
+    // CARD 500 paid / 400 total / 100 change → cash bucket = 0 − 100 = −100
+    // (change dispensed from drawer float, mirroring sales.service.ts).
+    // Algebraic invariant: sum(payments) = paidAmount − change = total = revenue.
+    salesReportMock([
+      salesReportRow({
+        id: 's1',
+        total: '400',
+        paidAmount: '500',
+        changeAmount: '100',
+        payments: [{ method: 'CARD', amount: '500' }],
+      }),
+    ]);
+    const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
+    const p = result.summary.payments;
+    expect(p.cash).toBe('-100');
+    expect(p.card).toBe('500');
+    expect(paymentsSum(p)).toBe(parseFloat(result.summary.revenue));
+  });
+
+  it('payments: refund after overpayment — invariant holds on remaining revenue', async () => {
+    // The REFUNDED sale is excluded by the repository (net revenue scope);
+    // the surviving overpayment sale must still balance.
+    salesReportMock([
+      salesReportRow({
+        id: 's2',
+        total: '900',
+        paidAmount: '1800',
+        changeAmount: '900',
+        payments: [{ method: 'CASH', amount: '1800' }],
+      }),
+    ]);
+    const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
+    expect(result.summary.payments.cash).toBe('900');
+    expect(paymentsSum(result.summary.payments)).toBe(
+      parseFloat(result.summary.revenue),
+    );
+  });
+
   it('sales report summary uses the net aggregate values', async () => {
     repo.salesReportData.mockResolvedValue([
       [

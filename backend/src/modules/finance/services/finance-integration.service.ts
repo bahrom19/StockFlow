@@ -60,6 +60,7 @@ export class FinanceIntegrationService {
         case 'CARD':
         case 'QR':
         case 'BANK_TRANSFER':
+        case 'MOBILE_WALLET':
           cardAmount = cardAmount.add(amt);
           break;
         case 'STORE_CREDIT':

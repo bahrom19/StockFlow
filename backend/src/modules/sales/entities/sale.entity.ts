@@ -19,7 +19,15 @@ export class PaymentEntity {
   @ApiProperty() id!: string;
   @ApiProperty() saleId!: string;
   @ApiProperty({
-    enum: ['CASH', 'CARD', 'QR', 'BANK_TRANSFER', 'GIFT_CARD', 'STORE_CREDIT'],
+    enum: [
+      'CASH',
+      'CARD',
+      'QR',
+      'BANK_TRANSFER',
+      'MOBILE_WALLET',
+      'GIFT_CARD',
+      'STORE_CREDIT',
+    ],
   })
   method!: string;
   @ApiProperty({ example: '2998.0000' }) amount!: string;

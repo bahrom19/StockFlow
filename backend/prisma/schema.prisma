@@ -1398,6 +1398,7 @@ enum PaymentMethod {
   CARD
   QR
   BANK_TRANSFER
+  MOBILE_WALLET
   GIFT_CARD
   STORE_CREDIT
 }
@@ -1573,6 +1574,9 @@ model CashShift {
   closingBalance Decimal        @default(0) @db.Decimal(18, 4)
   cashSales      Decimal        @default(0) @db.Decimal(18, 4)
   cardSales      Decimal        @default(0) @db.Decimal(18, 4)
+  qrSales        Decimal        @default(0) @db.Decimal(18, 4)
+  bankTransferSales Decimal     @default(0) @db.Decimal(18, 4)
+  mobileWalletSales Decimal     @default(0) @db.Decimal(18, 4)
   totalSales     Decimal        @default(0) @db.Decimal(18, 4)
   cashIn         Decimal        @default(0) @db.Decimal(18, 4)
   cashOut        Decimal        @default(0) @db.Decimal(18, 4)

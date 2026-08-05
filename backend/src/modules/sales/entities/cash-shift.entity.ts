@@ -12,6 +12,9 @@ export class CashShiftEntity {
   @ApiProperty({ example: '0.0000' }) closingBalance!: string;
   @ApiProperty({ example: '0.0000' }) cashSales!: string;
   @ApiProperty({ example: '0.0000' }) cardSales!: string;
+  @ApiProperty({ example: '0.0000' }) qrSales!: string;
+  @ApiProperty({ example: '0.0000' }) bankTransferSales!: string;
+  @ApiProperty({ example: '0.0000' }) mobileWalletSales!: string;
   @ApiProperty({ example: '0.0000' }) totalSales!: string;
   @ApiProperty({ example: '0.0000' }) cashIn!: string;
   @ApiProperty({ example: '0.0000' }) cashOut!: string;

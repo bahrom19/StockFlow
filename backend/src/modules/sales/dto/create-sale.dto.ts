@@ -43,9 +43,25 @@ export class CreateSaleItemDto {
 export class CreatePaymentDto {
   @ApiProperty({
     description: 'Payment method',
-    enum: ['CASH', 'CARD', 'QR', 'BANK_TRANSFER', 'GIFT_CARD', 'STORE_CREDIT'],
+    enum: [
+      'CASH',
+      'CARD',
+      'QR',
+      'BANK_TRANSFER',
+      'MOBILE_WALLET',
+      'GIFT_CARD',
+      'STORE_CREDIT',
+    ],
   })
-  @IsEnum(['CASH', 'CARD', 'QR', 'BANK_TRANSFER', 'GIFT_CARD', 'STORE_CREDIT'])
+  @IsEnum([
+    'CASH',
+    'CARD',
+    'QR',
+    'BANK_TRANSFER',
+    'MOBILE_WALLET',
+    'GIFT_CARD',
+    'STORE_CREDIT',
+  ])
   method!: string;
 
   @ApiProperty({ description: 'Amount paid with this method' })
