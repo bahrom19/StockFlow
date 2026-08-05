@@ -36,10 +36,9 @@ export interface AdjustmentJournalPayload {
  * Handles inventory adjustments by creating journal entries in Finance.
  * Subscribes to `inventory.adjusted` events.
  *
- * Creates:
- * - Debit: Inventory Adjustment Expense
- * - Credit: Inventory
- * (for positive adjustments, reverse direction)
+ * Creates (balanced):
+ * - Increase:  Debit Inventory (1300) / Credit Inventory Adjustment (5100)
+ * - Decrease:  Debit Inventory Adjustment (5100) / Credit Inventory (1300)
  */
 @Injectable()
 export class InventoryFinanceHandler implements EventHandler {
@@ -117,15 +116,18 @@ export class InventoryFinanceHandler implements EventHandler {
     const isIncrease = diff > 0;
     const description = `Inventory adjustment: ${payload.reason ?? 'manual'}`;
 
+    // Inventory account is always the first leg, adjustment account the second.
+    // Increase:  Dr Inventory / Cr Adjustment
+    // Decrease:  Cr Inventory / Dr Adjustment
     const lines: PostJournalEntryInput['lines'] = [
       {
-        accountId: isIncrease ? inventoryAccountId : adjustmentAccountId,
+        accountId: inventoryAccountId,
         debit: isIncrease ? amount.toString() : '0',
         credit: isIncrease ? '0' : amount.toString(),
         description,
       },
       {
-        accountId: isIncrease ? adjustmentAccountId : inventoryAccountId,
+        accountId: adjustmentAccountId,
         debit: isIncrease ? '0' : amount.toString(),
         credit: isIncrease ? amount.toString() : '0',
         description,

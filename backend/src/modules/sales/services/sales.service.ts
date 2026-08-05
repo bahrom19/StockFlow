@@ -407,6 +407,48 @@ export class SalesService {
     // by the SaleRefundedEventHandler in the Inventory module via the EventBus.
     // This service ONLY publishes the event — it no longer directly mutates stock.
 
+    // Net the refunded amounts out of the linked cash shift, reversing the
+    // exact allocation applied at completion: cash sales are net of change
+    // (tendered − change), all non-cash methods (CARD/QR/…) are netted from
+    // cardSales, and totalSales is reduced by the sale total. Only an OPEN
+    // shift is touched — a closed shift's Z report is final. The write is
+    // guarded by rowVersion (optimistic locking): a stale version throws
+    // ConflictException and rolls the whole transaction back, so a refund can
+    // never be double-counted against a concurrently-mutated shift.
+    if (sale.cashShiftId) {
+      const shift = await tx.cashShift.findFirst({
+        where: { id: sale.cashShiftId, companyId },
+      });
+      if (shift && shift.status === 'OPEN') {
+        const payments = await tx.payment.findMany({
+          where: { saleId: sale.id },
+        });
+        let cashTotal = new Decimal(0);
+        let cardTotal = new Decimal(0);
+        for (const p of payments) {
+          if (p.method === 'CASH') cashTotal = cashTotal.add(p.amount);
+          else cardTotal = cardTotal.add(p.amount);
+        }
+        const changeAmount = new Decimal(sale.changeAmount.toString());
+        const cashSalesNet = cashTotal.sub(changeAmount);
+        const saleTotal = new Decimal(sale.total.toString());
+
+        await this.cashShiftRepository.update(
+          shift.id,
+          {
+            cashSales: new Decimal(shift.cashSales.toString()).sub(
+              cashSalesNet,
+            ),
+            cardSales: new Decimal(shift.cardSales.toString()).sub(cardTotal),
+            totalSales: new Decimal(shift.totalSales.toString()).sub(saleTotal),
+          },
+          companyId,
+          shift.rowVersion ?? 0,
+          tx,
+        );
+      }
+    }
+
     // Publish SaleRefundedEvent
     const payments = await tx.payment.findMany({ where: { saleId: sale.id } });
     await this.eventBus.publish(
