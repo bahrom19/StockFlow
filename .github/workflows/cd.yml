@@ -98,7 +98,7 @@ jobs:
         working-directory: .
     environment:
       name: staging
-      url: https://staging.stockflow.example.com
+      url: https://stockflow-production-04c7.up.railway.app
 
     steps:
       - name: Deploy to Staging
@@ -136,19 +136,19 @@ jobs:
         run: |
           echo "🔍 Running health check against Staging..."
           curl -sSf --max-time 10 \
-            https://staging.stockflow.example.com/api/health || exit 1
+            https://stockflow-production-04c7.up.railway.app/api/health || exit 1
           echo "✅ Health check passed"
 
       - name: Liveness probe
         run: |
           curl -sSf --max-time 10 \
-            https://staging.stockflow.example.com/api/health/live || exit 1
+            https://stockflow-production-04c7.up.railway.app/api/health/live || exit 1
           echo "✅ Liveness probe passed"
 
       - name: Readiness probe
         run: |
           curl -sSf --max-time 10 \
-            https://staging.stockflow.example.com/api/health/ready || exit 1
+            https://stockflow-production-04c7.up.railway.app/api/health/ready || exit 1
           echo "✅ Readiness probe passed"
 
       - name: API smoke test (auth + products + health)
@@ -157,7 +157,7 @@ jobs:
           echo "🔍 Running API smoke tests..."
           # Test auth
           AUTH_RESP=$(curl -sS --max-time 10 \
-            -X POST https://staging.stockflow.example.com/api/auth/login \
+            -X POST https://stockflow-production-04c7.up.railway.app/api/auth/login \
             -H 'Content-Type: application/json' \
             -d '{"email":"test@stockflow.com","password":"test123"}')
           echo "Auth response: $(echo $AUTH_RESP | head -c 100)"
@@ -166,7 +166,7 @@ jobs:
       - name: Metrics endpoint
         run: |
           curl -sSf --max-time 10 \
-            https://staging.stockflow.example.com/api/health/metrics | head -c 500
+            https://stockflow-production-04c7.up.railway.app/api/health/metrics | head -c 500
           echo ""
           echo "✅ Metrics endpoint reachable"
 
@@ -187,7 +187,7 @@ jobs:
         run: |
           echo "⏳ Waiting for manual approval to deploy to Production..."
           echo "   Review the Staging deployment at:"
-          echo "   https://staging.stockflow.example.com"
+          echo "   https://stockflow-production-04c7.up.railway.app"
           echo "   "
           echo "   Approve or reject via GitHub Environments UI."
           # GitHub Actions automatically pauses for environment
@@ -206,7 +206,7 @@ jobs:
         working-directory: .
     environment:
       name: production
-      url: https://stockflow.example.com
+      url: https://stockflow-production-04c7.up.railway.app
 
     steps:
       - name: Deploy to Production
@@ -241,19 +241,19 @@ jobs:
       - name: Health check
         run: |
           curl -sSf --max-time 10 \
-            https://stockflow.example.com/api/health || \
+            https://stockflow-production-04c7.up.railway.app/api/health || \
             (echo "❌ Production health check failed" && exit 1)
 
       - name: Liveness probe
         run: |
           curl -sSf --max-time 10 \
-            https://stockflow.example.com/api/health/live || \
+            https://stockflow-production-04c7.up.railway.app/api/health/live || \
             (echo "❌ Production liveness probe failed" && exit 1)
 
       - name: Readiness probe
         run: |
           curl -sSf --max-time 10 \
-            https://stockflow.example.com/api/health/ready || \
+            https://stockflow-production-04c7.up.railway.app/api/health/ready || \
             (echo "❌ Production readiness probe failed" && exit 1)
 
   # ═══════════════════════════════════════════════════════════════
@@ -281,7 +281,7 @@ jobs:
         run: |
           echo "🔍 Verifying rollback health..."
           curl -sSf --max-time 10 \
-            https://stockflow.example.com/api/health/live || \
+            https://stockflow-production-04c7.up.railway.app/api/health/live || \
             echo "⚠️ Rollback health check failed — manual intervention required"
           echo "✅ Rollback verification completed"
 

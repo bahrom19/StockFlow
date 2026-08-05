@@ -181,6 +181,8 @@ jobs:
           npx prisma validate
           echo "✓ Prisma schema is valid"
         shell: bash
+        env:
+          DATABASE_URL: postgresql://stockflow:stockflow@localhost:5432/stockflow_test
 
       # ───────────────────────────────────────────────────────────
       # 11. Verify migrations — check migration health
@@ -228,6 +230,9 @@ jobs:
     if: always()
     needs: [ci]
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
     steps:
       - name: Check CI result
         run: |
