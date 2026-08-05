@@ -1,6 +1,23 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, SaleStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
+
+/**
+ * Statuses that generate net revenue for reporting purposes.
+ *
+ * A `REFUNDED` sale is a full reversal — its revenue and COGS must not be
+ * counted (the cash-flow, journals and cost layers are already reversed by
+ * the refund workflow). `DRAFT`/`PENDING`/`CANCELLED` sales are not revenue.
+ *
+ * `PARTIALLY_REFUNDED` stays in the revenue set: the Sale model has no
+ * refunded-amount column, so the full sale value is the only amount that can
+ * be reported until a refundedAmount field is introduced (P1 reporting-only
+ * fix — accounting, GL and costing are untouched).
+ */
+export const REVENUE_SALE_STATUSES: SaleStatus[] = [
+  SaleStatus.COMPLETED,
+  SaleStatus.PARTIALLY_REFUNDED,
+];
 
 /**
  * ReportsRepository — database logic only.
@@ -68,7 +85,11 @@ export class ReportsRepository {
 
   grossProfitData(companyId: string) {
     return this.prismaService.sale.findMany({
-      where: { companyId, status: 'COMPLETED', deletedAt: null },
+      where: {
+        companyId,
+        status: { in: REVENUE_SALE_STATUSES },
+        deletedAt: null,
+      },
       select: {
         total: true,
         items: { select: { costPrice: true, quantity: true } },
@@ -367,8 +388,15 @@ export class ReportsRepository {
   // ── Profit Report ───────────────────────────────────────────────
 
   profitReportData(companyId: string, where: Prisma.SaleWhereInput) {
+    // P1: only revenue-generating statuses count — REFUNDED/DRAFT/PENDING/
+    // CANCELLED sales are excluded so the Profit Report shows net revenue.
+    // An explicit caller-provided status filter (e.g. status=REFUNDED drill-
+    // down) is respected; the profit endpoint currently forwards none.
+    const netWhere = where.status
+      ? where
+      : { ...where, status: { in: REVENUE_SALE_STATUSES } };
     return this.prismaService.sale.findMany({
-      where,
+      where: netWhere,
       include: {
         items: { select: { costPrice: true, total: true, quantity: true } },
       },

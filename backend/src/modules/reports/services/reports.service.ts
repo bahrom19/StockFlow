@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ReportQueryDto } from '../dto/report-query.dto';
-import { ReportsRepository } from '../repositories/reports.repository';
+import {
+  REVENUE_SALE_STATUSES,
+  ReportsRepository,
+} from '../repositories/reports.repository';
 
 @Injectable()
 export class ReportsService {
@@ -120,6 +123,13 @@ export class ReportsService {
       customerId,
       status,
     );
+    // P1: when the caller does not explicitly filter by status, scope the
+    // Sales Report to revenue-generating sales so its summary stays
+    // consistent with the Dashboard and the Profit Report (refunds are
+    // excluded — they are reversed in the journals and cost layers).
+    if (!status) {
+      where.status = { in: REVENUE_SALE_STATUSES };
+    }
     const [sales, agg, itemAgg] = await this.repo.salesReportData(
       companyId,
       where,
