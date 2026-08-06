@@ -85,10 +85,14 @@ jobs:
     name: '🚀 Deploy Web to Railway'
     needs: [build]
     runs-on: ubuntu-latest
-    # Only deploy on main and when the Railway secrets are provisioned.
-    if: github.ref == 'refs/heads/main' &&
-        secrets.RAILWAY_TOKEN != '' &&
-        secrets.RAILWAY_WEB_SERVICE_ID != ''
+    # GitHub does not allow the `secrets` context in a job-level `if`.
+    # Secrets are exposed as job env below and checked in the step-level
+    # `if` (env IS allowed there), so the workflow stays green when the
+    # Railway secrets are not yet provisioned.
+    if: github.ref == 'refs/heads/main'
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_WEB_SERVICE_ID: ${{ secrets.RAILWAY_WEB_SERVICE_ID }}
 
     steps:
       - name: Checkout repository
@@ -106,12 +110,12 @@ jobs:
         uses: railwayapp/cli-action@v3
 
       - name: Deploy to Railway
+        if: env.RAILWAY_TOKEN != '' && env.RAILWAY_WEB_SERVICE_ID != ''
         working-directory: web-deploy
-        run: railway up --service ${{ secrets.RAILWAY_WEB_SERVICE_ID }} --ci
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service "$RAILWAY_WEB_SERVICE_ID" --ci
 
       - name: Notify deploy URL
+        if: env.RAILWAY_TOKEN != '' && env.RAILWAY_WEB_SERVICE_ID != ''
         run: |
-          echo "✅ Flutter web deployed via service ${{ secrets.RAILWAY_WEB_SERVICE_ID }}"
+          echo "✅ Flutter web deployed via service $RAILWAY_WEB_SERVICE_ID"
           echo "   Health: https://healthchecks.railway.app/"
