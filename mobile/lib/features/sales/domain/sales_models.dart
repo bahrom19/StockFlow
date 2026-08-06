@@ -304,6 +304,17 @@ class CartItem {
     'discount': discount,
   };
 
+  factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
+        productId: json['productId'] as String,
+        productName: (json['productName'] as String?) ?? '',
+        productSku: (json['productSku'] as String?) ?? '',
+        barcode: json['barcode'] as String?,
+        quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+        unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
+        costPrice: (json['costPrice'] as num?)?.toDouble() ?? 0,
+        discount: (json['discount'] as num?)?.toDouble() ?? 0,
+      );
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

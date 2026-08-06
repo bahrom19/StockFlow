@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:stockflow/core/theme/app_spacing.dart';
+import 'package:stockflow/core/widgets/app_snackbar.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 import 'package:stockflow/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:stockflow/features/inventory/presentation/widgets/inventory_card.dart';
+import 'package:stockflow/features/inventory/presentation/widgets/stock_action_dialogs.dart';
 
 class InventoryListScreen extends ConsumerStatefulWidget {
   const InventoryListScreen({super.key});
@@ -24,6 +25,34 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
     });
   }
 
+  Future<void> _openAdjustDialog(InventoryLoaded? loaded) async {
+    if (loaded == null || loaded.items.isEmpty) {
+      AppSnackbar.info(context, 'Load inventory first');
+      return;
+    }
+    await showAdjustmentDialog(
+      context,
+      items: loaded.items,
+      warehouses: loaded.warehouses,
+    );
+  }
+
+  Future<void> _openTransferDialog(InventoryLoaded? loaded) async {
+    if (loaded == null || loaded.items.isEmpty) {
+      AppSnackbar.info(context, 'Load inventory first');
+      return;
+    }
+    if (loaded.warehouses.length < 2) {
+      AppSnackbar.info(context, 'Need at least two warehouses to transfer');
+      return;
+    }
+    await showTransferDialog(
+      context,
+      items: loaded.items,
+      warehouses: loaded.warehouses,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -39,6 +68,19 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
           PageHeader(
             title: 'Inventory',
             subtitle: 'Live stock levels across all warehouses',
+            actions: [
+              OutlinedButton.icon(
+                onPressed: () => _openAdjustDialog(loaded),
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Adjust'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () => _openTransferDialog(loaded),
+                icon: const Icon(Icons.swap_horiz, size: 18),
+                label: const Text('Transfer'),
+              ),
+            ],
           ),
           Expanded(
             child: EntityTable<StockItem>(

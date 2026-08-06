@@ -44,6 +44,13 @@ class CartState {
   double get totalDiscount =>
       items.fold(0.0, (sum, item) => sum + item.discount);
 
+  /// Estimated tax — the backend computes the authoritative amount at sale
+  /// creation; the receipt shows the returned `sale.tax`. A cart-level rate
+  /// keeps the register transparent about the line before completion.
+  double get taxRate => 0;
+
+  double get tax => subtotal * taxRate;
+
   double get total => subtotal - totalDiscount;
 
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
@@ -198,6 +205,7 @@ class SaleListNotifier extends StateNotifier<SaleListState> {
   String _currentSearch = '';
   String? _statusFilter;
   String? _warehouseFilter;
+  String? _customerFilter;
 
   SaleListNotifier(this._ref) : super(const SaleListLoading());
 
@@ -257,6 +265,23 @@ class SaleListNotifier extends StateNotifier<SaleListState> {
     _fetch();
   }
 
+  /// Filters the sale list by a single customer (used for the customer's
+  /// purchase history view). Resets other filters.
+  void filterByCustomer(String? customerId) {
+    _customerFilter = customerId;
+    _statusFilter = null;
+    _warehouseFilter = null;
+    final current = state;
+    if (current is SaleListLoaded) {
+      state = current.copyWith(isRefreshing: true, page: 1, sales: []);
+    } else {
+      state = const SaleListLoading();
+    }
+    _fetch();
+  }
+
+  String? get customerFilter => _customerFilter;
+
   Future<void> loadMore() async {
     final current = state;
     if (current is! SaleListLoaded ||
@@ -275,6 +300,7 @@ class SaleListNotifier extends StateNotifier<SaleListState> {
       search: _currentSearch.isNotEmpty ? _currentSearch : null,
       status: _statusFilter,
       warehouseId: _warehouseFilter,
+      customerId: _customerFilter,
     );
 
     if (result is SalesFailure) {

@@ -52,6 +52,14 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
 
     final loaded = state is ProductsLoaded ? state : null;
     final items = loaded?.products ?? const <Product>[];
+    final activeCategory = loaded?.category;
+    final categories = <String>[];
+    for (final p in items) {
+      final c = p.category;
+      if (c != null && c.isNotEmpty && !categories.contains(c)) {
+        categories.add(c);
+      }
+    }
 
     return Scaffold(
       body: Column(
@@ -74,6 +82,13 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
               searchHint: 'Search by name, SKU or barcode…',
               onSearch: (q) =>
                   ref.read(productsListProvider.notifier).search(q),
+              filters: [
+                const EntityFilter('All', null),
+                for (final c in categories) EntityFilter(c, c),
+              ],
+              activeFilter: activeCategory,
+              onFilter: (v) =>
+                  ref.read(productsListProvider.notifier).setCategory(v),
               onRefresh: () =>
                   ref.read(productsListProvider.notifier).refresh(),
               onCreate: () => context.push(RouteNames.productCreate),

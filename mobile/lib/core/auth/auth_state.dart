@@ -100,6 +100,13 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final result = await repo.login(email: email, password: password);
 
       if (result is ApiSuccess<LoginResponse>) {
+        // Persist tokens immediately so session restore (checkAuthStatus)
+        // can validate on app restart / F5 without a fresh login.
+        final storage = _ref.read(tokenStorageProvider);
+        await storage.saveTokens(
+          accessToken: result.data.accessToken,
+          refreshToken: result.data.refreshToken,
+        );
         state = AuthAuthenticated(result.data.user);
       } else {
         final message = result is ApiFailure<LoginResponse>

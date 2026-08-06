@@ -113,6 +113,7 @@ class ProductsLoaded extends ProductsState {
   final bool isRefreshing;
   final bool isLoadingMore;
   final String search;
+  final String? category;
 
   const ProductsLoaded({
     required this.products,
@@ -122,6 +123,7 @@ class ProductsLoaded extends ProductsState {
     this.isRefreshing = false,
     this.isLoadingMore = false,
     this.search = '',
+    this.category,
   });
 
   ProductsLoaded copyWith({
@@ -132,6 +134,7 @@ class ProductsLoaded extends ProductsState {
     bool? isRefreshing,
     bool? isLoadingMore,
     String? search,
+    String? category,
   }) {
     return ProductsLoaded(
       products: products ?? this.products,
@@ -141,6 +144,7 @@ class ProductsLoaded extends ProductsState {
       isRefreshing: isRefreshing ?? this.isRefreshing,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       search: search ?? this.search,
+      category: category ?? this.category,
     );
   }
 }

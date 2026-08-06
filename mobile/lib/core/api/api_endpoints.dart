@@ -41,6 +41,12 @@ class ApiEndpoints {
   static const String sales = '/sales';
   static const String salesReceipt = '/sales/receipt';
   static const String salesNextNumber = '/sales/next-number';
+  static const String cashShifts = '/sales/cash-shifts';
+  static const String cashShiftOpen = '/sales/cash-shifts/open';
+  static const String cashShiftClose = '/sales/cash-shifts/close';
+  static const String cashShiftCashIn = '/sales/cash-shifts/cash-in';
+  static const String cashShiftCashOut = '/sales/cash-shifts/cash-out';
+  static const String cashShiftXReport = '/sales/cash-shifts/x-report';
 
   // ──────────────────────────────────
   // Purchasing

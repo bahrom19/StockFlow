@@ -10,6 +10,7 @@ class ProductsListNotifier extends StateNotifier<ProductsState> {
   final Ref _ref;
   Timer? _searchDebounce;
   String _currentSearch = '';
+  String? _currentCategory;
 
   ProductsListNotifier(this._ref) : super(const ProductsLoading());
 
@@ -25,6 +26,17 @@ class ProductsListNotifier extends StateNotifier<ProductsState> {
     }
     _currentSearch = '';
     await _fetch();
+  }
+
+  void setCategory(String? category) {
+    _currentCategory = category;
+    final current = state;
+    if (current is ProductsLoaded) {
+      state = current.copyWith(isRefreshing: true, page: 1, products: []);
+    } else {
+      state = const ProductsLoading();
+    }
+    _fetch();
   }
 
   void search(String query) {
@@ -57,6 +69,7 @@ class ProductsListNotifier extends StateNotifier<ProductsState> {
       page: page,
       limit: 20,
       search: _currentSearch.isNotEmpty ? _currentSearch : null,
+      category: _currentCategory,
     );
 
     if (result is ProductsFail<ProductListResponse>) {
@@ -85,6 +98,7 @@ class ProductsListNotifier extends StateNotifier<ProductsState> {
       page: page,
       hasMore: hasMore,
       search: _currentSearch,
+      category: _currentCategory,
     );
   }
 

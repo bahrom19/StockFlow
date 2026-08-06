@@ -45,7 +45,6 @@ class _WarehouseFormScreenState extends ConsumerState<WarehouseFormScreen> {
   }
 
   Future<void> _load() async {
-    final repo = ref.read(warehouseListProvider.notifier);
     final current = ref.read(warehouseListProvider);
     if (current is WarehouseListLoaded) {
       final match = current.warehouses

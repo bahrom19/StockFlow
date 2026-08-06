@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/utils/formatters.dart';
@@ -40,7 +42,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             IconButton(
               icon: const Icon(Icons.edit_outlined),
               tooltip: 'Edit',
-              onPressed: () {},
+              onPressed: () => context
+                  .push(RouteNames.productEdit.replaceAll(':id', widget.productId)),
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),

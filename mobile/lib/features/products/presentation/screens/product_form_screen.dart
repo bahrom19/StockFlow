@@ -8,8 +8,9 @@ import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/products/presentation/providers/products_provider.dart';
 
 class ProductFormScreen extends ConsumerStatefulWidget {
-  final Product? product; // null = create, non-null = edit
-  const ProductFormScreen({super.key, this.product});
+  final Product? product; // non-null = edit (already loaded)
+  final String? productId; // edit route: load by id when [product] is null
+  const ProductFormScreen({super.key, this.product, this.productId});
 
   @override
   ConsumerState<ProductFormScreen> createState() => _ProductFormScreenState();
@@ -30,11 +31,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   bool _isActive = true;
   bool _isSaving = false;
   bool _isEdit = false;
+  bool _isLoading = false;
+  Product? _loaded;
 
   @override
   void initState() {
     super.initState();
-    _isEdit = widget.product != null;
+    _isEdit = widget.product != null || widget.productId != null;
     final p = widget.product;
     _nameCtrl = TextEditingController(text: p?.name ?? '');
     _skuCtrl = TextEditingController(text: p?.sku ?? '');
@@ -49,6 +52,41 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       text: (p?.stockQuantity ?? 0).toString(),
     );
     _isActive = p?.isActive ?? true;
+    if (p == null && widget.productId != null) {
+      _isLoading = true;
+      Future.microtask(_loadProduct);
+    }
+  }
+
+  Future<void> _loadProduct() async {
+    final repo = ref.read(productsRepositoryProvider);
+    final result = await repo.getById(widget.productId!);
+    if (!mounted) return;
+    setState(() {
+      if (result is ProductsSuccess<Product>) {
+        _loaded = result.data;
+        final loaded = result.data;
+        _nameCtrl.text = loaded.name;
+        _skuCtrl.text = loaded.sku ?? '';
+        _barcodeCtrl.text = loaded.barcode ?? '';
+        _priceCtrl.text = loaded.price ?? '';
+        _costPriceCtrl.text = loaded.costPrice ?? '';
+        _unitCtrl.text = loaded.unit ?? '';
+        _categoryCtrl.text = loaded.category ?? '';
+        _brandCtrl.text = loaded.brand ?? '';
+        _descCtrl.text = loaded.description ?? '';
+        _stockCtrl.text = loaded.stockQuantity.toString();
+        _isActive = loaded.isActive;
+      } else {
+        AppSnackbar.error(
+          context,
+          result is ProductsFail<Product>
+              ? result.error.message
+              : 'Failed to load product',
+        );
+      }
+      _isLoading = false;
+    });
   }
 
   @override
@@ -67,7 +105,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   }
 
   Map<String, dynamic> _buildUpdatePayload() {
-    final p = widget.product!;
+    final p = _loaded ?? widget.product!;
     final map = <String, dynamic>{};
     if (_nameCtrl.text != p.name) map['name'] = _nameCtrl.text;
     if (_skuCtrl.text != (p.sku ?? '')) map['sku'] = _skuCtrl.text;
@@ -95,6 +133,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     return map;
   }
 
+  String get _editingId =>
+      widget.product?.id ?? _loaded?.id ?? widget.productId ?? '';
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
@@ -109,7 +150,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           setState(() => _isSaving = false);
           return;
         }
-        final result = await repo.update(widget.product!.id, payload);
+        final result = await repo.update(_editingId, payload);
         if (result is ProductsSuccess<Product> && mounted) {
           AppSnackbar.success(context, 'Product updated');
           ref.read(productsListProvider.notifier).refresh();
@@ -168,7 +209,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         title: Text(_isEdit ? 'Edit Product' : 'New Product'),
         actions: [
           TextButton(
-            onPressed: _isSaving ? null : _save,
+            onPressed: _isSaving || _isLoading ? null : _save,
             child: _isSaving
                 ? const SizedBox(
                     width: 20,
@@ -180,7 +221,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           ),
         ],
       ),
-      body: Form(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          : Form(
         key: _formKey,
         child: ListView(
           padding: AppSpacing.screenPadding,

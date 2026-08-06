@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/services/receipt_print_service.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
+import 'package:stockflow/core/widgets/app_snackbar.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/error_state_widget.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
 import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:stockflow/features/reports/data/report_export.dart';
 
 /// Reports screen — business KPIs + recent sales table.
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -27,6 +30,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     });
   }
 
+  Future<void> _exportPdf(
+    DashboardSummary summary,
+    List<RecentSale> sales,
+  ) async {
+    try {
+      final bytes = await ReportExport.buildPdf(
+        summary: summary,
+        sales: sales,
+      );
+      final stamp = DateTime.now();
+      final name =
+          'report_${stamp.year}-${stamp.month.toString().padLeft(2, '0')}-${stamp.day.toString().padLeft(2, '0')}.pdf';
+      await ReceiptPrintService.downloadPdf(bytes, name);
+      if (mounted) {
+        AppSnackbar.success(context, 'Report exported as PDF');
+      }
+    } catch (e) {
+      if (mounted) AppSnackbar.error(context, 'PDF export failed: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -43,6 +67,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             title: 'Reports',
             subtitle: 'Business performance at a glance',
             actions: [
+              IconButton(
+                tooltip: 'Export PDF',
+                onPressed: summary == null
+                    ? null
+                    : () => _exportPdf(summary, sales),
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+              ),
               IconButton(
                 tooltip: 'Refresh',
                 onPressed: () {

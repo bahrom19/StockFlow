@@ -6,19 +6,43 @@ import 'package:stockflow/features/products/data/repositories/products_repositor
 import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/inventory/data/repositories/inventory_repository.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
+import 'package:stockflow/features/customers/domain/customer_models.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
+import 'package:stockflow/core/theme/app_spacing.dart';
+import 'package:stockflow/core/services/receipt_print_service.dart';
+import 'package:stockflow/features/sales/data/receipt_export.dart';
+import 'package:stockflow/features/sales/presentation/screens/pos_workspace.dart';
+import 'package:stockflow/features/sales/presentation/widgets/pos_customer_picker.dart';
 
 // ──────────────────────────────────
-// POS Screen — Main Sales Terminal
+// POS Screen — Responsive Terminal
 // ──────────────────────────────────
-class PosScreen extends ConsumerStatefulWidget {
+/// Desktop/tablet: full two-panel cashier workspace (catalog + cart).
+/// Narrow screens (< 600px): compact mobile terminal with bottom sheet.
+class PosScreen extends ConsumerWidget {
   const PosScreen({super.key});
 
   @override
-  ConsumerState<PosScreen> createState() => _PosScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width >= AppSpacing.breakpointTablet) {
+      return const PosWorkspace();
+    }
+    return const _MobilePosScreen();
+  }
 }
 
-class _PosScreenState extends ConsumerState<PosScreen> {
+// ──────────────────────────────────
+// Mobile POS — Compact Terminal
+// ──────────────────────────────────
+class _MobilePosScreen extends ConsumerStatefulWidget {
+  const _MobilePosScreen();
+
+  @override
+  ConsumerState<_MobilePosScreen> createState() => _MobilePosScreenState();
+}
+
+class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
   final _searchController = TextEditingController();
   List<Product> _searchResults = [];
   bool _isSearching = false;
@@ -450,6 +474,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
   final _qrController = TextEditingController();
   String _paymentMethod = 'CASH';
   bool _isProcessing = false;
+  Customer? _customer;
 
   @override
   void initState() {
@@ -473,6 +498,16 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
   }
 
   bool get _isAmountValid => _totalPaid >= widget.cart.total;
+
+  Future<void> _pickCustomer() async {
+    final customer = await showPosCustomerPicker(context);
+    if (customer != null && mounted) {
+      setState(() => _customer = customer);
+      ref
+          .read(cartProvider.notifier)
+          .setCustomer(customer.id, customer.displayName);
+    }
+  }
 
   Future<void> _processCheckout() async {
     setState(() => _isProcessing = true);
@@ -509,7 +544,8 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
       warehouseId: widget.selectedWarehouseId!,
       cartItems: widget.cart.items,
       payments: payments,
-      customerId: widget.cart.customerId,
+      // The sheet may have picked a customer after [widget.cart] was snapshotted.
+      customerId: _customer?.id ?? widget.cart.customerId,
       notes: widget.cart.notes,
     );
 
@@ -589,6 +625,20 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  // Customer
+                  Text('Customer', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    key: const Key('pos_mobile_customer_button'),
+                    onPressed: _pickCustomer,
+                    icon: const Icon(Icons.person_outline, size: 18),
+                    label: Text(
+                      _customer?.displayName ?? 'Walk-in customer',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   // Payment method chips
                   Text('Payment Method',
                       style: theme.textTheme.titleSmall),
@@ -724,13 +774,55 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
 // ──────────────────────────────────
 // Receipt Screen
 // ──────────────────────────────────
-class ReceiptScreen extends ConsumerWidget {
+class ReceiptScreen extends ConsumerStatefulWidget {
   final Sale sale;
   const ReceiptScreen({super.key, required this.sale});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ReceiptScreen> createState() => _ReceiptScreenState();
+}
+
+class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
+  bool _isPdfExporting = false;
+
+  Future<void> _downloadPdf() async {
+    final sale = widget.sale;
+    setState(() => _isPdfExporting = true);
+    try {
+      final bytes = await ReceiptExport.buildPdf(sale);
+      await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Receipt PDF downloaded')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF export failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPdfExporting = false);
+    }
+  }
+
+  Future<void> _print() async {
+    try {
+      await ReceiptPrintService.printHtml(ReceiptExport.buildHtml(widget.sale));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Print failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final sale = widget.sale;
     final total = double.tryParse(sale.total) ?? 0;
     final paid = double.tryParse(sale.paidAmount) ?? 0;
     final change = double.tryParse(sale.changeAmount) ?? 0;
@@ -739,8 +831,22 @@ class ReceiptScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Receipt'),
         actions: [
-          IconButton(icon: const Icon(Icons.share), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.print), onPressed: () {}),
+          IconButton(
+            icon: _isPdfExporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: 'Download PDF',
+            onPressed: _isPdfExporting ? null : _downloadPdf,
+          ),
+          IconButton(
+            icon: const Icon(Icons.print),
+            tooltip: 'Print',
+            onPressed: _print,
+          ),
         ],
       ),
       body: Center(

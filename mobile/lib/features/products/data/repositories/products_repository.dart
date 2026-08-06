@@ -33,6 +33,7 @@ class ProductsRepository {
     int page = 1,
     int limit = 20,
     String? search,
+    String? category,
     String? sortBy,
     String? sortOrder,
   }) async {
@@ -43,6 +44,9 @@ class ProductsRepository {
         'limit': limit.toString(),
       };
       if (search != null && search.isNotEmpty) params['search'] = search;
+      if (category != null && category.isNotEmpty) {
+        params['category'] = category;
+      }
       if (sortBy != null) params['sortBy'] = sortBy;
       if (sortOrder != null) params['sortOrder'] = sortOrder;
 

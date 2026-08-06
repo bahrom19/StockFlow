@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';

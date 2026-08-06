@@ -33,28 +33,47 @@ import 'route_names.dart';
 
 // ──────────────────────────────────
 // GoRouter Provider
+//
+// Architectural contract:
+//  1. The GoRouter is constructed exactly ONCE. The provider body does NOT
+//     watch authStateProvider, so auth changes never recreate the router
+//     (recreating it re-applies initialLocation and re-mounts SplashScreen,
+//     which caused the Splash → Refresh → Splash loop).
+//  2. Auth stays reactive via ref.listen + router.refresh(): every auth state
+//     change re-runs the redirect against the CURRENT location — no new
+//     GoRouter, no reset to initialLocation.
+//  3. redirect reads live auth via ref.read at execution time.
 // ──────────────────────────────────
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
-
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: RouteNames.splash,
     debugLogDiagnostics: true,
     redirect: (context, state) {
-      final isAuthenticated = authState is AuthAuthenticated;
-      final isAuthRoute = state.matchedLocation == RouteNames.login;
-      final isSplashRoute = state.matchedLocation == RouteNames.splash;
+      final authState = ref.read(authStateProvider);
+      final location = state.matchedLocation;
+      final isAuthRoute = location == RouteNames.login;
 
-      if (isSplashRoute) return null;
-
-      if (!isAuthenticated && !isAuthRoute) {
-        return RouteNames.login;
+      // Cold start: nothing is known yet — always land on Splash, which owns
+      // the session-restore decision (checkAuthStatus → refresh → navigate).
+      if (authState is AuthInitial) {
+        return location == RouteNames.splash ? null : RouteNames.splash;
       }
 
-      if (isAuthenticated && isAuthRoute) {
-        return RouteNames.dashboard;
+      // Session restore / login in flight: keep the current screen.
+      if (authState is AuthLoading) {
+        if (location == RouteNames.splash || isAuthRoute) return null;
+        return RouteNames.splash;
       }
 
+      if (authState is AuthAuthenticated) {
+        if (location == RouteNames.splash || isAuthRoute) {
+          return RouteNames.dashboard;
+        }
+        return null;
+      }
+
+      // AuthUnauthenticated / AuthError.
+      if (!isAuthRoute) return RouteNames.login;
       return null;
     },
     routes: [
@@ -128,7 +147,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: RouteNames.productEdit,
             name: 'productEdit',
             builder: (context, state) => ProductFormScreen(
-              product: null, // will be loaded from state
+              product: null,
+              productId: state.pathParameters['id'],
             ),
           ),
           GoRoute(
@@ -243,6 +263,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
     errorBuilder: (context, state) => const _NotFoundScreen(),
   );
+
+  // Keep auth reactive WITHOUT recreating the router:
+  // re-run the redirect against the current location on every auth change.
+  ref.listen<AuthState>(authStateProvider, (_, __) => router.refresh());
+
+  return router;
 });
 
 // ──────────────────────────────────

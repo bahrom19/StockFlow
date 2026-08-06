@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/theme/app_spacing.dart';
+import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
 import 'package:stockflow/features/sales/presentation/widgets/sales_widgets.dart';
@@ -89,6 +91,52 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
     }
   }
 
+  /// Partial return — lets the cashier pick which items (and how many) to
+  /// return. The backend tracks PARTIALLY_REFUNDED status; inventory reversal
+  /// for partial returns is a backend-level concern and is noted as such.
+  Future<void> _partialReturn() async {
+    final sale = _sale;
+    if (sale == null || sale.items.isEmpty) return;
+
+    final quantities = <String, int>{
+      for (final item in sale.items) item.id: item.quantity,
+    };
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _PartialReturnDialog(
+        sale: sale,
+        quantities: quantities,
+        onChanged: (itemId, qty) => quantities[itemId] = qty,
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Full return (all items back to full quantity) → use the refund API.
+    final isFull = sale.items.every((i) => quantities[i.id] == i.quantity);
+    if (isFull) {
+      await _transitionStatus('REFUNDED');
+      return;
+    }
+    // Partial → mark the sale as PARTIALLY_REFUNDED.
+    final repo = ref.read(salesRepositoryProvider);
+    final result = await repo.transitionStatus(widget.saleId, 'PARTIALLY_REFUNDED');
+    if (result is SalesSuccess<Sale>) {
+      setState(() => _sale = result.data);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Partial return recorded')),
+        );
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text((result as SalesFailure<Sale>).error.message),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -152,8 +200,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
           if (canRefund)
             IconButton(
               icon: const Icon(Icons.keyboard_return),
-              tooltip: 'Refund',
+              tooltip: 'Full refund',
               onPressed: () => _confirmAction('Refund', 'REFUNDED'),
+            ),
+          if (canRefund)
+            IconButton(
+              icon: const Icon(Icons.currency_exchange),
+              tooltip: 'Partial return',
+              onPressed: _partialReturn,
             ),
         ],
       ),
@@ -371,5 +425,136 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
   String _formatDate(DateTime dt) {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+// ──────────────────────────────────
+// Partial Return Dialog
+// ──────────────────────────────────
+class _PartialReturnDialog extends StatefulWidget {
+  final Sale sale;
+  final Map<String, int> quantities;
+  final void Function(String itemId, int qty) onChanged;
+
+  const _PartialReturnDialog({
+    required this.sale,
+    required this.quantities,
+    required this.onChanged,
+  });
+
+  @override
+  State<_PartialReturnDialog> createState() => _PartialReturnDialogState();
+}
+
+class _PartialReturnDialogState extends State<_PartialReturnDialog> {
+  late Map<String, int> _qty;
+
+  @override
+  void initState() {
+    super.initState();
+    _qty = Map.of(widget.quantities);
+  }
+
+  double get _refundTotal {
+    var total = 0.0;
+    for (final item in widget.sale.items) {
+      final qty = _qty[item.id] ?? 0;
+      if (qty > 0) {
+        final unit = (double.tryParse(item.total) ?? 0) / item.quantity;
+        total += unit * qty;
+      }
+    }
+    return total;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      icon: const Icon(Icons.currency_exchange, size: 40),
+      title: const Text('Partial Return'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select how many of each item to return.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              for (final item in widget.sale.items)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.productId.length <= 16
+                              ? item.productId
+                              : item.productId.substring(0, 16),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                      Text('max ${item.quantity} · ',
+                          style: theme.textTheme.labelSmall),
+                      SizedBox(
+                        width: 70,
+                        child: TextField(
+                          controller: TextEditingController(
+                            text: '${_qty[item.id] ?? 0}',
+                          ),
+                          textAlign: TextAlign.center,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(isDense: true),
+                          onChanged: (v) {
+                            final maxQty = item.quantity;
+                            final parsed = int.tryParse(v);
+                            final qty = (parsed ?? 0).clamp(0, maxQty);
+                            _qty[item.id] = qty;
+                            widget.onChanged(item.id, qty);
+                            setState(() {});
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const Divider(height: AppSpacing.md),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Refund total', style: theme.textTheme.titleSmall),
+                  Text(
+                    Formatters.currency(_refundTotal),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _refundTotal <= 0
+              ? null
+              : () => Navigator.of(context).pop(true),
+          child: const Text('Confirm return'),
+        ),
+      ],
+    );
   }
 }

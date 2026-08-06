@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
+import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
@@ -28,7 +29,15 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    Future.microtask(() => ref.read(saleListProvider.notifier).loadSales());
+    final customerId = GoRouterState.of(context).uri.queryParameters['customerId'];
+    Future.microtask(() {
+      final notifier = ref.read(saleListProvider.notifier);
+      if (customerId != null && customerId.isNotEmpty) {
+        notifier.filterByCustomer(customerId);
+      } else {
+        notifier.loadSales();
+      }
+    });
   }
 
   @override
@@ -52,13 +61,49 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
     final loaded = state is SaleListLoaded ? state : null;
     final items = loaded?.sales ?? const <Sale>[];
 
+    final filteredCustomerId =
+        GoRouterState.of(context).uri.queryParameters['customerId'];
+    final customerFilterActive = filteredCustomerId?.isNotEmpty ?? false;
+
     return Scaffold(
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (customerFilterActive) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              color: theme.colorScheme.primaryContainer,
+              child: Row(
+                children: [
+                  Icon(Icons.history,
+                      size: 16, color: theme.colorScheme.onPrimaryContainer),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      'Showing purchase history for this customer',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        context.go(RouteNames.sales),
+                    child: const Text('Clear filter'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           PageHeader(
             title: 'Sales',
-            subtitle: 'Transactions, refunds and cash flow',
+            subtitle: customerFilterActive
+                ? 'Purchase history for this customer'
+                : 'Transactions, refunds and cash flow',
             actions: [
               FilledButton.icon(
                 onPressed: () => context.push(RouteNames.saleNew),
