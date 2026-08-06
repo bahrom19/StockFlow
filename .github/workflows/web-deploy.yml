@@ -113,6 +113,26 @@ jobs:
         working-directory: web-deploy
         run: npx --yes @railway/cli@latest domain --service "$RAILWAY_SERVICE_NAME"
 
+      # Mandatory verification: the deploy is only green if the public
+      # URL actually serves the app. Railway can report a successful
+      # build while the service still has no live deployment (or an old
+      # failed one); this step fails the run loudly in that case.
+      - name: Verify public URL
+        if: env.RAILWAY_TOKEN != ''
+        working-directory: web-deploy
+        run: |
+          WEB_URL=$(npx --yes @railway/cli@latest domain list --service "$RAILWAY_SERVICE_NAME" \
+            | grep -oE 'https://[a-z0-9-]+\.up\.railway\.app' | head -1)
+          echo "Web URL: $WEB_URL"
+          test -n "$WEB_URL" || { echo '::error::no public domain found'; exit 1; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$WEB_URL/")
+          echo "index: $code"
+          test "$code" = "200" || { echo "::error::index returned $code"; exit 1; }
+          fallback=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$WEB_URL/pos")
+          echo "spa fallback: $fallback"
+          test "$fallback" = "200" || { echo "::error::spa fallback returned $fallback"; exit 1; }
+          echo "✅ Flutter web live at $WEB_URL"
+
       - name: Notify deploy URL
         if: env.RAILWAY_TOKEN != ''
         working-directory: web-deploy
