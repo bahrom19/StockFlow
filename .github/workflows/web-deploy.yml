@@ -82,8 +82,10 @@ jobs:
 
       # The Flutter build output lives at mobile/build/web/. Copy it
       # into the Docker build context (web-deploy/html/) IN THIS JOB so
-      # the Dockerfile `COPY html/ ...` always finds it. The html dir is
-      # gitignored — it exists only here, at build time.
+      # the Dockerfile `COPY html/ ...` always finds it. html/ must NOT
+      # be git-ignored: the Railway CLI filters git-ignored files out of
+      # the upload snapshot, which would silently break the Docker build
+      # (COPY html/ not found). The assertion below fails loudly instead.
       - name: Stage build into Docker context
         run: |
           rm -rf web-deploy/html
@@ -92,6 +94,11 @@ jobs:
           echo "✓ staged $(ls web-deploy/html | wc -l | tr -d ' ') top-level assets"
           test -f web-deploy/html/index.html && echo "✓ index.html present"
           test -f web-deploy/html/main.dart.js && echo "✓ main.dart.js present"
+          if git check-ignore web-deploy/html/index.html >/dev/null 2>&1; then
+            echo "::error::web-deploy/html is git-ignored - Railway will not upload it (COPY html/ will fail). Remove it from .gitignore."
+            exit 1
+          fi
+          echo "✓ html/ not git-ignored - Railway snapshot will include it"
 
       # Deploy via the official Railway CLI from npm (no third-party
       # action dependency). Targets the service BY NAME — the CLI
