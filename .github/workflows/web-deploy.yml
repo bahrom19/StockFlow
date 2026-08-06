@@ -108,15 +108,14 @@ jobs:
           name: stockflow-web-build
           path: web-deploy/html
 
-      # Install the Railway CLI only — the deploy below runs from the
-      # web-deploy directory (single deployment, no double-railway-up).
-      - name: Install Railway CLI
-        uses: railwayapp/cli-action@v3
-
+      # Deploy via the official Railway CLI from npm (no third-party
+      # action dependency). Runs from web-deploy/ which holds the nginx
+      # Dockerfile + staged html/. Guarded by the step-level env check so
+      # the workflow stays green before the Railway secrets are set.
       - name: Deploy to Railway
         if: env.RAILWAY_TOKEN != '' && env.RAILWAY_WEB_SERVICE_ID != ''
         working-directory: web-deploy
-        run: railway up --service "$RAILWAY_WEB_SERVICE_ID" --ci
+        run: npx --yes @railway/cli@latest up --service "$RAILWAY_WEB_SERVICE_ID" --ci
 
       - name: Notify deploy URL
         if: env.RAILWAY_TOKEN != '' && env.RAILWAY_WEB_SERVICE_ID != ''
