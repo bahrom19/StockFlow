@@ -128,10 +128,11 @@ jobs:
         if: env.RAILWAY_TOKEN != ''
         working-directory: web-deploy
         run: |
-          WEB_URL=$(npx --yes @railway/cli@latest domain list --service "$RAILWAY_SERVICE_NAME" \
-            | grep -oE 'https://[a-z0-9-]+\.up\.railway\.app' | head -1)
+          HOST=$(npx --yes @railway/cli@latest domain list --service "$RAILWAY_SERVICE_NAME" \
+            | grep -oE '[a-z0-9-]+\.up\.railway\.app' | head -1)
+          test -n "$HOST" || { echo '::error::no public domain found'; exit 1; }
+          WEB_URL="https://$HOST"
           echo "Web URL: $WEB_URL"
-          test -n "$WEB_URL" || { echo '::error::no public domain found'; exit 1; }
           code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$WEB_URL/")
           echo "index: $code"
           test "$code" = "200" || { echo "::error::index returned $code"; exit 1; }
