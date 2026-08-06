@@ -123,8 +123,19 @@ jobs:
         working-directory: web-deploy
         run: npx --yes @railway/cli@latest up --service "$RAILWAY_SERVICE_NAME" --ci
 
+      # `railway up` never exposes a service publicly on its own — a
+      # domain must be generated explicitly. This step is idempotent:
+      # Railway allows one *.up.railway.app domain per service, so
+      # repeat runs simply confirm/return the existing domain.
+      - name: Generate public domain
+        if: env.RAILWAY_TOKEN != ''
+        working-directory: web-deploy
+        run: npx --yes @railway/cli@latest domain --service "$RAILWAY_SERVICE_NAME"
+
       - name: Notify deploy URL
         if: env.RAILWAY_TOKEN != ''
+        working-directory: web-deploy
         run: |
           echo "✅ Flutter web deployed via service $RAILWAY_SERVICE_NAME"
-          echo "   Health: https://healthchecks.railway.app/"
+          echo "   Public URL:"
+          npx --yes @railway/cli@latest domain list --service "$RAILWAY_SERVICE_NAME" | tail -5
