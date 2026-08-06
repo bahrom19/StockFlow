@@ -27,3 +27,5 @@ node_modules/
 .freebuff/
 
 mobile/.dart_tool/
+# Web-deploy static assets (staged by CI at build time)
+web-deploy/html/
