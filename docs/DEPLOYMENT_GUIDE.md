@@ -358,19 +358,23 @@ gunzip -c backup-before-migration.sql.gz | psql "$DATABASE_URL"
 
 ### 11.2 Пайплайн
 
-`push → main` (изменения в `mobile/**` или workflow) запускает
-`Web Deploy`:
+`push → main` (изменения в `mobile/**`, `web-deploy/**` или workflow) запускает
+`Web Deploy` — один job (build + deploy), чтобы `html/` гарантированно
+присутствовал в Docker build context:
 
 | Шаг | Действие |
 |-----|----------|
 | Build | `flutter analyze` → `flutter test` → `flutter build web --release` |
-| Stage | `build/web` копируется в `web-deploy/html/` |
+| Stage | `mobile/build/web` копируется в `web-deploy/html/` (тот же job) |
 | Deploy | `railway up` собирает nginx-образ и деплоит static-сервис |
+| Domain | `railway domain` генерирует публичный URL (идемпотентно) |
 
 Без секрета `RAILWAY_TOKEN` workflow **всё равно собирает и проходит** —
 шаг деплоя пропускается с сообщением (безопасно для PR и локальных тестов).
 Деплой выполняется командой `npx --yes @railway/cli@latest up
 --service stockflow-web --ci` (имя сервиса задано в `env` workflow).
+Dockerfile выполняет только `COPY html/ /usr/share/nginx/html/` — каталог
+создаётся самим workflow перед сборкой, поэтому COPY всегда находит файлы.
 
 ### 11.3 Проверка после деплоя
 
