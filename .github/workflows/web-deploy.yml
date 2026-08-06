@@ -4,11 +4,14 @@
 # Builds the Flutter web app and deploys it to Railway as a static
 # site (nginx). Runs on every push to main that touches mobile/.
 #
-# Secrets (one-time provisioning, see docs/DEPLOYMENT_GUIDE.md §6):
-#   RAILWAY_TOKEN          — Railway account token
-#   RAILWAY_WEB_SERVICE_ID — the static web service id
+# Secret (one-time provisioning, see docs/DEPLOYMENT_GUIDE.md §6):
+#   RAILWAY_TOKEN — Railway account token
 #
-# The deploy step is guarded: without the secrets the workflow still
+# The service is targeted BY NAME (`stockflow-web`), so no service-id
+# secret is required — Railway CLI resolves names to the service in the
+# linked project.
+#
+# The deploy step is guarded: without RAILWAY_TOKEN the workflow still
 # builds and reports green (deploy is skipped with a notice).
 # ═══════════════════════════════════════════════════════════════
 
@@ -28,6 +31,7 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.24.5'
+  RAILWAY_SERVICE_NAME: 'stockflow-web'
 
 jobs:
   # ─────────────────────────────────────────────────────────────
@@ -90,13 +94,12 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     # GitHub does not allow the `secrets` context in a job-level `if`.
-    # Secrets are exposed as job env below and checked in the step-level
+    # The secret is exposed as job env below and checked in the step-level
     # `if` (env IS allowed there), so the workflow stays green when the
-    # Railway secrets are not yet provisioned.
+    # Railway token is not yet provisioned.
     if: github.ref == 'refs/heads/main'
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      RAILWAY_WEB_SERVICE_ID: ${{ secrets.RAILWAY_WEB_SERVICE_ID }}
 
     steps:
       - name: Checkout repository
@@ -109,16 +112,19 @@ jobs:
           path: web-deploy/html
 
       # Deploy via the official Railway CLI from npm (no third-party
-      # action dependency). Runs from web-deploy/ which holds the nginx
-      # Dockerfile + staged html/. Guarded by the step-level env check so
-      # the workflow stays green before the Railway secrets are set.
+      # action dependency). Targets the service BY NAME — the CLI
+      # resolves `--service stockflow-web` against the linked project,
+      # so no service-id secret is needed. Runs from web-deploy/ which
+      # holds the nginx Dockerfile + staged html/. Guarded by the
+      # step-level env check so the workflow stays green before the
+      # Railway token is set.
       - name: Deploy to Railway
-        if: env.RAILWAY_TOKEN != '' && env.RAILWAY_WEB_SERVICE_ID != ''
+        if: env.RAILWAY_TOKEN != ''
         working-directory: web-deploy
-        run: npx --yes @railway/cli@latest up --service "$RAILWAY_WEB_SERVICE_ID" --ci
+        run: npx --yes @railway/cli@latest up --service "$RAILWAY_SERVICE_NAME" --ci
 
       - name: Notify deploy URL
-        if: env.RAILWAY_TOKEN != '' && env.RAILWAY_WEB_SERVICE_ID != ''
+        if: env.RAILWAY_TOKEN != ''
         run: |
-          echo "✅ Flutter web deployed via service $RAILWAY_WEB_SERVICE_ID"
+          echo "✅ Flutter web deployed via service $RAILWAY_SERVICE_NAME"
           echo "   Health: https://healthchecks.railway.app/"

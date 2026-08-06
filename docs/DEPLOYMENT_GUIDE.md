@@ -351,10 +351,10 @@ gunzip -c backup-before-migration.sql.gz | psql "$DATABASE_URL"
    root directory = `web-deploy` (репозиторий должен быть подключён).
    Сервис соберёт `web-deploy/Dockerfile` (nginx:alpine) — без
    исходников мобильного приложения.
-2. **Скопируйте Service ID** сервиса (настройки сервиса → Service ID).
-3. **Добавьте секреты в GitHub** (repo → Settings → Secrets → Actions):
+2. **Назовите сервис `stockflow-web`** (Service Settings → Name).
+   Пайплайн деплоит **по имени сервиса** — Service ID не нужен.
+3. **Добавьте один секрет в GitHub** (repo → Settings → Secrets → Actions):
    - `RAILWAY_TOKEN` — Railway Account token (Dashboard → Account → Tokens)
-   - `RAILWAY_WEB_SERVICE_ID` — Service ID из шага 2
 
 ### 11.2 Пайплайн
 
@@ -367,9 +367,10 @@ gunzip -c backup-before-migration.sql.gz | psql "$DATABASE_URL"
 | Stage | `build/web` копируется в `web-deploy/html/` |
 | Deploy | `railway up` собирает nginx-образ и деплоит static-сервис |
 
-Без секретов `RAILWAY_TOKEN`/`RAILWAY_WEB_SERVICE_ID` workflow
-**всё равно собирает и проходит** — шаг деплоя пропускается с
-сообщением (безопасно для PR и локальных тестов).
+Без секрета `RAILWAY_TOKEN` workflow **всё равно собирает и проходит** —
+шаг деплоя пропускается с сообщением (безопасно для PR и локальных тестов).
+Деплой выполняется командой `npx --yes @railway/cli@latest up
+--service stockflow-web --ci` (имя сервиса задано в `env` workflow).
 
 ### 11.3 Проверка после деплоя
 
