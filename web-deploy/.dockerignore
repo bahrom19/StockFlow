@@ -1,0 +1,9 @@
+# Web-deploy build context — keep the image lean.
+# html/ is staged by the workflow and MUST be included.
+.git
+.github
+docs
+backend
+mobile
+*.md
+Dockerfile.nginx

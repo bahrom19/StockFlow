@@ -1,0 +1,117 @@
+# ═══════════════════════════════════════════════════════════════
+# StockFlow Enterprise — Flutter Web Deployment
+# ═══════════════════════════════════════════════════════════════
+# Builds the Flutter web app and deploys it to Railway as a static
+# site (nginx). Runs on every push to main that touches mobile/.
+#
+# Secrets (one-time provisioning, see docs/DEPLOYMENT_GUIDE.md §6):
+#   RAILWAY_TOKEN          — Railway account token
+#   RAILWAY_WEB_SERVICE_ID — the static web service id
+#
+# The deploy step is guarded: without the secrets the workflow still
+# builds and reports green (deploy is skipped with a notice).
+# ═══════════════════════════════════════════════════════════════
+
+name: Web Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/web-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: web-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.24.5'
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # 1. BUILD — analyze + test + compile the web release
+  # ─────────────────────────────────────────────────────────────
+  build:
+    name: '🌐 Build Flutter Web'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+        working-directory: mobile
+
+      - name: Static analysis
+        run: flutter analyze
+        working-directory: mobile
+
+      - name: Run tests
+        run: flutter test
+        working-directory: mobile
+
+      - name: Build web release
+        run: flutter build web --release
+        working-directory: mobile
+
+      - name: Stage static assets
+        run: |
+          mkdir -p web-deploy/html
+          cp -r build/web/. web-deploy/html/
+          echo "✓ staged $(ls web-deploy/html | wc -l | tr -d ' ') top-level assets"
+        working-directory: mobile
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stockflow-web-build
+          path: mobile/web-deploy/html
+          retention-days: 7
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────
+  # 2. DEPLOY — push the nginx image to Railway (guarded)
+  # ─────────────────────────────────────────────────────────────
+  deploy:
+    name: '🚀 Deploy Web to Railway'
+    needs: [build]
+    runs-on: ubuntu-latest
+    # Only deploy on main and when the Railway secrets are provisioned.
+    if: github.ref == 'refs/heads/main' &&
+        secrets.RAILWAY_TOKEN != '' &&
+        secrets.RAILWAY_WEB_SERVICE_ID != ''
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: stockflow-web-build
+          path: web-deploy/html
+
+      # Install the Railway CLI only — the deploy below runs from the
+      # web-deploy directory (single deployment, no double-railway-up).
+      - name: Install Railway CLI
+        uses: railwayapp/cli-action@v3
+
+      - name: Deploy to Railway
+        working-directory: web-deploy
+        run: railway up --service ${{ secrets.RAILWAY_WEB_SERVICE_ID }} --ci
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Notify deploy URL
+        run: |
+          echo "✅ Flutter web deployed via service ${{ secrets.RAILWAY_WEB_SERVICE_ID }}"
+          echo "   Health: https://healthchecks.railway.app/"

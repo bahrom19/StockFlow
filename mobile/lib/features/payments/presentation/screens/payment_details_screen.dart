@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/utils/formatters.dart';
+import 'package:stockflow/core/utils/pdf_downloader.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
+import 'package:stockflow/features/payments/data/payment_pdf_export.dart';
 import 'package:stockflow/features/payments/data/payments_repository.dart';
 import 'package:stockflow/features/payments/domain/payment_models.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
@@ -132,6 +134,11 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
             subtitle: _subtitle(),
             actions: [
               IconButton(
+                tooltip: 'Export PDF',
+                onPressed: _sales.isEmpty ? null : _exportPdf,
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+              ),
+              IconButton(
                 tooltip: 'Refresh',
                 onPressed: () => _load(reset: true),
                 icon: const Icon(Icons.refresh),
@@ -176,20 +183,7 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
                       'Amount',
                       'Status',
                     ],
-                    exportRows: () => [
-                      for (final s in _sales)
-                        for (final p in s.payments)
-                          [
-                            Formatters.dateTime(s.createdAt),
-                            s.saleNumber,
-                            _shortId(s.cashierId),
-                            s.customerId == null ? '' : _shortId(s.customerId!),
-                            _shortId(s.warehouseId),
-                            p.method,
-                            p.amount,
-                            s.status,
-                          ],
-                    ],
+                    exportRows: _exportRows,
                     columns: [
                       DataColumn(
                         label: Text('Date', style: theme.textTheme.labelMedium),
@@ -268,6 +262,61 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
   }
 
   String _shortId(String id) => id.length <= 8 ? id : id.substring(0, 8);
+
+  /// Same row shape as the CSV export — reused by the PDF export.
+  List<List<String>> _exportRows() {
+    return [
+      for (final s in _sales)
+        for (final p in s.payments)
+          [
+            Formatters.dateTime(s.createdAt),
+            s.saleNumber,
+            _shortId(s.cashierId),
+            s.customerId == null ? '' : _shortId(s.customerId!),
+            _shortId(s.warehouseId),
+            p.method,
+            p.amount,
+            s.status,
+          ],
+    ];
+  }
+
+  Future<void> _exportPdf() async {
+    final rows = _exportRows();
+    if (rows.isEmpty) return;
+    try {
+      final bytes = await PaymentPdfExport.build(
+        title: 'Payment Details',
+        subtitle: _subtitle(),
+        headers: const [
+          'Date',
+          'Receipt',
+          'Cashier',
+          'Customer',
+          'Warehouse',
+          'Method',
+          'Amount',
+          'Status',
+        ],
+        rows: rows,
+      );
+      await PdfDownloader.download('payment_details.pdf', bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Exported ${rows.length} rows as PDF')),
+      );
+    } on UnsupportedError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'PDF export is not supported here')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PDF export failed: $e')),
+      );
+    }
+  }
 }
 
 /// Renders the payment method(s) of a sale with their brand colors.

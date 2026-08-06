@@ -334,3 +334,63 @@ gunzip -c backup-before-migration.sql.gz | psql "$DATABASE_URL"
 - [ ] Redis подключен
 - [ ] Health check настроен
 - [ ] Backup настроен
+
+---
+
+## 11. Flutter Web deployment (Phase 3)
+
+> **Статус:** автоматизировано через GitHub Actions (`web-deploy.yml`).
+> Backend и Web — отдельные Railway-сервисы. Backend **не** раздаёт
+> статику; Flutter Web раздаётся nginx-сервисом.
+
+### 11.1 One-time provisioning (Railway)
+
+Выполняется один раз в Railway Dashboard:
+
+1. **Создайте static-сервис**: New Project → Deploy from Dockerfile →
+   root directory = `web-deploy` (репозиторий должен быть подключён).
+   Сервис соберёт `web-deploy/Dockerfile` (nginx:alpine) — без
+   исходников мобильного приложения.
+2. **Скопируйте Service ID** сервиса (настройки сервиса → Service ID).
+3. **Добавьте секреты в GitHub** (repo → Settings → Secrets → Actions):
+   - `RAILWAY_TOKEN` — Railway Account token (Dashboard → Account → Tokens)
+   - `RAILWAY_WEB_SERVICE_ID` — Service ID из шага 2
+
+### 11.2 Пайплайн
+
+`push → main` (изменения в `mobile/**` или workflow) запускает
+`Web Deploy`:
+
+| Шаг | Действие |
+|-----|----------|
+| Build | `flutter analyze` → `flutter test` → `flutter build web --release` |
+| Stage | `build/web` копируется в `web-deploy/html/` |
+| Deploy | `railway up` собирает nginx-образ и деплоит static-сервис |
+
+Без секретов `RAILWAY_TOKEN`/`RAILWAY_WEB_SERVICE_ID` workflow
+**всё равно собирает и проходит** — шаг деплоя пропускается с
+сообщением (безопасно для PR и локальных тестов).
+
+### 11.3 Проверка после деплоя
+
+```bash
+# SPA отдаётся
+curl -sI https://<web-service>.up.railway.app/ | head -3
+
+# Deep-link (SPA fallback) работает
+curl -s -o /dev/null -w '%{http_code}\n' \
+  https://<web-service>.up.railway.app/payments/details
+
+# Хешированные ассеты кэшируются
+curl -sI https://<web-service>.up.railway.app/main.dart.js | grep -i cache
+```
+
+### 11.4 Локальный превью сборки
+
+```bash
+cd mobile && flutter build web --release
+mkdir -p ../web-deploy/html && cp -r build/web/. ../web-deploy/html/
+docker build -t stockflow-web ../web-deploy
+docker run -p 8080:80 stockflow-web
+# → http://localhost:8080
+```
