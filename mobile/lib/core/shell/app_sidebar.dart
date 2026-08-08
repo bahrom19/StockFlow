@@ -265,7 +265,7 @@ class _SidebarSectionLabel extends StatelessWidget {
   }
 }
 
-class _SidebarItem extends StatelessWidget {
+class _SidebarItem extends StatefulWidget {
   final _SidebarNavItem item;
   final bool selected;
   final VoidCallback onTap;
@@ -277,46 +277,100 @@ class _SidebarItem extends StatelessWidget {
   });
 
   @override
+  State<_SidebarItem> createState() => _SidebarItemState();
+}
+
+class _SidebarItemState extends State<_SidebarItem> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = selected
+    final color = widget.selected
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
+    final bg = widget.selected
+        ? theme.colorScheme.primaryContainer.withOpacity(0.45)
+        : (_hovered
+            ? theme.colorScheme.onSurface.withOpacity(0.05)
+            : Colors.transparent);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Material(
-        color: selected
-            ? theme.colorScheme.primaryContainer.withOpacity(0.45)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.sm,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  selected ? item.selectedIcon : item.icon,
-                  size: AppSpacing.iconMd,
-                  color: color,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    item.label,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: color,
-                      fontWeight:
-                          selected ? FontWeight.w600 : FontWeight.w500,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              onTap: widget.onTap,
+              child: Stack(
+                children: [
+                  // Active indicator bar (left edge)
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    left: 0,
+                    top: widget.selected ? 8 : 14,
+                    bottom: widget.selected ? 8 : 14,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: widget.selected ? 1 : 0,
+                      child: Container(
+                        width: 3,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: AppSpacing.sm + 3,
+                      right: AppSpacing.sm,
+                      top: AppSpacing.sm,
+                      bottom: AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          child: Icon(
+                            widget.selected
+                                ? widget.item.selectedIcon
+                                : widget.item.icon,
+                            key: ValueKey(widget.selected),
+                            size: AppSpacing.iconMd,
+                            color: color,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            widget.item.label,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: color,
+                              fontWeight: widget.selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -345,73 +399,84 @@ class _SidebarUserCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.all(AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: DesignTokens.primary,
-            child: Text(
-              initials,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      child: Container(
+        margin: const EdgeInsets.all(AppSpacing.sm),
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.6),
+          ),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: DesignTokens.primary,
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  userName,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  email,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    userName,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    email,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
-          ),
-          PopupMenuButton<String>(
-            icon: Icon(
-              Icons.more_vert,
-              size: AppSpacing.iconSm,
-              color: theme.colorScheme.onSurfaceVariant,
+            Semantics(
+              label: 'Account menu',
+              button: true,
+              child: PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.more_vert,
+                  size: AppSpacing.iconSm,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                tooltip: 'Account menu',
+                onSelected: (value) {
+                  switch (value) {
+                    case 'profile':
+                      onProfile();
+                    case 'settings':
+                      onSettings();
+                    case 'logout':
+                      onLogout();
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'profile', child: Text('Profile')),
+                  PopupMenuItem(value: 'settings', child: Text('Settings')),
+                  PopupMenuDivider(),
+                  PopupMenuItem(value: 'logout', child: Text('Logout')),
+                ],
+              ),
             ),
-            onSelected: (value) {
-              switch (value) {
-                case 'profile':
-                  onProfile();
-                case 'settings':
-                  onSettings();
-                case 'logout':
-                  onLogout();
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'profile', child: Text('Profile')),
-              PopupMenuItem(value: 'settings', child: Text('Settings')),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'logout', child: Text('Logout')),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

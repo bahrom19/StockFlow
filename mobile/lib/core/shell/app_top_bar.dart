@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/sales/presentation/providers/cash_shift_provider.dart';
 import '../auth/auth_state.dart';
 import '../auth/models/auth_models.dart';
 import '../navigation/route_names.dart';
@@ -56,10 +58,30 @@ class AppTopBar extends ConsumerWidget {
             // Global search — deep-links to the module where the term lives.
             _GlobalSearchField(currentLocation: currentLocation),
             const SizedBox(width: AppSpacing.sm),
+            // Live system status: pulse dot + clock + open-shift pill.
+            // Passive — watches providers, never triggers requests.
+            const _LiveStatusCluster(),
+            const SizedBox(width: AppSpacing.xs),
             IconButton(
-              icon: const Icon(Icons.notifications_outlined),
               tooltip: 'Notifications',
-              onPressed: () {},
+              onPressed: () {
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    const SnackBar(
+                      content: Row(
+                        children: [
+                          Icon(Icons.notifications_none, size: 18),
+                          SizedBox(width: 8),
+                          Expanded(child: Text("You're all caught up")),
+                        ],
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      width: 320,
+                    ),
+                  );
+              },
+              icon: const Icon(Icons.notifications_outlined),
             ),
             const SizedBox(width: AppSpacing.xs),
             _UserMenu(
@@ -122,8 +144,11 @@ class _GlobalSearchFieldState extends State<_GlobalSearchField> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the top bar breathable on small desktops: the 280px global search
+    // only fits when there is real horizontal room left after the sidebar,
+    // live-status cluster and user menu.
     final isDesktop = MediaQuery.of(context).size.width >=
-        AppSpacing.breakpointTablet;
+        AppSpacing.breakpointDesktop;
     if (!isDesktop) return const SizedBox.shrink();
 
     return SizedBox(
@@ -169,6 +194,171 @@ class _GlobalSearchFieldState extends State<_GlobalSearchField> {
   }
 }
 
+/// Live system status cluster — pulse dot + current time + open-shift pill.
+///
+/// Passive by design: watches [cashShiftProvider] but never calls a notifier
+/// (no new API requests from the global chrome). When the shift state is
+/// unknown/loading a neutral placeholder renders instead.
+class _LiveStatusCluster extends ConsumerStatefulWidget {
+  const _LiveStatusCluster();
+
+  @override
+  ConsumerState<_LiveStatusCluster> createState() => _LiveStatusClusterState();
+}
+
+class _LiveStatusClusterState extends ConsumerState<_LiveStatusCluster> {
+  Timer? _timer;
+  late String _time;
+
+  @override
+  void initState() {
+    super.initState();
+    _time = _now();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _time = _now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _now() {
+    final n = DateTime.now();
+    final hh = n.hour.toString().padLeft(2, '0');
+    final mm = n.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final shiftState = ref.watch(cashShiftProvider);
+
+    String shiftLabel;
+    Color shiftColor;
+    switch (shiftState) {
+      case ShiftLoaded(:final current):
+        if (current == null) {
+          shiftLabel = 'No shift';
+          shiftColor = DesignTokens.warning;
+        } else {
+          shiftLabel = 'Shift open';
+          shiftColor = DesignTokens.success;
+        }
+      case ShiftError():
+        shiftLabel = 'Shift —';
+        shiftColor = theme.colorScheme.onSurfaceVariant;
+      default:
+        // Loading / unknown → graceful placeholder.
+        shiftLabel = 'Shift —';
+        shiftColor = theme.colorScheme.onSurfaceVariant;
+    }
+
+    return Semantics(
+      label: 'System live, $_time · $shiftLabel',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Pulse dot + Live
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: DesignTokens.success.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _PulseDot(),
+                const SizedBox(width: 5),
+                Text(
+                  'Live · $_time',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: DesignTokens.success,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          // Shift pill
+          Tooltip(
+            message: 'Cash shift status',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: shiftColor.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.point_of_sale, size: 12, color: shiftColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    shiftLabel,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: shiftColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Softly pulsing green dot — the "alive" heartbeat of the system.
+class _PulseDot extends StatefulWidget {
+  @override
+  State<_PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<_PulseDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween(begin: 1.0, end: 0.35).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      ),
+      child: Container(
+        width: 7,
+        height: 7,
+        decoration: const BoxDecoration(
+          color: DesignTokens.success,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
 class _UserMenu extends StatelessWidget {
   final String userName;
   final String email;
@@ -188,8 +378,11 @@ class _UserMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      tooltip: 'Account',
+    return Semantics(
+      label: 'Account menu',
+      button: true,
+      child: PopupMenuButton<String>(
+      tooltip: 'Account menu',
       offset: const Offset(0, 48),
       onSelected: (value) {
         switch (value) {
@@ -276,6 +469,7 @@ class _UserMenu extends StatelessWidget {
           ),
         ),
       ],
+      ),
     );
   }
 }
