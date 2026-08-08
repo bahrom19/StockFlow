@@ -1,0 +1,26 @@
+# StockFlow — Gitleaks configuration.
+#
+# Extends Gitleaks' default rule set (nothing is disabled — secret scanning
+# stays fully active). The only customisation is a scoped global allowlist
+# for NON-SECRET test fixture passwords used in Flutter widget tests and the
+# Playwright E2E suite. These are fake credentials (e.g. 'StrongPass123')
+# whose string entropy trips the generic-api-key heuristic; they are not
+# real secrets and are confined to test files.
+
+title = "StockFlow gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-secret fake passwords used in Flutter widget tests and Playwright E2E specs"
+paths = [
+  '''mobile/test/features/auth/register_screen_test\.dart''',
+  '''e2e/tests/auth\.spec\.ts''',
+]
+regexes = [
+  '''StrongPass123''',
+  '''E2eStrong123''',
+  '''Different123''',
+  '''WrongPass123''',
+]

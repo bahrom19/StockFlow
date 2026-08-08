@@ -175,12 +175,13 @@ export async function clickMenu(page: Page, item: string): Promise<void> {
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     }
   } else {
-    // Fallback: the last button in the top bar (user avatar).
-    const buttons = page.locator('flt-semantics[role="button"]');
-    const box = await buttons.last().boundingBox();
-    if (box) {
-      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    }
+    // Fallback: the account avatar sits at the FAR RIGHT of the top bar.
+    // Real pointer events reach the Flutter canvas even when the shell chrome
+    // is absent from the semantics tree (NaN-geometry quirk), so click the
+    // avatar's screen position directly instead of "the last semantics button"
+    // (which on some screens is a content button that navigates away).
+    const vp = page.viewportSize() ?? { width: 1440, height: 900 };
+    await page.mouse.click(vp.width - 20, 45);
   }
   await page.waitForTimeout(700);
   const menuItem = page

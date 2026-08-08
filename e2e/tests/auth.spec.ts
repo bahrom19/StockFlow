@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page, APIRequestContext } from '@playwright/test';
 import {
   enableSemantics,
   reenableSemantics,
@@ -16,33 +16,67 @@ import {
  * the PRODUCTION Railway API (embedded in env/.env.prod) — the same binary
  * that is deployed to stockflow-web.
  *
- * Each run uses a unique company (timestamp suffix) so parallel/repeated
- * runs never collide on duplicate emails.
+ * ── IDENTITY LIFECYCLE (critical) ─────────────────────────────────────────
+ * The test identity (email / company) is created AND registered via the API
+ * in `test.beforeAll`, which Playwright runs once per worker process.
+ *
+ * Root cause of the historical flaky 401s: identity was generated at MODULE
+ * scope (`let unique = Date.now()`). Playwright 1.62 restarts worker
+ * processes mid-file (re-evaluating the module), so tests that ran in a new
+ * worker used an email that had never been registered → spurious
+ * `401 Invalid credentials`. Registering in beforeAll guarantees the identity
+ * always exists in whichever worker runs the tests.
+ * ──────────────────────────────────────────────────────────────────────────
  */
 
-let unique = Date.now().toString(36);
-let companyName = `E2E Corp ${unique}`;
-let email = `e2e.${unique}@stockflow.test`;
-const password = 'E2eStrong123!';
-const fullName = 'E2E Tester';
+const PASSWORD = 'E2eStrong123!';
+const FULL_NAME = 'E2E Tester';
 
-async function registerCompany(page: Page): Promise<void> {
-  await waitForRoute(page, '#/register');
-  await typeInto(page, 'Company Name', companyName);
-  await typeInto(page, 'Full Name', fullName);
-  await typeInto(page, 'Email', email);
-  await typeInto(page, 'Password', password);
-  await typeInto(page, 'Confirm Password', password);
-  await clickButton(page, 'Create Account');
+// Production API base, resolved from the built binary (same URL the app
+// itself uses). Fallback kept for resilience if extraction ever fails.
+const API_FALLBACK = 'https://stockflow-production-04c7.up.railway.app/api';
+
+/** Identity registered in beforeAll; all login-dependent tests share it. */
+let identity: { email: string; companyName: string } | undefined;
+
+async function resolveApiBase(request: APIRequestContext): Promise<string> {
+  try {
+    const res = await request.get('http://127.0.0.1:8081/main.dart.js');
+    if (res.ok()) {
+      const js = await res.text();
+      const m = js.match(/https:\/\/[a-z0-9.-]+railway\.app\/api/);
+      if (m) return m[0];
+    }
+  } catch {
+    /* fall through to fallback */
+  }
+  return API_FALLBACK;
 }
 
-async function login(page: Page): Promise<void> {
-  await waitForRoute(page, '#/login');
-  await typeInto(page, 'Email', email);
-  await typeInto(page, 'Password', password);
-  await clickButton(page, 'Sign In');
-  await waitForRoute(page, '#/dashboard');
-}
+test.beforeAll(async ({ request }) => {
+  const unique = `${Date.now().toString(36)}${Math.random()
+    .toString(36)
+    .slice(2, 6)}`;
+  identity = {
+    email: `e2e.${unique}@stockflow.test`,
+    companyName: `E2E Corp ${unique}`,
+  };
+  const apiBase = await resolveApiBase(request);
+  const res = await request.post(`${apiBase}/auth/register`, {
+    data: {
+      email: identity.email,
+      password: PASSWORD,
+      companyName: identity.companyName,
+      firstName: FULL_NAME,
+    },
+  });
+  // 201 = created; 409 = already exists (harmless — identity is still valid).
+  if (res.status() !== 201 && res.status() !== 409) {
+    throw new Error(
+      `beforeAll registration failed: ${res.status()} ${await res.text()}`,
+    );
+  }
+});
 
 // Failure diagnostics: capture console + page errors so a hanging/failing
 // test can be debugged from the report without a rerun.
@@ -69,13 +103,56 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
+/** Register a company through the real UI (register screen). */
+async function registerViaUi(
+  page: Page,
+  opts: { email: string; companyName: string },
+): Promise<void> {
+  await waitForRoute(page, '#/register');
+  await typeInto(page, 'Company Name', opts.companyName);
+  await typeInto(page, 'Full Name', FULL_NAME);
+  await typeInto(page, 'Email', opts.email);
+  await typeInto(page, 'Password', PASSWORD);
+  await typeInto(page, 'Confirm Password', PASSWORD);
+  await clickButton(page, 'Create Account');
+}
+
+/** Log in with the beforeAll-registered identity. */
+async function login(page: Page): Promise<void> {
+  await waitForRoute(page, '#/login');
+  await typeInto(page, 'Email', identity!.email);
+  await typeInto(page, 'Password', PASSWORD);
+  await clickButton(page, 'Sign In');
+  await waitForRoute(page, '#/dashboard');
+}
+
+/**
+ * Flutter web only emits semantics nodes for widgets laid out inside the
+ * visible viewport. On the dashboard the KPI strip sits below the tall Cash
+ * Drawer hero, so scroll it into view before asserting KPI labels — a real
+ * wheel gesture, not a wait/retry workaround.
+ */
+async function scrollDashboardIntoView(page: Page): Promise<void> {
+  await page.mouse.move(720, 450);
+  await page.mouse.wheel(0, 1000);
+}
+
 test.describe('StockFlow first-user authentication', () => {
   test('1. Register new company', async ({ page }) => {
+    // The beforeAll identity already exists; this test needs its OWN fresh
+    // email to exercise the real "new company" success path.
+    const uiUnique = `${Date.now().toString(36)}${Math.random()
+      .toString(36)
+      .slice(2, 6)}`;
+
     await waitForRoute(page, '#/login');
     await clickButton(page, 'Create account');
     await waitForRoute(page, '#/register');
 
-    await registerCompany(page);
+    await registerViaUi(page, {
+      email: `e2e-ui.${uiUnique}@stockflow.test`,
+      companyName: `E2E UI Corp ${uiUnique}`,
+    });
 
     // Success snackbar, then redirected back to login.
     await expectText(page, 'Account created. Please sign in.');
@@ -89,6 +166,7 @@ test.describe('StockFlow first-user authentication', () => {
 
   test('3. Dashboard opens', async ({ page }) => {
     await login(page);
+    await scrollDashboardIntoView(page);
     await expectText(page, "Today's Revenue");
     await expectText(page, "Today's Sales");
   });
@@ -101,6 +179,7 @@ test.describe('StockFlow first-user authentication', () => {
     // session itself is restored (route = dashboard), reactivate semantics
     // to render the tree for further assertions.
     await reenableSemantics(page);
+    await scrollDashboardIntoView(page);
     await expectText(page, "Today's Revenue");
   });
 
@@ -111,6 +190,7 @@ test.describe('StockFlow first-user authentication', () => {
     await page.reload();
     await waitForRoute(page, '#/dashboard');
     await reenableSemantics(page);
+    await scrollDashboardIntoView(page);
     await expectText(page, "Today's Revenue");
   });
 
@@ -130,7 +210,7 @@ test.describe('StockFlow first-user authentication', () => {
 
   test('8. Invalid password rejected', async ({ page }) => {
     await waitForRoute(page, '#/login');
-    await typeInto(page, 'Email', email);
+    await typeInto(page, 'Email', identity!.email);
     await typeInto(page, 'Password', 'WrongPass123!');
     await clickButton(page, 'Sign In');
     // Stays on login with an error.
@@ -143,7 +223,11 @@ test.describe('StockFlow first-user authentication', () => {
     await clickButton(page, 'Create account');
     await waitForRoute(page, '#/register');
 
-    await registerCompany(page);
+    // The beforeAll identity is guaranteed to exist → deterministic 409.
+    await registerViaUi(page, {
+      email: identity!.email,
+      companyName: identity!.companyName,
+    });
 
     // Error snackbar, still on register.
     await expectText(page, /already|exists|registered/i);
@@ -155,10 +239,10 @@ test.describe('StockFlow first-user authentication', () => {
     await clickButton(page, 'Create account');
     await waitForRoute(page, '#/register');
 
-    await typeInto(page, 'Company Name', companyName);
-    await typeInto(page, 'Full Name', fullName);
-    await typeInto(page, 'Email', email);
-    await typeInto(page, 'Password', password);
+    await typeInto(page, 'Company Name', identity!.companyName);
+    await typeInto(page, 'Full Name', FULL_NAME);
+    await typeInto(page, 'Email', identity!.email);
+    await typeInto(page, 'Password', PASSWORD);
     await typeInto(page, 'Confirm Password', 'Different123!');
     await clickButton(page, 'Create Account');
 
