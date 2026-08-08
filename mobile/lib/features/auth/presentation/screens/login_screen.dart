@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_state.dart';
+import '../../../../core/navigation/route_names.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../core/utils/validators.dart';
@@ -140,6 +142,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: _isLoading
                             ? AppLoading.button()
                             : const Text('Sign In'),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'New to StockFlow?',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () => context.go(RouteNames.register),
+                            child: const Text('Create account'),
+                          ),
+                        ],
                       ),
                     ],
                   ),

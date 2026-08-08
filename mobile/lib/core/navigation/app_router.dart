@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/customers/presentation/screens/customer_form_screen.dart';
 import '../../features/customers/presentation/screens/customers_list_screen.dart';
@@ -51,7 +52,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
       final location = state.matchedLocation;
-      final isAuthRoute = location == RouteNames.login;
+      final isAuthRoute =
+          location == RouteNames.login || location == RouteNames.register;
 
       // Cold start: nothing is known yet — always land on Splash, which owns
       // the session-restore decision (checkAuthStatus → refresh → navigate).
@@ -86,6 +88,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.login,
         name: 'login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.register,
+        name: 'register',
+        builder: (context, state) => const RegisterScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),

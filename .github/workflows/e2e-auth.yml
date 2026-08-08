@@ -1,0 +1,95 @@
+# ═══════════════════════════════════════════════════════════════
+# StockFlow Enterprise — E2E Authentication Suite (Playwright)
+# ═══════════════════════════════════════════════════════════════
+# Builds the Flutter Web release and drives it with Playwright in a
+# real Chromium browser against the PRODUCTION Railway API (the same
+# binary deployed to stockflow-web). Covers the v1.2.1 first-user
+# authentication flow: register → login → dashboard → F5 → session
+# restore → logout → redirects → error paths.
+#
+# Requires no secrets: the web build embeds the production API URL via
+# env/.env.prod (committed), and unique emails per run avoid collisions.
+# ═══════════════════════════════════════════════════════════════
+
+name: E2E Auth (Playwright)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/lib/**'
+      - 'mobile/test/**'
+      - 'e2e/**'
+      - '.github/workflows/e2e-auth.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/lib/**'
+      - 'mobile/test/**'
+      - 'e2e/**'
+      - '.github/workflows/e2e-auth.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-auth-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.24.5'
+
+jobs:
+  e2e-auth:
+    name: '🧪 Auth E2E (Playwright)'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+        working-directory: mobile
+
+      # Errors only — the committed tree carries pre-existing warning-level
+      # lints in in-flight modules (see web-deploy.yml for the same policy).
+      - name: Static analysis (errors only)
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+        working-directory: mobile
+
+      - name: Build web release
+        run: flutter build web --release
+        working-directory: mobile
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install Playwright dependencies
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run authentication E2E suite
+        working-directory: e2e
+        run: npx playwright test
+        env:
+          CI: 'true'
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
