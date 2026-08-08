@@ -40,6 +40,73 @@ class DaySales with _$DaySales {
 }
 
 // ──────────────────────────────────
+// Purchasing Summary (from GET /reports/purchasing → summary)
+// ──────────────────────────────────
+/// Lightweight purchasing summary used by the Dashboard Action Center
+/// (event #4 — pending purchase orders). Loaded once per dashboard refresh
+/// with `limit=1` so only the `summary` block is consumed; the `orders` list
+/// is ignored.
+///
+/// Decision (docs/ux/dashboard_v33_action_center.md §3a): Dashboard uses this
+/// Dashboard-specific summary request instead of `poListProvider`, which
+/// belongs to the Purchasing screen.
+@freezed
+class PurchasingSummary with _$PurchasingSummary {
+  const factory PurchasingSummary({
+    required int totalOrders,
+    required String totalValue,
+    @Default({}) Map<String, int> byStatus,
+  }) = _PurchasingSummary;
+
+  factory PurchasingSummary.fromJson(Map<String, dynamic> json) =>
+      _$PurchasingSummaryFromJson(json);
+
+  const PurchasingSummary._();
+
+  /// PENDING + ORDERED — purchase orders awaiting owner action.
+  /// Strictly excludes APPROVED / PARTIALLY_RECEIVED / RECEIVED / CANCELLED /
+  /// DRAFT (approved decision — see docs §3a).
+  int get pendingPoCount =>
+      (byStatus['PENDING'] ?? 0) + (byStatus['ORDERED'] ?? 0);
+}
+
+// ──────────────────────────────────
+// Low Stock Item (from GET /reports/inventory/low-stock)
+// ──────────────────────────────────
+/// One low-stock inventory position, used by Action Center event #3 to show
+/// the top-3 most critical items (name, SKU, stock, min, warehouse).
+///
+/// Stage B decision (docs/ux/dashboard_v33_action_center.md §3a): the
+/// Dashboard loads this lightweight list once per refresh via the existing
+/// endpoint — NOT on the 20s Cash Drawer timer.
+@freezed
+class LowStockItem with _$LowStockItem {
+  const factory LowStockItem({
+    required String productId,
+    required String productName,
+    required String sku,
+    required int currentStock,
+    required int minQuantity,
+    required String warehouseId,
+    required String warehouseName,
+    required String status,
+  }) = _LowStockItem;
+
+  factory LowStockItem.fromJson(Map<String, dynamic> json) =>
+      _$LowStockItemFromJson(json);
+
+  const LowStockItem._();
+
+  /// Units below the reorder point: `minQuantity − currentStock`.
+  /// Positive = shortfall. Drives the deterministic Low Stock sort
+  /// (largest deficit first).
+  int get deficit => minQuantity - currentStock;
+
+  /// True when this position is a plain low stock (not out of stock).
+  bool get isLowStock => status == 'LOW_STOCK';
+}
+
+// ──────────────────────────────────
 // Recent Sale (from GET /reports/sales)
 // ──────────────────────────────────
 @freezed

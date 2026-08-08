@@ -63,9 +63,18 @@ class AppSpacing {
   static const double inputLg = 56;
 
   // ──────────────────────────────────
-  // App Bar
+  // App Bar / Sidebar
   // ──────────────────────────────────
   static const double appBarHeight = 64;
+
+  /// Fixed width of the desktop navigation sidebar.
+  ///
+  /// The sidebar is a non-flexible child of the shell Row; without a bounded
+  /// width Flutter lays it out with unbounded constraints and any internal
+  /// Expanded (e.g. the brand row in _SidebarHeader) throws
+  /// "RenderFlex children have non-zero flex but incoming width constraints
+  /// are unbounded" → blank dashboard after login.
+  static const double sidebarWidth = 260;
 
   // ──────────────────────────────────
   // Bottom Navigation

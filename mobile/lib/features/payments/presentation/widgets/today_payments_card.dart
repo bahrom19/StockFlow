@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
+import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/payments/presentation/providers/today_payments_provider.dart';
-import 'package:stockflow/core/navigation/route_names.dart';
 
 /// Dashboard widget — Today's Payments.
 ///
@@ -105,25 +106,49 @@ class _Breakdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final entries = [
-      ('CASH', 'Cash', const Color(0xFF0F9D58), double.tryParse(payments.cash) ?? 0),
-      ('CARD', 'Card', const Color(0xFF1A73E8), double.tryParse(payments.card) ?? 0),
-      ('QR', 'QR', const Color(0xFF9334E6), double.tryParse(payments.qr) ?? 0),
-      ('BANK_TRANSFER', 'Bank', const Color(0xFFF9A825), double.tryParse(payments.bankTransfer) ?? 0),
-      ('MOBILE_WALLET', 'Wallet', const Color(0xFF00ACC1), double.tryParse(payments.mobileWallet) ?? 0),
+      ('CASH', 'Cash', DesignTokens.paymentCash, double.tryParse(payments.cash) ?? 0),
+      ('CARD', 'Card', DesignTokens.paymentCard, double.tryParse(payments.card) ?? 0),
+      ('QR', 'QR', DesignTokens.paymentQr, double.tryParse(payments.qr) ?? 0),
+      ('BANK_TRANSFER', 'Bank', DesignTokens.paymentBank, double.tryParse(payments.bankTransfer) ?? 0),
+      ('MOBILE_WALLET', 'Wallet', DesignTokens.paymentWallet, double.tryParse(payments.mobileWallet) ?? 0),
     ];
     final visible = entries.where((e) => e.$4 > 0).toList();
     final total = payments.total;
 
     if (total <= 0) {
       return SizedBox(
-        height: 90,
-        child: Center(
-          child: Text(
-            'No sales today yet',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+        height: 96,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              ),
+              child: Icon(
+                Icons.payments_outlined,
+                size: 22,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'No payments today',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Sales you make today will appear here.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       );
     }

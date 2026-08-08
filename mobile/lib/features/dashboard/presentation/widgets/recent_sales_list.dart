@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/utils/formatters.dart';
+import 'package:stockflow/core/widgets/premium_empty_state.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 
 /// Recent Sales List
@@ -15,16 +18,15 @@ class RecentSalesList extends StatelessWidget {
     final theme = Theme.of(context);
 
     if (sales.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Center(
-            child: Text('No recent sales',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                )),
-          ),
-        ),
+      return PremiumEmptyState(
+        icon: Icons.receipt_long,
+        color: DesignTokens.primary,
+        title: 'No recent sales',
+        description: 'Start by creating your first sale — completed sales '
+            'show up here instantly.',
+        ctaLabel: 'New Sale',
+        ctaIcon: Icons.add_shopping_cart,
+        onCta: () => context.push(RouteNames.saleNew),
       );
     }
 
@@ -36,7 +38,21 @@ class RecentSalesList extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
-            child: Text('Recent Sales', style: theme.textTheme.titleMedium),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Recent Sales',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.push(RouteNames.sales),
+                  child: const Text('View all'),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
           ...sales.map((sale) => _SaleItem(sale: sale)),
@@ -55,7 +71,9 @@ class _SaleItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return InkWell(
-      onTap: () {},
+      onTap: () => context.push(
+        RouteNames.saleDetail.replaceAll(':id', sale.id),
+      ),
       child: Padding(
         padding: AppSpacing.listTilePadding,
         child: Row(

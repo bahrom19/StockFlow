@@ -55,6 +55,49 @@ Map<String, dynamic> _$$DaySalesImplToJson(_$DaySalesImpl instance) =>
       'averageReceipt': instance.averageReceipt,
     };
 
+_$PurchasingSummaryImpl _$$PurchasingSummaryImplFromJson(
+        Map<String, dynamic> json) =>
+    _$PurchasingSummaryImpl(
+      totalOrders: (json['totalOrders'] as num).toInt(),
+      totalValue: json['totalValue'] as String,
+      byStatus: (json['byStatus'] as Map<String, dynamic>?)?.map(
+            (k, e) => MapEntry(k, (e as num).toInt()),
+          ) ??
+          const {},
+    );
+
+Map<String, dynamic> _$$PurchasingSummaryImplToJson(
+        _$PurchasingSummaryImpl instance) =>
+    <String, dynamic>{
+      'totalOrders': instance.totalOrders,
+      'totalValue': instance.totalValue,
+      'byStatus': instance.byStatus,
+    };
+
+_$LowStockItemImpl _$$LowStockItemImplFromJson(Map<String, dynamic> json) =>
+    _$LowStockItemImpl(
+      productId: json['productId'] as String,
+      productName: json['productName'] as String,
+      sku: json['sku'] as String,
+      currentStock: (json['currentStock'] as num).toInt(),
+      minQuantity: (json['minQuantity'] as num).toInt(),
+      warehouseId: json['warehouseId'] as String,
+      warehouseName: json['warehouseName'] as String,
+      status: json['status'] as String,
+    );
+
+Map<String, dynamic> _$$LowStockItemImplToJson(_$LowStockItemImpl instance) =>
+    <String, dynamic>{
+      'productId': instance.productId,
+      'productName': instance.productName,
+      'sku': instance.sku,
+      'currentStock': instance.currentStock,
+      'minQuantity': instance.minQuantity,
+      'warehouseId': instance.warehouseId,
+      'warehouseName': instance.warehouseName,
+      'status': instance.status,
+    };
+
 _$RecentSaleImpl _$$RecentSaleImplFromJson(Map<String, dynamic> json) =>
     _$RecentSaleImpl(
       id: json['id'] as String,

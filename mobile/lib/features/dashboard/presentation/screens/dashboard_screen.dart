@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/error_state_widget.dart';
+import 'package:stockflow/core/widgets/shimmer_box.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:stockflow/features/dashboard/presentation/widgets/action_center.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/ai_insights_card.dart';
+import 'package:stockflow/features/dashboard/presentation/widgets/cash_drawer_hero.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/kpi_card.dart';
+import 'package:stockflow/features/dashboard/presentation/widgets/onboarding_hero.dart';
+import 'package:stockflow/features/dashboard/presentation/widgets/quick_actions.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/recent_sales_list.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/sales_chart.dart';
+import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 import 'package:stockflow/features/payments/presentation/widgets/today_payments_card.dart';
+import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
+import 'package:stockflow/features/warehouses/presentation/providers/warehouses_provider.dart';
 
-/// Production Dashboard Screen
+/// Production Dashboard Screen — answers "How is my business today?" in <5s.
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -24,6 +33,8 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with AutomaticKeepAliveClientMixin {
+  String? _shiftWarehouseId;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -32,21 +43,73 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     super.initState();
     Future.microtask(() {
       ref.read(dashboardProvider.notifier).loadDashboard();
+      _bootstrapShift();
     });
+  }
+
+  /// Single owner of the cash-shift bootstrap for this screen: loads the
+  /// warehouse list once, then loads the open shift for the default (or first)
+  /// active warehouse — exactly one X-report request per page load. The hero
+  /// and ActionCenter only watch the shared [cashShiftProvider].
+  ///
+  /// The warehouse list starts in `WarehouseListLoading` (its initial state),
+  /// so we must trigger `loadWarehouses()` from that state too — otherwise the
+  /// list never loads and the shift stays stuck in "Checking shift…" forever.
+  void _bootstrapShift() {
+    final ws = ref.read(warehouseListProvider);
+    if (ws is WarehouseListLoaded) {
+      _ensureShift(ws.warehouses);
+    } else if (ws is WarehouseListEmpty) {
+      return; // no warehouses — nothing to open a shift in
+    } else {
+      // Loading (initial or in-flight) or Error — trigger the load once;
+      // ref.listen in build picks it up as soon as it arrives.
+      Future.microtask(() {
+        if (!mounted) return;
+        final current = ref.read(warehouseListProvider);
+        if (current is! WarehouseListLoaded &&
+            current is! WarehouseListEmpty) {
+          ref.read(warehouseListProvider.notifier).loadWarehouses();
+        }
+      });
+    }
+  }
+
+  void _ensureShift(List<Warehouse> warehouses) {
+    if (warehouses.isEmpty) return;
+    final wh = warehouses.firstWhere(
+      (w) => w.isDefault,
+      orElse: () => warehouses.first,
+    );
+    if (_shiftWarehouseId != wh.id) {
+      _shiftWarehouseId = wh.id;
+      Future.microtask(() {
+        if (mounted) {
+          ref.read(cashShiftProvider.notifier).loadShift(wh.id);
+        }
+      });
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    await ref.read(dashboardProvider.notifier).refresh();
+    if (_shiftWarehouseId != null) {
+      await ref.read(cashShiftProvider.notifier).refresh();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    ref.listen<WarehouseListState>(warehouseListProvider, (prev, next) {
+      if (next is WarehouseListLoaded) _ensureShift(next.warehouses);
+    });
     final theme = Theme.of(context);
     final state = ref.watch(dashboardProvider);
     final user = ref.watch(currentUserProvider);
 
-    // The Shell (TopBar) renders the page title and global actions;
-    // the dashboard renders only its content. The greeting is kept as a
-    // content header so the first screen still feels personal.
     return RefreshIndicator(
-      onRefresh: () => ref.read(dashboardProvider.notifier).refresh(),
+      onRefresh: _refreshAll,
       child: _buildBody(theme, state, user),
     );
   }
@@ -58,13 +121,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   ) {
     return switch (state) {
       DashboardLoading() => ListView(
-          padding: AppSpacing.screenPadding,
-          children: [
-            _buildKpiRow(theme, isLoading: true),
-            const SizedBox(height: AppSpacing.md),
-            _buildKpiRow(theme, isLoading: true),
-            const SizedBox(height: AppSpacing.lg),
-            const SizedBox(height: 160),
+          padding: _pagePadding,
+          children: const [
+            _GreetingSkeleton(),
+            SizedBox(height: AppSpacing.xl),
+            CashDrawerHeroSkeleton(),
+            SizedBox(height: AppSpacing.lg),
+            _KpiSkeletonGrid(),
+            SizedBox(height: AppSpacing.lg),
+            ShimmerBox(width: 240, height: 32, radius: 8),
+            SizedBox(height: AppSpacing.sm),
+            _QuickActionsSkeleton(),
+            SizedBox(height: AppSpacing.lg),
+            ShimmerBox(width: double.infinity, height: 220, radius: 12),
           ],
         ),
       DashboardError(message: final msg) => ErrorStateWidget(
@@ -84,23 +153,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           recentSales: recentSales,
           chartData: chartData,
           isRefreshing: isRefreshing,
+          onRefresh: () =>
+              ref.read(dashboardProvider.notifier).refresh(),
         ),
     };
   }
-
-  Widget _buildKpiRow(ThemeData _, {bool isLoading = false}) {
-    if (isLoading) {
-      return const Row(
-        children: [
-          Expanded(child: KpiCardSkeleton()),
-          SizedBox(width: AppSpacing.sm),
-          Expanded(child: KpiCardSkeleton()),
-        ],
-      );
-    }
-    return const SizedBox.shrink();
-  }
 }
+
+const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(
+  AppSpacing.xl,
+  AppSpacing.xl,
+  AppSpacing.xl,
+  AppSpacing.xxl,
+);
 
 class _DashboardContentView extends StatelessWidget {
   final String? userName;
@@ -108,6 +173,7 @@ class _DashboardContentView extends StatelessWidget {
   final SalesReport? recentSales;
   final List<ChartDataPoint> chartData;
   final bool isRefreshing;
+  final VoidCallback onRefresh;
 
   const _DashboardContentView({
     this.userName,
@@ -115,309 +181,339 @@ class _DashboardContentView extends StatelessWidget {
     this.recentSales,
     required this.chartData,
     required this.isRefreshing,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isWide = width >= AppSpacing.breakpointWide;
+    final recentSalesWidget = RecentSalesList(
+      sales: recentSales?.sales ?? const [],
+    );
+
+    // Brand-new company → one informative onboarding block instead of the
+    // five scattered "No data" cards (chart, payments, recent, low stock, AI).
+    final isOnboarding = summary.customerCount == 0 &&
+        summary.ordersCount == 0 &&
+        chartData.every((d) => d.revenue == 0) &&
+        (recentSales?.sales.isEmpty ?? true);
+
+    return ListView(
+      padding: _pagePadding,
+      children: [
+        _GreetingRow(
+          userName: userName,
+          isRefreshing: isRefreshing,
+          onRefresh: onRefresh,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // ── Cash Drawer Hero — the page's #1 answer ──
+        const CashDrawerHero(),
+        const SizedBox(height: AppSpacing.lg),
+
+        // ── KPI strip (compact) ─────────────────
+        _KpiSection(summary: summary),
+        const SizedBox(height: AppSpacing.sm),
+
+        // ── Quick Actions — directly under KPI ──
+        const QuickActionsStrip(),
+        const SizedBox(height: AppSpacing.lg),
+
+        if (isOnboarding) ...[
+          // ── Single onboarding hero ────────────
+          const OnboardingHero(),
+        ] else ...[
+          // ── Action Center: prioritized issues ──
+          const ActionCenter(),
+          const SizedBox(height: AppSpacing.lg),
+
+          // ── Hero: chart (central) + payments ──
+          if (isWide)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 7,
+                  child: SalesBarChart(
+                    data: chartData,
+                    title: 'Sales — Last ${chartData.length} Days',
+                    showProfit: true,
+                    height: 220,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                const Expanded(flex: 5, child: TodayPaymentsCard()),
+              ],
+            )
+          else ...[
+            SalesBarChart(
+              data: chartData,
+              title: 'Sales — Last ${chartData.length} Days',
+              showProfit: true,
+              height: 200,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            const TodayPaymentsCard(),
+          ],
+
+          const SizedBox(height: AppSpacing.lg),
+
+          // ── Recent Sales | AI Insights ────────
+          if (width >= 1024)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 6, child: recentSalesWidget),
+                const SizedBox(width: AppSpacing.sm),
+                const Expanded(flex: 4, child: AiInsightsCard()),
+              ],
+            )
+          else ...[
+            recentSalesWidget,
+            const SizedBox(height: AppSpacing.md),
+            const AiInsightsCard(),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+// ──────────────────────────────────
+// Greeting
+// ──────────────────────────────────
+class _GreetingRow extends StatelessWidget {
+  final String? userName;
+  final bool isRefreshing;
+  final VoidCallback onRefresh;
+
+  const _GreetingRow({
+    this.userName,
+    required this.isRefreshing,
+    required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDesktop = MediaQuery.of(context).size.width >= AppSpacing.breakpointDesktop;
+    final today = DateFormat('EEEE, MMM d').format(DateTime.now());
 
-    return ListView(
-      padding: AppSpacing.screenPadding,
+    return Row(
       children: [
-        // ── Greeting ──
-        Text(
-          'Hello, ${userName ?? 'User'}',
-          style: theme.textTheme.titleMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hello, ${userName ?? 'User'}',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$today · Business snapshot',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: AppSpacing.md),
+        if (isRefreshing)
+          const Padding(
+            padding: EdgeInsets.all(AppSpacing.sm),
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh),
+          ),
+      ],
+    );
+  }
+}
 
-        // ── KPI Cards (2 columns on phone, 4 on desktop) ──
-        if (isDesktop) ...[
-          _KpiGrid(summary: summary),
-        ] else ...[
-          _KpiRow(summary: summary),
+// ──────────────────────────────────
+// KPI Section — 5 cards, Revenue emphasized
+// ──────────────────────────────────
+class _KpiSection extends StatelessWidget {
+  final DashboardSummary summary;
+
+  const _KpiSection({required this.summary});
+
+  double? _revenueTrend() {
+    final t = double.tryParse(summary.todaySales.revenue) ?? 0;
+    final y = double.tryParse(summary.yesterdaySales.revenue) ?? 0;
+    if (y <= 0) return null;
+    return ((t - y) / y) * 100;
+  }
+
+  double? _countTrend() {
+    final y = summary.yesterdaySales.count;
+    if (y <= 0) return null;
+    return ((summary.todaySales.count - y) / y) * 100;
+  }
+
+  List<Widget> _cards() {
+    return [
+      KpiCard(
+        title: "Today's Revenue",
+        value: Formatters.currency(summary.todaySales.revenue),
+        subtitle: 'vs yesterday',
+        changePercent: _revenueTrend(),
+        icon: Icons.trending_up,
+        color: DesignTokens.success,
+        compact: true,
+      ),
+      KpiCard(
+        title: "Today's Sales",
+        value: summary.todaySales.count.toString(),
+        subtitle: '${summary.yesterdaySales.count} yesterday',
+        changePercent: _countTrend(),
+        icon: Icons.receipt_long,
+        color: DesignTokens.primary,
+        compact: true,
+      ),
+      KpiCard(
+        title: 'Gross Profit',
+        value: Formatters.currency(summary.grossProfit),
+        subtitle: 'Period profit',
+        icon: Icons.account_balance,
+        color: DesignTokens.profit,
+        compact: true,
+      ),
+      KpiCard(
+        title: 'Inventory Value',
+        value: Formatters.currencyShort(summary.inventoryValue),
+        subtitle: 'Total stock value',
+        icon: Icons.warehouse,
+        color: DesignTokens.accent,
+        compact: true,
+      ),
+      KpiCard(
+        title: 'Customers',
+        value: summary.customerCount.toString(),
+        subtitle: 'Total customers',
+        icon: Icons.people,
+        color: DesignTokens.info,
+        compact: true,
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final cards = _cards();
+
+    if (width >= AppSpacing.breakpointWide) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: 13, child: cards[0]),
+          const SizedBox(width: AppSpacing.xs),
+          for (var i = 1; i < cards.length; i++) ...[
+            Expanded(flex: 10, child: cards[i]),
+            if (i < cards.length - 1) const SizedBox(width: AppSpacing.xs),
+          ],
         ],
+      );
+    }
 
-        const SizedBox(height: AppSpacing.lg),
+    // Wrap: 3-up on desktop, 2-up on tablet/mobile.
+    final cols = width >= AppSpacing.breakpointDesktop ? 3 : 2;
+    final usable = width - AppSpacing.xl * 2 - (cols - 1) * AppSpacing.sm;
+    final cardWidth = usable / cols;
 
-        // ── Chart ──
-        SalesBarChart(
-          data: chartData,
-          title: 'Sales — Last ${chartData.length} Days',
-          showProfit: true,
-        ),
-
-        const SizedBox(height: AppSpacing.md),
-
-        // ── Today's Payments (v1.2) ──
-        TodayPaymentsCard(),
-
-        const SizedBox(height: AppSpacing.md),
-
-        // ── Recent Sales ──
-        if (recentSales != null)
-          RecentSalesList(sales: recentSales!.sales),
-
-        const SizedBox(height: AppSpacing.md),
-
-        // ── AI Insights ──
-        AiInsightsCard(),
-
-        const SizedBox(height: AppSpacing.md),
-
-        // ── Quick Actions ──
-        _QuickActionsGrid(),
-
-        const SizedBox(height: AppSpacing.xxl),
-      ],
-    );
-  }
-}
-
-class _KpiRow extends StatelessWidget {
-  final DashboardSummary summary;
-  const _KpiRow({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: KpiCard(
-                title: "Today's Revenue",
-                value: Formatters.currency(summary.todaySales.revenue),
-                icon: Icons.trending_up,
-                color: DesignTokens.success,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: KpiCard(
-                title: "Today's Sales",
-                value: summary.todaySales.count.toString(),
-                icon: Icons.receipt_long,
-                color: DesignTokens.primary,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            Expanded(
-              child: KpiCard(
-                title: 'Gross Profit',
-                value: Formatters.currency(summary.grossProfit),
-                icon: Icons.account_balance,
-                color: DesignTokens.profit,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: KpiCard(
-                title: 'Customers',
-                value: summary.customerCount.toString(),
-                icon: Icons.people,
-                color: DesignTokens.info,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            Expanded(
-              child: KpiCard(
-                title: 'Low Stock',
-                value: summary.lowStockProducts.toString(),
-                subtitle: '${summary.outOfStockProducts} out of stock',
-                icon: Icons.inventory,
-                color: DesignTokens.warning,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: KpiCard(
-                title: 'Inventory Value',
-                value: Formatters.currencyShort(summary.inventoryValue),
-                icon: Icons.warehouse,
-                color: DesignTokens.accent,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _KpiGrid extends StatelessWidget {
-  final DashboardSummary summary;
-  const _KpiGrid({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
       children: [
-        SizedBox(
-          width: _cardWidth(context),
-          child: KpiCard(
-            title: "Today's Revenue",
-            value: Formatters.currency(summary.todaySales.revenue),
-            icon: Icons.trending_up,
-            color: DesignTokens.success,
-          ),
-        ),
-        SizedBox(
-          width: _cardWidth(context),
-          child: KpiCard(
-            title: "Today's Sales",
-            value: summary.todaySales.count.toString(),
-            icon: Icons.receipt_long,
-            color: DesignTokens.primary,
-          ),
-        ),
-        SizedBox(
-          width: _cardWidth(context),
-          child: KpiCard(
-            title: 'Gross Profit',
-            value: Formatters.currency(summary.grossProfit),
-            icon: Icons.account_balance,
-            color: DesignTokens.profit,
-          ),
-        ),
-        SizedBox(
-          width: _cardWidth(context),
-          child: KpiCard(
-            title: 'Customers',
-            value: summary.customerCount.toString(),
-            icon: Icons.people,
-            color: DesignTokens.info,
-          ),
-        ),
-        SizedBox(
-          width: _cardWidth(context),
-          child: KpiCard(
-            title: 'Low Stock',
-            value: summary.lowStockProducts.toString(),
-            subtitle: '${summary.outOfStockProducts} out of stock',
-            icon: Icons.inventory,
-            color: DesignTokens.warning,
-          ),
-        ),
-        SizedBox(
-          width: _cardWidth(context),
-          child: KpiCard(
-            title: 'Monthly Sales',
-            value: summary.monthSales.count.toString(),
-            subtitle: Formatters.currency(summary.monthSales.revenue),
-            icon: Icons.calendar_month,
-            color: DesignTokens.info,
-          ),
-        ),
-        SizedBox(
-          width: _cardWidth(context),
-          child: KpiCard(
-            title: 'Inventory Value',
-            value: Formatters.currencyShort(summary.inventoryValue),
-            icon: Icons.warehouse,
-            color: DesignTokens.accent,
-          ),
-        ),
-        SizedBox(
-          width: _cardWidth(context),
-          child: KpiCard(
-            title: 'Orders',
-            value: summary.ordersCount.toString(),
-            icon: Icons.shopping_cart,
-            color: DesignTokens.secondary,
-          ),
-        ),
+        for (final card in cards)
+          SizedBox(width: cardWidth, child: card),
       ],
     );
   }
-
-  double _cardWidth(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    if (w >= AppSpacing.breakpointWide) return (w - 64) / 4 - 8;
-    if (w >= AppSpacing.breakpointDesktop) return (w - 48) / 3 - 8;
-    return (w - 32) / 2 - 4;
-  }
 }
 
-class _QuickActionsGrid extends StatelessWidget {
+// ──────────────────────────────────
+// Skeletons
+// ──────────────────────────────────
+class _GreetingSkeleton extends StatelessWidget {
+  const _GreetingSkeleton();
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Quick Actions', style: theme.textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            _QuickActionChip(
-              icon: Icons.add_shopping_cart,
-              label: 'New Sale',
-              onTap: () {},
-            ),
-            _QuickActionChip(
-              icon: Icons.add_box,
-              label: 'Purchase',
-              onTap: () {},
-            ),
-            _QuickActionChip(
-              icon: Icons.person_add,
-              label: 'Customer',
-              onTap: () {},
-            ),
-            _QuickActionChip(
-              icon: Icons.inventory,
-              label: 'Stock Take',
-              onTap: () {},
-            ),
-            _QuickActionChip(
-              icon: Icons.receipt,
-              label: 'Invoice',
-              onTap: () {},
-            ),
-            _QuickActionChip(
-              icon: Icons.local_shipping,
-              label: 'Transfer',
-              onTap: () {},
-            ),
-          ],
-        ),
+        ShimmerBox(width: 220, height: 28, radius: AppSpacing.radiusSm),
+        SizedBox(height: AppSpacing.xs),
+        ShimmerBox(width: 180, height: 14, radius: AppSpacing.radiusXs),
       ],
     );
   }
 }
 
-class _QuickActionChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _QuickActionChip({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+class _KpiSkeletonGrid extends StatelessWidget {
+  const _KpiSkeletonGrid();
 
   @override
   Widget build(BuildContext context) {
-    return ActionChip(
-      avatar: Icon(icon, size: 18),
-      label: Text(label),
-      onPressed: onTap,
+    final width = MediaQuery.sizeOf(context).width;
+    final cols = width >= AppSpacing.breakpointWide
+        ? 5
+        : (width >= AppSpacing.breakpointDesktop ? 3 : 2);
+    final usable = width - AppSpacing.xl * 2 - (cols - 1) * AppSpacing.sm;
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        for (var i = 0; i < cols; i++)
+          SizedBox(
+            width: usable / cols,
+            child: const KpiCardSkeleton(),
+          ),
+      ],
+    );
+  }
+}
+
+class _QuickActionsSkeleton extends StatelessWidget {
+  const _QuickActionsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final cols = width >= 1400
+        ? 6
+        : (width >= 1000
+            ? 3
+            : 2);
+    final usable = width - AppSpacing.xl * 2 - (cols - 1) * AppSpacing.xs;
+
+    return Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: [
+        for (var i = 0; i < cols; i++)
+          ShimmerBox(
+            width: usable / cols,
+            height: 56,
+            radius: AppSpacing.radiusMd,
+          ),
+      ],
     );
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
+import 'package:stockflow/core/widgets/premium_empty_state.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 
 /// Sales Bar Chart — custom painted with animated bars and gradient.
@@ -9,25 +12,31 @@ class SalesBarChart extends StatelessWidget {
   final String title;
   final bool showProfit;
 
+  /// Chart plot height (the whole card grows with it).
+  final double height;
+
   const SalesBarChart({
     super.key,
     required this.data,
     this.title = 'Revenue',
     this.showProfit = false,
+    this.height = 160,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (data.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Center(
-            child: Text('No sales data available',
-                style: theme.textTheme.bodyMedium),
-          ),
-        ),
+      return PremiumEmptyState(
+        icon: Icons.bar_chart,
+        color: DesignTokens.primary,
+        title: 'No sales yet',
+        description: 'Complete your first sale and revenue & profit trends '
+            'will appear here.',
+        ctaLabel: 'New Sale',
+        ctaIcon: Icons.add_shopping_cart,
+        onCta: () => context.push(RouteNames.saleNew),
+        hero: true,
       );
     }
 
@@ -66,7 +75,7 @@ class SalesBarChart extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             SizedBox(
-              height: 160,
+              height: height,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final barWidth =
@@ -75,13 +84,13 @@ class SalesBarChart extends StatelessWidget {
                           (showProfit ? 2.2 : 1.2);
 
                   return CustomPaint(
-                    size: Size(constraints.maxWidth, 160),
+                    size: Size(constraints.maxWidth, height),
                     painter: _GridPainter(maxValue: maxValue),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: data.map((point) {
                         final revenueHeight =
-                            (point.revenue / maxValue) * 140;
+                            (point.revenue / maxValue) * (height - 20);
                         return Expanded(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -96,17 +105,19 @@ class SalesBarChart extends StatelessWidget {
                                             : 1)),
                                     width: barWidth,
                                     color: DesignTokens.success,
+                                    maxHeight: height - 20,
                                   ),
                                 _AnimatedBar(
                                   height: revenueHeight,
                                   width: barWidth,
                                   color: DesignTokens.primary,
+                                  maxHeight: height - 20,
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   point.label,
                                   style: theme.textTheme.labelSmall?.copyWith(
-                                    fontSize: 9,
+                                    fontSize: 11,
                                   ),
                                   textAlign: TextAlign.center,
                                   maxLines: 1,
@@ -133,11 +144,13 @@ class _AnimatedBar extends StatelessWidget {
   final double height;
   final double width;
   final Color color;
+  final double maxHeight;
 
   const _AnimatedBar({
     required this.height,
     required this.width,
     required this.color,
+    this.maxHeight = 160,
   });
 
   @override
@@ -149,7 +162,7 @@ class _AnimatedBar extends StatelessWidget {
       builder: (context, value, _) {
         return Container(
           width: width.clamp(4, 24),
-          height: value.clamp(0, 160),
+          height: value.clamp(0, maxHeight),
           decoration: BoxDecoration(
             color: color,
             borderRadius: const BorderRadius.vertical(

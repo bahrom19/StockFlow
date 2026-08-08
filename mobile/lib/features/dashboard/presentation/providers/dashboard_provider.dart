@@ -18,6 +18,8 @@ class DashboardData extends DashboardUiState {
   final DashboardSummary summary;
   final SalesReport? recentSales;
   final ProfitReport? profit;
+  final PurchasingSummary? purchasingSummary;
+  final List<LowStockItem> lowStockItems;
   final List<ChartDataPoint> chartData;
   final bool isRefreshing;
 
@@ -25,6 +27,8 @@ class DashboardData extends DashboardUiState {
     required this.summary,
     this.recentSales,
     this.profit,
+    this.purchasingSummary,
+    this.lowStockItems = const [],
     this.chartData = const [],
     this.isRefreshing = false,
   });
@@ -33,6 +37,8 @@ class DashboardData extends DashboardUiState {
     DashboardSummary? summary,
     SalesReport? recentSales,
     ProfitReport? profit,
+    PurchasingSummary? purchasingSummary,
+    List<LowStockItem>? lowStockItems,
     List<ChartDataPoint>? chartData,
     bool? isRefreshing,
   }) {
@@ -40,6 +46,8 @@ class DashboardData extends DashboardUiState {
       summary: summary ?? this.summary,
       recentSales: recentSales ?? this.recentSales,
       profit: profit ?? this.profit,
+      purchasingSummary: purchasingSummary ?? this.purchasingSummary,
+      lowStockItems: lowStockItems ?? this.lowStockItems,
       chartData: chartData ?? this.chartData,
       isRefreshing: isRefreshing ?? this.isRefreshing,
     );
@@ -77,20 +85,28 @@ class DashboardNotifier extends StateNotifier<DashboardUiState> {
   Future<void> _fetchAll() async {
     final repo = _ref.read(dashboardRepositoryProvider);
 
-    // Fire all requests concurrently
+    // Fire all requests concurrently. Purchasing summary (limit=1) and the
+    // low-stock list are single light requests for Action Center events #4/#3
+    // — they do NOT run on the 20s Cash Drawer timer, only on initial load /
+    // manual refresh.
     final results = await Future.wait([
       repo.getDashboardSummary(),
-      repo.getRecentSales(page: 1, limit: 10),
-      repo.getProfitReport(days: 30),
+      repo.getRecentSales(),
+      repo.getProfitReport(),
+      repo.getPurchasingSummary(),
+      repo.getLowStockItems(),
     ]);
 
     final summaryResult = results[0] as DashboardResult<DashboardSummary>;
     final salesResult = results[1] as DashboardResult<SalesReport>;
     final profitResult = results[2] as DashboardResult<ProfitReport>;
+    final purchasingResult =
+        results[3] as DashboardResult<PurchasingSummary>;
+    final lowStockResult = results[4] as DashboardResult<List<LowStockItem>>;
 
     // If the essential API (summary) fails, show error
     if (summaryResult is DashboardFailure<DashboardSummary>) {
-      final failure = summaryResult as DashboardFailure<DashboardSummary>;
+      final failure = summaryResult;
       state = DashboardError(
         failure.error.message,
         failure: failure.error,
@@ -105,6 +121,14 @@ class DashboardNotifier extends StateNotifier<DashboardUiState> {
     final profit = profitResult is DashboardSuccess<ProfitReport>
         ? profitResult.data
         : null;
+    final purchasingSummary =
+        purchasingResult is DashboardSuccess<PurchasingSummary>
+            ? purchasingResult.data
+            : null;
+    final lowStockItems =
+        lowStockResult is DashboardSuccess<List<LowStockItem>>
+            ? lowStockResult.data
+            : const <LowStockItem>[];
 
     // Build chart data from profit report
     final chartData = <ChartDataPoint>[];
@@ -125,6 +149,8 @@ class DashboardNotifier extends StateNotifier<DashboardUiState> {
       summary: summary,
       recentSales: recentSales,
       profit: profit,
+      purchasingSummary: purchasingSummary,
+      lowStockItems: lowStockItems,
       chartData: chartData,
     );
   }

@@ -639,6 +639,508 @@ abstract class _DaySales implements DaySales {
       throw _privateConstructorUsedError;
 }
 
+PurchasingSummary _$PurchasingSummaryFromJson(Map<String, dynamic> json) {
+  return _PurchasingSummary.fromJson(json);
+}
+
+/// @nodoc
+mixin _$PurchasingSummary {
+  int get totalOrders => throw _privateConstructorUsedError;
+  String get totalValue => throw _privateConstructorUsedError;
+  Map<String, int> get byStatus => throw _privateConstructorUsedError;
+
+  /// Serializes this PurchasingSummary to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of PurchasingSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PurchasingSummaryCopyWith<PurchasingSummary> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PurchasingSummaryCopyWith<$Res> {
+  factory $PurchasingSummaryCopyWith(
+          PurchasingSummary value, $Res Function(PurchasingSummary) then) =
+      _$PurchasingSummaryCopyWithImpl<$Res, PurchasingSummary>;
+  @useResult
+  $Res call({int totalOrders, String totalValue, Map<String, int> byStatus});
+}
+
+/// @nodoc
+class _$PurchasingSummaryCopyWithImpl<$Res, $Val extends PurchasingSummary>
+    implements $PurchasingSummaryCopyWith<$Res> {
+  _$PurchasingSummaryCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PurchasingSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalOrders = null,
+    Object? totalValue = null,
+    Object? byStatus = null,
+  }) {
+    return _then(_value.copyWith(
+      totalOrders: null == totalOrders
+          ? _value.totalOrders
+          : totalOrders // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalValue: null == totalValue
+          ? _value.totalValue
+          : totalValue // ignore: cast_nullable_to_non_nullable
+              as String,
+      byStatus: null == byStatus
+          ? _value.byStatus
+          : byStatus // ignore: cast_nullable_to_non_nullable
+              as Map<String, int>,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$PurchasingSummaryImplCopyWith<$Res>
+    implements $PurchasingSummaryCopyWith<$Res> {
+  factory _$$PurchasingSummaryImplCopyWith(_$PurchasingSummaryImpl value,
+          $Res Function(_$PurchasingSummaryImpl) then) =
+      __$$PurchasingSummaryImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({int totalOrders, String totalValue, Map<String, int> byStatus});
+}
+
+/// @nodoc
+class __$$PurchasingSummaryImplCopyWithImpl<$Res>
+    extends _$PurchasingSummaryCopyWithImpl<$Res, _$PurchasingSummaryImpl>
+    implements _$$PurchasingSummaryImplCopyWith<$Res> {
+  __$$PurchasingSummaryImplCopyWithImpl(_$PurchasingSummaryImpl _value,
+      $Res Function(_$PurchasingSummaryImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of PurchasingSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalOrders = null,
+    Object? totalValue = null,
+    Object? byStatus = null,
+  }) {
+    return _then(_$PurchasingSummaryImpl(
+      totalOrders: null == totalOrders
+          ? _value.totalOrders
+          : totalOrders // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalValue: null == totalValue
+          ? _value.totalValue
+          : totalValue // ignore: cast_nullable_to_non_nullable
+              as String,
+      byStatus: null == byStatus
+          ? _value._byStatus
+          : byStatus // ignore: cast_nullable_to_non_nullable
+              as Map<String, int>,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$PurchasingSummaryImpl extends _PurchasingSummary {
+  const _$PurchasingSummaryImpl(
+      {required this.totalOrders,
+      required this.totalValue,
+      final Map<String, int> byStatus = const {}})
+      : _byStatus = byStatus,
+        super._();
+
+  factory _$PurchasingSummaryImpl.fromJson(Map<String, dynamic> json) =>
+      _$$PurchasingSummaryImplFromJson(json);
+
+  @override
+  final int totalOrders;
+  @override
+  final String totalValue;
+  final Map<String, int> _byStatus;
+  @override
+  @JsonKey()
+  Map<String, int> get byStatus {
+    if (_byStatus is EqualUnmodifiableMapView) return _byStatus;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableMapView(_byStatus);
+  }
+
+  @override
+  String toString() {
+    return 'PurchasingSummary(totalOrders: $totalOrders, totalValue: $totalValue, byStatus: $byStatus)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PurchasingSummaryImpl &&
+            (identical(other.totalOrders, totalOrders) ||
+                other.totalOrders == totalOrders) &&
+            (identical(other.totalValue, totalValue) ||
+                other.totalValue == totalValue) &&
+            const DeepCollectionEquality().equals(other._byStatus, _byStatus));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, totalOrders, totalValue,
+      const DeepCollectionEquality().hash(_byStatus));
+
+  /// Create a copy of PurchasingSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PurchasingSummaryImplCopyWith<_$PurchasingSummaryImpl> get copyWith =>
+      __$$PurchasingSummaryImplCopyWithImpl<_$PurchasingSummaryImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$PurchasingSummaryImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _PurchasingSummary extends PurchasingSummary {
+  const factory _PurchasingSummary(
+      {required final int totalOrders,
+      required final String totalValue,
+      final Map<String, int> byStatus}) = _$PurchasingSummaryImpl;
+  const _PurchasingSummary._() : super._();
+
+  factory _PurchasingSummary.fromJson(Map<String, dynamic> json) =
+      _$PurchasingSummaryImpl.fromJson;
+
+  @override
+  int get totalOrders;
+  @override
+  String get totalValue;
+  @override
+  Map<String, int> get byStatus;
+
+  /// Create a copy of PurchasingSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PurchasingSummaryImplCopyWith<_$PurchasingSummaryImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+LowStockItem _$LowStockItemFromJson(Map<String, dynamic> json) {
+  return _LowStockItem.fromJson(json);
+}
+
+/// @nodoc
+mixin _$LowStockItem {
+  String get productId => throw _privateConstructorUsedError;
+  String get productName => throw _privateConstructorUsedError;
+  String get sku => throw _privateConstructorUsedError;
+  int get currentStock => throw _privateConstructorUsedError;
+  int get minQuantity => throw _privateConstructorUsedError;
+  String get warehouseId => throw _privateConstructorUsedError;
+  String get warehouseName => throw _privateConstructorUsedError;
+  String get status => throw _privateConstructorUsedError;
+
+  /// Serializes this LowStockItem to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of LowStockItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $LowStockItemCopyWith<LowStockItem> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $LowStockItemCopyWith<$Res> {
+  factory $LowStockItemCopyWith(
+          LowStockItem value, $Res Function(LowStockItem) then) =
+      _$LowStockItemCopyWithImpl<$Res, LowStockItem>;
+  @useResult
+  $Res call(
+      {String productId,
+      String productName,
+      String sku,
+      int currentStock,
+      int minQuantity,
+      String warehouseId,
+      String warehouseName,
+      String status});
+}
+
+/// @nodoc
+class _$LowStockItemCopyWithImpl<$Res, $Val extends LowStockItem>
+    implements $LowStockItemCopyWith<$Res> {
+  _$LowStockItemCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of LowStockItem
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? productName = null,
+    Object? sku = null,
+    Object? currentStock = null,
+    Object? minQuantity = null,
+    Object? warehouseId = null,
+    Object? warehouseName = null,
+    Object? status = null,
+  }) {
+    return _then(_value.copyWith(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productName: null == productName
+          ? _value.productName
+          : productName // ignore: cast_nullable_to_non_nullable
+              as String,
+      sku: null == sku
+          ? _value.sku
+          : sku // ignore: cast_nullable_to_non_nullable
+              as String,
+      currentStock: null == currentStock
+          ? _value.currentStock
+          : currentStock // ignore: cast_nullable_to_non_nullable
+              as int,
+      minQuantity: null == minQuantity
+          ? _value.minQuantity
+          : minQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      warehouseId: null == warehouseId
+          ? _value.warehouseId
+          : warehouseId // ignore: cast_nullable_to_non_nullable
+              as String,
+      warehouseName: null == warehouseName
+          ? _value.warehouseName
+          : warehouseName // ignore: cast_nullable_to_non_nullable
+              as String,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$LowStockItemImplCopyWith<$Res>
+    implements $LowStockItemCopyWith<$Res> {
+  factory _$$LowStockItemImplCopyWith(
+          _$LowStockItemImpl value, $Res Function(_$LowStockItemImpl) then) =
+      __$$LowStockItemImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String productId,
+      String productName,
+      String sku,
+      int currentStock,
+      int minQuantity,
+      String warehouseId,
+      String warehouseName,
+      String status});
+}
+
+/// @nodoc
+class __$$LowStockItemImplCopyWithImpl<$Res>
+    extends _$LowStockItemCopyWithImpl<$Res, _$LowStockItemImpl>
+    implements _$$LowStockItemImplCopyWith<$Res> {
+  __$$LowStockItemImplCopyWithImpl(
+      _$LowStockItemImpl _value, $Res Function(_$LowStockItemImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of LowStockItem
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? productName = null,
+    Object? sku = null,
+    Object? currentStock = null,
+    Object? minQuantity = null,
+    Object? warehouseId = null,
+    Object? warehouseName = null,
+    Object? status = null,
+  }) {
+    return _then(_$LowStockItemImpl(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productName: null == productName
+          ? _value.productName
+          : productName // ignore: cast_nullable_to_non_nullable
+              as String,
+      sku: null == sku
+          ? _value.sku
+          : sku // ignore: cast_nullable_to_non_nullable
+              as String,
+      currentStock: null == currentStock
+          ? _value.currentStock
+          : currentStock // ignore: cast_nullable_to_non_nullable
+              as int,
+      minQuantity: null == minQuantity
+          ? _value.minQuantity
+          : minQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      warehouseId: null == warehouseId
+          ? _value.warehouseId
+          : warehouseId // ignore: cast_nullable_to_non_nullable
+              as String,
+      warehouseName: null == warehouseName
+          ? _value.warehouseName
+          : warehouseName // ignore: cast_nullable_to_non_nullable
+              as String,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$LowStockItemImpl extends _LowStockItem {
+  const _$LowStockItemImpl(
+      {required this.productId,
+      required this.productName,
+      required this.sku,
+      required this.currentStock,
+      required this.minQuantity,
+      required this.warehouseId,
+      required this.warehouseName,
+      required this.status})
+      : super._();
+
+  factory _$LowStockItemImpl.fromJson(Map<String, dynamic> json) =>
+      _$$LowStockItemImplFromJson(json);
+
+  @override
+  final String productId;
+  @override
+  final String productName;
+  @override
+  final String sku;
+  @override
+  final int currentStock;
+  @override
+  final int minQuantity;
+  @override
+  final String warehouseId;
+  @override
+  final String warehouseName;
+  @override
+  final String status;
+
+  @override
+  String toString() {
+    return 'LowStockItem(productId: $productId, productName: $productName, sku: $sku, currentStock: $currentStock, minQuantity: $minQuantity, warehouseId: $warehouseId, warehouseName: $warehouseName, status: $status)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$LowStockItemImpl &&
+            (identical(other.productId, productId) ||
+                other.productId == productId) &&
+            (identical(other.productName, productName) ||
+                other.productName == productName) &&
+            (identical(other.sku, sku) || other.sku == sku) &&
+            (identical(other.currentStock, currentStock) ||
+                other.currentStock == currentStock) &&
+            (identical(other.minQuantity, minQuantity) ||
+                other.minQuantity == minQuantity) &&
+            (identical(other.warehouseId, warehouseId) ||
+                other.warehouseId == warehouseId) &&
+            (identical(other.warehouseName, warehouseName) ||
+                other.warehouseName == warehouseName) &&
+            (identical(other.status, status) || other.status == status));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, productId, productName, sku,
+      currentStock, minQuantity, warehouseId, warehouseName, status);
+
+  /// Create a copy of LowStockItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$LowStockItemImplCopyWith<_$LowStockItemImpl> get copyWith =>
+      __$$LowStockItemImplCopyWithImpl<_$LowStockItemImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$LowStockItemImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _LowStockItem extends LowStockItem {
+  const factory _LowStockItem(
+      {required final String productId,
+      required final String productName,
+      required final String sku,
+      required final int currentStock,
+      required final int minQuantity,
+      required final String warehouseId,
+      required final String warehouseName,
+      required final String status}) = _$LowStockItemImpl;
+  const _LowStockItem._() : super._();
+
+  factory _LowStockItem.fromJson(Map<String, dynamic> json) =
+      _$LowStockItemImpl.fromJson;
+
+  @override
+  String get productId;
+  @override
+  String get productName;
+  @override
+  String get sku;
+  @override
+  int get currentStock;
+  @override
+  int get minQuantity;
+  @override
+  String get warehouseId;
+  @override
+  String get warehouseName;
+  @override
+  String get status;
+
+  /// Create a copy of LowStockItem
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$LowStockItemImplCopyWith<_$LowStockItemImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 RecentSale _$RecentSaleFromJson(Map<String, dynamic> json) {
   return _RecentSale.fromJson(json);
 }

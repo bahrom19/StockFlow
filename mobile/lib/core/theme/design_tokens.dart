@@ -62,4 +62,13 @@ class DesignTokens {
   static const Color revenue = Color(0xFF0F9D58);
   static const Color expense = Color(0xFFEA4335);
   static const Color profit = Color(0xFF1A73E8);
+
+  // ──────────────────────────────────
+  // Payment Method Colors (single source of truth)
+  // ──────────────────────────────────
+  static const Color paymentCash = Color(0xFF0F9D58);
+  static const Color paymentCard = Color(0xFF1A73E8);
+  static const Color paymentQr = Color(0xFF9334E6);
+  static const Color paymentBank = Color(0xFFF9A825);
+  static const Color paymentWallet = Color(0xFF00ACC1);
 }
