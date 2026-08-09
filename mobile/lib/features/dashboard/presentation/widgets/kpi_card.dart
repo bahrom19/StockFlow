@@ -56,7 +56,14 @@ class _KpiCardState extends State<KpiCard> {
 
     final body = widget.compact ? _buildCompact(theme, color) : _buildVertical(theme, color);
 
-    return MouseRegion(
+    // Label-less semantics boundary: keeps this card's text in its OWN
+    // merged leaf (rendered as textContent in Flutter Web). Without it, any
+    // interactive sibling in the KPI strip (e.g. RevenueGoalCard's edit
+    // button) makes Flutter Web hoist the whole strip's text into
+    // role="group" aria-label — invisible to innerText and screen readers.
+    return Semantics(
+      container: true,
+      child: MouseRegion(
       cursor: widget.onTap != null
           ? SystemMouseCursors.click
           : SystemMouseCursors.basic,
@@ -116,6 +123,7 @@ class _KpiCardState extends State<KpiCard> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

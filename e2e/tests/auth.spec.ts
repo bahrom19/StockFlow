@@ -167,8 +167,20 @@ test.describe('StockFlow first-user authentication', () => {
   test('3. Dashboard opens', async ({ page }) => {
     await login(page);
     await scrollDashboardIntoView(page);
-    await expectText(page, "Today's Revenue");
-    await expectText(page, "Today's Sales");
+    // KPI strip regression guard: ALL five labels must be visible through
+    // document.body.innerText. This regressed in Stage E when the
+    // interactive pencil IconButton inside RevenueGoalCard made Flutter Web
+    // hoist the whole strip's text into role="group" aria-label (invisible
+    // to innerText). The semantics boundary fix restores textContent output.
+    for (const label of [
+      "Today's Revenue",
+      "Today's Sales",
+      'Gross Profit',
+      'Inventory Value',
+      'Customers',
+    ]) {
+      await expectText(page, label);
+    }
   });
 
   test('4. Refresh page keeps the session (F5)', async ({ page }) => {
@@ -248,5 +260,34 @@ test.describe('StockFlow first-user authentication', () => {
 
     await expectText(page, 'Passwords do not match');
     await expectText(page, 'Create your account');
+  });
+
+  test('11. Monthly goal pencil opens dialog and survives reload', async ({
+    page,
+  }) => {
+    await login(page);
+    await scrollDashboardIntoView(page);
+
+    // Pencil (role=button, label from tooltip) opens the Monthly Goal dialog.
+    await clickButton(page, 'Set monthly goal');
+    // Dialog is open when its amount input is present. Flutter Web renders
+    // the dialog as an overlay where the title/labels may live in aria-label
+    // rather than innerText, so assert on the input itself (exact, robust).
+    const field = page.locator('input[aria-label*="Goal amount"]');
+    await field.waitFor({ state: 'visible', timeout: 15_000 });
+    await field.click({ force: true });
+    await page.waitForTimeout(400);
+    await page.keyboard.type('2000000', { delay: 25 });
+    await clickButton(page, 'Save');
+
+    // Goal summary appears on the Revenue card (currencyShort($2.0M)).
+    await expectText(page, 'of $2.0M');
+
+    // Reload → goal persisted locally (SharedPreferences), progress re-shown.
+    await page.reload();
+    await waitForRoute(page, '#/dashboard');
+    await reenableSemantics(page);
+    await scrollDashboardIntoView(page);
+    await expectText(page, 'of $2.0M');
   });
 });

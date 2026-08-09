@@ -204,166 +204,183 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
                   ),
                 ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.sm,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        // ── Semantics isolation (browser-level E2E fix) ──────────────
+        // The old all-KpiCard strip serialized its labels as textContent in
+        // Flutter Web. Adding an interactive IconButton to this card made
+        // Flutter Web collapse the whole KPI strip into one role="group"
+        // whose text lives in aria-label (invisible to innerText) — breaking
+        // innerText-based E2E and screen-reader output.
+        //
+        // Fix: a label-less Semantics(container: true) boundary around the
+        // card keeps its subtree out of the strip's text merge; all
+        // non-interactive text is folded into ONE merged leaf (children=0,
+        // rendered as textContent — identical to the pre-Stage-E KpiCard),
+        // and the pencil button stays a SEPARATE interactive sibling node.
+        child: Semantics(
+          container: true,
+          child: Stack(
             children: [
-              // ── Header: icon | value + title | trend ──
-              Row(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(_hovered ? 0.20 : 0.14),
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                    ),
-                    child: const Icon(
-                      Icons.trending_up,
-                      color: DesignTokens.revenue,
-                      size: 22,
-                    ),
+              MergeSemantics(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.sm,
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          Formatters.currency(_todayRevenue),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            fontFeatures: const [
-                              FontFeature.tabularFigures(),
-                            ],
-                            color: theme.colorScheme.onSurface,
-                            fontSize: 21,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          "Today's Revenue",
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: color,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  _TrendChip(percent: _trend),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xs),
-
-              if (!hasGoal) ...[
-                // ── Goal unset → prompt (no fake bar) ──
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Set monthly goal',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton(
-                      key: const Key('monthly_goal_edit'),
-                      tooltip: 'Set monthly goal',
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 18,
-                      onPressed: _editGoal,
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        color: DesignTokens.revenue,
-                      ),
-                    ),
-                  ],
-                ),
-              ] else ...[
-                // ── Goal set → progress bar + month summary ──
-                Semantics(
-                  label: 'Monthly goal progress $percent',
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: fill,
-                            minHeight: 6,
-                            backgroundColor:
-                                color.withOpacity(0.12),
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              reached
-                                  ? DesignTokens.success
-                                  : color,
+                      // ── Header: icon | value + title | trend ──
+                      Row(
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: color.withOpacity(
+                                _hovered ? 0.20 : 0.14,
+                              ),
+                              borderRadius:
+                                  BorderRadius.circular(AppSpacing.radiusSm),
+                            ),
+                            child: const Icon(
+                              Icons.trending_up,
+                              color: DesignTokens.revenue,
+                              size: 22,
                             ),
                           ),
-                        ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  Formatters.currency(_todayRevenue),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                    color: theme.colorScheme.onSurface,
+                                    fontSize: 21,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  "Today's Revenue",
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: color,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          _TrendChip(percent: _trend),
+                        ],
                       ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        percent,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: reached
-                              ? DesignTokens.success
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
+                      const SizedBox(height: AppSpacing.xs),
+
+                      Padding(
+                        // Reserve the pencil's lane (bottom-right) so the
+                        // goal line never runs underneath the button.
+                        padding: const EdgeInsets.only(right: 34),
+                        child: !hasGoal
+                            ? Text(
+                                'Set monthly goal',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // ── Goal set: progress bar + % ──
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                          child: LinearProgressIndicator(
+                                            value: fill,
+                                            minHeight: 6,
+                                            backgroundColor:
+                                                color.withOpacity(0.12),
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                              reached
+                                                  ? DesignTokens.success
+                                                  : color,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppSpacing.xs),
+                                      Text(
+                                        percent,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: reached
+                                              ? DesignTokens.success
+                                              : theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    reached
+                                        ? 'Goal reached'
+                                        : '${Formatters.currencyShort(_monthRevenue)} '
+                                            'of ${Formatters.currencyShort(monthGoal)}'
+                                            '${widget.summary.monthSales.count > 0 ? ' · ${widget.summary.monthSales.count} sales' : ''}',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight:
+                                          reached ? FontWeight.w700 : null,
+                                      color: reached
+                                          ? DesignTokens.success
+                                          : theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        reached
-                            ? 'Goal reached'
-                            : '${Formatters.currencyShort(_monthRevenue)} '
-                                'of ${Formatters.currencyShort(monthGoal)}'
-                                '${widget.summary.monthSales.count > 0 ? ' · ${widget.summary.monthSales.count} sales' : ''}',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: reached ? FontWeight.w700 : null,
-                          color: reached
-                              ? DesignTokens.success
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton(
-                      key: const Key('monthly_goal_edit'),
-                      tooltip: 'Set monthly goal',
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 16,
-                      onPressed: _editGoal,
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        color: DesignTokens.revenue,
-                        size: 16,
-                      ),
-                    ),
-                  ],
+              ),
+              // Edit button: independent interactive sibling (never merged
+              // into the text leaf, so the strip keeps plain textContent).
+              Positioned(
+                right: 2,
+                bottom: 4,
+                child: IconButton(
+                  key: const Key('monthly_goal_edit'),
+                  tooltip: 'Set monthly goal',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 16,
+                  onPressed: _editGoal,
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    color: DesignTokens.revenue,
+                    size: 16,
+                  ),
                 ),
-              ],
+              ),
             ],
           ),
         ),
