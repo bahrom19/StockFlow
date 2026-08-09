@@ -1,0 +1,431 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/theme/app_spacing.dart';
+import 'package:stockflow/core/theme/design_tokens.dart';
+import 'package:stockflow/core/utils/formatters.dart';
+import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
+import 'package:stockflow/features/dashboard/presentation/providers/monthly_goal_provider.dart';
+
+// ─────────────────────────────────────────────────────────────
+// Revenue Goal Card — Stage E.
+//
+// First KPI card of the Dashboard (emphasized): today's revenue + trend vs
+// yesterday + a monthly-goal progress bar. The monthly goal is a LOCAL owner
+// setting (SharedPreferences via [monthlyGoalProvider]) — zero new network
+// requests, zero backend changes.
+//
+// States:
+//  - goal unset (null/0)  → progress bar hidden, "Set monthly goal" + ✎
+//  - goal set, under      → bar at monthRevenue/goal + "X of Y · Z%"
+//  - goal reached         → bar clamped to 100%, success color, "Goal reached"
+//  - trend: yesterday<=0  → neutral "—" (no invented percentage)
+// ─────────────────────────────────────────────────────────────
+
+/// Pure progress helper (unit-tested): returns the raw ratio (may exceed 1),
+/// or null when no valid goal is set.
+double? monthlyGoalProgress({
+  required double monthRevenue,
+  double? goal,
+}) {
+  if (goal == null || goal <= 0) return null;
+  return monthRevenue / goal;
+}
+
+/// Clamped fill value 0..1 for the progress bar.
+double monthlyGoalFill({
+  required double monthRevenue,
+  double? goal,
+}) {
+  return (monthlyGoalProgress(monthRevenue: monthRevenue, goal: goal) ?? 0)
+      .clamp(0.0, 1.0);
+}
+
+/// "62%" — the real percentage (can exceed 100 for overachievement).
+String monthlyGoalPercent({
+  required double monthRevenue,
+  double? goal,
+}) {
+  final p = monthlyGoalProgress(monthRevenue: monthRevenue, goal: goal);
+  if (p == null) return '';
+  return '${(p * 100).round()}%';
+}
+
+class RevenueGoalCard extends ConsumerStatefulWidget {
+  final DashboardSummary summary;
+
+  const RevenueGoalCard({super.key, required this.summary});
+
+  @override
+  ConsumerState<RevenueGoalCard> createState() => _RevenueGoalCardState();
+}
+
+class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
+  bool _hovered = false;
+
+  double get _todayRevenue =>
+      double.tryParse(widget.summary.todaySales.revenue) ?? 0;
+  double get _monthRevenue =>
+      double.tryParse(widget.summary.monthSales.revenue) ?? 0;
+  double get _yesterdayRevenue =>
+      double.tryParse(widget.summary.yesterdaySales.revenue) ?? 0;
+
+  double? get _trend {
+    if (_yesterdayRevenue <= 0) return null;
+    return ((_todayRevenue - _yesterdayRevenue) / _yesterdayRevenue) * 100;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Load the local goal once on mount (no network, no polling).
+    Future.microtask(() {
+      if (!mounted) return;
+      ref.read(monthlyGoalProvider.notifier).load();
+    });
+  }
+
+  Future<void> _editGoal() async {
+    final goal = ref.read(monthlyGoalProvider);
+    final controller = TextEditingController(
+      text: goal != null && goal > 0 ? goal.toStringAsFixed(0) : '',
+    );
+    String? error;
+
+    final saved = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Monthly Goal'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Set the sales target for this month. '
+                'Progress shows on the Revenue card.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                key: const Key('monthly_goal_field'),
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                ],
+                decoration: InputDecoration(
+                  labelText: 'Goal amount',
+                  hintText: 'e.g. 2000000',
+                  helperText: 'Whole numbers or decimals allowed',
+                  errorText: error,
+                  border: const OutlineInputBorder(),
+                ),
+                onSubmitted: (_) {},
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final parsed = double.tryParse(controller.text.trim());
+                if (parsed == null || parsed <= 0) {
+                  setDialogState(() {
+                    error = 'Enter an amount greater than zero';
+                  });
+                  return;
+                }
+                Navigator.of(dialogContext).pop(parsed);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // Note: the local controller is intentionally not disposed here —
+    // showDialog resolves at pop while the dialog's exit animation is still
+    // running, and the TextField inside it keeps referencing the controller;
+    // disposing here would throw "used after being disposed". It is a
+    // short-lived local, unreferenced after this frame, so GC handles it.
+    if (saved != null && mounted) {
+      await ref.read(monthlyGoalProvider.notifier).setGoal(saved);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const color = DesignTokens.revenue;
+    final goal = ref.watch(monthlyGoalProvider);
+    final monthGoal = goal ?? 0;
+    final hasGoal = goal != null && goal > 0;
+    final fill = monthlyGoalFill(monthRevenue: _monthRevenue, goal: goal);
+    final percent = monthlyGoalPercent(monthRevenue: _monthRevenue, goal: goal);
+    final reached = hasGoal && _monthRevenue >= monthGoal;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(
+            color: _hovered
+                ? color.withOpacity(0.45)
+                : color.withOpacity(0.35),
+            width: AppSpacing.borderMd,
+          ),
+          boxShadow: _hovered
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(0.14),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: color.withOpacity(0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.sm,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header: icon | value + title | trend ──
+              Row(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(_hovered ? 0.20 : 0.14),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    ),
+                    child: const Icon(
+                      Icons.trending_up,
+                      color: DesignTokens.revenue,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          Formatters.currency(_todayRevenue),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
+                            color: theme.colorScheme.onSurface,
+                            fontSize: 21,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          "Today's Revenue",
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: color,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  _TrendChip(percent: _trend),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+
+              if (!hasGoal) ...[
+                // ── Goal unset → prompt (no fake bar) ──
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Set monthly goal',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      key: const Key('monthly_goal_edit'),
+                      tooltip: 'Set monthly goal',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 18,
+                      onPressed: _editGoal,
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: DesignTokens.revenue,
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                // ── Goal set → progress bar + month summary ──
+                Semantics(
+                  label: 'Monthly goal progress $percent',
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: fill,
+                            minHeight: 6,
+                            backgroundColor:
+                                color.withOpacity(0.12),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              reached
+                                  ? DesignTokens.success
+                                  : color,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        percent,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: reached
+                              ? DesignTokens.success
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        reached
+                            ? 'Goal reached'
+                            : '${Formatters.currencyShort(_monthRevenue)} '
+                                'of ${Formatters.currencyShort(monthGoal)}'
+                                '${widget.summary.monthSales.count > 0 ? ' · ${widget.summary.monthSales.count} sales' : ''}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: reached ? FontWeight.w700 : null,
+                          color: reached
+                              ? DesignTokens.success
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      key: const Key('monthly_goal_edit'),
+                      tooltip: 'Set monthly goal',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      onPressed: _editGoal,
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: DesignTokens.revenue,
+                        size: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Trend chip — neutral "—" when there is no yesterday baseline.
+class _TrendChip extends StatelessWidget {
+  final double? percent;
+
+  const _TrendChip({required this.percent});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (percent == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          '—',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    final up = percent! >= 0;
+    final color = up ? DesignTokens.success : DesignTokens.error;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            up ? Icons.trending_up : Icons.trending_down,
+            size: 12,
+            color: color,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            '${percent!.abs().toStringAsFixed(1)}%',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

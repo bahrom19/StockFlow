@@ -17,6 +17,7 @@ import 'package:stockflow/features/dashboard/presentation/widgets/kpi_card.dart'
 import 'package:stockflow/features/dashboard/presentation/widgets/onboarding_hero.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/quick_actions.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/recent_sales_list.dart';
+import 'package:stockflow/features/dashboard/presentation/widgets/revenue_goal_card.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/sales_chart.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 import 'package:stockflow/features/payments/presentation/widgets/today_payments_card.dart';
@@ -351,13 +352,6 @@ class _KpiSection extends StatelessWidget {
 
   const _KpiSection({required this.summary});
 
-  double? _revenueTrend() {
-    final t = double.tryParse(summary.todaySales.revenue) ?? 0;
-    final y = double.tryParse(summary.yesterdaySales.revenue) ?? 0;
-    if (y <= 0) return null;
-    return ((t - y) / y) * 100;
-  }
-
   double? _countTrend() {
     final y = summary.yesterdaySales.count;
     if (y <= 0) return null;
@@ -366,15 +360,9 @@ class _KpiSection extends StatelessWidget {
 
   List<Widget> _cards() {
     return [
-      KpiCard(
-        title: "Today's Revenue",
-        value: Formatters.currency(summary.todaySales.revenue),
-        subtitle: 'vs yesterday',
-        changePercent: _revenueTrend(),
-        icon: Icons.trending_up,
-        color: DesignTokens.success,
-        compact: true,
-      ),
+      // Stage E — Revenue + Monthly Goal (first KPI, emphasized). The monthly
+      // goal is a LOCAL owner setting (SharedPreferences), zero new requests.
+      RevenueGoalCard(summary: summary),
       KpiCard(
         title: "Today's Sales",
         value: summary.todaySales.count.toString(),

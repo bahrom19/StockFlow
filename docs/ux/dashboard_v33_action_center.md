@@ -341,6 +341,19 @@
 
 ---
 
+## 9b. Decision: Monthly Sales Goal (Stage E — Revenue + Monthly Goal)
+
+**Решение (утверждено владельцем):** месячная цель продаж — **локальная UI-настройка владельца**, хранится в `SharedPreferences` под ключом `monthly_goal` (`monthly_goal_provider.dart`, `StateNotifierProvider<double?>`). Backend/API/Prisma не затрагиваются, **новых network-запросов нет**.
+
+- **Revenue-карточка** (`RevenueGoalCard`, первая KPI-карточка Dashboard, emphasized): число = `todaySales.revenue`, trend = vs `yesterdaySales.revenue` (`—` при `yesterday <= 0`), прогресс = `monthSales.revenue / goal`.
+- `goal == null/0` → progress bar **скрыт**, строка «Set monthly goal» + кнопка ✎.
+- Перевыполнение → fill clamp 100%, `DesignTokens.success`, подпись «Goal reached».
+- Ввод цели: диалог с карточки, `double > 0` (целое без дробной части допустимо, при сохранении нормализуется до 2 знаков), валидация `> 0`.
+- **Стоимость:** 0 запросов; цель читается из локального хранилища один раз при монтировании карточки (`load()` идемпотентен), без polling/refresh.
+- Settings-вход для цели — отдельный UX-этап (пока только ✎ на карточке).
+
+> **Implementation note:** цель читается/пишется через `SharedPreferences.getInstance()` напрямую, а не через `preferencesStorageProvider` — тот провайдер создаёт свежий неинициализированный `PreferencesStorage()` (инстанс из `main.dart` в него не прокинут), из-за чего персистентность через него молча не работала бы.
+
 ## 10. План реализации (после утверждения концепции)
 
 - **Этап A — каркас:** новый виджет `ActionCenter` (ConsumerWidget) + модель события `AttentionEvent` (category: critical/attention/opportunity, title, problem, cause, recommendation, impact, route, weight). Подключение на место AttentionSection. Skeleton/error/all-clear состояния (включая «Everything looks good · No urgent actions · Last checked X min ago»).
