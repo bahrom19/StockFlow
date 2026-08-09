@@ -64,12 +64,23 @@ class _CashDrawerHeroState extends ConsumerState<CashDrawerHero> {
   /// Background auto-refresh: re-reads the open shift while this screen is the
   /// active route. `refresh()` is a no-op when no warehouse is known yet, so
   /// this never fires before the bootstrap completes.
+  ///
+  /// X-report polling is skipped while no open shift exists (loading, error,
+  /// or a definitive "no shift" from the 404 — all resolved via
+  /// [ShiftState]): with no open shift the X-report endpoint 404s, so polling
+  /// would spam 404s and console errors for zero value. Polling resumes
+  /// automatically as soon as a shift is open (the state flips to
+  /// [ShiftLoaded] with a non-null [ShiftLoaded.current]).
   Future<void> _autoRefresh() async {
     if (!mounted) return;
     final route = ModalRoute.of(context);
     if (route == null || !route.isCurrent) return; // not visible — skip
     final ws = ref.read(warehouseListProvider);
     if (ws is! WarehouseListLoaded) return;
+    // Only poll while an open shift exists — otherwise the X-report endpoint
+    // 404s (ShiftLoading / ShiftError / ShiftLoaded(current: null)).
+    final shiftState = ref.read(cashShiftProvider);
+    if (shiftState is! ShiftLoaded || shiftState.current == null) return;
     final shift = await ref.read(cashShiftProvider.notifier).refresh();
     if (mounted && shift != null) {
       _lastUpdated = DateTime.now();
