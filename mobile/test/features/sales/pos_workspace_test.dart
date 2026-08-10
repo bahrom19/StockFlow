@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -979,6 +980,138 @@ void main() {
 
       expect(find.text('X Report'), findsWidgets);
       expect(find.textContaining('Cash sales'), findsOneWidget);
+    });
+  });
+
+  // ──────────────────────────────────
+  // PosWorkspace semantics boundary tests
+  // ──────────────────────────────────
+  // Regression guard for Flutter Web semantics flattening: non-interactive
+  // text that sits next to a CTA inside the workspace used to be merged into
+  // a role="group" aria-label (invisible to document.body.innerText). Each
+  // wrapped block must stay its own text leaf WITHOUT a tap action, while
+  // every CTA remains an independently tappable semantics node.
+  group('PosWorkspace semantics boundaries', () {
+    Widget buildWorkspace(_FakePosApi fake) {
+      return ProviderScope(
+        overrides: [apiClientProvider.overrideWith((ref) => fake)],
+        child: const MaterialApp(
+          home: Scaffold(body: PosWorkspace()),
+        ),
+      );
+    }
+
+    void useDesktopSurface(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    testWidgets('toolbar texts are separate non-tappable leaves',
+        (tester) async {
+      useDesktopSurface(tester);
+      final handle = tester.ensureSemantics();
+      final fake = _FakePosApi()
+        ..products = [
+          _product('p1', 'Espresso', sku: 'ESP', price: '100.00'),
+        ]
+        ..warehouses = [_warehouse()];
+
+      await tester.pumpWidget(buildWorkspace(fake));
+      await tester.pumpAndSettle();
+
+      // Each wrapped toolbar block is its own NON-tappable text leaf.
+      final titleData = tester
+          .getSemantics(find.text('Cashier Terminal'))
+          .getSemanticsData();
+      expect(titleData.label, contains('Cashier Terminal'));
+      expect(titleData.hasAction(SemanticsAction.tap), isFalse);
+
+      final hintsData =
+          tester.getSemantics(find.textContaining('F2 search')).getSemanticsData();
+      expect(hintsData.label, contains('F2 search'));
+      expect(hintsData.hasAction(SemanticsAction.tap), isFalse);
+
+      final itemsData =
+          tester.getSemantics(find.textContaining('items ·')).getSemanticsData();
+      expect(itemsData.label, contains('items ·'));
+      expect(itemsData.hasAction(SemanticsAction.tap), isFalse);
+
+      handle.dispose();
+    });
+
+    testWidgets('catalog footer is a leaf; Load more CTA stays tappable',
+        (tester) async {
+      useDesktopSurface(tester);
+      final handle = tester.ensureSemantics();
+      final fake = _FakePosApi()
+        ..products = [
+          for (var i = 0; i < 35; i++)
+            _product('p$i', 'Product $i', sku: 'S$i', price: '10.00'),
+        ]
+        ..warehouses = [_warehouse()];
+
+      await tester.pumpWidget(buildWorkspace(fake));
+      await tester.pumpAndSettle();
+
+      // Footer text is a separate non-tappable leaf.
+      final footerData = tester
+          .getSemantics(find.textContaining('Enter to add'))
+          .getSemanticsData();
+      expect(footerData.label, contains('Enter to add'));
+      expect(footerData.hasAction(SemanticsAction.tap), isFalse);
+
+      // Load more remains an independently tappable CTA.
+      final loadMoreData =
+          tester.getSemantics(find.text('Load more')).getSemanticsData();
+      expect(loadMoreData.label, contains('Load more'));
+      expect(loadMoreData.hasAction(SemanticsAction.tap), isTrue);
+
+      handle.dispose();
+    });
+
+    testWidgets(
+        'cart header, totals and payment summary are leaves; CTAs stay tappable',
+        (tester) async {
+      useDesktopSurface(tester);
+      final handle = tester.ensureSemantics();
+      final fake = _FakePosApi()
+        ..products = [
+          _product('p1', 'Espresso', sku: 'ESP', price: '100.00'),
+        ]
+        ..warehouses = [_warehouse()];
+
+      await tester.pumpWidget(buildWorkspace(fake));
+      await tester.pumpAndSettle();
+
+      // Add the product so totals + payment sections render.
+      await tester.tap(find.text('Espresso'));
+      await tester.pumpAndSettle();
+
+      final cartData = tester
+          .getSemantics(find.text('Cart (1 items)'))
+          .getSemanticsData();
+      expect(cartData.label, contains('Cart (1 items)'));
+      expect(cartData.hasAction(SemanticsAction.tap), isFalse);
+
+      for (final label in ['Subtotal', 'Tax', 'Total', 'Payment', 'Paid']) {
+        final data = tester.getSemantics(find.text(label)).getSemanticsData();
+        expect(data.label, contains(label),
+            reason: '$label must keep its text label');
+        expect(data.hasAction(SemanticsAction.tap), isFalse,
+            reason: '$label must be a non-tappable text leaf');
+      }
+
+      // CTA buttons remain independently tappable semantics nodes.
+      final clearData =
+          tester.getSemantics(find.text('Clear')).getSemanticsData();
+      expect(clearData.hasAction(SemanticsAction.tap), isTrue);
+
+      final openShiftData =
+          tester.getSemantics(find.text('Open Shift')).getSemanticsData();
+      expect(openShiftData.hasAction(SemanticsAction.tap), isTrue);
+
+      handle.dispose();
     });
   });
 

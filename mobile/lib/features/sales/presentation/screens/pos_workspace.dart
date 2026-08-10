@@ -956,23 +956,35 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                 Icon(Icons.point_of_sale,
                     size: 18, color: theme.colorScheme.primary),
                 const SizedBox(width: AppSpacing.xs),
-                Text('Cashier Terminal',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700)),
+                // Label-less semantics boundary keeps the toolbar text as its
+                // own innerText leaf instead of Flutter Web merging it into the
+                // workspace group's aria-label (see semantics guideline).
+                Semantics(
+                  container: true,
+                  child: Text('Cashier Terminal',
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: Text(
-                    'F2 search · F4 customer · F8 payment · F9 complete · '
-                    'Ctrl+Del clear · Enter add · ESC clear',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  child: Semantics(
+                    container: true,
+                    child: Text(
+                      'F2 search · F4 customer · F8 payment · F9 complete · '
+                      'Ctrl+Del clear · Enter add · ESC clear',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),
-                Text(
-                  '${cart.itemCount} items · ${Formatters.currency(cart.total)}',
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
+                Semantics(
+                  container: true,
+                  child: Text(
+                    '${cart.itemCount} items · ${Formatters.currency(cart.total)}',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
                 ),
               ],
             ),

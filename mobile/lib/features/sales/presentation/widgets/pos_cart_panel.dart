@@ -82,10 +82,15 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                 color: theme.colorScheme.primary,
               ),
               const SizedBox(width: AppSpacing.xs),
-              Text(
-                'Cart (${cart.itemCount} items)',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
+              // Label-less semantics boundary: cart header text stays its own
+              // innerText leaf; the Clear CTA remains a separate sibling.
+              Semantics(
+                container: true,
+                child: Text(
+                  'Cart (${cart.itemCount} items)',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -156,26 +161,30 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Row(
-                              children: [
-                                Icon(Icons.payments_outlined,
-                                    size: 18,
-                                    color: theme.colorScheme.primary),
-                                const SizedBox(width: AppSpacing.xs),
-                                Text(
-                                  'Payment',
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
+                            Semantics(
+                              container: true,
+                              child: Row(
+                                children: [
+                                  Icon(Icons.payments_outlined,
+                                      size: 18,
+                                      color: theme.colorScheme.primary),
+                                  const SizedBox(width: AppSpacing.xs),
+                                  Text(
+                                    'Payment',
+                                    style:
+                                        theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  'F8',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
+                                  const Spacer(),
+                                  Text(
+                                    'F8',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             // Customer picker
@@ -208,40 +217,48 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             // Change indicator
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Paid',
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                                Text(
-                                  Formatters.currency(_totalPaid),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: isAmountValid
-                                        ? const Color(0xFF0F9D58)
-                                        : theme.colorScheme.error,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_totalPaid > 0) ...[
-                              const SizedBox(height: AppSpacing.xxs),
-                              Row(
+                            Semantics(
+                              container: true,
+                              child: Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('Change',
-                                      style: theme.textTheme.bodySmall),
                                   Text(
-                                    Formatters.currency(change),
-                                    style: theme.textTheme.bodySmall?.copyWith(
+                                    'Paid',
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                  Text(
+                                    Formatters.currency(_totalPaid),
+                                    style:
+                                        theme.textTheme.bodySmall?.copyWith(
                                       fontWeight: FontWeight.w600,
-                                      color: const Color(0xFFFB8C00),
+                                      color: isAmountValid
+                                          ? const Color(0xFF0F9D58)
+                                          : theme.colorScheme.error,
                                     ),
                                   ),
                                 ],
+                              ),
+                            ),
+                            if (_totalPaid > 0) ...[
+                              const SizedBox(height: AppSpacing.xxs),
+                              Semantics(
+                                container: true,
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Change',
+                                        style: theme.textTheme.bodySmall),
+                                    Text(
+                                      Formatters.currency(change),
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFFFB8C00),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                             // Hold / resume actions
@@ -308,11 +325,14 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                               ),
                             ),
                             const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              'F9 to complete · F8 to payment · F4 customer',
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                            Semantics(
+                              container: true,
+                              child: Text(
+                                'F9 to complete · F8 to payment · F4 customer',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
                           ],
@@ -439,24 +459,29 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
     final base = large ? theme.textTheme.titleMedium : theme.textTheme.bodyMedium;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: base?.copyWith(
-              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-              color: color,
+      // Label-less semantics boundary: label + amount stay one innerText leaf
+      // instead of being merged into the workspace group's aria-label.
+      child: Semantics(
+        container: true,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: base?.copyWith(
+                fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+                color: color,
+              ),
             ),
-          ),
-          Text(
-            Formatters.currency(amount),
-            style: base?.copyWith(
-              fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
-              color: color,
+            Text(
+              Formatters.currency(amount),
+              style: base?.copyWith(
+                fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+                color: color,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

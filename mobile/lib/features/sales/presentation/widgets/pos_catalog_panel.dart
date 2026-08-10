@@ -130,10 +130,15 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Row(
             children: [
-              Text(
-                '${state.products.length} of ${state.total} · Enter to add · ↑↓ to navigate',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              // Label-less semantics boundary: footer text stays its own
+              // innerText leaf; the Load more CTA remains a separate sibling.
+              Semantics(
+                container: true,
+                child: Text(
+                  '${state.products.length} of ${state.total} · Enter to add · ↑↓ to navigate',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               const Spacer(),
