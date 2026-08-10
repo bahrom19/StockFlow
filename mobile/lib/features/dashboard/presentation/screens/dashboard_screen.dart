@@ -303,25 +303,34 @@ class _GreetingRow extends StatelessWidget {
 
     return Row(
       children: [
+        // ddd97fb semantics pattern: a label-less boundary around the greeting
+        // text keeps it in its own merged leaf (rendered as textContent in
+        // Flutter Web, so it stays visible to document.body.innerText and
+        // screen readers) instead of being hoisted into the row's
+        // role="group" aria-label by the interactive Refresh button. The
+        // Refresh button stays a sibling.
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Hello, ${userName ?? 'User'}',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.onSurface,
+          child: Semantics(
+            container: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hello, ${userName ?? 'User'}',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$today · Business snapshot',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                const SizedBox(height: 2),
+                Text(
+                  '$today · Business snapshot',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         if (isRefreshing)

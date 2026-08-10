@@ -541,27 +541,36 @@ class _NoShiftHero extends StatelessWidget {
               child: Icon(icon, color: warn, size: 22),
             ),
             const SizedBox(width: AppSpacing.sm),
+            // ddd97fb semantics pattern: a label-less boundary around the hero
+            // text keeps title + subtitle in their own merged leaf (rendered
+            // as textContent in Flutter Web, so they stay visible to
+            // document.body.innerText and screen readers) instead of being
+            // hoisted into the row's role="group" aria-label by the
+            // interactive "Open shift" button. The CTA stays a sibling.
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.onSurface,
+              child: Semantics(
+                container: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),

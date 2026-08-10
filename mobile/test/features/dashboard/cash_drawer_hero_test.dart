@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/api/api_client.dart';
@@ -300,6 +301,35 @@ void main() {
       await tick(tester);
       await tick(tester);
       expect(fake.xReportCalls, before);
+    });
+
+    // ── Semantics boundary (ddd97fb pattern, P2) ─────────────────────
+    // _NoShiftHero wraps its text Column in a label-less
+    // Semantics(container: true) so Flutter Web serializes the title +
+    // subtitle as textContent (document.body.innerText) instead of hoisting
+    // them into the row's role="group" aria-label because of the interactive
+    // "Open shift" button.
+    testWidgets('no-shift hero: title is its own leaf, CTA separate tappable',
+        (tester) async {
+      final fake = _FakeHeroApi(); // openShift == null → 404 → _NoShiftHero
+      await _pumpHero(tester, fake: fake);
+
+      final handle = tester.ensureSemantics();
+
+      // The title text must carry its own label on a NON-interactive node.
+      final titleData =
+          tester.getSemantics(find.text('No open shift')).getSemanticsData();
+      expect(titleData.label, contains('No open shift'));
+      expect(titleData.hasAction(SemanticsAction.tap), isFalse);
+
+      // The CTA remains a separate tappable node — the title was NOT
+      // swallowed into the button's label (the f72701d/ddd97fb rule).
+      final ctaData =
+          tester.getSemantics(find.text('Open shift')).getSemanticsData();
+      expect(ctaData.hasAction(SemanticsAction.tap), isTrue);
+
+      handle.dispose();
+      await tearDownWidget(tester);
     });
   });
 }
