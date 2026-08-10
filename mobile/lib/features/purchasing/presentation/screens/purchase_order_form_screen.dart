@@ -149,7 +149,14 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
             // Items
             Row(
               children: [
-                Text('Items', style: theme.textTheme.titleSmall),
+                // Semantics boundary (f72701d/ddd97fb pattern): without it,
+                // Flutter Web hoists "Items" into the row's role="group"
+                // aria-label next to the interactive Add Item button, hiding
+                // the header from document.body.innerText.
+                Semantics(
+                  container: true,
+                  child: Text('Items', style: theme.textTheme.titleSmall),
+                ),
                 const Spacer(),
                 TextButton.icon(onPressed: _addItem, icon: const Icon(Icons.add, size: 18), label: const Text('Add Item')),
               ],
