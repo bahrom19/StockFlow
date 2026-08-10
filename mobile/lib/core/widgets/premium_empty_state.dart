@@ -62,21 +62,35 @@ class PremiumEmptyState extends StatelessWidget {
         children: [
           _Artboard(color: color, icon: icon),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              height: 1.4,
+          // ddd97fb semantics pattern: a label-less boundary around the empty
+          // state's title + description keeps them in their own merged leaf
+          // (rendered as textContent in Flutter Web, so they stay visible to
+          // document.body.innerText and screen readers) instead of being
+          // hoisted into the group's aria-label by the interactive CTA below.
+          // The CTA stays a separate sibling node.
+          Semantics(
+            container: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
           if (ctaLabel != null && onCta != null) ...[

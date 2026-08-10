@@ -40,11 +40,20 @@ class RecentSalesList extends StatelessWidget {
                 AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
             child: Row(
               children: [
+                // ddd97fb semantics pattern: a label-less boundary around the
+                // header text keeps it in its own merged leaf (rendered as
+                // textContent in Flutter Web, so it stays visible to
+                // document.body.innerText and screen readers) instead of being
+                // hoisted into the row's role="group" aria-label by the
+                // interactive "View all" button. The button stays a sibling.
                 Expanded(
-                  child: Text(
-                    'Recent Sales',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                  child: Semantics(
+                    container: true,
+                    child: Text(
+                      'Recent Sales',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
                 TextButton(
