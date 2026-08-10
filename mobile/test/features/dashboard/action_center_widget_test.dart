@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
@@ -218,6 +219,55 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 90));
     // No exception → timer cancelled, no post-dispose setState.
+  });
+
+  // ── Semantics boundary (f72701d pattern, P1 audit) ─────────────────
+  // _AttentionEventRow wraps the event text in a label-less
+  // Semantics(container: true) so Flutter Web serializes it as textContent
+  // (visible to document.body.innerText) instead of hoisting the whole row
+  // into role="group" aria-label because of the interactive CTA button.
+  testWidgets('event text is a separate semantics leaf from the CTA',
+      (tester) async {
+    final items = [
+      const LowStockItem(
+        productId: 'p1',
+        productName: 'Laptop Stand',
+        sku: 'SKU-L-005',
+        currentStock: 2,
+        minQuantity: 5,
+        warehouseId: 'w1',
+        warehouseName: 'Main Store',
+        status: 'LOW_STOCK',
+      ),
+    ];
+    final summary = healthySummary().copyWith(lowStockProducts: 1);
+
+    await pumpActionCenter(
+      tester,
+      dashState: DashboardData(summary: summary, lowStockItems: items),
+      shiftState: ShiftLoaded(current: openShiftZeroDiff()),
+      warehouseState: const WarehouseListLoaded(warehouses: []),
+    );
+
+    final handle = tester.ensureSemantics();
+
+    // Event title must be its own semantics node carrying the label text.
+    final titleData =
+        tester.getSemantics(find.text('1 products low on stock')).getSemanticsData();
+    expect(titleData.label, contains('1 products low on stock'));
+
+    // The CTA must remain a separate, tappable semantics node — the text was
+    // NOT swallowed into the button's label (the f72701d baseline rule).
+    final ctaData =
+        tester.getSemantics(find.text('Review stock')).getSemanticsData();
+    expect(ctaData.hasAction(SemanticsAction.tap), isTrue);
+
+    // The title leaf itself is not the button: it carries no tap action, so
+    // the row did not collapse into a single labeled interactive node.
+    expect(titleData.hasAction(SemanticsAction.tap), isFalse);
+
+    handle.dispose();
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('ticker is not duplicated across rebuilds', (tester) async {

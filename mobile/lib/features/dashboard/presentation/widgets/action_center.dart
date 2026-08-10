@@ -561,9 +561,16 @@ class _AttentionEventRowState extends State<_AttentionEventRow> {
     final color = _categoryColor(event.category);
     final isNarrow = MediaQuery.sizeOf(context).width < 640;
 
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    // f72701d semantics pattern: a label-less boundary around the event text
+    // keeps it in its own merged leaf (rendered as textContent in Flutter
+    // Web, so it stays visible to document.body.innerText and screen
+    // readers) instead of being hoisted into the row's role="group"
+    // aria-label by the interactive CTA button.
+    final content = Semantics(
+      container: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         Row(
           children: [
             Container(
@@ -669,8 +676,9 @@ class _AttentionEventRowState extends State<_AttentionEventRow> {
               ),
             ),
           ),
+          ],
         ],
-      ],
+      ),
     );
 
     final cta = FilledButton.tonalIcon(
