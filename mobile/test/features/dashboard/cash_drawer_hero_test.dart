@@ -331,5 +331,39 @@ void main() {
       handle.dispose();
       await tearDownWidget(tester);
     });
+
+    // ── _HeroError semantics boundary (2dac3ea pattern, P3) ───────
+    // Like _NoShiftHero, _HeroError wraps its text Column in a label-less
+    // Semantics(container: true) so the title + subtitle render as
+    // textContent instead of being hoisted into the row's group aria-label
+    // by the interactive "Retry" button.
+    testWidgets('_HeroError: title its own leaf, Retry separate tappable',
+        (tester) async {
+      final fake = _FakeHeroApi()..failXReport = true; // → ShiftError
+      await _pumpHero(tester, fake: fake);
+
+      final handle = tester.ensureSemantics();
+
+      // Title is its own non-interactive leaf.
+      final titleData = tester
+          .getSemantics(find.text('Cash drawer unavailable'))
+          .getSemanticsData();
+      expect(titleData.label, contains('Cash drawer unavailable'));
+      expect(titleData.hasAction(SemanticsAction.tap), isFalse);
+
+      // Subtitle is part of the same merged leaf.
+      final subData = tester
+          .getSemantics(find.text('Could not load the open shift.'))
+          .getSemanticsData();
+      expect(subData.label, contains('Could not load the open shift.'));
+
+      // Retry stays a separate tappable node.
+      final retryData =
+          tester.getSemantics(find.text('Retry')).getSemanticsData();
+      expect(retryData.hasAction(SemanticsAction.tap), isTrue);
+
+      handle.dispose();
+      await tearDownWidget(tester);
+    });
   });
 }

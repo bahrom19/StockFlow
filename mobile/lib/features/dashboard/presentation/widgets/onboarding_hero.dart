@@ -73,29 +73,35 @@ class OnboardingHero extends ConsumerWidget {
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Welcome to StockFlow',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.onSurface,
+                child: Semantics(
+                  container: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Welcome to StockFlow',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: theme.colorScheme.onSurface,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Set up your store in four quick steps — your dashboard '
-                      'updates live as data flows in.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                      const SizedBox(height: 2),
+                      Text(
+                        'Set up your store in four quick steps — your dashboard '
+                        'updates live as data flows in.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              _ProgressPill(done: done, total: steps.length),
+              Semantics(
+                container: true,
+                child: _ProgressPill(done: done, total: steps.length),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),

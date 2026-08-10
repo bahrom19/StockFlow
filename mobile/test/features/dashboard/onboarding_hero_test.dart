@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
@@ -202,6 +203,52 @@ void main() {
       expect(find.text('0 of 4'), findsNothing);
       expect(find.text('Welcome to StockFlow'), findsNothing);
       expect(find.byType(LinearProgressIndicator), findsNothing);
+    });
+
+    // ── Semantics boundary (2dac3ea pattern, P3) ────────────────
+    // The header wraps its title + subtitle Column in a label-less
+    // Semantics(container: true) so Flutter Web serializes them as
+    // textContent (document.body.innerText) instead of hoisting them into
+    // the header Row's group aria-label. Each step CTA stays a separate
+    // interactive node.
+    testWidgets('header title is its own leaf, step CTA stays tappable',
+        (tester) async {
+      await pumpHero(
+        tester,
+        dashState: DashboardData(summary: summary()),
+        shiftState: const ShiftLoaded(),
+      );
+
+      final handle = tester.ensureSemantics();
+
+      // The header title must carry its own label on a NON-interactive node
+      // (not swallowed into a group aria-label by the interactive sections).
+      final titleData = tester
+          .getSemantics(find.text('Welcome to StockFlow'))
+          .getSemanticsData();
+      expect(titleData.label, contains('Welcome to StockFlow'));
+      expect(titleData.hasAction(SemanticsAction.tap), isFalse);
+
+      // The subtitle is part of the same merged leaf.
+      final subData = tester
+          .getSemantics(find.textContaining('Set up your store'))
+          .getSemanticsData();
+      expect(subData.label, contains('Set up your store'));
+
+      // Step CTAs remain separate tappable nodes.
+      final ctaData = tester
+          .getSemantics(find.text('Get started').first)
+          .getSemanticsData();
+      expect(ctaData.hasAction(SemanticsAction.tap), isTrue);
+
+      // The progress pill "0 of 4" is its own leaf (no tap action).
+      final pillData = tester
+          .getSemantics(find.text('0 of 4'))
+          .getSemanticsData();
+      expect(pillData.label, contains('0 of 4'));
+      expect(pillData.hasAction(SemanticsAction.tap), isFalse);
+
+      handle.dispose();
     });
   });
 }
