@@ -64,6 +64,14 @@ jobs:
         run: flutter pub get
         working-directory: mobile
 
+      # `flutter analyze` does not run code generation: on a clean checkout
+      # `pub get` only registers the synthetic flutter_gen package without
+      # producing the l10n files, so analysis would fail with
+      # uri_does_not_exist. Generate explicitly before analyzing.
+      - name: Generate localizations
+        run: flutter gen-l10n
+        working-directory: mobile
+
       # Fail on errors only. The committed tree carries pre-existing
       # warning-level lints in modules owned by in-flight workstreams
       # (they are fixed in the working tree); a deploy pipeline must not
