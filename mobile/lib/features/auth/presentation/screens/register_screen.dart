@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/auth/models/auth_models.dart';
+import '../../../../core/localization/l10n_ext.dart';
 import '../../../../core/navigation/route_names.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/design_tokens.dart';
@@ -62,12 +63,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _isLoading = false);
 
     if (result is ApiSuccess<LoginResponse>) {
-      AppSnackbar.success(context, 'Account created. Please sign in.');
+      AppSnackbar.success(context, context.l10n.accountCreated);
       context.go(RouteNames.login);
     } else {
       final message = result is ApiFailure<LoginResponse>
           ? result.error.message
-          : 'Registration failed. Please try again.';
+          : context.l10n.registrationFailed;
       AppSnackbar.error(context, message);
     }
   }
@@ -112,7 +113,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
-                    'Create your account',
+                    context.l10n.createYourAccount,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -127,32 +128,34 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         TextFormField(
                           controller: _companyController,
                           textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Company Name',
-                            prefixIcon: Icon(Icons.business_outlined),
+                          decoration: InputDecoration(
+                            labelText: context.l10n.companyName,
+                            prefixIcon: const Icon(Icons.business_outlined),
                           ),
-                          validator: Validators.required,
+                          validator: (v) =>
+                              Validators.requiredL10n(context.l10n, v),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         TextFormField(
                           controller: _fullNameController,
                           textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Full Name',
-                            prefixIcon: Icon(Icons.person_outline),
+                          decoration: InputDecoration(
+                            labelText: context.l10n.fullName,
+                            prefixIcon: const Icon(Icons.person_outline),
                           ),
-                          validator: Validators.required,
+                          validator: (v) =>
+                              Validators.requiredL10n(context.l10n, v),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         TextFormField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Email',
-                            prefixIcon: Icon(Icons.email_outlined),
+                          decoration: InputDecoration(
+                            labelText: context.l10n.email,
+                            prefixIcon: const Icon(Icons.email_outlined),
                           ),
-                          validator: Validators.email,
+                          validator: (v) => Validators.email(v, context.l10n),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         TextFormField(
@@ -160,7 +163,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscurePassword,
                           textInputAction: TextInputAction.next,
                           decoration: InputDecoration(
-                            labelText: 'Password',
+                            labelText: context.l10n.password,
                             prefixIcon: const Icon(Icons.lock_outlined),
                             suffixIcon: IconButton(
                               icon: Icon(
@@ -172,7 +175,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                   () => _obscurePassword = !_obscurePassword),
                             ),
                           ),
-                          validator: Validators.password,
+                          validator: (v) =>
+                              Validators.password(v, context.l10n),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         TextFormField(
@@ -180,7 +184,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           obscureText: _obscureConfirm,
                           textInputAction: TextInputAction.done,
                           decoration: InputDecoration(
-                            labelText: 'Confirm Password',
+                            labelText: context.l10n.confirmPassword,
                             prefixIcon: const Icon(Icons.lock_outline),
                             suffixIcon: IconButton(
                               icon: Icon(
@@ -194,10 +198,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
-                              return 'Confirm password is required';
+                              return context.l10n.confirmPasswordRequired;
                             }
                             if (value != _passwordController.text) {
-                              return 'Passwords do not match';
+                              return context.l10n.passwordsDoNotMatch;
                             }
                             return null;
                           },
@@ -208,14 +212,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           onPressed: _isLoading ? null : _handleRegister,
                           child: _isLoading
                               ? AppLoading.button()
-                              : const Text('Create Account'),
+                              : Text(context.l10n.createAccountButton),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              'Already have an account?',
+                              context.l10n.alreadyHaveAccount,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -224,7 +228,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               onPressed: _isLoading
                                   ? null
                                   : () => context.go(RouteNames.login),
-                              child: const Text('Sign In'),
+                              child: Text(context.l10n.signIn),
                             ),
                           ],
                         ),
@@ -233,7 +237,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   Text(
-                    '© 2026 StockFlow Enterprise',
+                    context.l10n.appCopyright,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

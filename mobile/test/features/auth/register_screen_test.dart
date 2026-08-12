@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -141,6 +143,17 @@ void main() {
       child: MaterialApp.router(
         routerConfig: _buildRouter(),
         theme: ThemeData(brightness: Brightness.light),
+        // Localization harness: the screens use context.l10n, so the
+        // generated delegate must be registered. Explicit en_US keeps the
+        // English assertions stable regardless of the host locale.
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('en'), Locale('ru'), Locale('kk')],
+        locale: const Locale('en'),
       ),
     );
   }

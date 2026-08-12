@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_state.dart';
+import '../../../../core/localization/l10n_ext.dart';
 import '../../../../core/navigation/route_names.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/design_tokens.dart';
@@ -88,7 +89,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
-                  'Enterprise ERP Platform',
+                  context.l10n.appTagline,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -101,7 +102,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        'Sign In',
+                        context.l10n.signIn,
                         style: theme.textTheme.titleLarge,
                       ),
                       const SizedBox(height: AppSpacing.lg),
@@ -109,11 +110,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email_outlined),
+                        decoration: InputDecoration(
+                          labelText: context.l10n.email,
+                          prefixIcon: const Icon(Icons.email_outlined),
                         ),
-                        validator: Validators.email,
+                        validator: (v) => Validators.email(v, context.l10n),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       TextFormField(
@@ -121,7 +122,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         obscureText: _obscurePassword,
                         textInputAction: TextInputAction.done,
                         decoration: InputDecoration(
-                          labelText: 'Password',
+                          labelText: context.l10n.password,
                           prefixIcon: const Icon(Icons.lock_outlined),
                           suffixIcon: IconButton(
                             icon: Icon(
@@ -133,7 +134,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 setState(() => _obscurePassword = !_obscurePassword),
                           ),
                         ),
-                        validator: Validators.required,
+                        validator: (v) => Validators.requiredL10n(context.l10n, v),
                         onFieldSubmitted: (_) => _handleLogin(),
                       ),
                       const SizedBox(height: AppSpacing.lg),
@@ -141,14 +142,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: _isLoading ? null : _handleLogin,
                         child: _isLoading
                             ? AppLoading.button()
-                            : const Text('Sign In'),
+                            : Text(context.l10n.signIn),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            'New to StockFlow?',
+                            context.l10n.newToStockFlow,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -157,7 +158,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             onPressed: _isLoading
                                 ? null
                                 : () => context.go(RouteNames.register),
-                            child: const Text('Create account'),
+                            child: Text(context.l10n.createAccount),
                           ),
                         ],
                       ),
@@ -166,7 +167,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xxl),
                 Text(
-                  '© 2026 StockFlow Enterprise',
+                  context.l10n.appCopyright,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

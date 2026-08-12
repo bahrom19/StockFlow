@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 
@@ -30,7 +31,8 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Text(user?.fullName ?? 'User', style: theme.textTheme.titleLarge),
+                Text(user?.fullName ?? context.l10n.user,
+                    style: theme.textTheme.titleLarge),
                 Text(user?.email ?? '',
                     style: theme.textTheme.bodyMedium
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
@@ -43,7 +45,7 @@ class ProfileScreen extends ConsumerWidget {
               children: [
                 _ProfileTile(
                   icon: Icons.badge_outlined,
-                  label: 'Role',
+                  label: context.l10n.role,
                   value: Formatters.status(
                     user?.roles.isNotEmpty ?? false
                         ? user!.roles.first
@@ -51,9 +53,17 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
                 const Divider(height: 1, indent: 56),
-                _ProfileTile(icon: Icons.business_outlined, label: 'Company', value: 'StockFlow Enterprise'),
+                _ProfileTile(
+                  icon: Icons.business_outlined,
+                  label: context.l10n.company,
+                  value: 'StockFlow Enterprise',
+                ),
                 const Divider(height: 1, indent: 56),
-                _ProfileTile(icon: Icons.fingerprint, label: 'User ID', value: user?.id ?? '-'),
+                _ProfileTile(
+                  icon: Icons.fingerprint,
+                  label: context.l10n.userId,
+                  value: user?.id ?? '-',
+                ),
               ],
             ),
           ),
@@ -63,7 +73,7 @@ class ProfileScreen extends ConsumerWidget {
             child: OutlinedButton.icon(
               onPressed: () {},
               icon: const Icon(Icons.edit),
-              label: const Text('Edit Profile'),
+              label: Text(context.l10n.editProfile),
             ),
           ),
         ],

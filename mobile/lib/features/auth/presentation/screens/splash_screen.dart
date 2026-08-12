@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../../core/auth/auth_state.dart';
+import '../../../../core/localization/l10n_ext.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/design_tokens.dart';
 
@@ -109,7 +110,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 ),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
-                  'Enterprise ERP',
+                  context.l10n.splashTagline,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -118,7 +119,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 const CircularProgressIndicator(strokeWidth: 2),
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  _version.isNotEmpty ? 'v$_version' : 'Loading...',
+                  _version.isNotEmpty
+                      ? context.l10n.versionLabel(_version)
+                      : context.l10n.loading,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

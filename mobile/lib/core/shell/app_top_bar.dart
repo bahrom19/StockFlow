@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/sales/presentation/providers/cash_shift_provider.dart';
 import '../auth/auth_state.dart';
 import '../auth/models/auth_models.dart';
+import '../localization/l10n_ext.dart';
 import '../navigation/route_names.dart';
 import '../theme/app_spacing.dart';
 import '../theme/design_tokens.dart';
@@ -28,7 +30,7 @@ class AppTopBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final user = ref.watch(currentUserProvider);
-    final title = _titleForLocation(currentLocation);
+    final title = _titleForLocation(context.l10n, currentLocation);
 
     return Material(
       color: theme.colorScheme.surface,
@@ -41,7 +43,7 @@ class AppTopBar extends ConsumerWidget {
             if (showMenuButton) ...[
               IconButton(
                 icon: const Icon(Icons.menu),
-                tooltip: 'Menu',
+                tooltip: context.l10n.menu,
                 onPressed: () => Scaffold.of(context).openDrawer(),
               ),
               const SizedBox(width: AppSpacing.xs),
@@ -63,17 +65,17 @@ class AppTopBar extends ConsumerWidget {
             const _LiveStatusCluster(),
             const SizedBox(width: AppSpacing.xs),
             IconButton(
-              tooltip: 'Notifications',
+              tooltip: context.l10n.notifications,
               onPressed: () {
                 ScaffoldMessenger.of(context)
                   ..hideCurrentSnackBar()
                   ..showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Row(
                         children: [
-                          Icon(Icons.notifications_none, size: 18),
-                          SizedBox(width: 8),
-                          Expanded(child: Text("You're all caught up")),
+                          const Icon(Icons.notifications_none, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(context.l10n.notificationsAllCaughtUp)),
                         ],
                       ),
                       behavior: SnackBarBehavior.floating,
@@ -85,7 +87,7 @@ class AppTopBar extends ConsumerWidget {
             ),
             const SizedBox(width: AppSpacing.xs),
             _UserMenu(
-              userName: user?.fullName ?? 'User',
+              userName: user?.fullName ?? context.l10n.user,
               email: user?.email ?? '',
               initials: _initials(user?.fullName ?? 'U'),
               onProfile: () => context.go(RouteNames.profile),
@@ -106,18 +108,18 @@ class AppTopBar extends ConsumerWidget {
         .toUpperCase();
   }
 
-  String _titleForLocation(String location) {
-    if (location.startsWith(RouteNames.sales)) return 'Sales';
-    if (location.startsWith(RouteNames.inventory)) return 'Inventory';
-    if (location.startsWith(RouteNames.products)) return 'Products';
-    if (location.startsWith(RouteNames.purchasing)) return 'Purchasing';
-    if (location.startsWith(RouteNames.suppliers)) return 'Suppliers';
-    if (location.startsWith(RouteNames.customers)) return 'Customers';
-    if (location.startsWith(RouteNames.reports)) return 'Reports';
-    if (location.startsWith(RouteNames.finance)) return 'Finance';
-    if (location.startsWith(RouteNames.profile)) return 'Profile';
-    if (location.startsWith(RouteNames.settings)) return 'Settings';
-    return 'Dashboard';
+  String _titleForLocation(AppLocalizations l10n, String location) {
+    if (location.startsWith(RouteNames.sales)) return l10n.sales;
+    if (location.startsWith(RouteNames.inventory)) return l10n.inventory;
+    if (location.startsWith(RouteNames.products)) return l10n.products;
+    if (location.startsWith(RouteNames.purchasing)) return l10n.purchasing;
+    if (location.startsWith(RouteNames.suppliers)) return l10n.suppliers;
+    if (location.startsWith(RouteNames.customers)) return l10n.customers;
+    if (location.startsWith(RouteNames.reports)) return l10n.reports;
+    if (location.startsWith(RouteNames.finance)) return l10n.finance;
+    if (location.startsWith(RouteNames.profile)) return l10n.profile;
+    if (location.startsWith(RouteNames.settings)) return l10n.settings;
+    return l10n.dashboard;
   }
 }
 
@@ -157,7 +159,7 @@ class _GlobalSearchFieldState extends State<_GlobalSearchField> {
         controller: _controller,
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
-          hintText: 'Search…',
+          hintText: context.l10n.searchHint,
           prefixIcon: const Icon(Icons.search, size: 20),
           isDense: true,
           filled: true,
@@ -242,23 +244,23 @@ class _LiveStatusClusterState extends ConsumerState<_LiveStatusCluster> {
     switch (shiftState) {
       case ShiftLoaded(:final current):
         if (current == null) {
-          shiftLabel = 'No shift';
+          shiftLabel = context.l10n.shiftNoShift;
           shiftColor = DesignTokens.warning;
         } else {
-          shiftLabel = 'Shift open';
+          shiftLabel = context.l10n.shiftOpen;
           shiftColor = DesignTokens.success;
         }
       case ShiftError():
-        shiftLabel = 'Shift —';
+        shiftLabel = context.l10n.shiftUnknown;
         shiftColor = theme.colorScheme.onSurfaceVariant;
       default:
         // Loading / unknown → graceful placeholder.
-        shiftLabel = 'Shift —';
+        shiftLabel = context.l10n.shiftUnknown;
         shiftColor = theme.colorScheme.onSurfaceVariant;
     }
 
     return Semantics(
-      label: 'System live, $_time · $shiftLabel',
+      label: context.l10n.systemLiveStatus(shiftLabel, _time),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -275,7 +277,7 @@ class _LiveStatusClusterState extends ConsumerState<_LiveStatusCluster> {
                 _PulseDot(),
                 const SizedBox(width: 5),
                 Text(
-                  'Live · $_time',
+                  context.l10n.liveStatus(_time),
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: DesignTokens.success,
                     fontWeight: FontWeight.w700,
@@ -287,7 +289,7 @@ class _LiveStatusClusterState extends ConsumerState<_LiveStatusCluster> {
           const SizedBox(width: AppSpacing.xs),
           // Shift pill
           Tooltip(
-            message: 'Cash shift status',
+            message: context.l10n.cashShiftStatus,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -379,10 +381,10 @@ class _UserMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'Account menu',
+      label: context.l10n.accountMenu,
       button: true,
       child: PopupMenuButton<String>(
-      tooltip: 'Account menu',
+      tooltip: context.l10n.accountMenu,
       offset: const Offset(0, 48),
       onSelected: (value) {
         switch (value) {
@@ -437,34 +439,34 @@ class _UserMenu extends StatelessWidget {
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'profile',
           child: Row(
             children: [
-              Icon(Icons.person_outline, size: 18),
-              SizedBox(width: 8),
-              Text('Profile'),
+              const Icon(Icons.person_outline, size: 18),
+              const SizedBox(width: 8),
+              Text(context.l10n.profile),
             ],
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'settings',
           child: Row(
             children: [
-              Icon(Icons.settings_outlined, size: 18),
-              SizedBox(width: 8),
-              Text('Settings'),
+              const Icon(Icons.settings_outlined, size: 18),
+              const SizedBox(width: 8),
+              Text(context.l10n.settings),
             ],
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'logout',
           child: Row(
             children: [
-              Icon(Icons.logout, size: 18),
-              SizedBox(width: 8),
-              Text('Logout'),
+              const Icon(Icons.logout, size: 18),
+              const SizedBox(width: 8),
+              Text(context.l10n.logout),
             ],
           ),
         ),

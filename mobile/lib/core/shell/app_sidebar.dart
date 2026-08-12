@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_state.dart';
 import '../auth/models/auth_models.dart';
+import '../localization/l10n_ext.dart';
 import '../navigation/route_names.dart';
 import '../theme/app_spacing.dart';
 import '../theme/design_tokens.dart';
@@ -31,7 +33,7 @@ class AppSidebar extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
               children: [
-                for (final section in _SidebarNav.sections) ...[
+                for (final section in _SidebarNav.sections(context.l10n)) ...[
                   _SidebarSectionLabel(title: section.title),
                   const SizedBox(height: AppSpacing.xxs),
                   for (final item in section.items)
@@ -48,7 +50,7 @@ class AppSidebar extends ConsumerWidget {
             ),
           ),
           _SidebarUserCard(
-            userName: user?.fullName ?? 'User',
+            userName: user?.fullName ?? context.l10n.user,
             email: user?.email ?? '',
             initials: _initials(user?.fullName ?? 'U'),
             onProfile: () => context.go(RouteNames.profile),
@@ -96,99 +98,102 @@ class _SidebarNavSection {
 }
 
 class _SidebarNav {
-  static const _dashboard = _SidebarNavItem(
-    label: 'Dashboard',
-    path: RouteNames.dashboard,
-    icon: Icons.dashboard_outlined,
-    selectedIcon: Icons.dashboard,
-  );
-  static const _products = _SidebarNavItem(
-    label: 'Products',
-    path: RouteNames.products,
-    icon: Icons.inventory_2_outlined,
-    selectedIcon: Icons.inventory_2,
-  );
-  static const _inventory = _SidebarNavItem(
-    label: 'Inventory',
-    path: RouteNames.inventory,
-    icon: Icons.inventory_outlined,
-    selectedIcon: Icons.inventory,
-  );
-  static const _warehouses = _SidebarNavItem(
-    label: 'Warehouses',
-    path: RouteNames.warehouses,
-    icon: Icons.warehouse_outlined,
-    selectedIcon: Icons.warehouse,
-  );
-  static const _sales = _SidebarNavItem(
-    label: 'Sales',
-    path: RouteNames.sales,
-    icon: Icons.receipt_long_outlined,
-    selectedIcon: Icons.receipt_long,
-  );
-  static const _purchasing = _SidebarNavItem(
-    label: 'Purchasing',
-    path: RouteNames.purchasing,
-    icon: Icons.shopping_cart_outlined,
-    selectedIcon: Icons.shopping_cart,
-  );
-  static const _suppliers = _SidebarNavItem(
-    label: 'Suppliers',
-    path: RouteNames.suppliers,
-    icon: Icons.local_shipping_outlined,
-    selectedIcon: Icons.local_shipping,
-  );
-  static const _customers = _SidebarNavItem(
-    label: 'Customers',
-    path: RouteNames.customers,
-    icon: Icons.people_outline,
-    selectedIcon: Icons.people,
-  );
-  static const _reports = _SidebarNavItem(
-    label: 'Reports',
-    path: RouteNames.reports,
-    icon: Icons.bar_chart_outlined,
-    selectedIcon: Icons.bar_chart,
-  );
-  static const _finance = _SidebarNavItem(
-    label: 'Finance',
-    path: RouteNames.finance,
-    icon: Icons.account_balance_outlined,
-    selectedIcon: Icons.account_balance,
-  );
-  static const _payments = _SidebarNavItem(
-    label: 'Payments',
-    path: RouteNames.payments,
-    icon: Icons.payments_outlined,
-    selectedIcon: Icons.payments,
-  );
-  static const _settings = _SidebarNavItem(
-    label: 'Settings',
-    path: RouteNames.settings,
-    icon: Icons.settings_outlined,
-    selectedIcon: Icons.settings,
-  );
-
-  static const sections = <_SidebarNavSection>[
-    _SidebarNavSection(title: 'OVERVIEW', items: [_dashboard]),
-    _SidebarNavSection(
-      title: 'OPERATIONS',
-      items: [
-        _products,
-        _inventory,
-        _warehouses,
-        _sales,
-        _purchasing,
-        _suppliers,
-        _customers,
-      ],
-    ),
-    _SidebarNavSection(
-      title: 'INSIGHTS',
-      items: [_reports, _payments, _finance],
-    ),
-    _SidebarNavSection(title: 'SYSTEM', items: [_settings]),
-  ];
+  /// Navigation sections with labels resolved from [l10n] at build time —
+  /// the labels are display-only; routing stays on the raw path constants.
+  static List<_SidebarNavSection> sections(AppLocalizations l10n) => [
+        _SidebarNavSection(
+          title: l10n.navSectionOverview,
+          items: [
+            _SidebarNavItem(
+              label: l10n.dashboard,
+              path: RouteNames.dashboard,
+              icon: Icons.dashboard_outlined,
+              selectedIcon: Icons.dashboard,
+            ),
+          ],
+        ),
+        _SidebarNavSection(
+          title: l10n.navSectionOperations,
+          items: [
+            _SidebarNavItem(
+              label: l10n.products,
+              path: RouteNames.products,
+              icon: Icons.inventory_2_outlined,
+              selectedIcon: Icons.inventory_2,
+            ),
+            _SidebarNavItem(
+              label: l10n.inventory,
+              path: RouteNames.inventory,
+              icon: Icons.inventory_outlined,
+              selectedIcon: Icons.inventory,
+            ),
+            _SidebarNavItem(
+              label: l10n.warehouses,
+              path: RouteNames.warehouses,
+              icon: Icons.warehouse_outlined,
+              selectedIcon: Icons.warehouse,
+            ),
+            _SidebarNavItem(
+              label: l10n.sales,
+              path: RouteNames.sales,
+              icon: Icons.receipt_long_outlined,
+              selectedIcon: Icons.receipt_long,
+            ),
+            _SidebarNavItem(
+              label: l10n.purchasing,
+              path: RouteNames.purchasing,
+              icon: Icons.shopping_cart_outlined,
+              selectedIcon: Icons.shopping_cart,
+            ),
+            _SidebarNavItem(
+              label: l10n.suppliers,
+              path: RouteNames.suppliers,
+              icon: Icons.local_shipping_outlined,
+              selectedIcon: Icons.local_shipping,
+            ),
+            _SidebarNavItem(
+              label: l10n.customers,
+              path: RouteNames.customers,
+              icon: Icons.people_outline,
+              selectedIcon: Icons.people,
+            ),
+          ],
+        ),
+        _SidebarNavSection(
+          title: l10n.navSectionInsights,
+          items: [
+            _SidebarNavItem(
+              label: l10n.reports,
+              path: RouteNames.reports,
+              icon: Icons.bar_chart_outlined,
+              selectedIcon: Icons.bar_chart,
+            ),
+            _SidebarNavItem(
+              label: l10n.payments,
+              path: RouteNames.payments,
+              icon: Icons.payments_outlined,
+              selectedIcon: Icons.payments,
+            ),
+            _SidebarNavItem(
+              label: l10n.finance,
+              path: RouteNames.finance,
+              icon: Icons.account_balance_outlined,
+              selectedIcon: Icons.account_balance,
+            ),
+          ],
+        ),
+        _SidebarNavSection(
+          title: l10n.navSectionSystem,
+          items: [
+            _SidebarNavItem(
+              label: l10n.settings,
+              path: RouteNames.settings,
+              icon: Icons.settings_outlined,
+              selectedIcon: Icons.settings,
+            ),
+          ],
+        ),
+      ];
 
   /// Returns true when [location] belongs to the nav item's route tree.
   static bool Function(String path) isActiveFor(String location) {
@@ -448,7 +453,7 @@ class _SidebarUserCard extends StatelessWidget {
               ),
             ),
             Semantics(
-              label: 'Account menu',
+              label: context.l10n.accountMenu,
               button: true,
               child: PopupMenuButton<String>(
                 icon: Icon(
@@ -456,7 +461,7 @@ class _SidebarUserCard extends StatelessWidget {
                   size: AppSpacing.iconSm,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
-                tooltip: 'Account menu',
+                tooltip: context.l10n.accountMenu,
                 onSelected: (value) {
                   switch (value) {
                     case 'profile':
@@ -467,11 +472,20 @@ class _SidebarUserCard extends StatelessWidget {
                       onLogout();
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'profile', child: Text('Profile')),
-                  PopupMenuItem(value: 'settings', child: Text('Settings')),
-                  PopupMenuDivider(),
-                  PopupMenuItem(value: 'logout', child: Text('Logout')),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'profile',
+                    child: Text(context.l10n.profile),
+                  ),
+                  PopupMenuItem(
+                    value: 'settings',
+                    child: Text(context.l10n.settings),
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'logout',
+                    child: Text(context.l10n.logout),
+                  ),
                 ],
               ),
             ),
