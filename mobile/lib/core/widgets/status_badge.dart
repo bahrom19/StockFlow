@@ -56,6 +56,23 @@ class StatusBadge extends StatelessWidget {
         return l10n.statusExpired;
       case 'REJECTED':
         return l10n.statusRejected;
+      // Stock movement types (Phase 3B) — rendered by the movements table.
+      case 'SALE':
+        return l10n.movementSale;
+      case 'PURCHASE':
+        return l10n.movementPurchase;
+      case 'TRANSFER_IN':
+        return l10n.movementTransferIn;
+      case 'TRANSFER_OUT':
+        return l10n.movementTransferOut;
+      case 'ADJUSTMENT':
+        return l10n.movementAdjustment;
+      case 'RETURN':
+        return l10n.movementReturn;
+      case 'LOSS':
+        return l10n.movementLoss;
+      case 'CORRECTION':
+        return l10n.movementCorrection;
       default:
         return Formatters.status(status);
     }

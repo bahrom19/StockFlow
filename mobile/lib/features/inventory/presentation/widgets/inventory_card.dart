@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 
 class InventoryCard extends StatelessWidget {
@@ -48,7 +50,7 @@ class InventoryCard extends StatelessWidget {
                         style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant)),
                   const Spacer(),
-                  Text('$available available',
+                  Text(context.l10n.inventoryAvailable(available),
                       style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant)),
                 ],
@@ -59,7 +61,7 @@ class InventoryCard extends StatelessWidget {
                   if (item.warehouse != null)
                     WarehouseChip(warehouse: item.warehouse!),
                   const Spacer(),
-                  Text('Reserved: $reserved',
+                  Text(context.l10n.inventoryReserved(reserved),
                       style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant)),
                 ],
@@ -120,10 +122,11 @@ class StockBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final (Color color, String label) = outOfStock
-        ? (DesignTokens.statusCancelled, 'Out')
+        ? (DesignTokens.statusCancelled, l10n.levelOut)
         : lowStock
-            ? (DesignTokens.warning, 'Low')
+            ? (DesignTokens.warning, l10n.levelLow)
             : (DesignTokens.success, quantity.toString());
 
     return Container(
@@ -186,9 +189,11 @@ class MovementTile extends StatelessWidget {
         ),
         child: Icon(icon, color: color, size: 18),
       ),
-      title: Text(movement.type.movementLabel,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(fontWeight: FontWeight.w600)),
+      title: Text(
+        StatusBadge.statusLabel(movement.type, context.l10n),
+        style: theme.textTheme.bodyMedium
+            ?.copyWith(fontWeight: FontWeight.w600),
+      ),
       subtitle: Text('${movement.beforeQuantity} → ${movement.afterQuantity}',
           style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant)),

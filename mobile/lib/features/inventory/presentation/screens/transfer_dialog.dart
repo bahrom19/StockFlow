@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/widgets/app_snackbar.dart';
 import 'package:stockflow/core/utils/validators.dart';
@@ -40,11 +41,11 @@ class _TransferDialogState extends ConsumerState<TransferDialog> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_fromWarehouse == null || _toWarehouse == null) {
-      AppSnackbar.error(context, 'Please select both warehouses');
+      AppSnackbar.error(context, context.l10n.selectBothWarehouses);
       return;
     }
     if (_fromWarehouse!.id == _toWarehouse!.id) {
-      AppSnackbar.error(context, 'Source and destination must differ');
+      AppSnackbar.error(context, context.l10n.sourceDestinationDiffer);
       return;
     }
     setState(() => _isSaving = true);
@@ -61,19 +62,20 @@ class _TransferDialogState extends ConsumerState<TransferDialog> {
     setState(() => _isSaving = false);
 
     if (result != null && mounted) {
-      AppSnackbar.success(context, 'Stock transferred successfully');
+      AppSnackbar.success(context, context.l10n.stockTransferred);
       ref.read(inventoryListProvider.notifier).refresh();
       Navigator.of(context).pop();
     } else if (mounted) {
-      AppSnackbar.error(context, 'Transfer failed');
+      AppSnackbar.error(context, context.l10n.transferFailed);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: const Text('Transfer Stock')),
+      appBar: AppBar(title: Text(l10n.transferStock)),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -83,42 +85,42 @@ class _TransferDialogState extends ConsumerState<TransferDialog> {
             const SizedBox(height: AppSpacing.lg),
             DropdownButtonFormField<Warehouse>(
               value: _fromWarehouse,
-              decoration: const InputDecoration(
-                labelText: 'From Warehouse *',
-                prefixIcon: Icon(Icons.arrow_circle_right),
+              decoration: InputDecoration(
+                labelText: l10n.fromWarehouse,
+                prefixIcon: const Icon(Icons.arrow_circle_right),
               ),
               items: widget.warehouses
                   .map((w) => DropdownMenuItem(value: w, child: Text(w.name)))
                   .toList(),
               onChanged: (v) => setState(() => _fromWarehouse = v),
-              validator: (v) => v == null ? 'Required' : null,
+              validator: (v) => v == null ? l10n.required : null,
             ),
             const SizedBox(height: AppSpacing.sm),
             DropdownButtonFormField<Warehouse>(
               value: _toWarehouse,
-              decoration: const InputDecoration(
-                labelText: 'To Warehouse *',
-                prefixIcon: Icon(Icons.arrow_circle_left),
+              decoration: InputDecoration(
+                labelText: l10n.toWarehouse,
+                prefixIcon: const Icon(Icons.arrow_circle_left),
               ),
               items: widget.warehouses
                   .map((w) => DropdownMenuItem(value: w, child: Text(w.name)))
                   .toList(),
               onChanged: (v) => setState(() => _toWarehouse = v),
-              validator: (v) => v == null ? 'Required' : null,
+              validator: (v) => v == null ? l10n.required : null,
             ),
             const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _qtyCtrl,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Quantity *',
-                prefixIcon: Icon(Icons.inventory),
+              decoration: InputDecoration(
+                labelText: l10n.quantityRequired,
+                prefixIcon: const Icon(Icons.inventory),
               ),
               validator: (v) {
-                final req = Validators.required(v, 'Quantity');
+                final req = Validators.required(v, l10n.quantity);
                 if (req != null) return req;
                 final qty = int.tryParse(v ?? '');
-                if (qty == null || qty <= 0) return 'Must be a positive number';
+                if (qty == null || qty <= 0) return l10n.positiveNumber;
                 return null;
               },
             ),
@@ -126,8 +128,8 @@ class _TransferDialogState extends ConsumerState<TransferDialog> {
             TextFormField(
               controller: _commentCtrl,
               maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Comment',
+              decoration: InputDecoration(
+                labelText: l10n.comment,
                 alignLabelWithHint: true,
               ),
             ),
@@ -140,7 +142,7 @@ class _TransferDialogState extends ConsumerState<TransferDialog> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text('Submit Transfer'),
+                  : Text(l10n.submitTransfer),
             ),
           ],
         ),

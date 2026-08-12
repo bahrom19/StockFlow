@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/widgets/app_snackbar.dart';
 import 'package:stockflow/core/utils/validators.dart';
@@ -55,19 +56,20 @@ class _AdjustmentDialogState extends ConsumerState<AdjustmentDialog> {
     setState(() => _isSaving = false);
 
     if (result != null && mounted) {
-      AppSnackbar.success(context, 'Stock adjusted successfully');
+      AppSnackbar.success(context, context.l10n.stockAdjusted);
       ref.read(inventoryListProvider.notifier).refresh();
       Navigator.of(context).pop();
     } else if (mounted) {
-      AppSnackbar.error(context, 'Adjustment failed');
+      AppSnackbar.error(context, context.l10n.adjustmentFailed);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: const Text('Adjust Stock')),
+      appBar: AppBar(title: Text(l10n.adjustStock)),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -76,9 +78,9 @@ class _AdjustmentDialogState extends ConsumerState<AdjustmentDialog> {
             Text(widget.productName, style: theme.textTheme.titleMedium),
             const SizedBox(height: AppSpacing.lg),
             SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: true, label: Text('Increase')),
-                ButtonSegment(value: false, label: Text('Decrease')),
+              segments: [
+                ButtonSegment(value: true, label: Text(l10n.increase)),
+                ButtonSegment(value: false, label: Text(l10n.decrease)),
               ],
               selected: {_isIncrease},
               onSelectionChanged: (v) => setState(() => _isIncrease = v.first),
@@ -88,32 +90,32 @@ class _AdjustmentDialogState extends ConsumerState<AdjustmentDialog> {
               controller: _qtyCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: 'Quantity *',
+                labelText: l10n.quantityRequired,
                 prefixIcon:
                     Icon(_isIncrease ? Icons.add_circle : Icons.remove_circle),
               ),
               validator: (v) {
-                final req = Validators.required(v, 'Quantity');
+                final req = Validators.required(v, l10n.quantity);
                 if (req != null) return req;
                 final qty = int.tryParse(v ?? '');
-                if (qty == null || qty <= 0) return 'Must be a positive number';
+                if (qty == null || qty <= 0) return l10n.positiveNumber;
                 return null;
               },
             ),
             const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _reasonCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Reason',
-                hintText: 'e.g. Physical count correction',
+              decoration: InputDecoration(
+                labelText: l10n.reason,
+                hintText: l10n.reasonHint,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
             TextFormField(
               controller: _commentCtrl,
               maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Comment',
+              decoration: InputDecoration(
+                labelText: l10n.comment,
                 alignLabelWithHint: true,
               ),
             ),
@@ -126,7 +128,7 @@ class _AdjustmentDialogState extends ConsumerState<AdjustmentDialog> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text('Submit Adjustment'),
+                  : Text(l10n.submitAdjustment),
             ),
           ],
         ),

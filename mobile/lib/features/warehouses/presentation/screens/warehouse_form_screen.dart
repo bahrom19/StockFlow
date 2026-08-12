@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/features/inventory/data/repositories/inventory_repository.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
@@ -112,13 +113,21 @@ class _WarehouseFormScreenState extends ConsumerState<WarehouseFormScreen> {
     setState(() => _isSaving = false);
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isEditing ? 'Warehouse updated' : 'Warehouse created')),
+        SnackBar(
+          content: Text(
+            _isEditing
+                ? context.l10n.warehouseUpdated
+                : context.l10n.warehouseCreated,
+          ),
+        ),
       );
       context.pop();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_isEditing ? 'Update failed' : 'Create failed'),
+          content: Text(
+            _isEditing ? context.l10n.updateFailed : context.l10n.createFailed,
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -137,8 +146,11 @@ class _WarehouseFormScreenState extends ConsumerState<WarehouseFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Edit Warehouse' : 'New Warehouse')),
+      appBar: AppBar(
+        title: Text(_isEditing ? l10n.editWarehouse : l10n.newWarehouse),
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
           : Form(
@@ -146,22 +158,21 @@ class _WarehouseFormScreenState extends ConsumerState<WarehouseFormScreen> {
               child: ListView(
                 padding: AppSpacing.screenPadding,
                 children: [
-                  _field(_nameCtrl, 'Warehouse Name *',
-                      hint: 'e.g. Main Store', required: true),
+                  _field(_nameCtrl, l10n.warehouseName,
+                      hint: l10n.warehouseNameHint, required: true),
                   const SizedBox(height: AppSpacing.sm),
-                  _field(_codeCtrl, 'Code *', hint: 'e.g. MAIN',
-                      required: true),
+                  _field(_codeCtrl, l10n.codeRequired,
+                      hint: l10n.codeHint, required: true),
                   const SizedBox(height: AppSpacing.sm),
-                  _field(_addressCtrl, 'Address'),
+                  _field(_addressCtrl, l10n.address),
                   const SizedBox(height: AppSpacing.sm),
-                  _field(_phoneCtrl, 'Phone'),
+                  _field(_phoneCtrl, l10n.phone),
                   const SizedBox(height: AppSpacing.sm),
-                  _field(_managerCtrl, 'Manager Name'),
+                  _field(_managerCtrl, l10n.managerName),
                   const SizedBox(height: AppSpacing.sm),
                   SwitchListTile(
-                    title: const Text('Default warehouse'),
-                    subtitle: const Text(
-                        'New stock will be assigned to this warehouse'),
+                    title: Text(l10n.defaultWarehouse),
+                    subtitle: Text(l10n.defaultWarehouseSubtitle),
                     value: _isDefault,
                     onChanged: (v) => setState(() => _isDefault = v),
                     contentPadding: EdgeInsets.zero,
@@ -178,7 +189,11 @@ class _WarehouseFormScreenState extends ConsumerState<WarehouseFormScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : Text(_isEditing ? 'Save Changes' : 'Create Warehouse'),
+                        : Text(
+                            _isEditing
+                                ? l10n.saveChanges
+                                : l10n.createWarehouse,
+                          ),
                   ),
                 ],
               ),
@@ -201,7 +216,9 @@ class _WarehouseFormScreenState extends ConsumerState<WarehouseFormScreen> {
         isDense: true,
       ),
       validator: required
-          ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
+          ? (v) => (v == null || v.trim().isEmpty)
+              ? context.l10n.required
+              : null
           : null,
     );
   }

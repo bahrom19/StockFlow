@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
@@ -41,11 +42,11 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Stock Movements',
-            subtitle: 'Every change in stock — purchases, sales, transfers',
+            title: context.l10n.stockMovements,
+            subtitle: context.l10n.movementsSubtitle,
             actions: [
               IconButton(
-                tooltip: 'Refresh',
+                tooltip: context.l10n.refresh,
                 onPressed: () => ref.read(movementsProvider.notifier).loadMovements(
                       productId: widget.productId,
                       warehouseId: widget.warehouseId,
@@ -59,16 +60,16 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
               items: items,
               total: items.length,
               isLoading: state is MovementsLoading,
-              searchHint: 'Search movements…',
+              searchHint: context.l10n.movementsSearchHint,
               exportFileName: 'stock_movements.csv',
-              exportHeaders: const [
-                'Date',
-                'Type',
-                'Product',
-                'Qty',
-                'Before',
-                'After',
-                'Reference',
+              exportHeaders: [
+                context.l10n.date,
+                context.l10n.type,
+                context.l10n.product,
+                context.l10n.qty,
+                context.l10n.before,
+                context.l10n.after,
+                context.l10n.reference,
               ],
               exportRows: () => [
                 for (final m in items)
@@ -83,18 +84,20 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
                   ],
               ],
               columns: [
-                const DataColumn(label: Text('Date')),
-                const DataColumn(label: Text('Type')),
-                const DataColumn(label: Text('Qty')),
+                DataColumn(label: Text(context.l10n.date)),
+                DataColumn(label: Text(context.l10n.type)),
+                DataColumn(label: Text(context.l10n.qty)),
                 DataColumn(
-                  label: Text('Before', style: theme.textTheme.labelMedium),
+                  label: Text(context.l10n.before,
+                      style: theme.textTheme.labelMedium),
                   numeric: true,
                 ),
                 DataColumn(
-                  label: Text('After', style: theme.textTheme.labelMedium),
+                  label: Text(context.l10n.after,
+                      style: theme.textTheme.labelMedium),
                   numeric: true,
                 ),
-                const DataColumn(label: Text('Reference')),
+                DataColumn(label: Text(context.l10n.reference)),
               ],
               buildRow: (m) => DataRow(
                 cells: [
@@ -119,8 +122,8 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
                   DataCell(Text(m.referenceType ?? '-')),
                 ],
               ),
-              emptyTitle: 'No movements',
-              emptySubtitle: 'Stock movements will appear here',
+              emptyTitle: context.l10n.movementsEmptyTitle,
+              emptySubtitle: context.l10n.movementsEmptySubtitle,
               emptyIcon: Icons.history,
               errorMessage: state is MovementsError
                   ? (state as MovementsError).message

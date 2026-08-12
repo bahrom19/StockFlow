@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/widgets/app_snackbar.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
@@ -27,7 +28,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
 
   Future<void> _openAdjustDialog(InventoryLoaded? loaded) async {
     if (loaded == null || loaded.items.isEmpty) {
-      AppSnackbar.info(context, 'Load inventory first');
+      AppSnackbar.info(context, context.l10n.inventoryLoadFirst);
       return;
     }
     await showAdjustmentDialog(
@@ -39,11 +40,11 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
 
   Future<void> _openTransferDialog(InventoryLoaded? loaded) async {
     if (loaded == null || loaded.items.isEmpty) {
-      AppSnackbar.info(context, 'Load inventory first');
+      AppSnackbar.info(context, context.l10n.inventoryLoadFirst);
       return;
     }
     if (loaded.warehouses.length < 2) {
-      AppSnackbar.info(context, 'Need at least two warehouses to transfer');
+      AppSnackbar.info(context, context.l10n.transferNeedTwoWarehouses);
       return;
     }
     await showTransferDialog(
@@ -66,19 +67,19 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Inventory',
-            subtitle: 'Live stock levels across all warehouses',
+            title: context.l10n.inventory,
+            subtitle: context.l10n.inventorySubtitle,
             actions: [
               OutlinedButton.icon(
                 onPressed: () => _openAdjustDialog(loaded),
                 icon: const Icon(Icons.tune, size: 18),
-                label: const Text('Adjust'),
+                label: Text(context.l10n.inventoryAdjust),
               ),
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: () => _openTransferDialog(loaded),
                 icon: const Icon(Icons.swap_horiz, size: 18),
-                label: const Text('Transfer'),
+                label: Text(context.l10n.inventoryTransfer),
               ),
             ],
           ),
@@ -89,13 +90,13 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
               isLoading: state is InventoryLoading,
               isRefreshing: loaded?.isRefreshing ?? false,
               search: loaded?.search,
-              searchHint: 'Search by name, SKU or barcode…',
+              searchHint: context.l10n.searchByNameSkuBarcode,
               onSearch: (q) =>
                   ref.read(inventoryListProvider.notifier).search(q),
               onRefresh: () =>
                   ref.read(inventoryListProvider.notifier).refresh(),
               filters: [
-                EntityFilter('All', null),
+                EntityFilter(context.l10n.all, null),
                 for (final w in (loaded?.warehouses ?? const <Warehouse>[]))
                   EntityFilter(w.name, w.id),
               ],
@@ -103,14 +104,14 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
               onFilter: (v) =>
                   ref.read(inventoryListProvider.notifier).filterByWarehouse(v),
               exportFileName: 'inventory.csv',
-              exportHeaders: const [
-                'Product',
-                'SKU',
-                'Warehouse',
-                'Quantity',
-                'Reserved',
-                'Available',
-                'Min',
+              exportHeaders: [
+                context.l10n.product,
+                context.l10n.sku,
+                context.l10n.warehouse,
+                context.l10n.quantity,
+                context.l10n.reserved,
+                context.l10n.available,
+                context.l10n.min,
               ],
               exportRows: () => [
                 for (final i in items)
@@ -125,23 +126,27 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
                   ],
               ],
               columns: [
-                const DataColumn(label: Text('Product')),
-                const DataColumn(label: Text('SKU')),
-                const DataColumn(label: Text('Warehouse')),
+                DataColumn(label: Text(context.l10n.product)),
+                DataColumn(label: Text(context.l10n.sku)),
+                DataColumn(label: Text(context.l10n.warehouse)),
                 DataColumn(
-                  label: Text('Qty', style: theme.textTheme.labelMedium),
+                  label: Text(context.l10n.qty,
+                      style: theme.textTheme.labelMedium),
                   numeric: true,
                 ),
                 DataColumn(
-                  label: Text('Reserved', style: theme.textTheme.labelMedium),
+                  label: Text(context.l10n.reserved,
+                      style: theme.textTheme.labelMedium),
                   numeric: true,
                 ),
                 DataColumn(
-                  label: Text('Available', style: theme.textTheme.labelMedium),
+                  label: Text(context.l10n.available,
+                      style: theme.textTheme.labelMedium),
                   numeric: true,
                 ),
                 DataColumn(
-                  label: Text('Level', style: theme.textTheme.labelMedium),
+                  label: Text(context.l10n.level,
+                      style: theme.textTheme.labelMedium),
                 ),
               ],
               buildRow: (i) => DataRow(
@@ -167,9 +172,8 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
                 ],
               ),
               buildCard: (i) => InventoryCard(item: i, onTap: () {}),
-              emptyTitle: 'No inventory items found',
-              emptySubtitle:
-                  'Stock data will appear once products are sold or received',
+              emptyTitle: context.l10n.inventoryEmptyTitle,
+              emptySubtitle: context.l10n.inventoryEmptySubtitle,
               emptyIcon: Icons.inventory_2_outlined,
               errorMessage: state is InventoryError
                   ? (state as InventoryError).message
@@ -192,12 +196,13 @@ class _LevelBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final available = item.availableQuantity;
     final (String label, Color color) = available <= 0
-        ? ('Out', theme.colorScheme.error)
+        ? (l10n.levelOut, theme.colorScheme.error)
         : available <= item.minQuantity
-            ? ('Low', const Color(0xFFFB8C00))
-            : ('OK', const Color(0xFF0F9D58));
+            ? (l10n.levelLow, const Color(0xFFFB8C00))
+            : (l10n.levelOk, const Color(0xFF0F9D58));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

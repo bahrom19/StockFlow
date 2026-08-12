@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/validators.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
@@ -89,7 +90,7 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
   Future<void> _submit() async {
     if (_selected == null || _warehouse == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a product and warehouse')),
+        SnackBar(content: Text(context.l10n.selectProductAndWarehouse)),
       );
       return;
     }
@@ -97,7 +98,7 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
     final qty = int.tryParse(_qtyCtrl.text) ?? 0;
     if (qty == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Quantity cannot be zero')),
+        SnackBar(content: Text(context.l10n.quantityCannotBeZero)),
       );
       return;
     }
@@ -121,7 +122,7 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
       final state = ref.read(adjustmentProvider);
       final message = state is AsyncError
           ? state.error.toString()
-          : 'Adjustment failed';
+          : context.l10n.adjustmentFailed;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
@@ -131,8 +132,9 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return AlertDialog(
-      title: const Text('Adjust Stock'),
+      title: Text(l10n.adjustStock),
       content: SizedBox(
         width: 420,
         child: Form(
@@ -143,7 +145,7 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Enter a positive value to add stock, negative to reduce.',
+                  l10n.adjustHint,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -152,9 +154,9 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
                 DropdownButtonFormField<StockItem>(
                   value: _selected,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Product *',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.productRequired,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   items: [
@@ -162,7 +164,7 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
                       DropdownMenuItem(
                         value: i,
                         child: Text(
-                          '${i.productName} (${i.quantity} in stock)',
+                          '${i.productName} ${l10n.itemInStock(i.quantity)}',
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -185,9 +187,9 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
                 DropdownButtonFormField<Warehouse>(
                   value: _warehouse,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Warehouse *',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.warehouseRequired,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   items: [
@@ -206,19 +208,19 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
                 TextFormField(
                   controller: _qtyCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Quantity *',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.quantityRequired,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
-                  validator: (v) => Validators.required(v, 'Quantity'),
+                  validator: (v) => Validators.required(v, l10n.quantity),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 TextFormField(
                   controller: _reasonCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Reason / Comment',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.reasonComment,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                 ),
@@ -232,7 +234,7 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
           onPressed: _isSubmitting
               ? null
               : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: _isSubmitting ? null : _submit,
@@ -242,7 +244,7 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Apply Adjustment'),
+              : Text(l10n.applyAdjustment),
         ),
       ],
     );
@@ -298,13 +300,13 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
   Future<void> _submit() async {
     if (_selected == null || _from == null || _to == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select product and both warehouses')),
+        SnackBar(content: Text(context.l10n.selectProductAndBothWarehouses)),
       );
       return;
     }
     if (_from!.id == _to!.id) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Source and destination must differ')),
+        SnackBar(content: Text(context.l10n.sourceDestinationDiffer)),
       );
       return;
     }
@@ -312,7 +314,7 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
     final qty = int.tryParse(_qtyCtrl.text) ?? 0;
     if (qty <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Quantity must be positive')),
+        SnackBar(content: Text(context.l10n.quantityMustBePositive)),
       );
       return;
     }
@@ -339,7 +341,7 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
       final state = ref.read(transferProvider);
       final message = state is AsyncError
           ? state.error.toString()
-          : 'Transfer failed';
+          : context.l10n.transferFailed;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
@@ -348,8 +350,9 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AlertDialog(
-      title: const Text('Transfer Stock'),
+      title: Text(l10n.transferStock),
       content: SizedBox(
         width: 420,
         child: Form(
@@ -361,9 +364,9 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
                 DropdownButtonFormField<StockItem>(
                   value: _selected,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Product *',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.productRequired,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   items: [
@@ -371,7 +374,7 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
                       DropdownMenuItem(
                         value: i,
                         child: Text(
-                          '${i.productName} (${i.quantity} in stock)',
+                          '${i.productName} ${l10n.itemInStock(i.quantity)}',
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -394,9 +397,9 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
                 DropdownButtonFormField<Warehouse>(
                   value: _from,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'From Warehouse *',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.fromWarehouse,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   items: [
@@ -412,9 +415,9 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
                 DropdownButtonFormField<Warehouse>(
                   value: _to,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'To Warehouse *',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.toWarehouse,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   items: [
@@ -430,19 +433,19 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
                 TextFormField(
                   controller: _qtyCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Quantity *',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.quantityRequired,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
-                  validator: (v) => Validators.required(v, 'Quantity'),
+                  validator: (v) => Validators.required(v, l10n.quantity),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 TextFormField(
                   controller: _commentCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Comment',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.comment,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                 ),
@@ -456,7 +459,7 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
           onPressed: _isSubmitting
               ? null
               : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: _isSubmitting ? null : _submit,
@@ -466,7 +469,7 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Transfer'),
+              : Text(l10n.inventoryTransfer),
         ),
       ],
     );

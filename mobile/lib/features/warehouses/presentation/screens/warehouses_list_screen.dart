@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
@@ -31,22 +32,21 @@ class _WarehousesListScreenState extends ConsumerState<WarehousesListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete warehouse?'),
+        title: Text(ctx.l10n.deleteWarehouseTitle),
         content: Text(
-          'Warehouse "${warehouse.name}" (${warehouse.code}) will be archived. '
-          'This cannot be undone.',
+          ctx.l10n.deleteWarehouseConfirm(warehouse.name, warehouse.code),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(ctx.l10n.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(ctx.l10n.delete),
           ),
         ],
       ),
@@ -57,7 +57,11 @@ class _WarehousesListScreenState extends ConsumerState<WarehousesListScreen> {
     final ok = await notifier.delete(warehouse.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'Warehouse deleted' : 'Delete failed')),
+      SnackBar(
+        content: Text(
+          ok ? context.l10n.warehouseDeleted : context.l10n.deleteFailed,
+        ),
+      ),
     );
   }
 
@@ -74,8 +78,8 @@ class _WarehousesListScreenState extends ConsumerState<WarehousesListScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Warehouses',
-            subtitle: 'Manage your storage locations and default warehouse',
+            title: context.l10n.warehouses,
+            subtitle: context.l10n.warehousesSubtitle,
           ),
           Expanded(
             child: EntityTable<Warehouse>(
@@ -84,22 +88,22 @@ class _WarehousesListScreenState extends ConsumerState<WarehousesListScreen> {
               isLoading: state is WarehouseListLoading,
               isRefreshing: loaded?.isRefreshing ?? false,
               search: loaded?.search,
-              searchHint: 'Search by name or code…',
+              searchHint: context.l10n.searchByNameOrCode,
               onSearch: (q) =>
                   ref.read(warehouseListProvider.notifier).search(q),
               onRefresh: () =>
                   ref.read(warehouseListProvider.notifier).refresh(),
               onCreate: () => context.push(RouteNames.warehouseNew),
-              createLabel: 'New Warehouse',
+              createLabel: context.l10n.newWarehouse,
               exportFileName: 'warehouses.csv',
-              exportHeaders: const [
-                'Name',
-                'Code',
-                'Address',
-                'Phone',
-                'Manager',
-                'Default',
-                'Status',
+              exportHeaders: [
+                context.l10n.name,
+                context.l10n.code,
+                context.l10n.address,
+                context.l10n.phone,
+                context.l10n.managerName,
+                context.l10n.defaultLabel,
+                context.l10n.status,
               ],
               exportRows: () => [
                 for (final w in items)
@@ -109,20 +113,22 @@ class _WarehousesListScreenState extends ConsumerState<WarehousesListScreen> {
                     w.address ?? '',
                     w.phone ?? '',
                     w.managerName ?? '',
-                    w.isDefault ? 'Yes' : 'No',
-                    w.isActive ? 'Active' : 'Inactive',
+                    w.isDefault ? context.l10n.yes : context.l10n.no,
+                    w.isActive
+                        ? context.l10n.statusActive
+                        : context.l10n.statusInactive,
                   ],
               ],
               columns: [
-                const DataColumn(label: Text('Warehouse')),
-                const DataColumn(label: Text('Code')),
-                const DataColumn(label: Text('Address')),
-                const DataColumn(label: Text('Manager')),
-                const DataColumn(label: Text('Default')),
-                const DataColumn(label: Text('Status')),
+                DataColumn(label: Text(context.l10n.warehouse)),
+                DataColumn(label: Text(context.l10n.code)),
+                DataColumn(label: Text(context.l10n.address)),
+                DataColumn(label: Text(context.l10n.managerName)),
+                DataColumn(label: Text(context.l10n.defaultLabel)),
+                DataColumn(label: Text(context.l10n.status)),
                 DataColumn(
                   label: Text(
-                    'Actions',
+                    context.l10n.actions,
                     style: theme.textTheme.labelMedium,
                   ),
                 ),
@@ -147,13 +153,13 @@ class _WarehousesListScreenState extends ConsumerState<WarehousesListScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          tooltip: 'Edit',
+                          tooltip: context.l10n.edit,
                           icon: const Icon(Icons.edit_outlined, size: 18),
                           onPressed: () => context
                               .push('${RouteNames.warehouseEdit.replaceAll(':id', w.id)}'),
                         ),
                         IconButton(
-                          tooltip: 'Delete',
+                          tooltip: context.l10n.delete,
                           icon: Icon(
                             Icons.delete_outline,
                             size: 18,
@@ -168,8 +174,8 @@ class _WarehousesListScreenState extends ConsumerState<WarehousesListScreen> {
               ),
               onRowTap: (w) => context
                   .push('${RouteNames.warehouseEdit.replaceAll(':id', w.id)}'),
-              emptyTitle: 'No warehouses',
-              emptySubtitle: 'Create your first warehouse to start tracking stock',
+              emptyTitle: context.l10n.warehousesEmptyTitle,
+              emptySubtitle: context.l10n.warehousesEmptySubtitle,
               emptyIcon: Icons.warehouse_outlined,
               errorMessage: state is WarehouseListError
                   ? (state as WarehouseListError).message
