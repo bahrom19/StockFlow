@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -152,8 +153,13 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(
-          home: Scaffold(body: SingleChildScrollView(child: ActionCenter())),
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(
+            body: SingleChildScrollView(child: ActionCenter()),
+          ),
         ),
       ),
     );
@@ -184,7 +190,12 @@ void main() {
             ),
           ),
         ],
-        child: MaterialApp.router(routerConfig: _router()),
+        child: MaterialApp.router(
+          routerConfig: _router(),
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+        ),
       ),
     );
     await tester.pump();

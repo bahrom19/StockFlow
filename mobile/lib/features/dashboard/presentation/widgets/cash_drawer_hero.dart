@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
@@ -204,6 +206,7 @@ class _ShiftHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
 
     // ── State → color + footer pill ──
     final Color stateColor;
@@ -212,20 +215,22 @@ class _ShiftHero extends StatelessWidget {
     if (!shift.isOpen) {
       stateColor = DesignTokens.grey500;
       pillIcon = Icons.lock_outline;
-      pillText = 'Shift closed';
+      pillText = l10n.shiftClosed;
     } else if (_balances) {
       stateColor = DesignTokens.success;
       pillIcon = Icons.check_circle;
-      pillText = 'Difference 0';
+      pillText = l10n.differenceZero;
     } else {
       stateColor = DesignTokens.error;
       pillIcon = Icons.error_outline;
-      pillText = 'Difference ${Formatters.currencyShort(shift.differenceValue)}';
+      pillText = l10n.differenceAmount(
+        Formatters.currencyShort(shift.differenceValue),
+      );
     }
 
     final statusText = shift.isOpen
-        ? 'Open · opened ${Formatters.time(shift.openedAt)}'
-        : 'Closed · opened ${Formatters.time(shift.openedAt)}';
+        ? l10n.shiftOpenOpenedAt(Formatters.time(shift.openedAt))
+        : l10n.shiftClosedOpenedAt(Formatters.time(shift.openedAt));
 
     return _HeroCard(
       accent: stateColor,
@@ -252,7 +257,7 @@ class _ShiftHero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Cash Drawer',
+                        l10n.cashDrawer,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: theme.colorScheme.onSurface,
@@ -292,7 +297,7 @@ class _ShiftHero extends StatelessWidget {
 
             // ── 1. Current money — the dominant answer ──
             Text(
-              'Cash in drawer',
+              l10n.cashInDrawer,
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -318,22 +323,22 @@ class _ShiftHero extends StatelessWidget {
             Row(
               children: [
                 _MiniStat(
-                  label: 'Cash in',
+                  label: l10n.cashIn,
                   value: Formatters.currencyShort(shift.cashInValue),
                   color: DesignTokens.paymentCash,
                 ),
                 _MiniStat(
-                  label: 'Cash sales',
+                  label: l10n.cashSales,
                   value: Formatters.currencyShort(shift.cashSalesValue),
                   color: DesignTokens.success,
                 ),
                 _MiniStat(
-                  label: 'Non-cash',
+                  label: l10n.nonCash,
                   value: Formatters.currencyShort(_nonCash),
                   color: DesignTokens.info,
                 ),
                 _MiniStat(
-                  label: 'Cash out',
+                  label: l10n.cashOut,
                   value: Formatters.currencyShort(shift.cashOutValue),
                   color: DesignTokens.warning,
                 ),
@@ -357,8 +362,9 @@ class _ShiftHero extends StatelessWidget {
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          'Expected closing · '
-                          '${Formatters.currency(shift.expectedClosingValue)}',
+                          l10n.expectedClosing(
+                            Formatters.currency(shift.expectedClosingValue),
+                          ),
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -430,13 +436,13 @@ class _UpdatedLabelState extends State<_UpdatedLabel> {
     super.dispose();
   }
 
-  String _label() {
+  String _label(AppLocalizations l10n) {
     final diff = DateTime.now().difference(widget.updatedAt);
-    if (diff.inSeconds < 5) return 'Updated just now';
-    if (diff.inSeconds < 60) return 'Updated ${diff.inSeconds}s ago';
-    if (diff.inMinutes < 60) return 'Updated ${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return 'Updated ${diff.inHours}h ago';
-    return 'Updated ${diff.inDays}d ago';
+    if (diff.inSeconds < 5) return l10n.updatedJustNow;
+    if (diff.inSeconds < 60) return l10n.updatedSecondsAgo(diff.inSeconds);
+    if (diff.inMinutes < 60) return l10n.updatedMinutesAgo(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.updatedHoursAgo(diff.inHours);
+    return l10n.updatedDaysAgo(diff.inDays);
   }
 
   @override
@@ -452,7 +458,7 @@ class _UpdatedLabelState extends State<_UpdatedLabel> {
         ),
         const SizedBox(width: 4),
         Text(
-          _label(),
+          _label(context.l10n),
           style: theme.textTheme.labelSmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -515,14 +521,15 @@ class _NoShiftHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final warn = DesignTokens.warning;
 
-    final title = noWarehouse ? 'No warehouse yet' : 'No open shift';
+    final title = noWarehouse ? l10n.noWarehouseYet : l10n.noOpenShift;
     final subtitle = noWarehouse
-        ? 'Add a warehouse first — cash shifts open per warehouse.'
-        : 'Open a cash shift to start selling and tracking the drawer.';
+        ? l10n.noWarehouseSubtitle
+        : l10n.noShiftSubtitle;
     final icon = noWarehouse ? Icons.warehouse_outlined : Icons.point_of_sale;
-    final buttonLabel = noWarehouse ? 'Add warehouse' : 'Open shift';
+    final buttonLabel = noWarehouse ? l10n.addWarehouse : l10n.openShift;
     final route = noWarehouse ? RouteNames.warehouses : RouteNames.saleNew;
 
     return _HeroCard(
@@ -595,6 +602,7 @@ class _HeroError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final err = DesignTokens.error;
 
     return Container(
@@ -618,7 +626,7 @@ class _HeroError extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Cash drawer unavailable',
+                    l10n.cashDrawerUnavailable,
                     style: theme.textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: theme.colorScheme.onSurface,
@@ -626,7 +634,7 @@ class _HeroError extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Could not load the open shift.',
+                    l10n.couldNotLoadOpenShift,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -635,7 +643,7 @@ class _HeroError extends StatelessWidget {
               ),
             ),
           ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          TextButton(onPressed: onRetry, child: Text(l10n.retry)),
         ],
       ),
     );

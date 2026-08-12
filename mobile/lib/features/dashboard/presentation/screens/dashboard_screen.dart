@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/utils/formatters.dart';
@@ -239,7 +241,7 @@ class _DashboardContentView extends StatelessWidget {
                   flex: 7,
                   child: SalesBarChart(
                     data: chartData,
-                    title: 'Sales — Last ${chartData.length} Days',
+                    title: context.l10n.salesLastDays(chartData.length),
                     showProfit: true,
                     height: 220,
                   ),
@@ -251,7 +253,7 @@ class _DashboardContentView extends StatelessWidget {
           else ...[
             SalesBarChart(
               data: chartData,
-              title: 'Sales — Last ${chartData.length} Days',
+              title: context.l10n.salesLastDays(chartData.length),
               showProfit: true,
               height: 200,
             ),
@@ -299,7 +301,11 @@ class _GreetingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final today = DateFormat('EEEE, MMM d').format(DateTime.now());
+    final l10n = context.l10n;
+    final today = DateFormat(
+      'EEEE, MMM d',
+      Localizations.localeOf(context).toLanguageTag(),
+    ).format(DateTime.now());
 
     return Row(
       children: [
@@ -316,7 +322,7 @@ class _GreetingRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Hello, ${userName ?? 'User'}',
+                  l10n.greetingHello(userName ?? l10n.user),
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: theme.colorScheme.onSurface,
@@ -324,7 +330,7 @@ class _GreetingRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$today · Business snapshot',
+                  l10n.greetingSubtitle(today),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -344,7 +350,7 @@ class _GreetingRow extends StatelessWidget {
           )
         else
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: l10n.refresh,
             onPressed: onRefresh,
             icon: const Icon(Icons.refresh),
           ),
@@ -367,40 +373,40 @@ class _KpiSection extends StatelessWidget {
     return ((summary.todaySales.count - y) / y) * 100;
   }
 
-  List<Widget> _cards() {
+  List<Widget> _cards(AppLocalizations l10n) {
     return [
       // Stage E — Revenue + Monthly Goal (first KPI, emphasized). The monthly
       // goal is a LOCAL owner setting (SharedPreferences), zero new requests.
       RevenueGoalCard(summary: summary),
       KpiCard(
-        title: "Today's Sales",
+        title: l10n.kpiTodaySales,
         value: summary.todaySales.count.toString(),
-        subtitle: '${summary.yesterdaySales.count} yesterday',
+        subtitle: l10n.kpiYesterdayCount(summary.yesterdaySales.count),
         changePercent: _countTrend(),
         icon: Icons.receipt_long,
         color: DesignTokens.primary,
         compact: true,
       ),
       KpiCard(
-        title: 'Gross Profit',
+        title: l10n.kpiGrossProfit,
         value: Formatters.currency(summary.grossProfit),
-        subtitle: 'Period profit',
+        subtitle: l10n.kpiPeriodProfit,
         icon: Icons.account_balance,
         color: DesignTokens.profit,
         compact: true,
       ),
       KpiCard(
-        title: 'Inventory Value',
+        title: l10n.kpiInventoryValue,
         value: Formatters.currencyShort(summary.inventoryValue),
-        subtitle: 'Total stock value',
+        subtitle: l10n.kpiTotalStockValue,
         icon: Icons.warehouse,
         color: DesignTokens.accent,
         compact: true,
       ),
       KpiCard(
-        title: 'Customers',
+        title: l10n.customers,
         value: summary.customerCount.toString(),
-        subtitle: 'Total customers',
+        subtitle: l10n.kpiTotalCustomers,
         icon: Icons.people,
         color: DesignTokens.info,
         compact: true,
@@ -411,7 +417,7 @@ class _KpiSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final cards = _cards();
+    final cards = _cards(context.l10n);
 
     if (width >= AppSpacing.breakpointWide) {
       return Row(

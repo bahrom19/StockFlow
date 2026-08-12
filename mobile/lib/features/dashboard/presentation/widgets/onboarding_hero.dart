@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
@@ -33,6 +35,7 @@ class OnboardingHero extends ConsumerWidget {
     }
 
     final steps = buildOnboardingSteps(
+      l10n: context.l10n,
       summary: dashState.summary,
       shiftState: shiftState,
     );
@@ -79,7 +82,7 @@ class OnboardingHero extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Welcome to StockFlow',
+                        context.l10n.welcomeToStockFlow,
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                           color: theme.colorScheme.onSurface,
@@ -87,8 +90,7 @@ class OnboardingHero extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Set up your store in four quick steps — your dashboard '
-                        'updates live as data flows in.',
+                        context.l10n.onboardingSubtitle,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -100,7 +102,11 @@ class OnboardingHero extends ConsumerWidget {
               const SizedBox(width: AppSpacing.md),
               Semantics(
                 container: true,
-                child: _ProgressPill(done: done, total: steps.length),
+                child: _ProgressPill(
+                  l10n: context.l10n,
+                  done: done,
+                  total: steps.length,
+                ),
               ),
             ],
           ),
@@ -176,6 +182,7 @@ class OnboardingStepView {
 ///  - "Open a cash shift"  — done once an open shift is loaded (X-report).
 ///  - "Complete first sale" — done once any sale exists.
 List<OnboardingStepView> buildOnboardingSteps({
+  required AppLocalizations l10n,
   required DashboardSummary summary,
   required ShiftState shiftState,
 }) {
@@ -187,32 +194,32 @@ List<OnboardingStepView> buildOnboardingSteps({
   return [
     OnboardingStepView(
       icon: Icons.inventory_2_outlined,
-      title: 'Add products',
-      description: 'Build your catalog with prices, SKUs and barcodes',
+      title: l10n.onbAddProducts,
+      description: l10n.onbAddProductsDesc,
       route: RouteNames.productCreate,
       color: DesignTokens.primary,
       done: hasStock,
     ),
     OnboardingStepView(
       icon: Icons.person_add_alt_1,
-      title: 'Register customers',
-      description: 'Keep your customer book ready for sales',
+      title: l10n.onbRegisterCustomers,
+      description: l10n.onbRegisterCustomersDesc,
       route: RouteNames.customerNew,
       color: DesignTokens.accent,
       done: summary.customerCount > 0,
     ),
     OnboardingStepView(
       icon: Icons.point_of_sale,
-      title: 'Open a cash shift',
-      description: 'Start the day with an open shift at the POS',
+      title: l10n.onbOpenCashShift,
+      description: l10n.onbOpenCashShiftDesc,
       route: RouteNames.saleNew,
       color: DesignTokens.secondary,
       done: shiftOpen,
     ),
     OnboardingStepView(
       icon: Icons.add_shopping_cart,
-      title: 'Complete your first sale',
-      description: 'Ring up a sale and watch the dashboard come alive',
+      title: l10n.onbCompleteFirstSale,
+      description: l10n.onbCompleteFirstSaleDesc,
       route: RouteNames.saleNew,
       color: DesignTokens.info,
       done: summary.ordersCount > 0 || summary.todaySales.count > 0,
@@ -222,9 +229,14 @@ List<OnboardingStepView> buildOnboardingSteps({
 
 /// Compact "N of 4" progress pill in the hero header.
 class _ProgressPill extends StatelessWidget {
+  final AppLocalizations l10n;
   final int done;
   final int total;
-  const _ProgressPill({required this.done, required this.total});
+  const _ProgressPill({
+    required this.l10n,
+    required this.done,
+    required this.total,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -240,7 +252,7 @@ class _ProgressPill extends StatelessWidget {
         border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Text(
-        complete ? 'All done' : '$done of $total',
+        complete ? l10n.allDone : l10n.progressOf(done, total),
         style: theme.textTheme.labelMedium?.copyWith(
           color: color,
           fontWeight: FontWeight.w800,
@@ -266,6 +278,7 @@ class _OnboardingStepCardState extends State<_OnboardingStepCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final color = widget.step.done ? DesignTokens.success : widget.step.color;
     final done = widget.step.done;
 
@@ -334,7 +347,7 @@ class _OnboardingStepCardState extends State<_OnboardingStepCard> {
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          done ? 'Done' : '${widget.index + 1}',
+                          done ? l10n.done : '${widget.index + 1}',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: color,
                             fontWeight: FontWeight.w800,
@@ -366,7 +379,7 @@ class _OnboardingStepCardState extends State<_OnboardingStepCard> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    done ? 'Completed' : 'Get started',
+                    done ? l10n.completed : l10n.getStarted,
                     style: theme.textTheme.labelMedium?.copyWith(
                       color: done
                           ? theme.colorScheme.onSurfaceVariant

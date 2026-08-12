@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
@@ -21,10 +23,9 @@ class RecentSalesList extends StatelessWidget {
       return PremiumEmptyState(
         icon: Icons.receipt_long,
         color: DesignTokens.primary,
-        title: 'No recent sales',
-        description: 'Start by creating your first sale — completed sales '
-            'show up here instantly.',
-        ctaLabel: 'New Sale',
+        title: context.l10n.noRecentSales,
+        description: context.l10n.noRecentSalesDesc,
+        ctaLabel: context.l10n.newSale,
         ctaIcon: Icons.add_shopping_cart,
         onCta: () => context.push(RouteNames.saleNew),
       );
@@ -50,7 +51,7 @@ class RecentSalesList extends StatelessWidget {
                   child: Semantics(
                     container: true,
                     child: Text(
-                      'Recent Sales',
+                      context.l10n.recentSales,
                       style: theme.textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
@@ -58,7 +59,7 @@ class RecentSalesList extends StatelessWidget {
                 ),
                 TextButton(
                   onPressed: () => context.push(RouteNames.sales),
-                  child: const Text('View all'),
+                  child: Text(context.l10n.viewAll),
                 ),
               ],
             ),
@@ -107,7 +108,7 @@ class _SaleItem extends StatelessWidget {
                 ],
               ),
             ),
-            _StatusChip(status: sale.status),
+            _StatusChip(status: sale.status, l10n: context.l10n),
             const SizedBox(width: AppSpacing.sm),
             Text(
               Formatters.currency(sale.total),
@@ -125,13 +126,14 @@ class _SaleItem extends StatelessWidget {
 
 class _StatusChip extends StatelessWidget {
   final String status;
+  final AppLocalizations l10n;
 
-  const _StatusChip({required this.status});
+  const _StatusChip({required this.status, required this.l10n});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (Color color, String label) = _statusColor(status);
+    final (Color color, String label) = _statusColor(status, l10n);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -150,18 +152,20 @@ class _StatusChip extends StatelessWidget {
     );
   }
 
-  (Color, String) _statusColor(String status) {
+  (Color, String) _statusColor(String status, AppLocalizations l10n) {
     switch (status) {
       case 'COMPLETED':
-        return (DesignTokens.statusCompleted, 'Done');
+        return (DesignTokens.statusCompleted, l10n.done);
       case 'PENDING':
-        return (DesignTokens.statusPending, 'Pending');
+        return (DesignTokens.statusPending, l10n.statusPending);
       case 'DRAFT':
-        return (DesignTokens.statusDraft, 'Draft');
+        return (DesignTokens.statusDraft, l10n.statusDraft);
       case 'CANCELLED':
-        return (DesignTokens.statusCancelled, 'Cancelled');
+        return (DesignTokens.statusCancelled, l10n.statusCancelled);
       case 'REFUNDED':
-        return (DesignTokens.statusRefunded, 'Refunded');
+        return (DesignTokens.statusRefunded, l10n.statusRefunded);
+      case 'PARTIALLY_REFUNDED':
+        return (DesignTokens.statusRefunded, l10n.statusPartiallyRefunded);
       default:
         return (DesignTokens.grey500, status);
     }

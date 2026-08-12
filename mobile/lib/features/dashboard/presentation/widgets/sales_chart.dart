@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
@@ -9,7 +10,7 @@ import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 /// Sales Bar Chart — custom painted with animated bars and gradient.
 class SalesBarChart extends StatelessWidget {
   final List<ChartDataPoint> data;
-  final String title;
+  final String? title;
   final bool showProfit;
 
   /// Chart plot height (the whole card grows with it).
@@ -18,7 +19,7 @@ class SalesBarChart extends StatelessWidget {
   const SalesBarChart({
     super.key,
     required this.data,
-    this.title = 'Revenue',
+    this.title,
     this.showProfit = false,
     this.height = 160,
   });
@@ -30,10 +31,9 @@ class SalesBarChart extends StatelessWidget {
       return PremiumEmptyState(
         icon: Icons.bar_chart,
         color: DesignTokens.primary,
-        title: 'No sales yet',
-        description: 'Complete your first sale and revenue & profit trends '
-            'will appear here.',
-        ctaLabel: 'New Sale',
+        title: context.l10n.noSalesYet,
+        description: context.l10n.noSalesYetDesc,
+        ctaLabel: context.l10n.newSale,
         ctaIcon: Icons.add_shopping_cart,
         onCta: () => context.push(RouteNames.saleNew),
         hero: true,
@@ -54,19 +54,22 @@ class SalesBarChart extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(title, style: theme.textTheme.titleMedium),
+                  child: Text(
+                    title ?? context.l10n.revenue,
+                    style: theme.textTheme.titleMedium,
+                  ),
                 ),
                 Row(
                   children: [
                     _LegendDot(color: DesignTokens.primary),
                     const SizedBox(width: 4),
-                    Text('Revenue',
+                    Text(context.l10n.revenue,
                         style: theme.textTheme.labelSmall),
                     if (showProfit) ...[
                       const SizedBox(width: 12),
                       _LegendDot(color: DesignTokens.success),
                       const SizedBox(width: 4),
-                      Text('Profit',
+                      Text(context.l10n.profit,
                           style: theme.textTheme.labelSmall),
                     ],
                   ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SemanticsAction;
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
@@ -20,6 +21,8 @@ class _FakeCashShiftNotifier extends CashShiftNotifier {
     state = initial;
   }
 }
+
+AppLocalizations _l10n() => lookupAppLocalizations(const Locale('en'));
 
 void main() {
   DashboardSummary summary({
@@ -49,6 +52,7 @@ void main() {
   group('buildOnboardingSteps', () {
     test('brand-new company → 0 of 4 (no invented completion)', () {
       final steps = buildOnboardingSteps(
+        l10n: _l10n(),
         summary: summary(),
         shiftState: const ShiftLoaded(),
       );
@@ -59,6 +63,7 @@ void main() {
 
     test('"Add products" done when stock value exists', () {
       final steps = buildOnboardingSteps(
+        l10n: _l10n(),
         summary: summary(inventoryValue: '15000'),
         shiftState: const ShiftLoaded(),
       );
@@ -69,6 +74,7 @@ void main() {
 
     test('"Add products" done when low/out-of-stock positions are tracked', () {
       final steps = buildOnboardingSteps(
+        l10n: _l10n(),
         summary: summary(lowStock: 3),
         shiftState: const ShiftLoaded(),
       );
@@ -78,6 +84,7 @@ void main() {
 
     test('"Register customers" done when a customer exists', () {
       final steps = buildOnboardingSteps(
+        l10n: _l10n(),
         summary: summary(customers: 2),
         shiftState: const ShiftLoaded(),
       );
@@ -87,10 +94,12 @@ void main() {
 
     test('"Open a cash shift" done only when a shift is actually open', () {
       final open = buildOnboardingSteps(
+        l10n: _l10n(),
         summary: summary(),
         shiftState: ShiftLoaded(current: _openShift()),
       );
       final closed = buildOnboardingSteps(
+        l10n: _l10n(),
         summary: summary(),
         shiftState: const ShiftLoaded(),
       );
@@ -101,10 +110,12 @@ void main() {
 
     test('"Complete first sale" done when any sale exists', () {
       final byOrders = buildOnboardingSteps(
+        l10n: _l10n(),
         summary: summary(orders: 1),
         shiftState: const ShiftLoaded(),
       );
       final byToday = buildOnboardingSteps(
+        l10n: _l10n(),
         summary: summary(todayCount: 3),
         shiftState: const ShiftLoaded(),
       );
@@ -115,6 +126,7 @@ void main() {
 
     test('mixed state → exactly the real steps are done', () {
       final steps = buildOnboardingSteps(
+        l10n: _l10n(),
         summary: summary(inventoryValue: '900', customers: 1),
         shiftState: ShiftLoaded(current: _openShift()),
       );
@@ -140,8 +152,13 @@ void main() {
             cashShiftProvider
                 .overrideWith((ref) => _FakeCashShiftNotifier(ref, shiftState)),
           ],
-          child: const MaterialApp(
-            home: Scaffold(body: SingleChildScrollView(child: OnboardingHero())),
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const Scaffold(
+              body: SingleChildScrollView(child: OnboardingHero()),
+            ),
           ),
         ),
       );

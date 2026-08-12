@@ -1,51 +1,53 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 
 /// Quick action definitions — shared by the dashboard strip.
-List<_QuickAction> _buildActions() {
+List<_QuickAction> _buildActions(AppLocalizations l10n) {
   return [
     _QuickAction(
       icon: Icons.add_shopping_cart,
-      title: 'New Sale',
-      description: 'Start a sale at the POS',
+      title: l10n.newSale,
+      description: l10n.qaStartSaleDesc,
       color: DesignTokens.primary,
       route: RouteNames.saleNew,
     ),
     _QuickAction(
       icon: Icons.add_box_outlined,
-      title: 'Purchase',
-      description: 'Create a purchase order',
+      title: l10n.purchase,
+      description: l10n.qaCreatePoDesc,
       color: DesignTokens.secondary,
       route: RouteNames.poNew,
     ),
     _QuickAction(
       icon: Icons.person_add_alt_1,
-      title: 'Add Customer',
-      description: 'Register a new customer',
+      title: l10n.addCustomer,
+      description: l10n.qaRegisterCustomerDesc,
       color: DesignTokens.accent,
       route: RouteNames.customerNew,
     ),
     _QuickAction(
       icon: Icons.add,
-      title: 'Add Product',
-      description: 'Add a product to catalog',
+      title: l10n.addProductAction,
+      description: l10n.qaAddProductDesc,
       color: DesignTokens.info,
       route: RouteNames.productCreate,
     ),
     _QuickAction(
       icon: Icons.history,
-      title: 'Stock Movements',
-      description: 'View stock movement history',
+      title: l10n.stockMovements,
+      description: l10n.qaViewMovementsDesc,
       color: DesignTokens.warning,
       route: RouteNames.movements,
     ),
     _QuickAction(
       icon: Icons.inventory_2_outlined,
-      title: 'Inventory',
-      description: 'Adjust or transfer stock',
+      title: l10n.inventory,
+      description: l10n.qaAdjustTransferDesc,
       color: DesignTokens.profit,
       route: RouteNames.inventory,
     ),
@@ -60,7 +62,7 @@ class QuickActionsStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actions = _buildActions();
+    final actions = _buildActions(context.l10n);
 
     return LayoutBuilder(
       builder: (context, constraints) {

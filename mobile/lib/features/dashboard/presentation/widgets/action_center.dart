@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
@@ -76,7 +78,9 @@ class _ActionCenterState extends ConsumerState<ActionCenter> {
     // Keep-alive: data may already be loaded when this widget mounts.
     _lastChecked ??= DateTime.now();
 
+    final l10n = context.l10n;
     final events = buildAttentionEvents(
+      l10n: l10n,
       summary: dashState.summary,
       shiftState: shiftState,
       warehouseState: warehouseState,
@@ -101,7 +105,7 @@ class _ActionCenterState extends ConsumerState<ActionCenter> {
       children: [
         Expanded(
           child: Text(
-            'Requires Attention',
+            l10n.requiresAttention,
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w700,
               color: theme.colorScheme.onSurface,
@@ -130,16 +134,14 @@ class _ActionCenterState extends ConsumerState<ActionCenter> {
     );
 
     // ── Rows ──────────────────────────────────────────────────
-    final rows = <Widget>[];
-
-    if (urgent.isEmpty) {
+    final rows = <Widget>[];      if (urgent.isEmpty) {
       // Full positive "All clear" state.
       rows.add(_AllClearRow(lastChecked: _lastChecked!));
       if (opportunities.isNotEmpty) {
         rows.add(_SectionToggle(
           label: _showOpportunities
-              ? 'Hide opportunities'
-              : 'Show opportunities (${opportunities.length})',
+              ? l10n.hideOpportunities
+              : l10n.showOpportunities(opportunities.length),
           icon: _showOpportunities
               ? Icons.expand_less
               : Icons.expand_more,
@@ -161,8 +163,8 @@ class _ActionCenterState extends ConsumerState<ActionCenter> {
       if (urgent.length > _defaultVisible) {
         rows.add(_SectionToggle(
           label: _showAll
-              ? 'Show less'
-              : 'Show all (${urgent.length - _defaultVisible})',
+              ? l10n.showLess
+              : l10n.showAll(urgent.length - _defaultVisible),
           icon: _showAll ? Icons.expand_less : Icons.expand_more,
           onTap: () => setState(() => _showAll = !_showAll),
         ));
@@ -170,8 +172,8 @@ class _ActionCenterState extends ConsumerState<ActionCenter> {
       if (opportunities.isNotEmpty) {
         rows.add(_SectionToggle(
           label: _showOpportunities
-              ? 'Hide opportunities'
-              : 'Show opportunities (${opportunities.length})',
+              ? l10n.hideOpportunities
+              : l10n.showOpportunities(opportunities.length),
           icon: _showOpportunities
               ? Icons.expand_less
               : Icons.expand_more,
@@ -244,6 +246,7 @@ class _WideRowWrapper extends StatelessWidget {
 /// (`minQuantity − currentStock`, largest first), limited to 3, formatted by
 /// [lowStockDetailLines].
 List<AttentionEvent> buildAttentionEvents({
+  required AppLocalizations l10n,
   required DashboardSummary summary,
   required ShiftState shiftState,
   required WarehouseListState warehouseState,
@@ -260,13 +263,15 @@ List<AttentionEvent> buildAttentionEvents({
     events.add(AttentionEvent(
       category: AttentionCategory.critical,
       weight: 200 + (diff.abs() / 100).clamp(0.0, 100.0).toDouble(),
-      title: 'Drawer difference ${Formatters.currency(diff)}',
-      reason:
-          'Physical cash does not match the expected closing of '
-          '${Formatters.currency(shift.expectedClosingValue)}.',
-      action: 'Recount the drawer, verify cash in/out, then close the shift.',
-      impact: '${Formatters.currency(diff.abs())} unaccounted right now',
-      ctaLabel: 'Reconcile',
+      title: l10n.eventDrawerDifferenceTitle(Formatters.currency(diff)),
+      reason: l10n.eventDrawerDifferenceReason(
+        Formatters.currency(shift.expectedClosingValue),
+      ),
+      action: l10n.eventDrawerDifferenceAction,
+      impact: l10n.eventDrawerDifferenceImpact(
+        Formatters.currency(diff.abs()),
+      ),
+      ctaLabel: l10n.eventReconcile,
       ctaRoute: RouteNames.saleNew,
       source: 'cashShiftProvider (X-report)',
     ));
@@ -278,16 +283,18 @@ List<AttentionEvent> buildAttentionEvents({
     events.add(AttentionEvent(
       category: AttentionCategory.critical,
       weight: 100 + summary.outOfStockProducts.toDouble().clamp(0.0, 100.0).toDouble(),
-      title: '${summary.outOfStockProducts} products out of stock',
-      reason: 'Zero stock left — customers cannot buy these items.',
-      action: 'Create a purchase order to restock the fastest movers first.',
+      title: l10n.eventOutOfStockTitle(summary.outOfStockProducts),
+      reason: l10n.eventOutOfStockReason,
+      action: l10n.eventOutOfStockAction,
       // Stage B impact rule: average-receipt estimate is an orientation and
       // is explicitly labelled as an estimate; without a receipt baseline the
       // impact stays qualitative (never an invented $X).
       impact: avg != null
-          ? '≈ ${Formatters.currency(avg * summary.outOfStockProducts)} lost sales/day (estimate)'
-          : 'Risk of lost sales',
-      ctaLabel: 'Restock',
+          ? l10n.eventOutOfStockImpactEstimate(
+              Formatters.currency(avg * summary.outOfStockProducts),
+            )
+          : l10n.eventOutOfStockImpactRisk,
+      ctaLabel: l10n.eventRestock,
       ctaRoute: RouteNames.products,
       source: 'dashboardProvider (/reports/dashboard)',
     ));
@@ -296,14 +303,14 @@ List<AttentionEvent> buildAttentionEvents({
   // ── ATTENTION ─────────────────────────────────────────────
   // Warehouse list unavailable → shift status is unknown.
   if (warehouseState is WarehouseListError) {
-    events.add(const AttentionEvent(
+    events.add(AttentionEvent(
       category: AttentionCategory.attention,
       weight: 600,
-      title: 'Warehouse list unavailable',
-      reason: 'Could not load warehouses, so shift status is unknown.',
-      action: 'Retry loading the warehouse list.',
-      impact: 'Shift monitoring is paused',
-      ctaLabel: 'Retry',
+      title: l10n.eventWarehouseUnavailableTitle,
+      reason: l10n.eventWarehouseUnavailableReason,
+      action: l10n.eventWarehouseUnavailableAction,
+      impact: l10n.eventWarehouseUnavailableImpact,
+      ctaLabel: l10n.retry,
       ctaRoute: RouteNames.warehouses,
       source: 'warehouseListProvider',
     ));
@@ -316,11 +323,11 @@ List<AttentionEvent> buildAttentionEvents({
     events.add(AttentionEvent(
       category: AttentionCategory.attention,
       weight: 400 + pendingPoCount.toDouble().clamp(0.0, 100.0).toDouble(),
-      title: '$pendingPoCount purchase orders awaiting action',
-      reason: 'PENDING — requires confirmation; ORDERED — awaiting receiving',
-      action: 'Confirm PENDING orders and receive ORDERED deliveries',
-      impact: 'Delayed replenishment can increase out-of-stock risk',
-      ctaLabel: 'View orders',
+      title: l10n.eventPendingPoTitle(pendingPoCount),
+      reason: l10n.eventPendingPoReason,
+      action: l10n.eventPendingPoAction,
+      impact: l10n.eventPendingPoImpact,
+      ctaLabel: l10n.eventViewOrders,
       ctaRoute: RouteNames.purchasing,
       source: 'dashboardProvider (/reports/purchasing)',
     ));
@@ -335,13 +342,13 @@ List<AttentionEvent> buildAttentionEvents({
     events.add(AttentionEvent(
       category: AttentionCategory.attention,
       weight: 500 + summary.lowStockProducts.toDouble().clamp(0.0, 100.0).toDouble(),
-      title: '${summary.lowStockProducts} products low on stock',
-      reason: 'Stock is below the reorder level — will run out soon.',
-      action: 'Order from suppliers before these run out.',
-      impact: '${summary.lowStockProducts} items at risk of stockout',
+      title: l10n.eventLowStockTitle(summary.lowStockProducts),
+      reason: l10n.eventLowStockReason,
+      action: l10n.eventLowStockAction,
+      impact: l10n.eventLowStockImpact(summary.lowStockProducts),
       details: lowStockDetailLines(lowStockItems),
-      detailsMore: lowStockMoreNote(lowStockItems),
-      ctaLabel: 'Review stock',
+      detailsMore: lowStockMoreNote(lowStockItems, l10n: l10n),
+      ctaLabel: l10n.eventReviewStock,
       ctaRoute: RouteNames.inventory,
       source: 'dashboardProvider (/reports/inventory/low-stock)',
     ));
@@ -357,14 +364,14 @@ List<AttentionEvent> buildAttentionEvents({
   if (warehouseState is WarehouseListLoaded &&
       shiftState is ShiftLoaded &&
       shift == null) {
-    events.add(const AttentionEvent(
+    events.add(AttentionEvent(
       category: AttentionCategory.attention,
       weight: 400,
-      title: 'No open shift',
-      reason: 'A cash shift must be open to accept sales at the POS.',
-      action: 'Open a shift to start selling.',
-      impact: 'POS is blocked until a shift is opened',
-      ctaLabel: 'Open shift',
+      title: l10n.noOpenShift,
+      reason: l10n.eventNoOpenShiftReason,
+      action: l10n.eventNoOpenShiftAction,
+      impact: l10n.eventNoOpenShiftImpact,
+      ctaLabel: l10n.openShift,
       ctaRoute: RouteNames.saleNew,
       source: 'cashShiftProvider (X-report)',
     ));
@@ -377,11 +384,11 @@ List<AttentionEvent> buildAttentionEvents({
       events.add(AttentionEvent(
         category: AttentionCategory.attention,
         weight: 300 + hours.toDouble().clamp(0.0, 100.0).toDouble(),
-        title: 'Shift open ${hours}h — longer than usual',
-        reason: 'Long open shifts increase cashier fatigue and miscount risk.',
-        action: 'Close the shift, reconcile the drawer and open a fresh one.',
-        impact: 'Open since ${Formatters.time(shift.openedAt)}',
-        ctaLabel: 'View shift',
+        title: l10n.eventLongShiftTitle(hours),
+        reason: l10n.eventLongShiftReason,
+        action: l10n.eventLongShiftAction,
+        impact: l10n.eventLongShiftImpact(Formatters.time(shift.openedAt)),
+        ctaLabel: l10n.eventViewShift,
         ctaRoute: RouteNames.saleNew,
         source: 'cashShiftProvider (X-report)',
       ));
@@ -396,11 +403,13 @@ List<AttentionEvent> buildAttentionEvents({
     events.add(AttentionEvent(
       category: AttentionCategory.attention,
       weight: 200 + pct.clamp(0.0, 100.0).toDouble(),
-      title: 'Revenue ${pct.toStringAsFixed(0)}% below yesterday',
-      reason: 'Today is slower than yesterday at the same point in the day.',
-      action: 'Open the sales report to find the cause.',
-      impact: '${Formatters.currency(yesterday - today)} behind yesterday so far',
-      ctaLabel: 'View report',
+      title: l10n.eventRevenueBelowTitle(pct.toStringAsFixed(0)),
+      reason: l10n.eventRevenueBelowReason,
+      action: l10n.eventRevenueBelowAction,
+      impact: l10n.eventRevenueBelowImpact(
+        Formatters.currency(yesterday - today),
+      ),
+      ctaLabel: l10n.eventViewReport,
       ctaRoute: RouteNames.reports,
       source: 'dashboardProvider (/reports/dashboard)',
     ));
@@ -411,11 +420,11 @@ List<AttentionEvent> buildAttentionEvents({
     events.add(AttentionEvent(
       category: AttentionCategory.attention,
       weight: 100,
-      title: 'No sales yet today',
-      reason: 'The shift is open but no sale has been recorded.',
-      action: 'Check POS readiness (scanner, printer, cashier).',
-      impact: '0 revenue since ${Formatters.time(shift.openedAt)}',
-      ctaLabel: 'Open POS',
+      title: l10n.eventNoSalesTitle,
+      reason: l10n.eventNoSalesReason,
+      action: l10n.eventNoSalesAction,
+      impact: l10n.eventNoSalesImpact(Formatters.time(shift.openedAt)),
+      ctaLabel: l10n.eventOpenPos,
       ctaRoute: RouteNames.saleNew,
       source: 'dashboardProvider + cashShiftProvider',
     ));
@@ -424,14 +433,14 @@ List<AttentionEvent> buildAttentionEvents({
   // ── OPPORTUNITIES ─────────────────────────────────────────
   // 9. No warehouse yet (onboarding).
   if (warehouseState is WarehouseListEmpty) {
-    events.add(const AttentionEvent(
+    events.add(AttentionEvent(
       category: AttentionCategory.opportunity,
       weight: 200,
-      title: 'No warehouse yet',
-      reason: 'Cash shifts open per warehouse — nothing can be sold without one.',
-      action: 'Add your first warehouse to start selling.',
-      impact: 'Cannot open shifts or record sales',
-      ctaLabel: 'Add warehouse',
+      title: l10n.noWarehouseYet,
+      reason: l10n.eventNoWarehouseReason,
+      action: l10n.eventNoWarehouseAction,
+      impact: l10n.eventNoWarehouseImpact,
+      ctaLabel: l10n.addWarehouse,
       ctaRoute: RouteNames.warehouses,
       source: 'warehouseListProvider',
     ));
@@ -440,14 +449,14 @@ List<AttentionEvent> buildAttentionEvents({
   // 10. Empty catalog / zero inventory (onboarding).
   final invValue = double.tryParse(summary.inventoryValue) ?? 0;
   if (invValue <= 0 && summary.customerCount == 0 && summary.ordersCount == 0) {
-    events.add(const AttentionEvent(
+    events.add(AttentionEvent(
       category: AttentionCategory.opportunity,
       weight: 100,
-      title: 'Start building your inventory',
-      reason: 'No products and zero stock value yet.',
-      action: 'Create your first products and record opening stock.',
-      impact: 'Nothing to sell until the catalog is filled',
-      ctaLabel: 'Add product',
+      title: l10n.eventEmptyCatalogTitle,
+      reason: l10n.eventEmptyCatalogReason,
+      action: l10n.eventEmptyCatalogAction,
+      impact: l10n.eventEmptyCatalogImpact,
+      ctaLabel: l10n.addProduct,
       ctaRoute: RouteNames.products,
       source: 'dashboardProvider (/reports/dashboard)',
     ));
@@ -507,10 +516,11 @@ List<String> lowStockDetailLines(
 String? lowStockMoreNote(
   List<LowStockItem> items, {
   int top = 3,
+  required AppLocalizations l10n,
 }) {
   final count = sortLowStockByDeficit(items).length;
   if (count <= top) return null;
-  return '+${count - top} more';
+  return l10n.moreNote(count - top);
 }
 
 /// Average receipt today (fallback: yesterday) — used for impact estimates.
@@ -540,6 +550,14 @@ IconData _categoryIcon(AttentionCategory c) => switch (c) {
       AttentionCategory.opportunity => Icons.lightbulb_outline,
     };
 
+/// Localized badge label for an attention category (rendered uppercase).
+String _categoryLabel(AppLocalizations l10n, AttentionCategory c) =>
+    switch (c) {
+      AttentionCategory.critical => l10n.categoryCritical,
+      AttentionCategory.attention => l10n.categoryAttention,
+      AttentionCategory.opportunity => l10n.categoryOpportunity,
+    };
+
 /// One event row: title → reason → action → impact, with a CTA button.
 /// Reflows to a vertical layout (CTA full-width) on narrow screens.
 class _AttentionEventRow extends StatefulWidget {
@@ -560,6 +578,7 @@ class _AttentionEventRowState extends State<_AttentionEventRow> {
     final event = widget.event;
     final color = _categoryColor(event.category);
     final isNarrow = MediaQuery.sizeOf(context).width < 640;
+    final l10n = context.l10n;
 
     // f72701d semantics pattern: a label-less boundary around the event text
     // keeps it in its own merged leaf (rendered as textContent in Flutter
@@ -598,7 +617,7 @@ class _AttentionEventRowState extends State<_AttentionEventRow> {
             ),
             const SizedBox(width: AppSpacing.xs),
             Text(
-              event.category.name.toUpperCase(),
+              _categoryLabel(l10n, event.category).toUpperCase(),
               style: theme.textTheme.labelSmall?.copyWith(
                 color: color,
                 fontWeight: FontWeight.w700,
@@ -745,6 +764,7 @@ class _AllClearRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     const green = DesignTokens.success;
 
     return Container(
@@ -763,7 +783,7 @@ class _AllClearRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Everything looks good',
+                  l10n.everythingLooksGood,
                   style: theme.textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: theme.colorScheme.onSurface,
@@ -771,7 +791,7 @@ class _AllClearRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'No urgent actions.',
+                  l10n.noUrgentActions,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -830,7 +850,7 @@ class _MoreNote extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Text(
-        '+$count more',
+        context.l10n.moreNote(count),
         style: theme.textTheme.labelSmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -866,12 +886,12 @@ class _LastCheckedLabelState extends State<_LastCheckedLabel> {
     super.dispose();
   }
 
-  String _label() {
+  String _label(AppLocalizations l10n) {
     final diff = DateTime.now().difference(widget.lastChecked);
-    if (diff.inMinutes < 1) return 'Last checked just now';
-    if (diff.inHours < 1) return 'Last checked ${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return 'Last checked ${diff.inHours}h ago';
-    return 'Last checked ${diff.inDays}d ago';
+    if (diff.inMinutes < 1) return l10n.lastCheckedJustNow;
+    if (diff.inHours < 1) return l10n.lastCheckedMinutesAgo(diff.inMinutes);
+    if (diff.inDays < 1) return l10n.lastCheckedHoursAgo(diff.inHours);
+    return l10n.lastCheckedDaysAgo(diff.inDays);
   }
 
   @override
@@ -887,7 +907,7 @@ class _LastCheckedLabelState extends State<_LastCheckedLabel> {
         ),
         const SizedBox(width: 4),
         Text(
-          _label(),
+          _label(context.l10n),
           style: theme.textTheme.labelSmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

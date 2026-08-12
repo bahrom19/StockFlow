@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/utils/formatters.dart';
@@ -75,6 +77,17 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
     return ((_todayRevenue - _yesterdayRevenue) / _yesterdayRevenue) * 100;
   }
 
+  /// "{amount} of {goal}" plus the optional "· {count} sales" suffix.
+  /// Built from ARB keys so every fragment stays localized.
+  String _goalSummaryText(AppLocalizations l10n, double monthGoal) {
+    final base = l10n.revenueGoalProgress(
+      Formatters.currencyShort(_monthRevenue),
+      Formatters.currencyShort(monthGoal),
+    );
+    final count = widget.summary.monthSales.count;
+    return count > 0 ? '$base${l10n.revenueGoalSalesCount(count)}' : base;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -95,59 +108,61 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
     final saved = await showDialog<double>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Monthly Goal'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Set the sales target for this month. '
-                'Progress shows on the Revenue card.',
-                style: Theme.of(context).textTheme.bodySmall,
+        builder: (context, setDialogState) {
+          final l10n = dialogContext.l10n;
+          return AlertDialog(
+            title: Text(l10n.revenueGoalTitle),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.revenueGoalDialogBody,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  key: const Key('monthly_goal_field'),
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: l10n.revenueGoalAmount,
+                    hintText: l10n.revenueGoalHint,
+                    helperText: l10n.revenueGoalHelper,
+                    errorText: error,
+                    border: const OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) {},
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(l10n.cancel),
               ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                key: const Key('monthly_goal_field'),
-                controller: controller,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                ],
-                decoration: InputDecoration(
-                  labelText: 'Goal amount',
-                  hintText: 'e.g. 2000000',
-                  helperText: 'Whole numbers or decimals allowed',
-                  errorText: error,
-                  border: const OutlineInputBorder(),
-                ),
-                onSubmitted: (_) {},
+              FilledButton(
+                onPressed: () {
+                  final parsed = double.tryParse(controller.text.trim());
+                  if (parsed == null || parsed <= 0) {
+                    setDialogState(() {
+                      error = l10n.revenueGoalError;
+                    });
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(parsed);
+                },
+                child: Text(l10n.save),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final parsed = double.tryParse(controller.text.trim());
-                if (parsed == null || parsed <= 0) {
-                  setDialogState(() {
-                    error = 'Enter an amount greater than zero';
-                  });
-                  return;
-                }
-                Navigator.of(dialogContext).pop(parsed);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
 
@@ -164,6 +179,7 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     const color = DesignTokens.revenue;
     final goal = ref.watch(monthlyGoalProvider);
     final monthGoal = goal ?? 0;
@@ -270,7 +286,7 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
                                 ),
                                 const SizedBox(height: 1),
                                 Text(
-                                  "Today's Revenue",
+                                  l10n.todaysRevenue,
                                   style: theme.textTheme.labelSmall?.copyWith(
                                     color: color,
                                     fontWeight: FontWeight.w700,
@@ -293,7 +309,7 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
                         padding: const EdgeInsets.only(right: 34),
                         child: !hasGoal
                             ? Text(
-                                'Set monthly goal',
+                                l10n.setMonthlyGoal,
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
@@ -342,10 +358,8 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
                                   const SizedBox(height: 4),
                                   Text(
                                     reached
-                                        ? 'Goal reached'
-                                        : '${Formatters.currencyShort(_monthRevenue)} '
-                                            'of ${Formatters.currencyShort(monthGoal)}'
-                                            '${widget.summary.monthSales.count > 0 ? ' · ${widget.summary.monthSales.count} sales' : ''}',
+                                        ? l10n.goalReached
+                                        : _goalSummaryText(l10n, monthGoal),
                                     style: theme.textTheme.labelSmall?.copyWith(
                                       fontWeight:
                                           reached ? FontWeight.w700 : null,
@@ -370,7 +384,7 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
                 bottom: 4,
                 child: IconButton(
                   key: const Key('monthly_goal_edit'),
-                  tooltip: 'Set monthly goal',
+                  tooltip: l10n.setMonthlyGoal,
                   visualDensity: VisualDensity.compact,
                   iconSize: 16,
                   onPressed: _editGoal,

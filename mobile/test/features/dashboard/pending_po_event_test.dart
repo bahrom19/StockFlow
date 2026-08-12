@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/action_center.dart';
@@ -80,6 +82,7 @@ void main() {
       int pendingPoCount = 0,
     }) {
       return buildAttentionEvents(
+        l10n: lookupAppLocalizations(const Locale('en')),
         summary: s ?? summary(),
         shiftState: const ShiftLoaded(),
         warehouseState: const WarehouseListLoaded(warehouses: []),
@@ -89,7 +92,7 @@ void main() {
 
     AttentionEvent? pendingPoEvent(List<AttentionEvent> events) {
       for (final e in events) {
-        if (e.title.contains('purchase orders awaiting action')) return e;
+        if (e.title.contains('awaiting action')) return e;
       }
       return null;
     }
@@ -109,13 +112,14 @@ void main() {
       final events = build(pendingPoCount: 1);
       final event = pendingPoEvent(events);
       expect(event, isNotNull);
-      expect(event!.title, '1 purchase orders awaiting action');
+      expect(event!.title, '1 purchase order awaiting action');
     });
 
     test('PENDING + ORDERED → sum is correct', () {
       // 3 PENDING + 4 ORDERED = 7 — mirrors PurchasingSummary.pendingPoCount.
       final s = summary();
       final events = buildAttentionEvents(
+        l10n: lookupAppLocalizations(const Locale('en')),
         summary: s,
         shiftState: const ShiftLoaded(),
         warehouseState: const WarehouseListLoaded(warehouses: []),
@@ -139,6 +143,7 @@ void main() {
     test('event vanishes at 0 alongside other attention events', () {
       final s = summary(lowStock: 3);
       final events = buildAttentionEvents(
+        l10n: lookupAppLocalizations(const Locale('en')),
         summary: s,
         shiftState: const ShiftLoaded(),
         warehouseState: const WarehouseListLoaded(warehouses: []),

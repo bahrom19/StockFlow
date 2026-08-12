@@ -1,9 +1,13 @@
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/action_center.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/attention_event.dart';
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
 import 'package:stockflow/features/warehouses/presentation/providers/warehouses_provider.dart';
+
+AppLocalizations _l10n() => lookupAppLocalizations(const Locale('en'));
 
 void main() {
   LowStockItem item({
@@ -133,11 +137,11 @@ void main() {
         item(name: 'C', sku: 'S3', stock: 3, warehouse: 'W3'),
       ];
 
-      expect(lowStockMoreNote(items), isNull);
+      expect(lowStockMoreNote(items, l10n: _l10n()), isNull);
     });
 
     test('null on empty input (not loaded)', () {
-      expect(lowStockMoreNote(const []), isNull);
+      expect(lowStockMoreNote(const [], l10n: _l10n()), isNull);
     });
 
     test('4 low-stock items → +1 more', () {
@@ -148,12 +152,12 @@ void main() {
         item(name: 'D', sku: 'S4', stock: 4, warehouse: 'W4'),
       ];
 
-      expect(lowStockMoreNote(items), '+1 more');
+      expect(lowStockMoreNote(items, l10n: _l10n()), '+1 more');
     });
 
     test('6 low-stock items → +3 more', () {
       final items = List.generate(6, (i) => item(sku: 'S$i', stock: i));
-      expect(lowStockMoreNote(items), '+3 more');
+      expect(lowStockMoreNote(items, l10n: _l10n()), '+3 more');
     });
 
     test('OUT_OF_STOCK items do not count towards the footer', () {
@@ -165,7 +169,7 @@ void main() {
       ];
 
       // Only 3 LOW_STOCK items → footer is null despite 4 rows in input.
-      expect(lowStockMoreNote(items), isNull);
+      expect(lowStockMoreNote(items, l10n: _l10n()), isNull);
     });
   });
 
@@ -201,6 +205,7 @@ void main() {
       List<LowStockItem> lowStockItems = const [],
     }) {
       return buildAttentionEvents(
+        l10n: _l10n(),
         summary: s ?? summary(),
         shiftState: const ShiftLoaded(),
         warehouseState: const WarehouseListLoaded(warehouses: []),

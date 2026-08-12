@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 
@@ -11,6 +12,7 @@ class AiInsightsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Container(
@@ -49,7 +51,7 @@ class AiInsightsCard extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
-                    'AI Insights',
+                    l10n.aiInsights,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -65,7 +67,7 @@ class AiInsightsCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      'Coming Soon',
+                      l10n.comingSoon,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: DesignTokens.secondary,
                         fontWeight: FontWeight.w600,
@@ -76,9 +78,7 @@ class AiInsightsCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                insightPreview ??
-                    'AI-powered inventory forecasting, sales analytics, and '
-                    'purchase recommendations available in Phase 9.',
+                insightPreview ?? l10n.aiInsightsBody,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -86,9 +86,9 @@ class AiInsightsCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
-                  _FeatureChip(icon: Icons.trending_up, label: 'Forecast'),
+                  _FeatureChip(icon: Icons.trending_up, label: l10n.forecast),
                   const SizedBox(width: AppSpacing.xs),
-                  _FeatureChip(icon: Icons.insights, label: 'Analytics'),
+                  _FeatureChip(icon: Icons.insights, label: l10n.analytics),
                   const SizedBox(width: AppSpacing.xs),
                   _FeatureChip(icon: Icons.chat_outlined, label: 'NLP'),
                 ],

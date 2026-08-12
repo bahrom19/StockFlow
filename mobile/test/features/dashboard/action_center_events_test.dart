@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/action_center.dart';
@@ -70,6 +72,7 @@ void main() {
     List<LowStockItem> lowStockItems = const [],
   }) {
     return buildAttentionEvents(
+      l10n: lookupAppLocalizations(const Locale('en')),
       summary: s,
       shiftState: shiftState,
       warehouseState: warehouseState,
@@ -377,6 +380,7 @@ void main() {
   group('No false events on loading/error-shaped inputs', () {
     test('all-zero summary + closed shift + empty warehouse → empty list', () {
       final events = buildAttentionEvents(
+        l10n: lookupAppLocalizations(const Locale('en')),
         summary: summary(
           todayRevenue: '0.0000',
           todayCount: 0,
@@ -398,6 +402,7 @@ void main() {
 
     test('pending PO count 0 and empty low stock → no #3/#4 events', () {
       final events = buildAttentionEvents(
+        l10n: lookupAppLocalizations(const Locale('en')),
         summary: summary(),
         shiftState: ShiftLoaded(current: openShift()),
         warehouseState: const WarehouseListLoaded(warehouses: []),

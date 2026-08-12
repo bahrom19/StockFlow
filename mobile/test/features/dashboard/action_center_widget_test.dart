@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SemanticsAction;
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
@@ -77,8 +78,11 @@ void main() {
             (ref) => _FakeWarehouseNotifier(ref, warehouseState),
           ),
         ],
-        child: const MaterialApp(
-          home: Scaffold(
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(
             body: SingleChildScrollView(child: ActionCenter()),
           ),
         ),
@@ -252,9 +256,9 @@ void main() {
     final handle = tester.ensureSemantics();
 
     // Event title must be its own semantics node carrying the label text.
-    final titleData =
-        tester.getSemantics(find.text('1 products low on stock')).getSemanticsData();
-    expect(titleData.label, contains('1 products low on stock'));
+    final titleData = tester
+        .getSemantics(find.text('1 product low on stock')).getSemanticsData();
+    expect(titleData.label, contains('1 product low on stock'));
 
     // The CTA must remain a separate, tappable semantics node — the text was
     // NOT swallowed into the button's label (the f72701d baseline rule).
