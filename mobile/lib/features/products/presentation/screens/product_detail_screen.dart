@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
@@ -36,18 +37,18 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Product'),
+        title: Text(context.l10n.product),
         actions: [
           if (state is ProductDetailLoaded) ...[
             IconButton(
               icon: const Icon(Icons.edit_outlined),
-              tooltip: 'Edit',
+              tooltip: context.l10n.edit,
               onPressed: () => context
                   .push(RouteNames.productEdit.replaceAll(':id', widget.productId)),
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),
-              tooltip: 'Delete',
+              tooltip: context.l10n.delete,
               onPressed: () => _confirmDelete(state.product),
             ),
           ],
@@ -72,7 +73,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     onPressed: () => ref
                         .read(productDetailProvider(widget.productId).notifier)
                         .loadProduct(widget.productId),
-                    child: const Text('Retry'),
+                    child: Text(context.l10n.retry),
                   ),
                 ],
               ),
@@ -85,6 +86,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   Widget _buildDetail(ThemeData theme, Product p) {
+    final l10n = context.l10n;
     return ListView(
       padding: AppSpacing.screenPadding,
       children: [
@@ -112,7 +114,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       Text(p.name, style: theme.textTheme.titleLarge),
                       const SizedBox(height: 4),
                       if (p.sku != null)
-                        Text('SKU: ${p.sku}',
+                        Text('${l10n.sku}: ${p.sku}',
                             style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant)),
                     ],
@@ -126,22 +128,22 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         const SizedBox(height: AppSpacing.md),
 
         // Pricing
-        Text('Pricing', style: theme.textTheme.titleMedium),
+        Text(l10n.pricing, style: theme.textTheme.titleMedium),
         const SizedBox(height: AppSpacing.sm),
         Card(
           child: Column(
             children: [
-              _InfoRow(label: 'Price', value: Formatters.currency(p.price)),
+              _InfoRow(label: l10n.price, value: Formatters.currency(p.price)),
               const Divider(height: 1, indent: 16, endIndent: 16),
               _InfoRow(
-                label: 'Cost Price',
+                label: l10n.costPrice,
                 value: p.costPrice != null
                     ? Formatters.currency(p.costPrice)
                     : '-',
               ),
               const Divider(height: 1, indent: 16, endIndent: 16),
               _InfoRow(
-                label: 'Margin',
+                label: l10n.margin,
                 value: _calcMargin(p),
               ),
             ],
@@ -150,13 +152,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         const SizedBox(height: AppSpacing.md),
 
         // Stock
-        Text('Stock', style: theme.textTheme.titleMedium),
+        Text(l10n.stock, style: theme.textTheme.titleMedium),
         const SizedBox(height: AppSpacing.sm),
         Card(
           child: Column(
             children: [
               _InfoRow(
-                label: 'Quantity',
+                label: l10n.quantity,
                 value: p.stockQuantity.toString(),
                 valueColor: p.stockQuantity <= 5
                     ? DesignTokens.warning
@@ -164,7 +166,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               ),
               if (p.unit != null) ...[
                 const Divider(height: 1, indent: 16, endIndent: 16),
-                _InfoRow(label: 'Unit', value: p.unit!),
+                _InfoRow(label: l10n.unit, value: p.unit!),
               ],
             ],
           ),
@@ -172,21 +174,21 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         const SizedBox(height: AppSpacing.md),
 
         // Details
-        Text('Details', style: theme.textTheme.titleMedium),
+        Text(l10n.details, style: theme.textTheme.titleMedium),
         const SizedBox(height: AppSpacing.sm),
         Card(
           child: Column(
             children: [
               if (p.category != null)
-                _InfoRow(label: 'Category', value: p.category!),
+                _InfoRow(label: l10n.category, value: p.category!),
               if (p.barcode != null) ...[
                 const Divider(height: 1, indent: 16, endIndent: 16),
-                _InfoRow(label: 'Barcode', value: p.barcode!,
+                _InfoRow(label: l10n.barcode, value: p.barcode!,
                     icon: Icons.qr_code),
               ],
               if (p.brand != null) ...[
                 const Divider(height: 1, indent: 16, endIndent: 16),
-                _InfoRow(label: 'Brand', value: p.brand!),
+                _InfoRow(label: l10n.brand, value: p.brand!),
               ],
               if (p.description != null) ...[
                 const Divider(height: 1, indent: 16, endIndent: 16),
@@ -195,7 +197,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Description',
+                      Text(l10n.description,
                           style: theme.textTheme.labelMedium),
                       const SizedBox(height: 4),
                       Text(p.description!,
@@ -210,15 +212,15 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         const SizedBox(height: AppSpacing.md),
 
         // Metadata
-        Text('Metadata', style: theme.textTheme.titleMedium),
+        Text(l10n.metadata, style: theme.textTheme.titleMedium),
         const SizedBox(height: AppSpacing.sm),
         Card(
           child: Column(
             children: [
-              _InfoRow(label: 'Created',
+              _InfoRow(label: l10n.created,
                   value: Formatters.dateTime(DateTime.tryParse(p.createdAt))),
               const Divider(height: 1, indent: 16, endIndent: 16),
-              _InfoRow(label: 'Updated',
+              _InfoRow(label: l10n.updated,
                   value: Formatters.dateTime(DateTime.tryParse(p.updatedAt))),
             ],
           ),
@@ -237,21 +239,22 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   Future<void> _confirmDelete(Product product) async {
+    final l10n = context.l10n;
     final confirmed = await AppDialog.confirm(
       context,
-      title: 'Delete Product',
-      message: 'Are you sure you want to delete "${product.name}"?',
-      confirmText: 'Delete',
+      title: l10n.deleteProduct,
+      message: l10n.deleteProductConfirm(product.name),
+      confirmText: l10n.delete,
       isDestructive: true,
     );
     if (confirmed) {
       final notifier = ref.read(productDetailProvider(widget.productId).notifier);
       final success = await notifier.deleteProduct(widget.productId);
       if (success && mounted) {
-        AppSnackbar.success(context, 'Product deleted');
+        AppSnackbar.success(context, context.l10n.productDeleted);
         Navigator.of(context).pop();
       } else if (mounted) {
-        AppSnackbar.error(context, 'Failed to delete product');
+        AppSnackbar.error(context, context.l10n.deleteProductFailed);
       }
     }
   }
@@ -296,6 +299,7 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final color = isActive ? DesignTokens.success : DesignTokens.grey500;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -304,7 +308,7 @@ class _StatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        isActive ? 'Active' : 'Inactive',
+        isActive ? l10n.statusActive : l10n.statusInactive,
         style: theme.textTheme.labelSmall?.copyWith(
           color: color,
           fontWeight: FontWeight.w600,

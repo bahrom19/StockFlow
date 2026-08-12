@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/utils/formatters.dart';
@@ -110,10 +111,11 @@ class _StockBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final (Color color, String label) = quantity <= 0
-        ? (DesignTokens.statusCancelled, 'Out')
+        ? (DesignTokens.statusCancelled, l10n.levelOut)
         : quantity <= 5
-            ? (DesignTokens.warning, 'Low')
+            ? (DesignTokens.warning, l10n.levelLow)
             : (DesignTokens.success, quantity.toString());
 
     return Container(

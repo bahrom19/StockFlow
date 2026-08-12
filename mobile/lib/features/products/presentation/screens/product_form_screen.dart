@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/validators.dart';
 import 'package:stockflow/core/widgets/app_snackbar.dart';
@@ -82,7 +83,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           context,
           result is ProductsFail<Product>
               ? result.error.message
-              : 'Failed to load product',
+              : context.l10n.failedToLoadProduct,
         );
       }
       _isLoading = false;
@@ -146,13 +147,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       if (_isEdit) {
         final payload = _buildUpdatePayload();
         if (payload.isEmpty) {
-          if (mounted) AppSnackbar.info(context, 'No changes to save');
+          if (mounted) AppSnackbar.info(context, context.l10n.noChangesToSave);
           setState(() => _isSaving = false);
           return;
         }
         final result = await repo.update(_editingId, payload);
         if (result is ProductsSuccess<Product> && mounted) {
-          AppSnackbar.success(context, 'Product updated');
+          AppSnackbar.success(context, context.l10n.productUpdated);
           ref.read(productsListProvider.notifier).refresh();
           Navigator.of(context).pop();
         } else if (mounted) {
@@ -160,7 +161,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             context,
             result is ProductsFail<Product>
                 ? result.error.message
-                : 'Update failed',
+                : context.l10n.updateFailed,
           );
         }
       } else {
@@ -184,7 +185,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         );
         final result = await repo.create(request);
         if (result is ProductsSuccess<Product> && mounted) {
-          AppSnackbar.success(context, 'Product created');
+          AppSnackbar.success(context, context.l10n.productCreated);
           ref.read(productsListProvider.notifier).refresh();
           Navigator.of(context).pop();
         } else if (mounted) {
@@ -192,7 +193,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             context,
             result is ProductsFail<Product>
                 ? result.error.message
-                : 'Create failed',
+                : context.l10n.createFailed,
           );
         }
       }
@@ -204,9 +205,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEdit ? 'Edit Product' : 'New Product'),
+        title: Text(_isEdit ? l10n.editProduct : l10n.newProduct),
         actions: [
           TextButton(
             onPressed: _isSaving || _isLoading ? null : _save,
@@ -217,7 +219,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     child:
                         CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Save'),
+                : Text(l10n.save),
           ),
         ],
       ),
@@ -228,15 +230,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         child: ListView(
           padding: AppSpacing.screenPadding,
           children: [
-            Text('Basic Information', style: theme.textTheme.titleMedium),
+            Text(l10n.basicInformation, style: theme.textTheme.titleMedium),
             const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Name *',
-                prefixIcon: Icon(Icons.inventory_2),
+              decoration: InputDecoration(
+                labelText: l10n.nameRequired,
+                prefixIcon: const Icon(Icons.inventory_2),
               ),
-              validator: (v) => Validators.required(v, 'Name'),
+              validator: (v) => Validators.required(v, l10n.name),
             ),
             const SizedBox(height: AppSpacing.sm),
             Row(
@@ -244,9 +246,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _skuCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'SKU',
-                      prefixIcon: Icon(Icons.tag),
+                    decoration: InputDecoration(
+                      labelText: l10n.sku,
+                      prefixIcon: const Icon(Icons.tag),
                     ),
                   ),
                 ),
@@ -254,16 +256,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _barcodeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Barcode',
-                      prefixIcon: Icon(Icons.qr_code),
+                    decoration: InputDecoration(
+                      labelText: l10n.barcode,
+                      prefixIcon: const Icon(Icons.qr_code),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            Text('Pricing', style: theme.textTheme.titleMedium),
+            Text(l10n.pricing, style: theme.textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             Row(
               children: [
@@ -271,11 +273,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   child: TextFormField(
                     controller: _priceCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Price *',
+                    decoration: InputDecoration(
+                      labelText: l10n.priceRequired,
                       prefixText: '\$ ',
                     ),
-                    validator: (v) => Validators.required(v, 'Price'),
+                    validator: (v) => Validators.required(v, l10n.price),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -283,8 +285,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   child: TextFormField(
                     controller: _costPriceCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Cost Price',
+                    decoration: InputDecoration(
+                      labelText: l10n.costPrice,
                       prefixText: '\$ ',
                     ),
                   ),
@@ -292,16 +294,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            Text('Details', style: theme.textTheme.titleMedium),
+            Text(l10n.details, style: theme.textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             Row(
               children: [
                 Expanded(
                   child: TextFormField(
                     controller: _unitCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Unit',
-                      hintText: 'pcs, kg, m',
+                    decoration: InputDecoration(
+                      labelText: l10n.unit,
+                      hintText: l10n.unitHint,
                     ),
                   ),
                 ),
@@ -309,9 +311,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _categoryCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Category',
-                      hintText: 'Electronics',
+                    decoration: InputDecoration(
+                      labelText: l10n.category,
+                      hintText: l10n.categoryHint,
                     ),
                   ),
                 ),
@@ -320,22 +322,22 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             const SizedBox(height: AppSpacing.sm),
             TextFormField(
               controller: _brandCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Brand',
-                prefixIcon: Icon(Icons.business),
+              decoration: InputDecoration(
+                labelText: l10n.brand,
+                prefixIcon: const Icon(Icons.business),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
             TextFormField(
               controller: _descCtrl,
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Description',
+              decoration: InputDecoration(
+                labelText: l10n.description,
                 alignLabelWithHint: true,
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            Text('Stock', style: theme.textTheme.titleMedium),
+            Text(l10n.stock, style: theme.textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             Row(
               children: [
@@ -343,16 +345,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   child: TextFormField(
                     controller: _stockCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Quantity',
-                      prefixIcon: Icon(Icons.inventory),
+                    decoration: InputDecoration(
+                      labelText: l10n.quantity,
+                      prefixIcon: const Icon(Icons.inventory),
                     ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: SwitchListTile(
-                    title: const Text('Active'),
+                    title: Text(l10n.statusActive),
                     value: _isActive,
                     onChanged: (v) => setState(() => _isActive = v),
                     contentPadding: EdgeInsets.zero,

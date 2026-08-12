@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/utils/formatters.dart';
@@ -10,6 +12,54 @@ class StatusBadge extends StatelessWidget {
   final Color? color;
 
   const StatusBadge({super.key, required this.status, this.color});
+
+  /// Central localized label for a backend status value.
+  ///
+  /// Phase 3A: every module renders statuses through this helper so RU/KK UI
+  /// never shows raw enums. Unknown values fall back to [Formatters.status]
+  /// (title-cased), keeping the historical rendering for anything new.
+  static String statusLabel(String status, AppLocalizations l10n) {
+    switch (status.toUpperCase()) {
+      case 'ACTIVE':
+        return l10n.statusActive;
+      case 'INACTIVE':
+        return l10n.statusInactive;
+      case 'DRAFT':
+        return l10n.statusDraft;
+      case 'PENDING':
+        return l10n.statusPending;
+      case 'COMPLETED':
+        return l10n.statusCompleted;
+      case 'CANCELLED':
+        return l10n.statusCancelled;
+      case 'REFUNDED':
+        return l10n.statusRefunded;
+      case 'PARTIALLY_REFUNDED':
+        return l10n.statusPartiallyRefunded;
+      case 'APPROVED':
+        return l10n.statusApproved;
+      case 'ORDERED':
+        return l10n.statusOrdered;
+      case 'PARTIALLY_RECEIVED':
+        return l10n.statusPartiallyReceived;
+      case 'RECEIVED':
+        return l10n.statusReceived;
+      case 'OPEN':
+        return l10n.statusOpen;
+      case 'CLOSED':
+        return l10n.statusClosed;
+      case 'PAID':
+        return l10n.statusPaid;
+      case 'PARTIALLY_PAID':
+        return l10n.statusPartiallyPaid;
+      case 'EXPIRED':
+        return l10n.statusExpired;
+      case 'REJECTED':
+        return l10n.statusRejected;
+      default:
+        return Formatters.status(status);
+    }
+  }
 
   /// Central mapping of backend status values to brand colors.
   static Color colorFor(String status) {
@@ -56,7 +106,7 @@ class StatusBadge extends StatelessWidget {
         border: Border.all(color: resolvedColor.withOpacity(0.25)),
       ),
       child: Text(
-        Formatters.status(status),
+        StatusBadge.statusLabel(status, context.l10n),
         style: theme.textTheme.labelSmall?.copyWith(
           color: resolvedColor,
           fontWeight: FontWeight.w600,

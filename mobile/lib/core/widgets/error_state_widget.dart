@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import '../theme/app_spacing.dart';
 
 /// Error State Widget
 class ErrorStateWidget extends StatelessWidget {
-  final String title;
+  final String? title;
   final String message;
   final VoidCallback? onRetry;
   final IconData icon;
 
   const ErrorStateWidget({
     super.key,
-    this.title = 'Something went wrong',
+    this.title,
     required this.message,
     this.onRetry,
     this.icon = Icons.error_outline,
@@ -27,7 +28,11 @@ class ErrorStateWidget extends StatelessWidget {
           children: [
             Icon(icon, size: 64, color: theme.colorScheme.error),
             const SizedBox(height: AppSpacing.md),
-            Text(title, style: theme.textTheme.titleLarge, textAlign: TextAlign.center),
+            Text(
+              title ?? context.l10n.errorGeneric,
+              style: theme.textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               message,
@@ -41,7 +46,7 @@ class ErrorStateWidget extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Try Again'),
+                label: Text(context.l10n.tryAgain),
               ),
             ],
           ],

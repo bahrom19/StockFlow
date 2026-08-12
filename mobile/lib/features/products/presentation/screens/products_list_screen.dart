@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
@@ -48,6 +49,7 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final state = ref.watch(productsListProvider);
 
     final loaded = state is ProductsLoaded ? state : null;
@@ -66,8 +68,8 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Products',
-            subtitle: 'Manage your catalog, pricing and stock levels',
+            title: l10n.products,
+            subtitle: l10n.productsSubtitle,
           ),
           Expanded(
             child: EntityTable<Product>(
@@ -79,11 +81,11 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
               isLoadingMore: loaded?.isLoadingMore ?? false,
               onLoadMore: _onScroll,
               search: loaded?.search,
-              searchHint: 'Search by name, SKU or barcode…',
+              searchHint: l10n.searchByNameSkuBarcode,
               onSearch: (q) =>
                   ref.read(productsListProvider.notifier).search(q),
               filters: [
-                const EntityFilter('All', null),
+                EntityFilter(l10n.all, null),
                 for (final c in categories) EntityFilter(c, c),
               ],
               activeFilter: activeCategory,
@@ -92,19 +94,19 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
               onRefresh: () =>
                   ref.read(productsListProvider.notifier).refresh(),
               onCreate: () => context.push(RouteNames.productCreate),
-              createLabel: 'New Product',
+              createLabel: l10n.newProduct,
               exportFileName: 'products.csv',
-              exportHeaders: const [
-                'Name',
-                'SKU',
-                'Barcode',
-                'Category',
-                'Brand',
-                'Unit',
-                'Price',
-                'Cost',
-                'Stock',
-                'Status',
+              exportHeaders: [
+                l10n.name,
+                l10n.sku,
+                l10n.barcode,
+                l10n.category,
+                l10n.brand,
+                l10n.unit,
+                l10n.price,
+                l10n.cost,
+                l10n.stock,
+                l10n.status,
               ],
               exportRows: () => [
                 for (final p in items)
@@ -118,23 +120,23 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
                     p.price ?? '',
                     p.costPrice ?? '',
                     p.stockQuantity.toString(),
-                    p.isActive ? 'Active' : 'Inactive',
+                    p.isActive ? l10n.statusActive : l10n.statusInactive,
                   ],
               ],
               columns: [
-                const DataColumn(label: Text('Product')),
-                const DataColumn(label: Text('SKU')),
-                const DataColumn(label: Text('Category')),
-                const DataColumn(label: Text('Unit')),
+                DataColumn(label: Text(l10n.product)),
+                DataColumn(label: Text(l10n.sku)),
+                DataColumn(label: Text(l10n.category)),
+                DataColumn(label: Text(l10n.unit)),
                 DataColumn(
-                  label: Text('Price', style: theme.textTheme.labelMedium),
+                  label: Text(l10n.price, style: theme.textTheme.labelMedium),
                   numeric: true,
                 ),
                 DataColumn(
-                  label: Text('Stock', style: theme.textTheme.labelMedium),
+                  label: Text(l10n.stock, style: theme.textTheme.labelMedium),
                   numeric: true,
                 ),
-                const DataColumn(label: Text('Status')),
+                DataColumn(label: Text(l10n.status)),
               ],
               buildRow: (p) => DataRow(
                 cells: [
@@ -159,8 +161,8 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
                 onTap: () => _navigateToDetail(p.id),
               ),
               onRowTap: (p) => _navigateToDetail(p.id),
-              emptyTitle: 'No products found',
-              emptySubtitle: 'Add your first product to get started',
+              emptyTitle: l10n.productsEmptyTitle,
+              emptySubtitle: l10n.productsEmptySubtitle,
               emptyIcon: Icons.inventory_2_outlined,
               errorMessage: state is ProductsError
                   ? (state as ProductsError).message

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/csv_exporter.dart';
 import 'package:stockflow/core/widgets/empty_state_widget.dart';
@@ -29,7 +30,7 @@ class EntityTable<T> extends StatelessWidget {
 
   // Search
   final String? search;
-  final String searchHint;
+  final String? searchHint;
   final ValueChanged<String>? onSearch;
 
   // Filters
@@ -41,7 +42,7 @@ class EntityTable<T> extends StatelessWidget {
   final Future<void> Function()? onRefresh;
   final VoidCallback? onLoadMore;
   final VoidCallback? onCreate;
-  final String createLabel;
+  final String? createLabel;
 
   // Export
   final String? exportFileName;
@@ -54,8 +55,8 @@ class EntityTable<T> extends StatelessWidget {
   final Widget Function(T item)? buildCard;
 
   // States
-  final String emptyTitle;
-  final String emptySubtitle;
+  final String? emptyTitle;
+  final String? emptySubtitle;
   final IconData emptyIcon;
   final String? errorMessage;
   final VoidCallback? onRetry;
@@ -70,7 +71,7 @@ class EntityTable<T> extends StatelessWidget {
     this.isRefreshing = false,
     this.isLoadingMore = false,
     this.search,
-    this.searchHint = 'Search…',
+    this.searchHint,
     this.onSearch,
     this.filters = const [],
     this.activeFilter,
@@ -78,15 +79,15 @@ class EntityTable<T> extends StatelessWidget {
     this.onRefresh,
     this.onLoadMore,
     this.onCreate,
-    this.createLabel = 'New',
+    this.createLabel,
     this.exportFileName,
     this.exportHeaders,
     this.exportRows,
     required this.columns,
     required this.buildRow,
     this.buildCard,
-    this.emptyTitle = 'Nothing here yet',
-    this.emptySubtitle = 'No records found.',
+    this.emptyTitle,
+    this.emptySubtitle,
     this.emptyIcon = Icons.inbox_outlined,
     this.errorMessage,
     this.onRetry,
@@ -95,15 +96,20 @@ class EntityTable<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final isDesktop = MediaQuery.of(context).size.width >=
         AppSpacing.breakpointDesktop;
+    final resolvedSearchHint = searchHint ?? l10n.searchHint;
+    final resolvedCreateLabel = createLabel ?? l10n.newLabel;
+    final resolvedEmptyTitle = emptyTitle ?? l10n.tableEmptyTitle;
+    final resolvedEmptySubtitle = emptySubtitle ?? l10n.tableEmptySubtitle;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Toolbar(
           search: search,
-          searchHint: searchHint,
+          searchHint: resolvedSearchHint,
           onSearch: onSearch,
           filters: filters,
           activeFilter: activeFilter,
@@ -111,7 +117,7 @@ class EntityTable<T> extends StatelessWidget {
           onRefresh: onRefresh,
           isRefreshing: isRefreshing,
           onCreate: onCreate,
-          createLabel: createLabel,
+          createLabel: resolvedCreateLabel,
           exportFileName: exportFileName,
           exportHeaders: exportHeaders,
           exportRows: exportRows,
@@ -129,11 +135,11 @@ class EntityTable<T> extends StatelessWidget {
             buildRow: buildRow,
             buildCard: buildCard,
             isDesktop: isDesktop,
-            emptyTitle: emptyTitle,
-            emptySubtitle: emptySubtitle,
+            emptyTitle: resolvedEmptyTitle,
+            emptySubtitle: resolvedEmptySubtitle,
             emptyIcon: emptyIcon,
             onCreate: onCreate,
-            createLabel: createLabel,
+            createLabel: resolvedCreateLabel,
             errorMessage: errorMessage,
             onRetry: onRetry,
             onRowTap: onRowTap,
@@ -219,7 +225,7 @@ class _ToolbarState extends State<_Toolbar> {
     await CsvExporter.download(filename, rows);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Exported ${data.length} rows as CSV')),
+      SnackBar(content: Text(context.l10n.exportedRows(data.length))),
     );
   }
 
@@ -273,7 +279,7 @@ class _ToolbarState extends State<_Toolbar> {
               if (widget.filters.isNotEmpty) ...[
                 const SizedBox(width: AppSpacing.xs),
                 IconButton.filledTonal(
-                  tooltip: 'Filters',
+                  tooltip: context.l10n.filters,
                   onPressed: () => setState(() => _showFilters = !_showFilters),
                   icon: Icon(
                     Icons.filter_list,
@@ -287,7 +293,7 @@ class _ToolbarState extends State<_Toolbar> {
               if (widget.onRefresh != null) ...[
                 const SizedBox(width: AppSpacing.xs),
                 IconButton(
-                  tooltip: 'Refresh',
+                  tooltip: context.l10n.refresh,
                   onPressed: widget.isRefreshing
                       ? null
                       : () => widget.onRefresh?.call(),
@@ -303,7 +309,7 @@ class _ToolbarState extends State<_Toolbar> {
               if (hasExport) ...[
                 const SizedBox(width: AppSpacing.xs),
                 IconButton(
-                  tooltip: 'Export CSV',
+                  tooltip: context.l10n.exportCsv,
                   onPressed: _export,
                   icon: const Icon(Icons.file_download_outlined, size: 20),
                 ),
@@ -555,7 +561,7 @@ class _Footer extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            'Showing $shown of $total',
+            context.l10n.showingOf(shown, total),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -571,7 +577,9 @@ class _Footer extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.more_horiz, size: 18),
-              label: Text(isLoadingMore ? 'Loading…' : 'Load more'),
+              label: Text(
+                isLoadingMore ? context.l10n.loadingMore : context.l10n.loadMore,
+              ),
             ),
         ],
       ),

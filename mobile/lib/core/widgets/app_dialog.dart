@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import '../theme/app_spacing.dart';
 
 /// StockFlow Dialog Helpers
@@ -10,10 +11,13 @@ class AppDialog {
     BuildContext context, {
     required String title,
     required String message,
-    String confirmText = 'Confirm',
-    String cancelText = 'Cancel',
+    String? confirmText,
+    String? cancelText,
     bool isDestructive = false,
   }) async {
+    final l10n = context.l10n;
+    final resolvedConfirm = confirmText ?? l10n.confirm;
+    final resolvedCancel = cancelText ?? l10n.cancel;
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -22,14 +26,14 @@ class AppDialog {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(cancelText),
+            child: Text(resolvedCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: isDestructive
                 ? FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error)
                 : null,
-            child: Text(confirmText),
+            child: Text(resolvedConfirm),
           ),
         ],
       ),
@@ -51,7 +55,7 @@ class AppDialog {
         actions: [
           FilledButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: Text(context.l10n.ok),
           ),
         ],
       ),
@@ -79,7 +83,7 @@ class AppDialog {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text(context.l10n.close),
           ),
           if (onRetry != null)
             FilledButton(
@@ -87,7 +91,7 @@ class AppDialog {
                 Navigator.of(context).pop();
                 onRetry();
               },
-              child: const Text('Retry'),
+              child: Text(context.l10n.retry),
             ),
         ],
       ),

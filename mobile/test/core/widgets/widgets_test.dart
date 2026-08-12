@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/widgets/error_state_widget.dart';
 import 'package:stockflow/core/widgets/empty_state_widget.dart';
@@ -10,6 +11,9 @@ void main() {
     testWidgets('should display error message', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: ErrorStateWidget(
               message: 'Test error message',
@@ -27,6 +31,9 @@ void main() {
     testWidgets('should not show retry button when onRetry is null', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: ErrorStateWidget(message: 'Test error'),
           ),

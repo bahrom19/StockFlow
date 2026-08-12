@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 
 /// StockFlow Snackbar Helpers
 class AppSnackbar {
@@ -41,7 +42,7 @@ class AppSnackbar {
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           action: SnackBarAction(
-            label: 'Dismiss',
+            label: context.l10n.dismiss,
             textColor: Colors.white,
             onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
           ),
