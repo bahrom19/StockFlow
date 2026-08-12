@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/constants/app_constants.dart';
+import 'package:stockflow/core/localization/locale_provider.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 
@@ -53,9 +54,12 @@ class SettingsScreen extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.language_outlined),
                   title: const Text('Language'),
-                  subtitle: const Text('English'),
+                  subtitle: Text(
+                    localeDisplayNames[ref.watch(localeProvider).languageCode] ??
+                        'English',
+                  ),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () => _showLanguageDialog(context, ref),
                 ),
                 const Divider(height: 1, indent: 56),
                 ListTile(
@@ -110,5 +114,27 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Minimal language picker (Phase 0 mechanism — no UI-string migration).
+  Future<void> _showLanguageDialog(BuildContext context, WidgetRef ref) async {
+    final current = ref.read(localeProvider).languageCode;
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Language'),
+        children: [
+          for (final code in supportedLocaleCodes)
+            ListTile(
+              title: Text(localeDisplayNames[code] ?? code),
+              trailing: code == current ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.of(dialogContext).pop(code),
+            ),
+        ],
+      ),
+    );
+    if (selected != null) {
+      await ref.read(localeProvider.notifier).setLocale(selected);
+    }
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/localization/locale_provider.dart';
 import 'core/navigation/app_router.dart';
 import 'core/theme/app_theme.dart';
 
@@ -11,6 +13,9 @@ class StockFlowApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    // Phase 0: wired locale defaults to English — system ru/kk is NOT
+    // auto-activated; the owner switches explicitly in Settings.
+    final appLocale = ref.watch(localeProvider);
 
     return MaterialApp.router(
       title: 'StockFlow',
@@ -19,8 +24,10 @@ class StockFlowApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       routerConfig: router,
+      locale: appLocale,
       // Localization support
       localizationsDelegates: const [
+        AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
