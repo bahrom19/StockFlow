@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
@@ -119,7 +120,7 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
                     '${m.afterQuantity}',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   )),
-                  DataCell(Text(m.referenceType ?? '-')),
+                  DataCell(Text(_referenceLabel(m.referenceType, context.l10n))),
                 ],
               ),
               emptyTitle: context.l10n.movementsEmptyTitle,
@@ -137,5 +138,48 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
         ],
       ),
     );
+  }
+
+  /// Localized label for a movement's [referenceType] (backend enum).
+  ///
+  /// Post-Phase 3B hotfix: the Reference column shows the raw backend value
+  /// byte-for-byte in EN (existing contract), while RU/KK localize every known
+  /// reference type. Unknown values always fall back to the raw string.
+  String _referenceLabel(String? type, AppLocalizations l10n) {
+    if (type == null) return '-';
+    // EN contract: keep the raw backend referenceType byte-for-byte.
+    if (l10n.localeName.startsWith('en')) return type;
+    switch (type.toUpperCase()) {
+      case 'SALE':
+        return l10n.movementSale;
+      case 'PURCHASE':
+        return l10n.movementPurchase;
+      case 'TRANSFER':
+        return l10n.movementTransfer;
+      case 'ADJUSTMENT':
+        return l10n.movementAdjustment;
+      case 'REFUND':
+        return l10n.movementRefund;
+      case 'RETURN':
+        return l10n.movementReturn;
+      case 'LOSS':
+        return l10n.movementLoss;
+      case 'CORRECTION':
+        return l10n.movementCorrection;
+      case 'PURCHASE_RECEIPT':
+        return l10n.movementPurchaseReceipt;
+      case 'PURCHASE_RETURN':
+        return l10n.movementPurchaseReturn;
+      case 'RESERVATION':
+        return l10n.movementReservation;
+      case 'RELEASE':
+        return l10n.movementRelease;
+      case 'INVENTORY_COUNT':
+        return l10n.movementInventoryCount;
+      case 'PRODUCT':
+        return l10n.movementInitialStock;
+      default:
+        return type;
+    }
   }
 }
