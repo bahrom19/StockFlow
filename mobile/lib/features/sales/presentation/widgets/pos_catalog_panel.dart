@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/status_badge.dart';
@@ -74,7 +75,7 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
             autofocus: true,
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
-              hintText: 'Search by name, SKU or barcode…  (F2)',
+              hintText: context.l10n.posCatalogSearchHint,
               prefixIcon: state.isSearching
                   ? const Padding(
                       padding: EdgeInsets.all(12),
@@ -114,7 +115,7 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               children: [
-                _categoryChip('All', null, state.category),
+                _categoryChip(context.l10n.all, null, state.category),
                 for (final c in state.categories) ...[
                   const SizedBox(width: AppSpacing.xs),
                   _categoryChip(c, c, state.category),
@@ -135,7 +136,10 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
               Semantics(
                 container: true,
                 child: Text(
-                  '${state.products.length} of ${state.total} · Enter to add · ↑↓ to navigate',
+                  context.l10n.posCatalogFooter(
+                    state.products.length,
+                    state.total,
+                  ),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -145,7 +149,7 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
               if (state.hasMore && !state.isLoading)
                 TextButton(
                   onPressed: () => notifier.loadMore(),
-                  child: const Text('Load more'),
+                  child: Text(context.l10n.loadMore),
                 ),
             ],
           ),
@@ -185,7 +189,7 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
               onPressed: () =>
                   ref.read(posCatalogProvider.notifier).resetToDefaults(),
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(context.l10n.retry),
             ),
           ],
         ),
@@ -200,10 +204,10 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
             Icon(Icons.inventory_2_outlined,
                 size: 56, color: theme.colorScheme.outline),
             const SizedBox(height: AppSpacing.sm),
-            Text('No products found',
+            Text(context.l10n.posNoProductsFound,
                 style: theme.textTheme.titleMedium),
             const SizedBox(height: AppSpacing.xxs),
-            Text('Try a different search term',
+            Text(context.l10n.posTryDifferentSearch,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 )),
@@ -234,12 +238,12 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
               fontWeight: FontWeight.w700,
               color: theme.colorScheme.onSurfaceVariant,
             ),
-            columns: const [
-              DataColumn(label: Text('Product')),
-              DataColumn(label: Text('SKU')),
-              DataColumn(label: Text('Category')),
-              DataColumn(label: Text('Price'), numeric: true),
-              DataColumn(label: Text('Stock'), numeric: true),
+            columns: [
+              DataColumn(label: Text(context.l10n.product)),
+              DataColumn(label: Text(context.l10n.sku)),
+              DataColumn(label: Text(context.l10n.category)),
+              DataColumn(label: Text(context.l10n.price), numeric: true),
+              DataColumn(label: Text(context.l10n.stock), numeric: true),
             ],
             rows: [
               for (var i = 0; i < state.products.length; i++)

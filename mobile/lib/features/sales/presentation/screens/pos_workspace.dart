@@ -6,10 +6,12 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/services/receipt_print_service.dart';
 import 'package:stockflow/core/widgets/app_dialog.dart';
 import 'package:stockflow/core/utils/formatters.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:stockflow/features/inventory/data/repositories/inventory_repository.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
@@ -107,37 +109,38 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   // Cash shift actions
   // ──────────────────────────────────
   Future<void> _openShift() async {
+    final l10n = context.l10n;
     final warehouseId = _selectedWarehouseId;
     if (warehouseId == null) {
-      _showSnack('Select a warehouse first');
+      _showSnack(l10n.posSelectWarehouseFirst);
       return;
     }
     final openingBalance = await _promptAmount(
-      title: 'Open Cash Shift',
-      message: 'Enter the opening balance in the drawer:',
-      confirmLabel: 'Open shift',
-      hint: 'Opening balance',
+      title: l10n.posOpenCashShiftTitle,
+      message: l10n.posOpenCashShiftMessage,
+      confirmLabel: l10n.posOpenShiftConfirm,
+      hint: l10n.posOpeningBalanceHint,
     );
     if (openingBalance == null || !mounted) return;
     final shift = await ref
         .read(cashShiftProvider.notifier)
         .openShift(openingBalance);
     if (shift != null && mounted) {
-      _showSnack('Shift opened', isError: false);
+      _showSnack(l10n.posShiftOpened, isError: false);
     } else if (mounted) {
-      _showSnack('Could not open shift. Check your permissions.');
+      _showSnack(l10n.posCouldNotOpenShift);
     }
   }
 
   Future<void> _xReport() async {
     final warehouseId = _selectedWarehouseId;
     if (warehouseId == null) {
-      _showSnack('Select a warehouse first');
+      _showSnack(context.l10n.posSelectWarehouseFirst);
       return;
     }
     final shift = await ref.read(cashShiftProvider.notifier).refresh();
     if (shift == null && mounted) {
-      _showSnack('No open shift to report');
+      _showSnack(context.l10n.posNoOpenShiftToReport);
       return;
     }
     if (!mounted || shift == null) return;
@@ -148,12 +151,12 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close'),
+            child: Text(context.l10n.close),
           ),
           TextButton.icon(
             onPressed: () => _downloadShiftPdf(shift),
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-            label: const Text('PDF'),
+            label: Text(context.l10n.posPdf),
           ),
         ],
       ),
@@ -165,18 +168,17 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     if (warehouseId == null) return;
     final confirmed = await AppDialog.confirm(
       context,
-      title: 'Close Cash Shift',
-      message: 'Close the current shift? A Z report will be generated.',
-      confirmText: 'Close shift',
+      title: context.l10n.posCloseCashShiftTitle,
+      message: context.l10n.posCloseCashShiftMessage,
+      confirmText: context.l10n.posCloseShiftConfirm,
     );
     if (!confirmed || !mounted) return;
 
     final actual = await _promptAmount(
-      title: 'Closing balance',
-      message: 'Optional: enter the actual cash in the drawer. '
-          'Leave empty to use the calculated balance.',
-      confirmLabel: 'Close',
-      hint: 'Actual closing balance',
+      title: context.l10n.posClosingBalanceTitle,
+      message: context.l10n.posClosingBalanceMessage,
+      confirmLabel: context.l10n.close,
+      hint: context.l10n.posClosingBalanceHint,
       allowEmpty: true,
     );
     if (!mounted) return;
@@ -196,46 +198,46 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Close'),
+              child: Text(context.l10n.close),
             ),
             TextButton.icon(
               onPressed: () => _downloadShiftPdf(closed, isZ: true),
               icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-              label: const Text('PDF'),
+              label: Text(context.l10n.posPdf),
             ),
           ],
         ),
       );
     } else if (mounted) {
-      _showSnack('Could not close shift');
+      _showSnack(context.l10n.posCouldNotCloseShift);
     }
   }
 
   Future<void> _cashInOut({required bool isIn}) async {
     final warehouseId = _selectedWarehouseId;
     if (warehouseId == null) return;
+    final l10n = context.l10n;
     final amount = await _promptAmount(
-      title: isIn ? 'Cash In' : 'Cash Out',
-      message: isIn
-          ? 'Enter the amount being added to the drawer:'
-          : 'Enter the amount being removed from the drawer:',
-      confirmLabel: isIn ? 'Cash in' : 'Cash out',
-      hint: 'Amount',
+      title: isIn ? l10n.posCashInTitle : l10n.posCashOutTitle,
+      message: isIn ? l10n.posCashInMessage : l10n.posCashOutMessage,
+      confirmLabel: isIn ? l10n.posCashInConfirm : l10n.posCashOutConfirm,
+      hint: l10n.posAmountHint,
     );
     if (amount == null || !mounted) return;
     final shift = isIn
         ? await ref.read(cashShiftProvider.notifier).cashIn(amount)
         : await ref.read(cashShiftProvider.notifier).cashOut(amount);
     if (shift != null && mounted) {
-      _showSnack(isIn ? 'Cash in recorded' : 'Cash out recorded',
+      _showSnack(isIn ? l10n.posCashInRecorded : l10n.posCashOutRecorded,
           isError: false);
     } else if (mounted) {
-      _showSnack('Operation failed');
+      _showSnack(l10n.posOperationFailed);
     }
   }
 
   Future<void> _downloadShiftPdf(CashShift shift, {bool isZ = false}) async {
     try {
+      final l10n = context.l10n;
       final doc = pw.Document();
       doc.addPage(pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -244,7 +246,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Center(
-              child: pw.Text(isZ ? 'Z Report' : 'X Report',
+              child: pw.Text(isZ ? l10n.posZReport : l10n.posXReport,
                   style: pw.TextStyle(
                       fontSize: 18, fontWeight: pw.FontWeight.bold)),
             ),
@@ -254,25 +256,26 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                   style: const pw.TextStyle(fontSize: 10)),
             ),
             pw.Divider(),
-            pw.Text('Warehouse: $_selectedWarehouseName',
+            pw.Text('${l10n.warehouse}: $_selectedWarehouseName',
                 style: const pw.TextStyle(fontSize: 10)),
-            pw.Text('Status: ${shift.status}',
+            pw.Text(
+                l10n.posStatus(StatusBadge.statusLabel(shift.status, l10n)),
                 style: const pw.TextStyle(fontSize: 10)),
             pw.SizedBox(height: 8),
-            _pdfAmountRow('Opening balance', shift.openingBalanceValue),
-            _pdfAmountRow('Cash sales', shift.cashSalesValue),
-            _pdfAmountRow('Card sales', shift.cardSalesValue),
-            _pdfAmountRow('QR sales', shift.qrSalesValue),
-            _pdfAmountRow('Bank transfer sales', shift.bankTransferSalesValue),
-            _pdfAmountRow('Mobile wallet sales', shift.mobileWalletSalesValue),
-            _pdfAmountRow('Total sales', shift.totalSalesValue, bold: true),
-            _pdfAmountRow('Cash in', shift.cashInValue),
-            _pdfAmountRow('Cash out', shift.cashOutValue),
+            _pdfAmountRow(l10n.posOpeningBalance, shift.openingBalanceValue),
+            _pdfAmountRow(l10n.posCashSales, shift.cashSalesValue),
+            _pdfAmountRow(l10n.posCardSales, shift.cardSalesValue),
+            _pdfAmountRow(l10n.posQrSales, shift.qrSalesValue),
+            _pdfAmountRow(l10n.posBankSales, shift.bankTransferSalesValue),
+            _pdfAmountRow(l10n.posWalletSales, shift.mobileWalletSalesValue),
+            _pdfAmountRow(l10n.posTotalSales, shift.totalSalesValue, bold: true),
+            _pdfAmountRow(l10n.posCashIn, shift.cashInValue),
+            _pdfAmountRow(l10n.posCashOut, shift.cashOutValue),
             if (isZ) ...[
               pw.Divider(),
-              _pdfAmountRow('Expected closing', shift.expectedClosingValue,
+              _pdfAmountRow(l10n.posExpectedClosing, shift.expectedClosingValue,
                   bold: true),
-              _pdfAmountRow('Difference', shift.differenceValue, bold: true),
+              _pdfAmountRow(l10n.posDifference, shift.differenceValue, bold: true),
             ],
           ],
         ),
@@ -280,9 +283,9 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       final bytes = await doc.save();
       await ReceiptPrintService.downloadPdf(
           bytes, '${isZ ? 'Z' : 'X'}_report_${shift.id.substring(0, 6)}.pdf');
-      _showSnack('Report downloaded', isError: false);
+      _showSnack(l10n.posReportDownloaded, isError: false);
     } catch (e) {
-      _showSnack('PDF export failed: $e');
+      _showSnack(context.l10n.posPdfExportFailed(e.toString()));
     }
   }
 
@@ -335,7 +338,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   Future<void> _holdSale() async {
     final cart = ref.read(cartProvider);
     if (cart.items.isEmpty) {
-      _showSnack('Nothing to hold — cart is empty');
+      _showSnack(context.l10n.posNothingToHold);
       return;
     }
     await ref.read(heldSalesProvider.notifier).hold(cart);
@@ -343,7 +346,9 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     _cashController.clear();
     _cardController.clear();
     _qrController.clear();
-    if (mounted) _showSnack('Sale held — resume it with Ctrl+H', isError: false);
+    if (mounted) {
+      _showSnack(context.l10n.posSaleHeld, isError: false);
+    }
   }
 
   Future<void> _resumeHeld() async {
@@ -351,13 +356,13 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     if (!mounted) return;
     final held = ref.read(heldSalesProvider).held;
     if (held.isEmpty) {
-      _showSnack('No held sales');
+      _showSnack(context.l10n.posNoHeldSales);
       return;
     }
     final selected = await showDialog<HeldSale>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Resume held sale'),
+        title: Text(context.l10n.posResumeHeldSale),
         children: [
           for (final h in held)
             SimpleDialogOption(
@@ -369,7 +374,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      '${h.label} · ${h.itemCount} items · '
+                      '${h.label} · '
+                      '${context.l10n.posItemsCount(h.itemCount)} · '
                       '${Formatters.currency(h.total)}',
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -378,9 +384,9 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
               ),
             ),
           if (held.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(AppSpacing.md),
-              child: Text('No held sales'),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(context.l10n.posNoHeldSales),
             ),
         ],
       ),
@@ -396,14 +402,14 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     if (restored.customerId != null) {
       notifier.setCustomer(restored.customerId, restored.customerName);
     }
-    if (mounted) _showSnack('Sale resumed', isError: false);
+    if (mounted) _showSnack(context.l10n.posSaleResumed, isError: false);
   }
 
   Future<void> _pickWarehouse() async {
     final selected = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Select warehouse'),
+        title: Text(context.l10n.posSelectWarehouseDialogTitle),
         children: [
           for (final w in _warehouses)
             SimpleDialogOption(
@@ -428,9 +434,9 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
               ),
             ),
           if (_warehouses.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(AppSpacing.md),
-              child: Text('No warehouses yet. Create one in Settings.'),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(context.l10n.posNoWarehousesYet),
             ),
         ],
       ),
@@ -481,7 +487,10 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       ref
           .read(cartProvider.notifier)
           .setCustomer(customer.id, customer.displayName);
-      _showSnack('Customer: ${customer.displayName}', isError: false);
+      _showSnack(
+        context.l10n.posCustomerSelected(customer.displayName),
+        isError: false,
+      );
     }
   }
 
@@ -516,13 +525,14 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     if (_isCompleting) return;
 
     final cart = ref.read(cartProvider);
-    final validationError = ref.read(cartProvider.notifier).validate();
+    final validationError =
+        ref.read(cartProvider.notifier).validate(context.l10n);
     if (validationError != null) {
       _showSnack(validationError);
       return;
     }
     if (_selectedWarehouseId == null) {
-      _showSnack('Select a warehouse before completing the sale');
+      _showSnack(context.l10n.posSelectWarehouseBeforeSale);
       return;
     }
 
@@ -532,8 +542,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     final totalPaid = cash + card + qr;
 
     if (totalPaid < cart.total - 0.005) {
-      _showSnack('Insufficient payment — needs '
-          '${Formatters.currency(cart.total)}');
+      _showSnack(context.l10n
+          .posInsufficientPaymentNeeds(Formatters.currency(cart.total)));
       _paymentFocus.requestFocus();
       return;
     }
@@ -559,14 +569,14 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
 
     if (sale == null) {
       if (mounted) setState(() => _isCompleting = false);
-      _showSnack('Failed to create sale. Please try again.');
+      _showSnack(context.l10n.posFailedCreateSale);
       return;
     }
 
     final completed = await posNotifier.completeSale(sale.id);
     if (completed == null) {
       if (mounted) setState(() => _isCompleting = false);
-      _showSnack('Failed to complete sale. Please try again.');
+      _showSnack(context.l10n.posFailedCompleteSale);
       return;
     }
 
@@ -609,7 +619,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         icon: const Icon(Icons.check_circle, size: 44, color: Color(0xFF0F9D58)),
-        title: const Text('Sale completed'),
+        title: Text(context.l10n.posSaleCompleted),
         content: SizedBox(
           width: 420,
           child: SingleChildScrollView(
@@ -638,9 +648,9 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                     child: Text(
                       [
                         if (cashierName?.isNotEmpty ?? false)
-                          'Cashier: $cashierName',
+                          context.l10n.posCashier(cashierName!),
                         if (warehouseName?.isNotEmpty ?? false)
-                          'Warehouse: $warehouseName',
+                          context.l10n.posWarehouseLine(warehouseName!),
                       ].join(' · '),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
@@ -675,24 +685,33 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                     ),
                   ),
                 const Divider(height: AppSpacing.md),
-                _receiptRow('Subtotal', double.tryParse(sale.subtotal) ?? 0),
+                _receiptRow(
+                    context.l10n.posSubtotal,
+                    double.tryParse(sale.subtotal) ?? 0),
                 if ((double.tryParse(sale.discount) ?? 0) > 0)
-                  _receiptRow('Discount',
-                      -(double.tryParse(sale.discount) ?? 0)),
-                _receiptRow('Tax', double.tryParse(sale.tax) ?? 0),
-                _receiptRow('Total', double.tryParse(sale.total) ?? 0,
+                  _receiptRow(
+                    context.l10n.posDiscount,
+                    -(double.tryParse(sale.discount) ?? 0),
+                  ),
+                _receiptRow(context.l10n.posTax,
+                    double.tryParse(sale.tax) ?? 0),
+                _receiptRow(context.l10n.posTotal,
+                    double.tryParse(sale.total) ?? 0,
                     bold: true),
                 const Divider(height: AppSpacing.md),
                 for (final p in sale.payments)
                   _receiptRow(
-                    p.method,
+                    _paymentLabel(p.method),
                     double.tryParse(p.amount) ?? 0,
                   ),
-                _receiptRow('Paid', double.tryParse(sale.paidAmount) ?? 0,
+                _receiptRow(context.l10n.posPaid,
+                    double.tryParse(sale.paidAmount) ?? 0,
                     bold: true),
                 if ((double.tryParse(sale.changeAmount) ?? 0) > 0)
-                  _receiptRow('Change',
-                      double.tryParse(sale.changeAmount) ?? 0),
+                  _receiptRow(
+                    context.l10n.posChange,
+                    double.tryParse(sale.changeAmount) ?? 0,
+                  ),
                 const SizedBox(height: AppSpacing.sm),
                 // QR code — machine-readable receipt.
                 Center(
@@ -721,12 +740,12 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
           TextButton.icon(
             onPressed: () => _downloadReceiptPdf(sale),
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-            label: const Text('PDF'),
+            label: Text(context.l10n.posPdf),
           ),
           TextButton.icon(
             onPressed: () => _printReceipt(sale),
             icon: const Icon(Icons.print, size: 18),
-            label: const Text('Print'),
+            label: Text(context.l10n.posPrint),
           ),
           FilledButton.icon(
             onPressed: () {
@@ -734,7 +753,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
               _searchFocus.requestFocus();
             },
             icon: const Icon(Icons.add_shopping_cart),
-            label: const Text('New sale'),
+            label: Text(context.l10n.posNewSale),
           ),
         ],
       ),
@@ -760,19 +779,36 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
 
   Future<void> _downloadReceiptPdf(Sale sale) async {
     try {
-      final bytes = await ReceiptExport.buildPdf(sale);
+      final bytes = await ReceiptExport.buildPdf(sale, l10n: context.l10n);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
-      _showSnack('Receipt PDF downloaded', isError: false);
+      _showSnack(context.l10n.posReceiptPdfDownloaded, isError: false);
     } catch (e) {
-      _showSnack('PDF export failed: $e');
+      _showSnack(context.l10n.posPdfExportFailed(e.toString()));
     }
   }
 
   Future<void> _printReceipt(Sale sale) async {
     try {
-      await ReceiptPrintService.printHtml(ReceiptExport.buildHtml(sale));
+      await ReceiptPrintService.printHtml(
+        ReceiptExport.buildHtml(sale, l10n: context.l10n),
+      );
     } catch (e) {
-      _showSnack('Print failed: $e');
+      _showSnack(context.l10n.posPrintFailed(e.toString()));
+    }
+  }
+
+  /// Payment method display label — EN keeps the backend value byte-for-byte.
+  String _paymentLabel(String method) {
+    final l10n = context.l10n;
+    switch (method) {
+      case 'CASH':
+        return l10n.posPaymentCash;
+      case 'CARD':
+        return l10n.posPaymentCard;
+      case 'QR':
+        return l10n.posPaymentQr;
+      default:
+        return method;
     }
   }
 
@@ -781,7 +817,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     if (name != null && name.isNotEmpty) return name;
     return item.productId.length <= 12
         ? item.productId
-        : 'Item ${item.productId.substring(0, 10)}';
+        : context.l10n.posItemFallback(item.productId.substring(0, 10));
   }
 
   void _showSnack(String message, {bool isError = true}) {
@@ -901,28 +937,31 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       builder: (ctx) => AlertDialog(
         icon: const Icon(Icons.delete_sweep_outlined,
             color: Color(0xFFD93025)),
-        title: const Text('Clear cart?'),
+        title: Text(context.l10n.posClearCartTitle),
         content: Text(
-          'Remove all ${cart.itemCount} items (${Formatters.currency(cart.total)}) from the cart?',
+          context.l10n.posClearCartConfirm(
+            Formatters.currency(cart.total),
+            cart.itemCount,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFFD93025),
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Clear cart'),
+            child: Text(context.l10n.posClearCartButton),
           ),
         ],
       ),
     );
     if (confirmed == true && mounted) {
       ref.read(cartProvider.notifier).clear();
-      _showSnack('Cart cleared', isError: false);
+      _showSnack(context.l10n.posCartCleared, isError: false);
     }
   }
 
@@ -961,7 +1000,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                 // workspace group's aria-label (see semantics guideline).
                 Semantics(
                   container: true,
-                  child: Text('Cashier Terminal',
+                  child: Text(context.l10n.posCashierTerminal,
                       style: theme.textTheme.titleSmall
                           ?.copyWith(fontWeight: FontWeight.w700)),
                 ),
@@ -970,8 +1009,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                   child: Semantics(
                     container: true,
                     child: Text(
-                      'F2 search · F4 customer · F8 payment · F9 complete · '
-                      'Ctrl+Del clear · Enter add · ESC clear',
+                      context.l10n.posToolbarHints,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -981,7 +1019,10 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                 Semantics(
                   container: true,
                   child: Text(
-                    '${cart.itemCount} items · ${Formatters.currency(cart.total)}',
+                    context.l10n.posItemsTotalSummary(
+                      Formatters.currency(cart.total),
+                      cart.itemCount,
+                    ),
                     style: theme.textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
@@ -1115,7 +1156,7 @@ class _AmountPromptDialogState extends State<_AmountPromptDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.cancel),
         ),
         FilledButton(
           onPressed: _submit,

@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 
 /// Builds a printable receipt (PDF bytes + HTML) for a completed [Sale].
@@ -65,6 +67,7 @@ class ReceiptExport {
     String? storeName,
     String? company,
     String? vatNumber,
+    AppLocalizations? l10n,
   }) async {
     final doc = pw.Document();
     doc.addPage(
@@ -79,6 +82,7 @@ class ReceiptExport {
           storeName: storeName,
           company: company,
           vatNumber: vatNumber,
+          l10n: l10n,
         ),
       ),
     );
@@ -93,21 +97,31 @@ class ReceiptExport {
     String? storeName,
     String? company,
     String? vatNumber,
+    AppLocalizations? l10n,
   }) {
     final rows = <pw.TableRow>[
       pw.TableRow(
         children: [
           pw.Padding(
             padding: const pw.EdgeInsets.symmetric(vertical: 2),
-            child: pw.Text('Item', style: _style(10, bold: true)),
+            child: pw.Text(
+              l10n?.posPdfItem ?? 'Item',
+              style: _style(10, bold: true),
+            ),
           ),
           pw.Padding(
             padding: const pw.EdgeInsets.symmetric(vertical: 2),
-            child: pw.Text('Qty', style: _style(10, bold: true)),
+            child: pw.Text(
+              l10n?.posPdfQty ?? 'Qty',
+              style: _style(10, bold: true),
+            ),
           ),
           pw.Padding(
             padding: const pw.EdgeInsets.symmetric(vertical: 2),
-            child: pw.Text('Total', style: _style(10, bold: true)),
+            child: pw.Text(
+              l10n?.posTotal ?? 'Total',
+              style: _style(10, bold: true),
+            ),
           ),
         ],
       ),
@@ -141,18 +155,39 @@ class ReceiptExport {
         if (company?.isNotEmpty ?? false)
           pw.Center(child: pw.Text(company!, style: _style(9))),
         if (vatNumber?.isNotEmpty ?? false)
-          pw.Center(child: pw.Text('VAT $vatNumber', style: _style(8))),
+          pw.Center(
+            child: pw.Text(
+              l10n?.posPdfVat(vatNumber!) ?? 'VAT $vatNumber',
+              style: _style(8),
+            ),
+          ),
         pw.Center(
           child: pw.Text(sale.saleNumber, style: _style(9)),
         ),
         pw.SizedBox(height: 4),
         pw.Divider(),
-        pw.Text('Date: ${sale.createdAt.toLocal()}', style: _style(8)),
+        pw.Text(
+          l10n?.posPdfDate(sale.createdAt.toLocal().toString()) ??
+              'Date: ${sale.createdAt.toLocal()}',
+          style: _style(8),
+        ),
         if (cashierName?.isNotEmpty ?? false)
-          pw.Text('Cashier: $cashierName', style: _style(8)),
+          pw.Text(
+            l10n?.posCashier(cashierName!) ?? 'Cashier: $cashierName',
+            style: _style(8),
+          ),
         if (warehouseName?.isNotEmpty ?? false)
-          pw.Text('Warehouse: $warehouseName', style: _style(8)),
-        pw.Text('Status: ${sale.status}', style: _style(8)),
+          pw.Text(
+            l10n?.posWarehouseLine(warehouseName!) ??
+                'Warehouse: $warehouseName',
+            style: _style(8),
+          ),
+        pw.Text(
+          l10n == null
+              ? 'Status: ${sale.status}'
+              : l10n.posStatus(StatusBadge.statusLabel(sale.status, l10n)),
+          style: _style(8),
+        ),
         pw.SizedBox(height: 4),
         pw.Divider(),
         pw.Table(
@@ -166,23 +201,27 @@ class ReceiptExport {
         ),
         pw.SizedBox(height: 4),
         pw.Divider(),
-        _amountRow('Subtotal', _amount(sale.subtotal)),
+        _amountRow(l10n?.posSubtotal ?? 'Subtotal', _amount(sale.subtotal)),
         if (_amount(sale.discount) > 0)
-          _amountRow('Discount', -_amount(sale.discount)),
-        _amountRow('Tax', _amount(sale.tax)),
-        _amountRow('TOTAL', _amount(sale.total), bold: true),
+          _amountRow(l10n?.posDiscount ?? 'Discount', -_amount(sale.discount)),
+        _amountRow(l10n?.posTax ?? 'Tax', _amount(sale.tax)),
+        _amountRow(l10n?.posPdfTotalLabel ?? 'TOTAL', _amount(sale.total),
+            bold: true),
         pw.Divider(),
-        _amountRow('Paid', _amount(sale.paidAmount)),
+        _amountRow(l10n?.posPaid ?? 'Paid', _amount(sale.paidAmount)),
         if (_amount(sale.changeAmount) > 0)
-          _amountRow('Change', _amount(sale.changeAmount)),
+          _amountRow(l10n?.posChange ?? 'Change', _amount(sale.changeAmount)),
         pw.SizedBox(height: 6),
         pw.Divider(),
-        pw.Text('Payments', style: _style(9, bold: true)),
+        pw.Text(l10n?.posPayments ?? 'Payments', style: _style(9, bold: true)),
         for (final p in sale.payments)
-          _amountRow(p.method, _amount(p.amount)),
+          _amountRow(_paymentLabel(p.method, l10n), _amount(p.amount)),
         pw.SizedBox(height: 8),
         pw.Center(
-          child: pw.Text('Thank you for your purchase!', style: _style(8)),
+          child: pw.Text(
+            l10n?.posThankYou ?? 'Thank you for your purchase!',
+            style: _style(8),
+          ),
         ),
         pw.SizedBox(height: 10),
         pw.Center(
@@ -222,6 +261,21 @@ class ReceiptExport {
     return _shortId(item.productId);
   }
 
+  /// Payment method display label — EN keeps the backend value byte-for-byte.
+  static String _paymentLabel(String method, AppLocalizations? l10n) {
+    if (l10n == null) return method;
+    switch (method) {
+      case 'CASH':
+        return l10n.posPaymentCash;
+      case 'CARD':
+        return l10n.posPaymentCard;
+      case 'QR':
+        return l10n.posPaymentQr;
+      default:
+        return method;
+    }
+  }
+
   /// Print-friendly standalone HTML receipt (used by the web print dialog).
   static String buildHtml(
     Sale sale, {
@@ -232,6 +286,7 @@ class ReceiptExport {
     String? company,
     String? vatNumber,
     String? qrPngDataUri,
+    AppLocalizations? l10n,
   }) {
     final store = (storeName?.isNotEmpty ?? false)
         ? storeName!
@@ -240,13 +295,13 @@ class ReceiptExport {
         ? '<div class="meta">${_esc(company!)}</div>'
         : '';
     final vatLine = (vatNumber?.isNotEmpty ?? false)
-        ? '<div class="meta">VAT ${_esc(vatNumber!)}</div>'
+        ? '<div class="meta">${_esc(l10n?.posPdfVat(vatNumber!) ?? 'VAT $vatNumber')}</div>'
         : '';
     final cashier = (cashierName?.isNotEmpty ?? false)
-        ? '<br>Cashier: ${_esc(cashierName!)}'
+        ? '<br>${_esc(l10n?.posCashier(cashierName!) ?? 'Cashier: $cashierName')}'
         : '';
     final warehouse = (warehouseName?.isNotEmpty ?? false)
-        ? '<br>Warehouse: ${_esc(warehouseName!)}'
+        ? '<br>${_esc(l10n?.posWarehouseLine(warehouseName!) ?? 'Warehouse: $warehouseName')}'
         : '';
     final qrImg = (qrPngDataUri?.isNotEmpty ?? false)
         ? '<div style="text-align:center;margin-top:8px"><img src="$qrPngDataUri" width="88" height="88"><br>${_esc(sale.saleNumber)}</div>'
@@ -259,7 +314,7 @@ class ReceiptExport {
             '</tr>')
         .join();
     final payments = sale.payments
-        .map((p) => '<tr><td>${_esc(p.method)}</td>'
+        .map((p) => '<tr><td>${_esc(_paymentLabel(p.method, l10n))}</td>'
             '<td>\$${_amount(p.amount).toStringAsFixed(2)}</td></tr>')
         .join();
 
@@ -280,21 +335,21 @@ class ReceiptExport {
   $companyLine$vatLine
   <div class="meta">${_esc(sale.saleNumber)}<br>${_esc(sale.createdAt.toLocal().toString())}$cashier$warehouse</div>
   <table>
-    <tr><td>Item</td><td>Qty</td><td>Total</td></tr>
+    <tr><td>${_esc(l10n?.posPdfItem ?? 'Item')}</td><td>${_esc(l10n?.posPdfQty ?? 'Qty')}</td><td>${_esc(l10n?.posTotal ?? 'Total')}</td></tr>
     $items
   </table>
   <table>
-    <tr><td>Subtotal</td><td>\$${_amount(sale.subtotal).toStringAsFixed(2)}</td></tr>
-    ${_amount(sale.discount) > 0 ? '<tr><td>Discount</td><td>-\$${_amount(sale.discount).toStringAsFixed(2)}</td></tr>' : ''}
-    <tr><td>Tax</td><td>\$${_amount(sale.tax).toStringAsFixed(2)}</td></tr>
-    <tr class="total"><td>TOTAL</td><td>\$${_amount(sale.total).toStringAsFixed(2)}</td></tr>
-    <tr><td>Paid</td><td>\$${_amount(sale.paidAmount).toStringAsFixed(2)}</td></tr>
-    ${_amount(sale.changeAmount) > 0 ? '<tr><td>Change</td><td>\$${_amount(sale.changeAmount).toStringAsFixed(2)}</td></tr>' : ''}
+    <tr><td>${_esc(l10n?.posSubtotal ?? 'Subtotal')}</td><td>\$${_amount(sale.subtotal).toStringAsFixed(2)}</td></tr>
+    ${_amount(sale.discount) > 0 ? '<tr><td>${_esc(l10n?.posDiscount ?? 'Discount')}</td><td>-\$${_amount(sale.discount).toStringAsFixed(2)}</td></tr>' : ''}
+    <tr><td>${_esc(l10n?.posTax ?? 'Tax')}</td><td>\$${_amount(sale.tax).toStringAsFixed(2)}</td></tr>
+    <tr class="total"><td>${_esc(l10n?.posPdfTotalLabel ?? 'TOTAL')}</td><td>\$${_amount(sale.total).toStringAsFixed(2)}</td></tr>
+    <tr><td>${_esc(l10n?.posPaid ?? 'Paid')}</td><td>\$${_amount(sale.paidAmount).toStringAsFixed(2)}</td></tr>
+    ${_amount(sale.changeAmount) > 0 ? '<tr><td>${_esc(l10n?.posChange ?? 'Change')}</td><td>-\$${_amount(sale.changeAmount).toStringAsFixed(2)}</td></tr>' : ''}
   </table>
-  <h3>Payments</h3>
+  <h3>${_esc(l10n?.posPayments ?? 'Payments')}</h3>
   <table>$payments</table>
   $qrImg
-  <p style="text-align:center;margin-top:8px">Thank you for your purchase!</p>
+  <p style="text-align:center;margin-top:8px">${_esc(l10n?.posThankYou ?? 'Thank you for your purchase!')}</p>
 </body></html>
 ''';
   }

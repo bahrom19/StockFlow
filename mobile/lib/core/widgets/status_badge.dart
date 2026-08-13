@@ -73,6 +73,13 @@ class StatusBadge extends StatelessWidget {
         return l10n.movementLoss;
       case 'CORRECTION':
         return l10n.movementCorrection;
+      // Stock levels (POS catalog + inventory cells).
+      case 'OUT':
+        return l10n.levelOut;
+      case 'LOW':
+        return l10n.levelLow;
+      case 'OK':
+        return l10n.levelOk;
       default:
         return Formatters.status(status);
     }

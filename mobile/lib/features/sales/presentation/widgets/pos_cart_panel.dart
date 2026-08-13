@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
@@ -87,7 +88,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
               Semantics(
                 container: true,
                 child: Text(
-                  'Cart (${cart.itemCount} items)',
+                  context.l10n.posCartItemsCount(cart.itemCount),
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -98,7 +99,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                 TextButton.icon(
                   onPressed: () => _confirmClearCart(),
                   icon: const Icon(Icons.delete_sweep_outlined, size: 16),
-                  label: const Text('Clear'),
+                  label: Text(context.l10n.posClear),
                 ),
             ],
           ),
@@ -142,13 +143,17 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                         ),
                         child: Column(
                           children: [
-                            _totalRow('Subtotal', cart.subtotal),
+                            _totalRow(context.l10n.posSubtotal, cart.subtotal),
                             if (cart.totalDiscount > 0)
-                              _totalRow('Discount', -cart.totalDiscount,
-                                  color: const Color(0xFFFB8C00)),
-                            _totalRow('Tax', cart.tax),
+                              _totalRow(
+                                context.l10n.posDiscount,
+                                -cart.totalDiscount,
+                                color: const Color(0xFFFB8C00),
+                              ),
+                            _totalRow(context.l10n.posTax, cart.tax),
                             const Divider(height: AppSpacing.sm),
-                            _totalRow('Total', total, bold: true, large: true),
+                            _totalRow(context.l10n.posTotal, total,
+                                bold: true, large: true),
                           ],
                         ),
                       ),
@@ -170,7 +175,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                       color: theme.colorScheme.primary),
                                   const SizedBox(width: AppSpacing.xs),
                                   Text(
-                                    'Payment',
+                                    context.l10n.posPayment,
                                     style:
                                         theme.textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.w700,
@@ -195,7 +200,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                             const SizedBox(height: AppSpacing.sm),
                             // Split payment inputs (cash / card / QR = mixed)
                             _amountField(
-                              'Cash',
+                              context.l10n.posCash,
                               widget.cashController,
                               Icons.money,
                               fieldKey: const Key('pos_cash_field'),
@@ -203,14 +208,14 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             _amountField(
-                              'Card',
+                              context.l10n.posCard,
                               widget.cardController,
                               Icons.credit_card,
                               fieldKey: const Key('pos_card_field'),
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             _amountField(
-                              'QR / Other',
+                              context.l10n.posQrOther,
                               widget.qrController,
                               Icons.qr_code,
                               fieldKey: const Key('pos_qr_field'),
@@ -224,7 +229,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    'Paid',
+                                    context.l10n.posPaid,
                                     style: theme.textTheme.bodySmall,
                                   ),
                                   Text(
@@ -248,7 +253,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Change',
+                                    Text(context.l10n.posChange,
                                         style: theme.textTheme.bodySmall),
                                     Text(
                                       Formatters.currency(change),
@@ -275,7 +280,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                             : widget.onHold,
                                         icon: const Icon(Icons.pause,
                                             size: 16),
-                                        label: const Text('Hold (F6)'),
+                                        label: Text(context.l10n.posHold),
                                       ),
                                     ),
                                   if (widget.onHold != null &&
@@ -287,7 +292,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                         onPressed: widget.onResumeHeld,
                                         icon: const Icon(Icons.play_arrow,
                                             size: 16),
-                                        label: const Text('Resume (Ctrl+H)'),
+                                        label: Text(context.l10n.posResume),
                                       ),
                                     ),
                                 ],
@@ -317,18 +322,18 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                   : const Icon(Icons.check_circle, size: 20),
                               label: Text(
                                 widget.isCompleting
-                                    ? 'Completing…'
+                                    ? context.l10n.posCompleting
                                     : isAmountValid
-                                        ? 'Complete Sale — '
-                                            '${Formatters.currency(total)}'
-                                        : 'Insufficient payment',
+                                        ? context.l10n
+                                            .posCompleteSale(Formatters.currency(total))
+                                        : context.l10n.posInsufficientPayment,
                               ),
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Semantics(
                               container: true,
                               child: Text(
-                                'F9 to complete · F8 to payment · F4 customer',
+                                context.l10n.posCartFooterHints,
                                 textAlign: TextAlign.center,
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
@@ -356,7 +361,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
             onPressed: widget.onPickCustomer,
             icon: const Icon(Icons.person_outline, size: 18),
             label: Text(
-              cart.customerName ?? 'Walk-in customer (F4)',
+              cart.customerName ?? context.l10n.posWalkInCustomerF4,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -364,7 +369,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
         ),
         if (cart.customerId != null)
           IconButton(
-            tooltip: 'Remove customer',
+            tooltip: context.l10n.posRemoveCustomer,
             icon: const Icon(Icons.close, size: 16),
             visualDensity: VisualDensity.compact,
             onPressed: () =>
@@ -380,7 +385,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
       icon: const Icon(Icons.warehouse_outlined, size: 18),
       label: Text(
         widget.warehouseId == null
-            ? 'Select warehouse…'
+            ? context.l10n.posSelectWarehouse
             : widget.warehouseName,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -396,21 +401,24 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
       builder: (ctx) => AlertDialog(
         icon: const Icon(Icons.delete_sweep_outlined,
             color: Color(0xFFD93025)),
-        title: const Text('Clear cart?'),
+        title: Text(context.l10n.posClearCartTitle),
         content: Text(
-          'Remove all ${cart.itemCount} items (${Formatters.currency(cart.total)}) from the cart?',
+          context.l10n.posClearCartConfirm(
+            Formatters.currency(cart.total),
+            cart.itemCount,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFFD93025),
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Clear cart'),
+            child: Text(context.l10n.posClearCartButton),
           ),
         ],
       ),
@@ -503,10 +511,11 @@ class _EmptyCart extends StatelessWidget {
           Icon(Icons.add_shopping_cart_outlined,
               size: 56, color: theme.colorScheme.outline),
           const SizedBox(height: AppSpacing.sm),
-          Text('Cart is empty', style: theme.textTheme.titleMedium),
+          Text(context.l10n.posCartEmpty,
+              style: theme.textTheme.titleMedium),
           const SizedBox(height: AppSpacing.xxs),
           Text(
-            'Search products on the left, then press Enter',
+            context.l10n.posCartEmptyHint,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -565,7 +574,7 @@ class _CartItemCard extends StatelessWidget {
                   icon: const Icon(Icons.close, size: 16),
                   onPressed: onRemove,
                   visualDensity: VisualDensity.compact,
-                  tooltip: 'Remove',
+                  tooltip: context.l10n.posRemove,
                 ),
               ],
             ),
@@ -627,7 +636,7 @@ class _CartItemCard extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  'Discount',
+                  context.l10n.posDiscount,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

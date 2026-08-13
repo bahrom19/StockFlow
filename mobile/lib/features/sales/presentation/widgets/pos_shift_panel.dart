@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/sales/domain/cash_shift_models.dart';
@@ -56,7 +57,7 @@ class PosShiftPanel extends ConsumerWidget {
           const SizedBox(width: AppSpacing.xs),
           if (shift?.isOpen ?? false) ...[
             Text(
-              'Shift OPEN',
+              context.l10n.posShiftOpen,
               style: theme.textTheme.labelMedium?.copyWith(
                 color: accent,
                 fontWeight: FontWeight.w800,
@@ -66,12 +67,14 @@ class PosShiftPanel extends ConsumerWidget {
             const SizedBox(width: AppSpacing.sm),
             Flexible(
               child: Text(
-                '· Cash ${Formatters.currency(shift!.cashSalesValue)} · '
-                'Card ${Formatters.currency(shift.cardSalesValue)} · '
-                'QR ${Formatters.currency(shift.qrSalesValue)} · '
-                'Bank ${Formatters.currency(shift.bankTransferSalesValue)} · '
-                'Wallet ${Formatters.currency(shift.mobileWalletSalesValue)} · '
-                'Total ${Formatters.currency(shift.totalSalesValue)}',
+                context.l10n.posShiftTotals(
+                  Formatters.currency(shift!.bankTransferSalesValue),
+                  Formatters.currency(shift.cardSalesValue),
+                  Formatters.currency(shift.cashSalesValue),
+                  Formatters.currency(shift.qrSalesValue),
+                  Formatters.currency(shift.totalSalesValue),
+                  Formatters.currency(shift.mobileWalletSalesValue),
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -82,35 +85,35 @@ class PosShiftPanel extends ConsumerWidget {
             const SizedBox(width: AppSpacing.md),
             _ActionButton(
               icon: Icons.description_outlined,
-              label: 'X Report',
-              tooltip: 'X Report (F7)',
+              label: context.l10n.posXReport,
+              tooltip: context.l10n.posTooltipXReport,
               onPressed: isOperating ? null : onXReport,
             ),
             const SizedBox(width: AppSpacing.xs),
             _ActionButton(
               icon: Icons.south_east,
-              label: 'Cash In',
-              tooltip: 'Cash in (Shift+C)',
+              label: context.l10n.posCashInLabel,
+              tooltip: context.l10n.posTooltipCashIn,
               onPressed: isOperating ? null : onCashIn,
             ),
             const SizedBox(width: AppSpacing.xs),
             _ActionButton(
               icon: Icons.north_west,
-              label: 'Cash Out',
-              tooltip: 'Cash out (Shift+D)',
+              label: context.l10n.posCashOutLabel,
+              tooltip: context.l10n.posTooltipCashOut,
               onPressed: isOperating ? null : onCashOut,
             ),
             const Spacer(),
             _ActionButton(
               icon: Icons.lock_outline,
-              label: 'Close Shift',
-              tooltip: 'Close shift (F10)',
+              label: context.l10n.posCloseShiftLabel,
+              tooltip: context.l10n.posTooltipCloseShift,
               emphasize: true,
               onPressed: isOperating ? null : onCloseShift,
             ),
           ] else ...[
             Text(
-              'No open shift',
+              context.l10n.noOpenShift,
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
@@ -119,7 +122,7 @@ class PosShiftPanel extends ConsumerWidget {
             if (warehouseId == null) ...[
               const SizedBox(width: AppSpacing.sm),
               Text(
-                '· select a warehouse first',
+                context.l10n.posSelectWarehouseFirstHint,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -128,8 +131,8 @@ class PosShiftPanel extends ConsumerWidget {
             const Spacer(),
             _ActionButton(
               icon: Icons.play_arrow,
-              label: 'Open Shift',
-              tooltip: 'Open cash shift (F5)',
+              label: context.l10n.posOpenShift,
+              tooltip: context.l10n.posTooltipOpenShift,
               emphasize: true,
               onPressed:
                   isOperating || warehouseId == null ? null : onOpenShift,
@@ -222,7 +225,7 @@ class ShiftReportView extends StatelessWidget {
       children: [
         Center(
           child: Text(
-            isZ ? 'Z Report' : 'X Report',
+            isZ ? context.l10n.posZReport : context.l10n.posXReport,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
             ),
@@ -238,32 +241,35 @@ class ShiftReportView extends StatelessWidget {
           ),
         ),
         const Divider(height: AppSpacing.md),
-        row('Opening balance', shift.openingBalanceValue),
-        row('Cash sales', shift.cashSalesValue),
-        row('Card sales', shift.cardSalesValue),
-        row('QR sales', shift.qrSalesValue),
-        row('Bank transfer sales', shift.bankTransferSalesValue),
-        row('Mobile wallet sales', shift.mobileWalletSalesValue),
-        row('Total sales', shift.totalSalesValue, bold: true),
+        row(context.l10n.posOpeningBalance, shift.openingBalanceValue),
+        row(context.l10n.posCashSales, shift.cashSalesValue),
+        row(context.l10n.posCardSales, shift.cardSalesValue),
+        row(context.l10n.posQrSales, shift.qrSalesValue),
+        row(context.l10n.posBankSales, shift.bankTransferSalesValue),
+        row(context.l10n.posWalletSales, shift.mobileWalletSalesValue),
+        row(context.l10n.posTotalSales, shift.totalSalesValue, bold: true),
         // Invariant: Cash + Card + QR + Bank + Wallet == Total Sales.
         if ((shift.methodsSum - shift.totalSalesValue).abs() > 0.005)
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs),
             child: Text(
-              '⚠ Payment breakdown (${Formatters.currency(shift.methodsSum)}) differs from total sales.',
+              context.l10n.posBreakdownWarning(
+                Formatters.currency(shift.methodsSum),
+              ),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.error,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-        row('Cash in', shift.cashInValue),
-        row('Cash out', shift.cashOutValue),
+        row(context.l10n.posCashIn, shift.cashInValue),
+        row(context.l10n.posCashOut, shift.cashOutValue),
         if (isZ) ...[
           const Divider(height: AppSpacing.sm),
-          row('Expected closing', shift.expectedClosingValue, bold: true),
+          row(context.l10n.posExpectedClosing, shift.expectedClosingValue,
+              bold: true),
           row(
-            'Difference',
+            context.l10n.posDifference,
             shift.differenceValue,
             bold: true,
             color: shift.differenceValue.abs() < 0.005
@@ -275,7 +281,7 @@ class ShiftReportView extends StatelessWidget {
               padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Center(
                 child: Text(
-                  'Closed ${Formatters.dateTime(closedAt)}',
+                  context.l10n.posClosedAt(Formatters.dateTime(closedAt)),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

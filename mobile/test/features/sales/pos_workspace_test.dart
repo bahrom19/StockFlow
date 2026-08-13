@@ -1204,4 +1204,104 @@ void main() {
       expect((state as ShiftLoaded).current, isNull);
     });
   });
+
+  // ──────────────────────────────────
+  // PosWorkspace localization (Phase 3C) — real user-facing strings in RU/KK
+  // ──────────────────────────────────
+  group('PosWorkspace localization (RU/KK)', () {
+    Widget buildWorkspaceLocale(_FakePosApi fake, Locale locale) {
+      return ProviderScope(
+        overrides: [apiClientProvider.overrideWith((ref) => fake)],
+        child: MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(body: PosWorkspace()),
+        ),
+      );
+    }
+
+    void useDesktopSurface(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
+
+    testWidgets('RU renders localized POS chrome and CTAs stay tappable',
+        (tester) async {
+      useDesktopSurface(tester);
+      final fake = _FakePosApi()
+        ..products = [
+          _product('p1', 'Espresso',
+              sku: 'ESP', price: '100.00', category: 'Drinks', stock: 50),
+        ]
+        ..warehouses = [_warehouse()];
+
+      await tester.pumpWidget(
+          buildWorkspaceLocale(fake, const Locale('ru')));
+      await tester.pumpAndSettle();
+
+      // Toolbar + hints + empty cart + shift strip are localized.
+      expect(find.text('Кассовый терминал'), findsOneWidget);
+      expect(find.textContaining('F2 поиск'), findsOneWidget);
+      expect(find.text('Корзина (0)'), findsOneWidget);
+      expect(find.text('Нет открытой смены'), findsOneWidget);
+
+      // Open-shift CTA is tappable and opens the localized dialog.
+      await tester.tap(find.text('Открыть смену'));
+      await tester.pumpAndSettle();
+      expect(find.text('Открыть кассовую смену'), findsOneWidget);
+      await tester.tap(find.text('Отмена'));
+      await tester.pumpAndSettle();
+
+      // Add a product → localized cart header, totals and payment section.
+      await tester.tap(find.text('Espresso'));
+      await tester.pumpAndSettle();
+      expect(find.text('Корзина (1)'), findsOneWidget);
+      expect(find.text('Подытог'), findsOneWidget);
+      expect(find.text('Итого'), findsWidgets);
+      expect(find.text('Оплата'), findsOneWidget);
+      expect(find.text('Оплачено'), findsOneWidget);
+      expect(find.textContaining('F9 завершить'), findsWidgets);
+
+      // Enter exact cash so the Complete button enables, then complete.
+      await tester.enterText(
+        find.byKey(const Key('pos_cash_field')),
+        '100.00',
+      );
+      await tester.pump();
+      expect(find.textContaining('Завершить продажу'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('pos_complete_button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Продажа завершена'), findsOneWidget);
+      await tester.tap(find.text('Новая продажа'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('KK renders localized POS chrome with a tappable open-shift CTA',
+        (tester) async {
+      useDesktopSurface(tester);
+      final fake = _FakePosApi()
+        ..products = [
+          _product('p1', 'Espresso',
+              sku: 'ESP', price: '100.00', category: 'Drinks', stock: 50),
+        ]
+        ..warehouses = [_warehouse()];
+
+      await tester.pumpWidget(
+          buildWorkspaceLocale(fake, const Locale('kk')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Кассалық терминал'), findsOneWidget);
+      expect(find.textContaining('F2 іздеу'), findsOneWidget);
+      expect(find.text('Себет (0)'), findsOneWidget);
+      expect(find.text('Ашық ауысым жоқ'), findsOneWidget);
+
+      await tester.tap(find.text('Ауысымды ашу'));
+      await tester.pumpAndSettle();
+      expect(find.text('Кассалық ауысымды ашу'), findsOneWidget);
+      await tester.tap(find.text('Болдырмау'));
+      await tester.pumpAndSettle();
+    });
+  });
 }

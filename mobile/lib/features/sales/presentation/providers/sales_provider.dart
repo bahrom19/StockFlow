@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
@@ -124,12 +125,24 @@ class CartNotifier extends StateNotifier<CartState> {
     state = const CartState();
   }
 
-  /// Validate cart before checkout
-  String? validate() {
-    if (state.items.isEmpty) return 'Cart is empty';
+  /// Validate cart before checkout.
+  ///
+  /// Pass [l10n] from the UI layer to get localized messages; without it the
+  /// historical English strings are returned (keeps tests and callers that
+  /// don't have a BuildContext working unchanged).
+  String? validate([AppLocalizations? l10n]) {
+    if (state.items.isEmpty) {
+      return l10n?.posCartEmpty ?? 'Cart is empty';
+    }
     for (final item in state.items) {
-      if (item.quantity < 1) return 'Invalid quantity for ${item.productName}';
-      if (item.unitPrice < 0) return 'Invalid price for ${item.productName}';
+      if (item.quantity < 1) {
+        return l10n?.posInvalidQuantity(item.productName) ??
+            'Invalid quantity for ${item.productName}';
+      }
+      if (item.unitPrice < 0) {
+        return l10n?.posInvalidPrice(item.productName) ??
+            'Invalid price for ${item.productName}';
+      }
     }
     return null;
   }

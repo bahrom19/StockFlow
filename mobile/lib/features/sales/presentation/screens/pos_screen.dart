@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/sales_provider.dart';
 import 'package:stockflow/features/products/data/repositories/products_repository.dart';
@@ -7,9 +8,11 @@ import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/inventory/data/repositories/inventory_repository.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 import 'package:stockflow/features/customers/domain/customer_models.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/services/receipt_print_service.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/sales/data/receipt_export.dart';
 import 'package:stockflow/features/sales/presentation/screens/pos_workspace.dart';
 import 'package:stockflow/features/sales/presentation/widgets/pos_customer_picker.dart';
@@ -119,7 +122,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
 
   void _showCheckout() {
     final cart = ref.read(cartProvider);
-    final error = ref.read(cartProvider.notifier).validate();
+    final error = ref.read(cartProvider.notifier).validate(context.l10n);
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error), backgroundColor: Colors.red),
@@ -152,7 +155,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Point of Sale'),
+        title: Text(context.l10n.posPointOfSale),
         actions: [
           if (_warehouses.length > 1)
             PopupMenuButton<String>(
@@ -188,7 +191,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
             TextButton.icon(
               onPressed: () => ref.read(cartProvider.notifier).clear(),
               icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-              label: const Text('Clear'),
+              label: Text(context.l10n.posClear),
             ),
         ],
       ),
@@ -200,7 +203,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search products by name, SKU or barcode...',
+                hintText: context.l10n.posMobileSearchHint,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _isSearching
                     ? const SizedBox(
@@ -253,7 +256,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                     ),
                     trailing: FilledButton.tonal(
                       onPressed: () => _addToCart(product),
-                      child: const Text('Add'),
+                      child: Text(context.l10n.posAdd),
                     ),
                     onTap: () => _addToCart(product),
                   );
@@ -271,10 +274,10 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                         Icon(Icons.add_shopping_cart_outlined,
                             size: 64, color: theme.colorScheme.outline),
                         const SizedBox(height: 16),
-                        Text('Cart is empty',
+                        Text(context.l10n.posCartEmpty,
                             style: theme.textTheme.titleMedium),
                         const SizedBox(height: 8),
-                        Text('Search and add products to start',
+                        Text(context.l10n.posMobileCartEmptyHint,
                             style: theme.textTheme.bodyMedium
                                 ?.copyWith(color: theme.colorScheme.outline)),
                       ],
@@ -325,7 +328,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${cart.itemCount} items',
+                            context.l10n.posItemsCount(cart.itemCount),
                             style: theme.textTheme.bodySmall,
                           ),
                           Text(
@@ -339,7 +342,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                     FilledButton.icon(
                       onPressed: _showCheckout,
                       icon: const Icon(Icons.payment),
-                      label: const Text('Checkout'),
+                      label: Text(context.l10n.posCheckout),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 32, vertical: 16),
@@ -397,7 +400,8 @@ class _CartItemTile extends StatelessWidget {
                   ),
                   if (item.discount > 0)
                     Text(
-                      'Discount: -\$${item.discount.toStringAsFixed(2)}',
+                      context.l10n
+                          .posDiscountLine(item.discount.toStringAsFixed(2)),
                       style: theme.textTheme.bodySmall
                           ?.copyWith(color: Colors.orange),
                     ),
@@ -529,8 +533,8 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
     if (widget.selectedWarehouseId == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a warehouse first'),
+          SnackBar(
+            content: Text(context.l10n.posPleaseSelectWarehouse),
             backgroundColor: Colors.red,
           ),
         );
@@ -565,8 +569,8 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
       } else if (mounted) {
         setState(() => _isProcessing = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to complete sale'),
+          SnackBar(
+            content: Text(context.l10n.posFailedCompleteSaleShort),
             backgroundColor: Colors.red,
           ),
         );
@@ -574,8 +578,8 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
     } else if (mounted) {
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to create sale'),
+        SnackBar(
+          content: Text(context.l10n.posFailedCreateSaleShort),
           backgroundColor: Colors.red,
         ),
       );
@@ -609,7 +613,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  Text('Checkout',
+                  Text(context.l10n.posCheckout,
                       style: theme.textTheme.titleLarge),
                   const Spacer(),
                   Text(
@@ -626,21 +630,23 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   // Customer
-                  Text('Customer', style: theme.textTheme.titleSmall),
+                  Text(context.l10n.posCustomer,
+                      style: theme.textTheme.titleSmall),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     key: const Key('pos_mobile_customer_button'),
                     onPressed: _pickCustomer,
                     icon: const Icon(Icons.person_outline, size: 18),
                     label: Text(
-                      _customer?.displayName ?? 'Walk-in customer',
+                      _customer?.displayName ??
+                          context.l10n.posWalkInCustomer,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(height: 16),
                   // Payment method chips
-                  Text('Payment Method',
+                  Text(context.l10n.posPaymentMethod,
                       style: theme.textTheme.titleSmall),
                   const SizedBox(height: 8),
                   Wrap(
@@ -655,15 +661,18 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
 
                   // Split payment inputs
                   if (_paymentMethod == 'CASH' || _paymentMethod == 'MIXED') ...[
-                    _amountField('Cash Amount', _cashController, Icons.money),
+                    _amountField(
+                        context.l10n.posCashAmount, _cashController, Icons.money),
                     const SizedBox(height: 8),
                   ],
                   if (_paymentMethod == 'CARD' || _paymentMethod == 'MIXED') ...[
-                    _amountField('Card Amount', _cardController, Icons.credit_card),
+                    _amountField(context.l10n.posCardAmount, _cardController,
+                        Icons.credit_card),
                     const SizedBox(height: 8),
                   ],
                   if (_paymentMethod == 'QR' || _paymentMethod == 'MIXED') ...[
-                    _amountField('QR Amount', _qrController, Icons.qr_code),
+                    _amountField(
+                        context.l10n.posQrAmount, _qrController, Icons.qr_code),
                     const SizedBox(height: 8),
                   ],
 
@@ -674,11 +683,11 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
                         padding: const EdgeInsets.all(12),
                         child: Column(
                           children: [
-                            _splitRow('Total', widget.cart.total),
-                            _splitRow('Paid', _totalPaid,
+                            _splitRow(context.l10n.posTotal, widget.cart.total),
+                            _splitRow(context.l10n.posPaid, _totalPaid,
                                 color: _isAmountValid ? Colors.green : Colors.red),
                             if (change >= 0)
-                              _splitRow('Change', change,
+                              _splitRow(context.l10n.posChange, change,
                                   color: Colors.orange),
                           ],
                         ),
@@ -706,10 +715,11 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
                                 strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.check_circle),
                     label: Text(_isProcessing
-                        ? 'Processing...'
+                        ? context.l10n.posProcessing
                         : change >= 0
-                            ? 'Complete Sale — \$${_totalPaid.toStringAsFixed(2)}'
-                            : 'Insufficient Payment'),
+                            ? context.l10n
+                                .posCompleteSale(_totalPaid.toStringAsFixed(2))
+                            : context.l10n.posInsufficientPaymentCaps),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -723,6 +733,22 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
     );
   }
 
+  String _chipLabel(String method) {
+    final l10n = context.l10n;
+    switch (method) {
+      case 'CASH':
+        return l10n.posPaymentCash;
+      case 'CARD':
+        return l10n.posPaymentCard;
+      case 'QR':
+        return l10n.posPaymentQr;
+      case 'MIXED':
+        return l10n.posPaymentSplit;
+      default:
+        return method;
+    }
+  }
+
   Widget _paymentChip(String method, IconData icon) {
     final isSelected = _paymentMethod == method ||
         (_paymentMethod == 'MIXED' && method == 'MIXED') ||
@@ -730,7 +756,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
     return FilterChip(
       selected: isSelected,
       avatar: Icon(icon, size: 18),
-      label: Text(method == 'MIXED' ? 'Split' : method),
+      label: Text(_chipLabel(method)),
       onSelected: (selected) {
         setState(() {
           if (method == 'MIXED') {
@@ -789,17 +815,20 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     final sale = widget.sale;
     setState(() => _isPdfExporting = true);
     try {
-      final bytes = await ReceiptExport.buildPdf(sale);
+      final bytes = await ReceiptExport.buildPdf(sale, l10n: context.l10n);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Receipt PDF downloaded')),
+          SnackBar(content: Text(context.l10n.posReceiptPdfDownloaded)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF export failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(context.l10n.posPdfExportFailed(e.toString())),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -809,11 +838,16 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
 
   Future<void> _print() async {
     try {
-      await ReceiptPrintService.printHtml(ReceiptExport.buildHtml(widget.sale));
+      await ReceiptPrintService.printHtml(
+        ReceiptExport.buildHtml(widget.sale, l10n: context.l10n),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Print failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(context.l10n.posPrintFailed(e.toString())),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -829,7 +863,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Receipt'),
+        title: Text(context.l10n.posReceipt),
         actions: [
           IconButton(
             icon: _isPdfExporting
@@ -839,12 +873,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: 'Download PDF',
+            tooltip: context.l10n.posDownloadPdf,
             onPressed: _isPdfExporting ? null : _downloadPdf,
           ),
           IconButton(
             icon: const Icon(Icons.print),
-            tooltip: 'Print',
+            tooltip: context.l10n.posPrint,
             onPressed: _print,
           ),
         ],
@@ -863,9 +897,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                     style: theme.textTheme.titleLarge),
                 const SizedBox(height: 4),
                 Text(
-                  'Status: ${sale.status}',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: Color(StockFlowColors.statusColor(sale.status))),
+                  context.l10n.posStatus(
+                    StatusBadge.statusLabel(sale.status, context.l10n),
+                  ),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Color(StockFlowColors.statusColor(sale.status)),
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -890,35 +927,41 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                 const Divider(),
 
                 // Totals
-                _receiptRow('Subtotal', double.tryParse(sale.subtotal) ?? 0, theme),
+                _receiptRow(context.l10n.posSubtotal,
+                    double.tryParse(sale.subtotal) ?? 0, theme),
                 if ((double.tryParse(sale.discount) ?? 0) > 0)
-                  _receiptRow('Discount', -(double.tryParse(sale.discount) ?? 0), theme,
-                      color: Colors.orange),
-                _receiptRow('Total', total, theme, bold: true),
+                  _receiptRow(
+                    context.l10n.posDiscount,
+                    -(double.tryParse(sale.discount) ?? 0),
+                    theme,
+                    color: Colors.orange,
+                  ),
+                _receiptRow(context.l10n.posTotal, total, theme, bold: true),
                 const Divider(),
 
                 // Payments
-                Text('Payments', style: theme.textTheme.titleSmall),
+                Text(context.l10n.posPayments,
+                    style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
                 ...sale.payments.map((p) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(p.method),
+                      Text(_paymentMethodLabel(p.method, context.l10n)),
                       Text('\$${(double.tryParse(p.amount) ?? 0).toStringAsFixed(2)}'),
                     ],
                   ),
                 )),
                 const Divider(),
-                _receiptRow('Paid', paid, theme, bold: true),
+                _receiptRow(context.l10n.posPaid, paid, theme, bold: true),
                 if (change > 0)
-                  _receiptRow('Change', change, theme,
+                  _receiptRow(context.l10n.posChange, change, theme,
                       color: Colors.orange),
                 const SizedBox(height: 24),
 
                 // Footer
-                Text('Thank you for your purchase!',
+                Text(context.l10n.posThankYou,
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: theme.colorScheme.outline)),
                 const SizedBox(height: 48),
@@ -928,6 +971,20 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         ),
       ),
     );
+  }
+
+  /// Payment method display label — EN keeps the backend value byte-for-byte.
+  String _paymentMethodLabel(String method, AppLocalizations l10n) {
+    switch (method) {
+      case 'CASH':
+        return l10n.posPaymentCash;
+      case 'CARD':
+        return l10n.posPaymentCard;
+      case 'QR':
+        return l10n.posPaymentQr;
+      default:
+        return method;
+    }
   }
 
   Widget _receiptRow(String label, double amount, ThemeData theme,

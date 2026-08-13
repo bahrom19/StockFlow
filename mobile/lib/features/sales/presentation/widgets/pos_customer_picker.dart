@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/features/customers/data/customers_repository.dart';
 import 'package:stockflow/features/customers/domain/customer_models.dart';
@@ -94,7 +95,7 @@ class _PosCustomerPickerDialogState
     if (_firstNameCtrl.text.trim().isEmpty &&
         _lastNameCtrl.text.trim().isEmpty &&
         _phoneCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Enter a name or phone for the customer');
+      setState(() => _error = context.l10n.posCustomerNameOrPhone);
       return;
     }
     setState(() {
@@ -132,7 +133,9 @@ class _PosCustomerPickerDialogState
         children: [
           const Icon(Icons.people_outline, size: 22),
           const SizedBox(width: AppSpacing.xs),
-          Text(_isCreateMode ? 'New customer' : 'Select customer'),
+          Text(_isCreateMode
+              ? context.l10n.posNewCustomer
+              : context.l10n.posSelectCustomer),
         ],
       ),
       content: SizedBox(
@@ -145,16 +148,16 @@ class _PosCustomerPickerDialogState
           TextButton.icon(
             onPressed: () => setState(() => _isCreateMode = true),
             icon: const Icon(Icons.person_add_alt, size: 18),
-            label: const Text('New customer'),
+            label: Text(context.l10n.posNewCustomer),
           ),
         if (_isCreateMode)
           TextButton(
             onPressed: () => setState(() => _isCreateMode = false),
-            child: const Text('Back to search'),
+            child: Text(context.l10n.posBackToSearch),
           ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.cancel),
         ),
       ],
     );
@@ -168,7 +171,7 @@ class _PosCustomerPickerDialogState
           controller: _searchController,
           autofocus: true,
           decoration: InputDecoration(
-            hintText: 'Search by name, phone or email…',
+            hintText: context.l10n.posCustomerSearchHint,
             prefixIcon: const Icon(Icons.search, size: 20),
             suffixIcon: _isLoading
                 ? const Padding(
@@ -201,7 +204,9 @@ class _PosCustomerPickerDialogState
           child: _customers.isEmpty
               ? Center(
                   child: Text(
-                    _isLoading ? 'Searching…' : 'No customers found',
+                    _isLoading
+                        ? context.l10n.posSearching
+                        : context.l10n.posNoCustomersFound,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -247,8 +252,8 @@ class _PosCustomerPickerDialogState
           TextField(
             controller: _firstNameCtrl,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'First name',
+            decoration: InputDecoration(
+              labelText: context.l10n.posFirstName,
               isDense: true,
               filled: true,
             ),
@@ -256,8 +261,8 @@ class _PosCustomerPickerDialogState
           const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _lastNameCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Last name',
+            decoration: InputDecoration(
+              labelText: context.l10n.posLastName,
               isDense: true,
               filled: true,
             ),
@@ -266,8 +271,8 @@ class _PosCustomerPickerDialogState
           TextField(
             controller: _phoneCtrl,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Phone',
+            decoration: InputDecoration(
+              labelText: context.l10n.phone,
               isDense: true,
               filled: true,
             ),
@@ -276,8 +281,8 @@ class _PosCustomerPickerDialogState
           TextField(
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email (optional)',
+            decoration: InputDecoration(
+              labelText: context.l10n.posEmailOptional,
               isDense: true,
               filled: true,
             ),
@@ -299,7 +304,9 @@ class _PosCustomerPickerDialogState
                         strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(Icons.check, size: 18),
-            label: Text(_isCreating ? 'Creating…' : 'Create & select'),
+            label: Text(_isCreating
+                ? context.l10n.posCreating
+                : context.l10n.posCreateAndSelect),
           ),
         ],
       ),
