@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
-import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
 import 'package:stockflow/features/finance/domain/finance_models.dart';
 import 'package:stockflow/features/finance/presentation/providers/finance_provider.dart';
-import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Finance screen — trial balance with account-type filters and CSV export.
 class FinanceScreen extends ConsumerStatefulWidget {
@@ -38,8 +39,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Finance',
-            subtitle: 'Trial balance and general ledger overview',
+            title: context.l10n.financeTitle,
+            subtitle: context.l10n.financeSubtitle,
           ),
           if (loaded != null)
             Padding(
@@ -47,13 +48,13 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               child: Row(
                 children: [
                   _TotalChip(
-                    label: 'Total Debit',
+                    label: context.l10n.totalDebit,
                     value: loaded.totalDebit,
                     color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   _TotalChip(
-                    label: 'Total Credit',
+                    label: context.l10n.totalCredit,
                     value: loaded.totalCredit,
                     color: theme.colorScheme.tertiary,
                   ),
@@ -62,7 +63,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                     child: Align(
                       alignment: Alignment.centerRight,
                       child: Text(
-                        'Balanced' + (loaded.totalDebit == loaded.totalCredit ? ' ✓' : ' ✗'),
+                        context.l10n.balanced +
+                            (loaded.totalDebit == loaded.totalCredit ? ' ✓' : ' ✗'),
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: loaded.totalDebit == loaded.totalCredit
@@ -82,23 +84,23 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               isLoading: state is TrialBalanceLoading,
               isRefreshing: loaded?.isRefreshing ?? false,
               onRefresh: () => ref.read(trialBalanceProvider.notifier).refresh(),
-              filters: const [
-                EntityFilter('All', null),
-                EntityFilter('Assets', 'ASSET'),
-                EntityFilter('Liabilities', 'LIABILITY'),
-                EntityFilter('Equity', 'EQUITY'),
-                EntityFilter('Revenue', 'REVENUE'),
-                EntityFilter('Expenses', 'EXPENSE'),
+              filters: [
+                EntityFilter(context.l10n.all, null),
+                EntityFilter(context.l10n.accountTypeAssets, 'ASSET'),
+                EntityFilter(context.l10n.accountTypeLiabilities, 'LIABILITY'),
+                EntityFilter(context.l10n.accountTypeEquity, 'EQUITY'),
+                EntityFilter(context.l10n.revenue, 'REVENUE'),
+                EntityFilter(context.l10n.accountTypeExpenses, 'EXPENSE'),
               ],
               onFilter: (v) =>
                   ref.read(trialBalanceProvider.notifier).filterByType(v),
               exportFileName: 'trial_balance.csv',
-              exportHeaders: const [
-                'Code',
-                'Account',
-                'Type',
-                'Debit',
-                'Credit',
+              exportHeaders: [
+                context.l10n.code,
+                context.l10n.account,
+                context.l10n.type,
+                context.l10n.debit,
+                context.l10n.credit,
               ],
               exportRows: () => [
                 for (final r in rows)
@@ -106,20 +108,23 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               ],
               columns: [
                 DataColumn(
-                  label: Text('Code', style: theme.textTheme.labelMedium),
+                  label: Text(
+                    context.l10n.code,
+                    style: theme.textTheme.labelMedium,
+                  ),
                 ),
-                const DataColumn(label: Text('Account')),
-                const DataColumn(label: Text('Type')),
+                DataColumn(label: Text(context.l10n.account)),
+                DataColumn(label: Text(context.l10n.type)),
                 DataColumn(
                   label: Text(
-                    'Debit',
+                    context.l10n.debit,
                     style: theme.textTheme.labelMedium,
                   ),
                   numeric: true,
                 ),
                 DataColumn(
                   label: Text(
-                    'Credit',
+                    context.l10n.credit,
                     style: theme.textTheme.labelMedium,
                   ),
                   numeric: true,
@@ -132,7 +137,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                     r.accountName,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   )),
-                  DataCell(Text(Formatters.status(r.accountType))),
+                  DataCell(Text(_accountTypeLabel(r.accountType, context.l10n))),
                   DataCell(Text(
                     context.money(r.debit),
                     style: const TextStyle(fontWeight: FontWeight.w500),
@@ -143,9 +148,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                   )),
                 ],
               ),
-              emptyTitle: 'No trial balance data',
-              emptySubtitle:
-                  'Balances will appear once journal entries are posted',
+              emptyTitle: context.l10n.noTrialBalanceData,
+              emptySubtitle: context.l10n.trialBalanceEmptySubtitle,
               emptyIcon: Icons.account_balance_outlined,
               errorMessage: state is TrialBalanceError
                   ? (state as TrialBalanceError).message
@@ -157,6 +161,29 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         ],
       ),
     );
+  }
+}
+
+/// UI-layer label for backend account-type codes (ASSET/LIABILITY/EQUITY/
+/// REVENUE/EXPENSE). Unknown codes fall back to the raw value — never invent
+/// new enum values on the client.
+String _accountTypeLabel(
+  String type,
+  AppLocalizations l10n,
+) {
+  switch (type) {
+    case 'ASSET':
+      return l10n.accountTypeAssets;
+    case 'LIABILITY':
+      return l10n.accountTypeLiabilities;
+    case 'EQUITY':
+      return l10n.accountTypeEquity;
+    case 'REVENUE':
+      return l10n.revenue;
+    case 'EXPENSE':
+      return l10n.accountTypeExpenses;
+    default:
+      return type;
   }
 }
 

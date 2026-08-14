@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/services/receipt_print_service.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
@@ -12,7 +14,6 @@ import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:stockflow/features/reports/data/report_export.dart';
-import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Reports screen — business KPIs + recent sales table.
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -46,10 +47,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           'report_${stamp.year}-${stamp.month.toString().padLeft(2, '0')}-${stamp.day.toString().padLeft(2, '0')}.pdf';
       await ReceiptPrintService.downloadPdf(bytes, name);
       if (mounted) {
-        AppSnackbar.success(context, 'Report exported as PDF');
+        AppSnackbar.success(context, context.l10n.reportExportedAsPdf);
       }
     } catch (e) {
-      if (mounted) AppSnackbar.error(context, 'PDF export failed: $e');
+      if (mounted) {
+        AppSnackbar.error(context, context.l10n.pdfExportFailed(e.toString()));
+      }
     }
   }
 
@@ -66,18 +69,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Reports',
-            subtitle: 'Business performance at a glance',
+            title: context.l10n.reportsTitle,
+            subtitle: context.l10n.reportsSubtitle,
             actions: [
               IconButton(
-                tooltip: 'Export PDF',
+                tooltip: context.l10n.exportPdf,
                 onPressed: summary == null
                     ? null
                     : () => _exportPdf(summary, sales),
                 icon: const Icon(Icons.picture_as_pdf_outlined),
               ),
               IconButton(
-                tooltip: 'Refresh',
+                tooltip: context.l10n.refresh,
                 onPressed: () {
                   ref.read(dashboardProvider.notifier).refresh();
                 },
@@ -116,7 +119,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 // ── Recent Sales Table ─────────────────
                 Text(
-                  'Recent Sales',
+                  context.l10n.recentSales,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -131,7 +134,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   onRetry: () =>
                       ref.read(dashboardProvider.notifier).loadDashboard(),
                   exportFileName: 'recent_sales.csv',
-                  exportHeaders: const ['Number', 'Date', 'Status', 'Total', 'Paid'],
+                  exportHeaders: [
+                    context.l10n.number,
+                    context.l10n.date,
+                    context.l10n.status,
+                    context.l10n.total,
+                    context.l10n.paid,
+                  ],
                   exportRows: () => [
                     for (final s in sales)
                       [
@@ -144,16 +153,25 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   ],
                   columns: [
                     DataColumn(
-                      label: Text('Number', style: theme.textTheme.labelMedium),
+                      label: Text(
+                        context.l10n.number,
+                        style: theme.textTheme.labelMedium,
+                      ),
                     ),
-                    const DataColumn(label: Text('Date')),
-                    const DataColumn(label: Text('Status')),
+                    DataColumn(label: Text(context.l10n.date)),
+                    DataColumn(label: Text(context.l10n.status)),
                     DataColumn(
-                      label: Text('Total', style: theme.textTheme.labelMedium),
+                      label: Text(
+                        context.l10n.total,
+                        style: theme.textTheme.labelMedium,
+                      ),
                       numeric: true,
                     ),
                     DataColumn(
-                      label: Text('Paid', style: theme.textTheme.labelMedium),
+                      label: Text(
+                        context.l10n.paid,
+                        style: theme.textTheme.labelMedium,
+                      ),
                       numeric: true,
                     ),
                   ],
@@ -172,8 +190,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     ],
                   ),
                   onRowTap: (s) => context.push('/sales/${s.id}'),
-                  emptyTitle: 'No sales yet',
-                  emptySubtitle: 'Recent sales will appear here',
+                  emptyTitle: context.l10n.noSalesYet,
+                  emptySubtitle: context.l10n.recentSalesEmptySubtitle,
                   emptyIcon: Icons.receipt_long_outlined,
                 ),
               ],
@@ -196,39 +214,40 @@ class _KpiGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final cards = <(String, String, IconData, Color)>[
       (
-        'Today Revenue',
+        l10n.kpiTodayRevenue,
         context.money(summary.todaySales.revenue),
         Icons.trending_up,
         theme.colorScheme.primary,
       ),
       (
-        'Yesterday',
+        l10n.kpiYesterday,
         context.money(summary.yesterdaySales.revenue),
         Icons.history,
         theme.colorScheme.tertiary,
       ),
       (
-        'Month Revenue',
+        l10n.kpiMonthRevenue,
         context.money(summary.monthSales.revenue),
         Icons.calendar_month_outlined,
         theme.colorScheme.secondary,
       ),
       (
-        'Gross Profit',
+        l10n.kpiGrossProfit,
         context.money(summary.grossProfit),
         Icons.savings_outlined,
         const Color(0xFF0F9D58),
       ),
       (
-        'Inventory Value',
+        l10n.kpiInventoryValue,
         context.money(summary.inventoryValue),
         Icons.inventory_2_outlined,
         const Color(0xFFFB8C00),
       ),
       (
-        'Orders',
+        l10n.kpiOrders,
         '${summary.ordersCount}',
         Icons.receipt_long_outlined,
         const Color(0xFF5F6368),
