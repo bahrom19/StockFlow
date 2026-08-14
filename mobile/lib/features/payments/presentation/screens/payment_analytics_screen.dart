@@ -1,12 +1,15 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/error_state_widget.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
 import 'package:stockflow/features/payments/domain/payment_models.dart';
+import 'package:stockflow/features/payments/presentation/labels.dart';
 import 'package:stockflow/features/payments/presentation/providers/payment_analytics_provider.dart';
 import 'package:stockflow/features/payments/presentation/screens/payment_details_screen.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
@@ -48,8 +51,8 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Payment Analytics',
-            subtitle: 'How customers pay — every method, every day',
+            title: context.l10n.paymentAnalyticsTitle,
+            subtitle: context.l10n.paymentAnalyticsSubtitle,
             actions: [
               // Period selector (Today / Week / Month / Custom).
               _PeriodSelector(
@@ -59,7 +62,7 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
               ),
               const SizedBox(width: AppSpacing.xs),
               IconButton(
-                tooltip: 'Refresh',
+                tooltip: context.l10n.refresh,
                 onPressed: () => notifier.refresh(),
                 icon: const Icon(Icons.refresh),
               ),
@@ -87,7 +90,7 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
 
     if (data.totalRevenue <= 0 && data.methods.every((m) => m.amount <= 0)) {
       return _EmptyAnalytics(
-        periodLabel: data.period.label,
+        periodLabel: paymentPeriodLabel(data.period, context.l10n),
         onExplore: () => context.push(PaymentDetailsScreen.route),
       );
     }
@@ -116,8 +119,10 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    'Payment breakdown (${context.money(data.methodsSum)}) '
-                    'differs from total revenue (${context.money(data.totalRevenue)}).',
+                    context.l10n.paymentBreakdownMismatch(
+                      context.money(data.methodsSum),
+                      context.money(data.totalRevenue),
+                    ),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onErrorContainer,
                       fontWeight: FontWeight.w600,
@@ -143,15 +148,16 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: _ChartCard(
-                  title: 'Payment Distribution',
+                child:                _ChartCard(
+                  title: context.l10n.paymentDistribution,
                   child: _PaymentPieChart(methods: data.methods),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: _ChartCard(
-                  title: 'Daily Trend — ${data.period.label}',
+                  title: context.l10n
+                      .dailyTrendTitle(paymentPeriodLabel(data.period, context.l10n)),
                   subtitle:
                       '${Formatters.date(data.from)} – ${Formatters.date(data.to)}',
                   child: _DailyTrendChart(points: data.dailyTrend),
@@ -161,12 +167,13 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
           )
         else ...[
           _ChartCard(
-            title: 'Payment Distribution',
+            title: context.l10n.paymentDistribution,
             child: _PaymentPieChart(methods: data.methods),
           ),
           const SizedBox(height: AppSpacing.md),
           _ChartCard(
-            title: 'Daily Trend — ${data.period.label}',
+            title: context.l10n
+                .dailyTrendTitle(paymentPeriodLabel(data.period, context.l10n)),
             subtitle:
                 '${Formatters.date(data.from)} – ${Formatters.date(data.to)}',
             child: _DailyTrendChart(points: data.dailyTrend),
@@ -175,8 +182,8 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
         const SizedBox(height: AppSpacing.md),
         // ── Comparison bar chart ───────────────
         _ChartCard(
-          title: 'Payment Comparison',
-          subtitle: 'By ${_metric.label}',
+          title: context.l10n.paymentComparison,
+          subtitle: context.l10n.byMetric(_metricLabel(_metric, context.l10n)),
           trailing: _MetricToggle(
             metric: _metric,
             onChanged: (m) => setState(() => _metric = m),
@@ -194,8 +201,8 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
           child: ListTile(
             leading: Icon(Icons.receipt_long_outlined,
                 color: theme.colorScheme.primary),
-            title: const Text('Payment Details'),
-            subtitle: const Text('Every transaction, filterable and exportable'),
+            title: Text(context.l10n.paymentDetailsTitle),
+            subtitle: Text(context.l10n.paymentDetailsSubtitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(PaymentDetailsScreen.route),
           ),
@@ -211,7 +218,7 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
       initialDate: now.subtract(const Duration(days: 29)),
       firstDate: now.subtract(const Duration(days: 365 * 2)),
       lastDate: now,
-      helpText: 'Start date',
+      helpText: context.l10n.startDate,
     );
     if (from == null || !mounted) return;
     final to = await showDatePicker(
@@ -219,7 +226,7 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
       initialDate: now,
       firstDate: from,
       lastDate: now,
-      helpText: 'End date',
+      helpText: context.l10n.endDate,
     );
     if (to == null || !mounted) return;
     notifier.setCustomRange(from, to);
@@ -254,7 +261,7 @@ class _PeriodSelector extends StatelessWidget {
         children: [
           for (final period in PaymentPeriod.values) ...[
             _PeriodChip(
-              label: period.label,
+              label: paymentPeriodLabel(period, context.l10n),
               selected: current == period,
               onTap: () =>
                   period == PaymentPeriod.custom ? onCustom() : onSelected(period),
@@ -389,7 +396,7 @@ class _MethodCard extends StatelessWidget {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      meta.label,
+                      paymentMethodLabel(stat.code, context.l10n),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelMedium?.copyWith(
@@ -418,7 +425,10 @@ class _MethodCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '${stat.count} txns · avg ${context.money(stat.averageTicket)}',
+                context.l10n.txnsAvg(
+                  context.money(stat.averageTicket),
+                  stat.count,
+                ),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -519,7 +529,7 @@ class _PaymentPieChart extends StatelessWidget {
     final theme = Theme.of(context);
     final visible = methods.where((m) => m.amount > 0).toList();
     if (visible.isEmpty) {
-      return _ChartEmpty(label: 'No payments in this period');
+      return _ChartEmpty(label: context.l10n.noPaymentsInPeriod);
     }
     final total = visible.fold<double>(0, (s, m) => s + m.amount);
 
@@ -557,7 +567,7 @@ class _PaymentPieChart extends StatelessWidget {
               for (final m in visible) ...[
                 _LegendRow(
                   color: PaymentMethodMeta.byCode(m.code).color,
-                  label: PaymentMethodMeta.byCode(m.code).label,
+                  label: paymentMethodLabel(m.code, context.l10n),
                   value: context.money(m.amount),
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -582,7 +592,7 @@ class _DailyTrendChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (points.isEmpty) {
-      return _ChartEmpty(label: 'No sales in this period');
+      return _ChartEmpty(label: context.l10n.noSalesInPeriod);
     }
 
     // Build one line per payment method, normalized across the period.
@@ -651,7 +661,7 @@ class _DailyTrendChart extends StatelessWidget {
             getTooltipItems: (spots) => [
               for (final spot in spots)
                 LineTooltipItem(
-                  '${metas[spot.barIndex % metas.length].label}: '
+                  '${paymentMethodLabel(metas[spot.barIndex % metas.length].code, context.l10n)}: '
                   '${context.money(spot.y)}',
                   TextStyle(
                     color: Colors.white,
@@ -709,6 +719,19 @@ enum _ComparisonMetric {
   const _ComparisonMetric(this.label);
 }
 
+/// UI-layer label for the comparison metric (Amount/Transactions/Average
+/// Ticket). EN values match the historical enum labels byte-for-byte.
+String _metricLabel(_ComparisonMetric metric, AppLocalizations l10n) {
+  switch (metric) {
+    case _ComparisonMetric.amount:
+      return l10n.metricAmount;
+    case _ComparisonMetric.transactions:
+      return l10n.metricTransactions;
+    case _ComparisonMetric.averageTicket:
+      return l10n.metricAverageTicket;
+  }
+}
+
 class _MetricToggle extends StatelessWidget {
   final _ComparisonMetric metric;
   final ValueChanged<_ComparisonMetric> onChanged;
@@ -723,7 +746,8 @@ class _MetricToggle extends StatelessWidget {
         for (final m in _ComparisonMetric.values)
           ButtonSegment(
             value: m,
-            label: Text(m.label, style: theme.textTheme.labelSmall),
+            label: Text(_metricLabel(m, context.l10n),
+                style: theme.textTheme.labelSmall),
           ),
       ],
       selected: {metric},
@@ -753,7 +777,7 @@ class _ComparisonBarChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (methods.isEmpty || methods.every((m) => _valueOf(m) <= 0)) {
-      return _ChartEmpty(label: 'No data in this period');
+      return _ChartEmpty(label: context.l10n.noDataInPeriod);
     }
 
     final maxValue = methods.fold<double>(0, (mx, m) {
@@ -802,7 +826,7 @@ class _ComparisonBarChart extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    PaymentMethodMeta.byCode(methods[idx].code).label,
+                    paymentMethodLabel(methods[idx].code, context.l10n),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       fontSize: 10,
@@ -821,7 +845,7 @@ class _ComparisonBarChart extends StatelessWidget {
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final m = methods[group.x.toInt()];
               return BarTooltipItem(
-                '${m.label}\n${context.money(_valueOf(m))}',
+                '${paymentMethodLabel(m.code, context.l10n)}\n${context.money(_valueOf(m))}',
                 TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -934,11 +958,11 @@ class _EmptyAnalytics extends StatelessWidget {
             Icon(Icons.payments_outlined,
                 size: 64, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
             const SizedBox(height: AppSpacing.md),
-            Text('No payments for $periodLabel',
+            Text(context.l10n.noPaymentsForPeriod(periodLabel),
                 style: theme.textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Complete a sale in the POS to see payment analytics here.',
+              context.l10n.paymentAnalyticsEmptyHint,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -948,7 +972,7 @@ class _EmptyAnalytics extends StatelessWidget {
             FilledButton.tonalIcon(
               onPressed: onExplore,
               icon: const Icon(Icons.receipt_long_outlined),
-              label: const Text('Browse payment details'),
+              label: Text(context.l10n.browsePaymentDetails),
             ),
           ],
         ),

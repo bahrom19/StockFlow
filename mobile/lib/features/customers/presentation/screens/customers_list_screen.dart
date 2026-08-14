@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
@@ -46,19 +48,19 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete customer?'),
-        content: Text('Customer "${customer.displayName}" will be archived.'),
+        title: Text(ctx.l10n.deleteCustomerTitle),
+        content: Text(ctx.l10n.deleteCustomerConfirm(customer.displayName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(ctx.l10n.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(ctx.l10n.delete),
           ),
         ],
       ),
@@ -67,7 +69,11 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
     final ok = await ref.read(customersListProvider.notifier).delete(customer.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'Customer deleted' : 'Delete failed')),
+      SnackBar(
+        content: Text(
+          ok ? context.l10n.customerDeleted : context.l10n.deleteFailed,
+        ),
+      ),
     );
   }
 
@@ -84,8 +90,8 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Customers',
-            subtitle: 'Manage your customer base, contacts and loyalty',
+            title: context.l10n.customers,
+            subtitle: context.l10n.customersSubtitle,
           ),
           Expanded(
             child: EntityTable<Customer>(
@@ -97,30 +103,30 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
               isLoadingMore: loaded?.isLoadingMore ?? false,
               onLoadMore: _onScroll,
               search: loaded?.search,
-              searchHint: 'Search by name, phone or email…',
+              searchHint: context.l10n.customersSearchHint,
               onSearch: (q) =>
                   ref.read(customersListProvider.notifier).search(q),
               onRefresh: () =>
                   ref.read(customersListProvider.notifier).refresh(),
               onCreate: () => context.push(RouteNames.customerNew),
-              createLabel: 'New Customer',
-              filters: const [
-                EntityFilter('All', null),
-                EntityFilter('People', 'PERSON'),
-                EntityFilter('Companies', 'COMPANY'),
+              createLabel: context.l10n.newCustomer,
+              filters: [
+                EntityFilter(context.l10n.all, null),
+                EntityFilter(context.l10n.people, 'PERSON'),
+                EntityFilter(context.l10n.companies, 'COMPANY'),
               ],
               activeFilter: loaded?.typeFilter,
               onFilter: (v) =>
                   ref.read(customersListProvider.notifier).filterByType(v),
               exportFileName: 'customers.csv',
-              exportHeaders: const [
-                'Name',
-                'Type',
-                'Phone',
-                'Email',
-                'Bonus Points',
-                'Debt',
-                'Status',
+              exportHeaders: [
+                context.l10n.name,
+                context.l10n.type,
+                context.l10n.phone,
+                context.l10n.email,
+                context.l10n.bonusPoints,
+                context.l10n.debt,
+                context.l10n.status,
               ],
               exportRows: () => [
                 for (final c in items)
@@ -135,15 +141,15 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                   ],
               ],
               columns: [
-                const DataColumn(label: Text('Customer')),
-                const DataColumn(label: Text('Type')),
-                const DataColumn(label: Text('Phone')),
-                const DataColumn(label: Text('Email')),
-                const DataColumn(label: Text('Bonus')),
-                const DataColumn(label: Text('Status')),
+                DataColumn(label: Text(context.l10n.customer)),
+                DataColumn(label: Text(context.l10n.type)),
+                DataColumn(label: Text(context.l10n.phone)),
+                DataColumn(label: Text(context.l10n.email)),
+                DataColumn(label: Text(context.l10n.bonus)),
+                DataColumn(label: Text(context.l10n.status)),
                 DataColumn(
                   label: Text(
-                    'Actions',
+                    context.l10n.actions,
                     style: theme.textTheme.labelMedium,
                   ),
                 ),
@@ -152,7 +158,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                 cells: [
                   DataCell(Text(c.displayName,
                       style: const TextStyle(fontWeight: FontWeight.w600))),
-                  DataCell(Text(CustomerType.fromApi(c.type).label)),
+                  DataCell(Text(_customerTypeLabel(c.type, context.l10n))),
                   DataCell(Text(c.phoneOrMobile.isEmpty ? '-' : c.phoneOrMobile)),
                   DataCell(Text(c.email ?? '-')),
                   DataCell(Text('${c.bonusPoints}')),
@@ -164,21 +170,21 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          tooltip: 'Purchase history',
+                          tooltip: context.l10n.purchaseHistory,
                           icon: const Icon(Icons.history, size: 18),
                           onPressed: () => context.push(
                             '${RouteNames.sales}?customerId=${c.id}',
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Edit',
+                          tooltip: context.l10n.edit,
                           icon: const Icon(Icons.edit_outlined, size: 18),
                           onPressed: () => context.push(
                             '${RouteNames.customerDetail.replaceAll(':id', c.id)}',
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Delete',
+                          tooltip: context.l10n.delete,
                           icon: Icon(
                             Icons.delete_outline,
                             size: 18,
@@ -194,8 +200,8 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
               onRowTap: (c) => context.push(
                 '${RouteNames.customerDetail.replaceAll(':id', c.id)}',
               ),
-              emptyTitle: 'No customers yet',
-              emptySubtitle: 'Add your first customer to start building relationships',
+              emptyTitle: context.l10n.noCustomersYet,
+              emptySubtitle: context.l10n.noCustomersSubtitle,
               emptyIcon: Icons.people_outline,
               errorMessage: state is CustomersListError
                   ? (state as CustomersListError).message
@@ -207,5 +213,19 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
         ],
       ),
     );
+  }
+}
+
+/// UI-layer label for the backend customer-type code (PERSON | COMPANY).
+/// Unknown codes fall back to the raw value — never invent new enum values
+/// on the client.
+String _customerTypeLabel(String type, AppLocalizations l10n) {
+  switch (type) {
+    case 'PERSON':
+      return l10n.customerPerson;
+    case 'COMPANY':
+      return l10n.customerCompany;
+    default:
+      return type;
   }
 }

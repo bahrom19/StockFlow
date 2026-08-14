@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
+import 'package:stockflow/features/payments/presentation/labels.dart';
 import 'package:stockflow/features/payments/presentation/providers/today_payments_provider.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
 
@@ -44,7 +46,7 @@ class TodayPaymentsCard extends ConsumerWidget {
                       size: 18, color: theme.colorScheme.primary),
                   const SizedBox(width: AppSpacing.xs),
                   Text(
-                    "Today's Payments",
+                    context.l10n.todaysPayments,
                     style: theme.textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
@@ -65,7 +67,7 @@ class TodayPaymentsCard extends ConsumerWidget {
                     height: 90,
                     child: Center(
                       child: Text(
-                        'Payment data unavailable',
+                        context.l10n.paymentDataUnavailable,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -79,7 +81,7 @@ class TodayPaymentsCard extends ConsumerWidget {
                         height: 90,
                         child: Center(
                           child: Text(
-                            'Payment data unavailable',
+                            context.l10n.paymentDataUnavailable,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -106,11 +108,11 @@ class _Breakdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final entries = [
-      ('CASH', 'Cash', DesignTokens.paymentCash, double.tryParse(payments.cash) ?? 0),
-      ('CARD', 'Card', DesignTokens.paymentCard, double.tryParse(payments.card) ?? 0),
-      ('QR', 'QR', DesignTokens.paymentQr, double.tryParse(payments.qr) ?? 0),
-      ('BANK_TRANSFER', 'Bank', DesignTokens.paymentBank, double.tryParse(payments.bankTransfer) ?? 0),
-      ('MOBILE_WALLET', 'Wallet', DesignTokens.paymentWallet, double.tryParse(payments.mobileWallet) ?? 0),
+      ('CASH', paymentMethodShortLabel('CASH', context.l10n), DesignTokens.paymentCash, double.tryParse(payments.cash) ?? 0),
+      ('CARD', paymentMethodShortLabel('CARD', context.l10n), DesignTokens.paymentCard, double.tryParse(payments.card) ?? 0),
+      ('QR', paymentMethodShortLabel('QR', context.l10n), DesignTokens.paymentQr, double.tryParse(payments.qr) ?? 0),
+      ('BANK_TRANSFER', paymentMethodShortLabel('BANK_TRANSFER', context.l10n), DesignTokens.paymentBank, double.tryParse(payments.bankTransfer) ?? 0),
+      ('MOBILE_WALLET', paymentMethodShortLabel('MOBILE_WALLET', context.l10n), DesignTokens.paymentWallet, double.tryParse(payments.mobileWallet) ?? 0),
     ];
     final visible = entries.where((e) => e.$4 > 0).toList();
     final total = payments.total;
@@ -136,13 +138,13 @@ class _Breakdown extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'No payments today',
+              context.l10n.noPaymentsToday,
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 2),
             Text(
-              'Sales you make today will appear here.',
+              context.l10n.noPaymentsTodaySubtitle,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -207,7 +209,7 @@ class _Breakdown extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Total',
+              context.l10n.total,
               style: theme.textTheme.labelMedium?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: theme.colorScheme.onSurfaceVariant,

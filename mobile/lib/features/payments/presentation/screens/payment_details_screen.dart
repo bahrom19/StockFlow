@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/utils/pdf_downloader.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
@@ -10,6 +11,7 @@ import 'package:stockflow/core/widgets/page_header.dart';
 import 'package:stockflow/features/payments/data/payment_pdf_export.dart';
 import 'package:stockflow/features/payments/data/payments_repository.dart';
 import 'package:stockflow/features/payments/domain/payment_models.dart';
+import 'package:stockflow/features/payments/presentation/labels.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
 
@@ -131,16 +133,16 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Payment Details',
-            subtitle: _subtitle(),
+            title: context.l10n.paymentDetailsTitle,
+            subtitle: _subtitle(context),
             actions: [
               IconButton(
-                tooltip: 'Export PDF',
+                tooltip: context.l10n.exportPdf,
                 onPressed: _sales.isEmpty ? null : _exportPdf,
                 icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
               ),
               IconButton(
-                tooltip: 'Refresh',
+                tooltip: context.l10n.refresh,
                 onPressed: () => _load(reset: true),
                 icon: const Icon(Icons.refresh),
               ),
@@ -160,7 +162,7 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
                       _load();
                     },
                     search: _query,
-                    searchHint: 'Search by receipt number…',
+                    searchHint: context.l10n.detailsSearchHint,
                     onSearch: (q) {
                       _query = q;
                       _searchDebounce?.cancel();
@@ -174,39 +176,31 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
                     onFilter: _setMethod,
                     onRefresh: () => _load(reset: true),
                     exportFileName: 'payment_details.csv',
-                    exportHeaders: const [
-                      'Date',
-                      'Receipt',
-                      'Cashier',
-                      'Customer',
-                      'Warehouse',
-                      'Method',
-                      'Amount',
-                      'Status',
-                    ],
+                    exportHeaders: _exportHeaders(context),
                     exportRows: _exportRows,
                     columns: [
                       DataColumn(
-                        label: Text('Date', style: theme.textTheme.labelMedium),
+                        label:
+                            Text(context.l10n.date, style: theme.textTheme.labelMedium),
                         onSort: (_, __) => _setSort('createdAt'),
                         numeric: false,
                       ),
                       DataColumn(
-                        label:
-                            Text('Receipt', style: theme.textTheme.labelMedium),
+                        label: Text(context.l10n.receipt,
+                            style: theme.textTheme.labelMedium),
                         onSort: (_, __) => _setSort('saleNumber'),
                       ),
-                      const DataColumn(label: Text('Cashier')),
-                      const DataColumn(label: Text('Customer')),
-                      const DataColumn(label: Text('Warehouse')),
-                      const DataColumn(label: Text('Method')),
+                      DataColumn(label: Text(context.l10n.cashier)),
+                      DataColumn(label: Text(context.l10n.customer)),
+                      DataColumn(label: Text(context.l10n.warehouse)),
+                      DataColumn(label: Text(context.l10n.method)),
                       DataColumn(
                         label:
-                            Text('Amount', style: theme.textTheme.labelMedium),
+                            Text(context.l10n.amount, style: theme.textTheme.labelMedium),
                         numeric: true,
                         onSort: (_, __) => _setSort('total'),
                       ),
-                      const DataColumn(label: Text('Status')),
+                      DataColumn(label: Text(context.l10n.status)),
                     ],
                     buildRow: (s) => DataRow(
                       cells: [
@@ -232,10 +226,11 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
                       ],
                     ),
                     onRowTap: (s) => context.push('/sales/${s.id}'),
-                    emptyTitle: 'No payments found',
+                    emptyTitle: context.l10n.noPaymentsFound,
                     emptySubtitle: _method == null
-                        ? 'Sales payments will appear here once transactions exist.'
-                        : 'No ${_method} payments match this search.',
+                        ? context.l10n.noPaymentsYetSubtitle
+                        : context.l10n
+                            .noMethodPaymentsMatch(paymentMethodRawLabel(_method!, context.l10n)),
                     emptyIcon: Icons.payments_outlined,
                     errorMessage: _error,
                     onRetry: () => _load(reset: true),
@@ -246,19 +241,36 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
     );
   }
 
-  String _subtitle() {
+  String _subtitle(BuildContext context) {
+    final l10n = context.l10n;
     final parts = <String>[
-      if (_method != null) 'Filtered by ${_method!.replaceAll('_', ' ').toLowerCase()}',
-      '$_total transactions',
+      if (_method != null)
+        l10n.filteredBy(paymentMethodFilterLabel(_method!, l10n)),
+      l10n.transactionsCount(_total),
     ];
     return parts.join(' · ');
   }
 
-  List<EntityFilter> _methodFilters() {
+  List<String> _exportHeaders(BuildContext context) {
+    final l10n = context.l10n;
     return [
-      const EntityFilter('All', null),
+      l10n.date,
+      l10n.receipt,
+      l10n.cashier,
+      l10n.customer,
+      l10n.warehouse,
+      l10n.method,
+      l10n.amount,
+      l10n.status,
+    ];
+  }
+
+  List<EntityFilter> _methodFilters() {
+    final l10n = context.l10n;
+    return [
+      EntityFilter(l10n.all, null),
       for (final meta in PaymentMethodMeta.all)
-        EntityFilter(meta.label, meta.code),
+        EntityFilter(paymentMethodLabel(meta.code, l10n), meta.code),
     ];
   }
 
@@ -287,35 +299,30 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
     if (rows.isEmpty) return;
     try {
       final bytes = await PaymentPdfExport.build(
-        title: 'Payment Details',
+        title: context.l10n.paymentDetailsTitle,
         currency: context.currencyCode,
-        subtitle: _subtitle(),
-        headers: const [
-          'Date',
-          'Receipt',
-          'Cashier',
-          'Customer',
-          'Warehouse',
-          'Method',
-          'Amount',
-          'Status',
-        ],
+        subtitle: _subtitle(context),
+        headers: _exportHeaders(context),
         rows: rows,
       );
       await PdfDownloader.download('payment_details.pdf', bytes);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Exported ${rows.length} rows as PDF')),
+        SnackBar(content: Text(context.l10n.exportedRowsAsPdf(rows.length))),
       );
     } on UnsupportedError catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'PDF export is not supported here')),
+        SnackBar(
+          content: Text(
+            e.message ?? context.l10n.pdfExportNotSupported,
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF export failed: $e')),
+        SnackBar(content: Text(context.l10n.pdfExportFailed(e.toString()))),
       );
     }
   }
@@ -345,7 +352,7 @@ class _MethodCell extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
-              PaymentMethodMeta.byCode(p.method).label,
+              paymentMethodLabel(p.method, context.l10n),
               style: theme.textTheme.labelSmall?.copyWith(
                 color: PaymentMethodMeta.byCode(p.method).color,
                 fontWeight: FontWeight.w600,
@@ -373,7 +380,7 @@ class _StatusCell extends StatelessWidget {
             : theme.colorScheme.onSurfaceVariant;
 
     return Text(
-      status.replaceAll('_', ' '),
+      paymentStatusLabel(status, context.l10n),
       style: theme.textTheme.labelSmall?.copyWith(
         color: color,
         fontWeight: FontWeight.w600,

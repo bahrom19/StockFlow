@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/features/customers/data/customers_repository.dart';
 import 'package:stockflow/features/customers/domain/customer_models.dart';
@@ -144,7 +145,11 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
     if (!mounted) return;
     if (result is CustomersSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isEditing ? 'Customer updated' : 'Customer created')),
+        SnackBar(
+          content: Text(
+            _isEditing ? context.l10n.customerUpdated : context.l10n.customerCreated,
+          ),
+        ),
       );
       context.pop();
     } else {
@@ -160,7 +165,11 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Edit Customer' : 'New Customer')),
+      appBar: AppBar(
+        title: Text(
+          _isEditing ? context.l10n.editCustomer : context.l10n.newCustomer,
+        ),
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
           : Form(
@@ -169,16 +178,16 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
           padding: AppSpacing.screenPadding,
           children: [
             SegmentedButton<CustomerType>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: CustomerType.person,
-                  label: Text('Person'),
-                  icon: Icon(Icons.person_outline, size: 18),
+                  label: Text(context.l10n.customerPerson),
+                  icon: const Icon(Icons.person_outline, size: 18),
                 ),
                 ButtonSegment(
                   value: CustomerType.company,
-                  label: Text('Company'),
-                  icon: Icon(Icons.business_outlined, size: 18),
+                  label: Text(context.l10n.customerCompany),
+                  icon: const Icon(Icons.business_outlined, size: 18),
                 ),
               ],
               selected: {_type},
@@ -186,26 +195,28 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
             ),
             const SizedBox(height: AppSpacing.md),
             if (_type == CustomerType.company) ...[
-              _field(_companyCtrl, 'Company Name',
+              _field(_companyCtrl, context.l10n.companyName,
                   required: true, autofocus: true),
               const SizedBox(height: AppSpacing.sm),
-              _field(_binCtrl, 'BIN'),
+              _field(_binCtrl, context.l10n.bin),
             ] else ...[
-              _field(_firstCtrl, 'First Name', autofocus: true),
+              _field(_firstCtrl, context.l10n.firstName, autofocus: true),
               const SizedBox(height: AppSpacing.sm),
-              _field(_lastCtrl, 'Last Name'),
+              _field(_lastCtrl, context.l10n.lastName),
               const SizedBox(height: AppSpacing.sm),
-              _field(_iinCtrl, 'IIN'),
+              _field(_iinCtrl, context.l10n.iin),
             ],
             const SizedBox(height: AppSpacing.sm),
-            _field(_phoneCtrl, 'Phone', keyboardType: TextInputType.phone),
+            _field(_phoneCtrl, context.l10n.phone,
+                keyboardType: TextInputType.phone),
             const SizedBox(height: AppSpacing.sm),
-            _field(_emailCtrl, 'Email', keyboardType: TextInputType.emailAddress),
+            _field(_emailCtrl, context.l10n.email,
+                keyboardType: TextInputType.emailAddress),
             const SizedBox(height: AppSpacing.sm),
-            _field(_notesCtrl, 'Notes', maxLines: 3),
+            _field(_notesCtrl, context.l10n.notes, maxLines: 3),
             const SizedBox(height: AppSpacing.sm),
             SwitchListTile(
-              title: const Text('Active'),
+              title: Text(context.l10n.statusActive),
               contentPadding: EdgeInsets.zero,
               value: _isActive,
               onChanged: (v) => setState(() => _isActive = v),
@@ -222,7 +233,11 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : Text(_isEditing ? 'Save Changes' : 'Create Customer'),
+                  : Text(
+                      _isEditing
+                          ? context.l10n.saveChanges
+                          : context.l10n.createCustomer,
+                    ),
             ),
           ],
         ),
@@ -249,7 +264,9 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
         isDense: true,
       ),
       validator: required
-          ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
+          ? (v) => (v == null || v.trim().isEmpty)
+              ? context.l10n.required
+              : null
           : null,
     );
   }
