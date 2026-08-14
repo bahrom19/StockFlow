@@ -4,9 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
-import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/payments/presentation/providers/today_payments_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Dashboard widget — Today's Payments.
 ///
@@ -193,7 +193,7 @@ class _Breakdown extends StatelessWidget {
                 ),
                 Text(
                   '${payments.percentOf(amount).toStringAsFixed(0)}% · '
-                  '${Formatters.currency(amount)}',
+                  '${context.money(amount)}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -214,7 +214,7 @@ class _Breakdown extends StatelessWidget {
               ),
             ),
             Text(
-              Formatters.currency(total),
+              context.money(total),
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w800,
               ),

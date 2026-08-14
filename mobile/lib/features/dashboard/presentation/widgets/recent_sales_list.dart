@@ -8,6 +8,7 @@ import 'package:stockflow/core/theme/design_tokens.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/premium_empty_state.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Recent Sales List
 class RecentSalesList extends StatelessWidget {
@@ -111,7 +112,7 @@ class _SaleItem extends StatelessWidget {
             _StatusChip(status: sale.status, l10n: context.l10n),
             const SizedBox(width: AppSpacing.sm),
             Text(
-              Formatters.currency(sale.total),
+              context.money(sale.total),
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: theme.colorScheme.onSurface,

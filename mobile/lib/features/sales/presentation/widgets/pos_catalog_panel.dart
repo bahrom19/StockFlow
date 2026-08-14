@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
-import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/pos_catalog_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// POS catalog panel — the cashier's product browser (~70% width).
 ///
@@ -285,7 +285,7 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
         DataCell(Text(product.category ?? '-')),
         DataCell(
           Text(
-            Formatters.currency(product.price),
+            context.money(product.price),
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ),

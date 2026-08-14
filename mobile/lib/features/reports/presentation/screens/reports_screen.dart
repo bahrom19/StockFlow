@@ -12,6 +12,7 @@ import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:stockflow/features/reports/data/report_export.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Reports screen — business KPIs + recent sales table.
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -38,6 +39,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       final bytes = await ReportExport.buildPdf(
         summary: summary,
         sales: sales,
+        currency: context.currencyCode,
       );
       final stamp = DateTime.now();
       final name =
@@ -165,8 +167,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         DateTime.tryParse(s.createdAt),
                       ))),
                       DataCell(StatusBadge(status: s.status)),
-                      DataCell(Text(Formatters.currency(s.total))),
-                      DataCell(Text(Formatters.currency(s.paidAmount))),
+                      DataCell(Text(context.money(s.total))),
+                      DataCell(Text(context.money(s.paidAmount))),
                     ],
                   ),
                   onRowTap: (s) => context.push('/sales/${s.id}'),
@@ -197,31 +199,31 @@ class _KpiGrid extends StatelessWidget {
     final cards = <(String, String, IconData, Color)>[
       (
         'Today Revenue',
-        Formatters.currency(summary.todaySales.revenue),
+        context.money(summary.todaySales.revenue),
         Icons.trending_up,
         theme.colorScheme.primary,
       ),
       (
         'Yesterday',
-        Formatters.currency(summary.yesterdaySales.revenue),
+        context.money(summary.yesterdaySales.revenue),
         Icons.history,
         theme.colorScheme.tertiary,
       ),
       (
         'Month Revenue',
-        Formatters.currency(summary.monthSales.revenue),
+        context.money(summary.monthSales.revenue),
         Icons.calendar_month_outlined,
         theme.colorScheme.secondary,
       ),
       (
         'Gross Profit',
-        Formatters.currency(summary.grossProfit),
+        context.money(summary.grossProfit),
         Icons.savings_outlined,
         const Color(0xFF0F9D58),
       ),
       (
         'Inventory Value',
-        Formatters.currency(summary.inventoryValue),
+        context.money(summary.inventoryValue),
         Icons.inventory_2_outlined,
         const Color(0xFFFB8C00),
       ),

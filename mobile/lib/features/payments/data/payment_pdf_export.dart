@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:stockflow/core/currency/currency_catalog.dart';
 
 /// Builds a Payment Details PDF document from CSV-style rows.
 ///
@@ -28,6 +29,7 @@ class PaymentPdfExport {
     required List<String> headers,
     required List<List<String>> rows,
     bool compress = true,
+    String currency = 'KZT',
   }) async {
     // Right-align the column named "Amount" (or "Total") — derived from the
     // headers so reordering columns never silently misaligns the totals.
@@ -51,7 +53,20 @@ class PaymentPdfExport {
           pw.TableHelper.fromTextArray(
             context: context,
             headers: headers,
-            data: rows,
+            data: amountColumnIndex >= 0
+                ? [
+                    for (final row in rows)
+                      [
+                        for (var i = 0; i < row.length; i++)
+                          i == amountColumnIndex
+                              ? CurrencyCatalog.formatPdf(
+                                  double.tryParse(row[i]) ?? 0,
+                                  code: currency,
+                                )
+                              : row[i],
+                      ],
+                  ]
+                : rows,
             headerStyle: _style(9, bold: true),
             cellStyle: _style(8),
             headerDecoration: const pw.BoxDecoration(
@@ -78,7 +93,7 @@ class PaymentPdfExport {
               ),
               pw.Text(
                 'Total amount: '
-                '${_sumAmount(rows, amountColumnIndex).toStringAsFixed(2)}',
+                '${CurrencyCatalog.formatPdf(_sumAmount(rows, amountColumnIndex), code: currency)}',
                 style: _style(9, bold: true),
               ),
             ],

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
-import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/sales_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// POS cart panel — the cashier's checkout column (~30% width).
 ///
@@ -233,7 +233,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                     style: theme.textTheme.bodySmall,
                                   ),
                                   Text(
-                                    Formatters.currency(_totalPaid),
+                                    context.money(_totalPaid),
                                     style:
                                         theme.textTheme.bodySmall?.copyWith(
                                       fontWeight: FontWeight.w600,
@@ -256,7 +256,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                     Text(context.l10n.posChange,
                                         style: theme.textTheme.bodySmall),
                                     Text(
-                                      Formatters.currency(change),
+                                      context.money(change),
                                       style: theme.textTheme.bodySmall?.copyWith(
                                         fontWeight: FontWeight.w600,
                                         color: const Color(0xFFFB8C00),
@@ -325,7 +325,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                     ? context.l10n.posCompleting
                                     : isAmountValid
                                         ? context.l10n
-                                            .posCompleteSale(Formatters.currency(total))
+                                            .posCompleteSale(context.money(total))
                                         : context.l10n.posInsufficientPayment,
                               ),
                             ),
@@ -404,7 +404,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
         title: Text(context.l10n.posClearCartTitle),
         content: Text(
           context.l10n.posClearCartConfirm(
-            Formatters.currency(cart.total),
+            context.money(cart.total),
             cart.itemCount,
           ),
         ),
@@ -482,7 +482,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
               ),
             ),
             Text(
-              Formatters.currency(amount),
+              context.money(amount),
               style: base?.copyWith(
                 fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
                 color: color,
@@ -589,7 +589,7 @@ class _CartItemCard extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  '${Formatters.currency(item.unitPrice)} × ',
+                  '${context.money(item.unitPrice)} × ',
                   style: theme.textTheme.bodySmall,
                 ),
                 // Quantity stepper
@@ -625,7 +625,7 @@ class _CartItemCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  Formatters.currency(item.total),
+                  context.money(item.total),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

@@ -7,6 +7,7 @@ import 'package:stockflow/features/products/data/repositories/products_repositor
 import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/suppliers/data/repositories/suppliers_repository.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 class PurchaseOrderFormScreen extends ConsumerStatefulWidget {
   const PurchaseOrderFormScreen({super.key});
@@ -72,9 +73,11 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
             child: ListView.builder(
               shrinkWrap: true,
               itemCount: products.length,
-              itemBuilder: (_, i) => ListTile(
+              itemBuilder: (ctx, i) => ListTile(
                 title: Text(products[i].name),
-                subtitle: Text('\$${(double.tryParse(products[i].price ?? '0') ?? 0).toStringAsFixed(2)}'),
+                subtitle: Text(ctx.money(
+                  double.tryParse(products[i].price ?? '0') ?? 0,
+                )),
                 onTap: () => Navigator.pop(ctx, products[i]),
               ),
             ),

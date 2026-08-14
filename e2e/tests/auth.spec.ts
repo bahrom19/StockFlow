@@ -280,14 +280,15 @@ test.describe('StockFlow first-user authentication', () => {
     await page.keyboard.type('2000000', { delay: 25 });
     await clickButton(page, 'Save');
 
-    // Goal summary appears on the Revenue card (currencyShort($2.0M)).
-    await expectText(page, 'of $2.0M');
+    // Goal summary appears on the Revenue card (currencyShort). Phase 4:
+    // default currency is KZT → ₸ (was $ before multi-currency).
+    await expectText(page, 'of ₸2.0M');
 
     // Reload → goal persisted locally (SharedPreferences), progress re-shown.
     await page.reload();
     await waitForRoute(page, '#/dashboard');
     await reenableSemantics(page);
     await scrollDashboardIntoView(page);
-    await expectText(page, 'of $2.0M');
+    await expectText(page, 'of ₸2.0M');
   });
 });

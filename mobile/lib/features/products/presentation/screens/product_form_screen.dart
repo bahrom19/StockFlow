@@ -7,6 +7,7 @@ import 'package:stockflow/core/widgets/app_snackbar.dart';
 import 'package:stockflow/features/products/data/repositories/products_repository.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/products/presentation/providers/products_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 class ProductFormScreen extends ConsumerStatefulWidget {
   final Product? product; // non-null = edit (already loaded)
@@ -275,7 +276,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: l10n.priceRequired,
-                      prefixText: '\$ ',
+                      prefixText: '${context.currencySymbol} ',
                     ),
                     validator: (v) => Validators.required(v, l10n.price),
                   ),
@@ -287,7 +288,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: l10n.costPrice,
-                      prefixText: '\$ ',
+                      prefixText: '${context.currencySymbol} ',
                     ),
                   ),
                 ),

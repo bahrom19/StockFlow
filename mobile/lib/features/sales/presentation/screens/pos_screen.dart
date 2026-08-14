@@ -16,6 +16,7 @@ import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/sales/data/receipt_export.dart';
 import 'package:stockflow/features/sales/presentation/screens/pos_workspace.dart';
 import 'package:stockflow/features/sales/presentation/widgets/pos_customer_picker.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 // ──────────────────────────────────
 // POS Screen — Responsive Terminal
@@ -251,7 +252,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                     ),
                     title: Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
-                      '${product.sku ?? ''}  •  \$${price.toStringAsFixed(2)}',
+                      '${product.sku ?? ''}  •  ${context.money(price)}',
                       style: theme.textTheme.bodySmall,
                     ),
                     trailing: FilledButton.tonal(
@@ -332,7 +333,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                             style: theme.textTheme.bodySmall,
                           ),
                           Text(
-                            '\$${cart.total.toStringAsFixed(2)}',
+                            context.money(cart.total),
                             style: theme.textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
@@ -395,7 +396,7 @@ class _CartItemTile extends StatelessWidget {
                           ?.copyWith(color: theme.colorScheme.outline)),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${item.unitPrice.toStringAsFixed(2)} × ${item.quantity}',
+                    '${context.money(item.unitPrice)} × ${item.quantity}',
                     style: theme.textTheme.bodyMedium,
                   ),
                   if (item.discount > 0)
@@ -437,7 +438,7 @@ class _CartItemTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '\$${item.total.toStringAsFixed(2)}',
+                  context.money(item.total),
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.bold),
                 ),
@@ -551,6 +552,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
       // The sheet may have picked a customer after [widget.cart] was snapshotted.
       customerId: _customer?.id ?? widget.cart.customerId,
       notes: widget.cart.notes,
+      currency: context.currencyCode,
     );
 
     if (sale != null && mounted) {
@@ -617,7 +619,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
                       style: theme.textTheme.titleLarge),
                   const Spacer(),
                   Text(
-                    '\$${widget.cart.total.toStringAsFixed(2)}',
+                    context.money(widget.cart.total),
                     style: theme.textTheme.titleLarge
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
@@ -789,7 +791,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(color: color)),
-          Text('\$${amount.toStringAsFixed(2)}',
+          Text(context.money(amount),
               style: TextStyle(fontWeight: FontWeight.bold, color: color)),
         ],
       ),
@@ -815,7 +817,8 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     final sale = widget.sale;
     setState(() => _isPdfExporting = true);
     try {
-      final bytes = await ReceiptExport.buildPdf(sale, l10n: context.l10n);
+      final bytes = await ReceiptExport.buildPdf(sale,
+          l10n: context.l10n, currency: context.currencyCode);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -917,7 +920,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                           child: Text('${item.productId.substring(0, 8)} × ${item.quantity}',
                               maxLines: 1, overflow: TextOverflow.ellipsis),
                         ),
-                        Text('\$${itemTotal.toStringAsFixed(2)}',
+                        Text(context.money(itemTotal),
                             style: theme.textTheme.bodyMedium
                                 ?.copyWith(fontWeight: FontWeight.w600)),
                       ],
@@ -949,7 +952,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(_paymentMethodLabel(p.method, context.l10n)),
-                      Text('\$${(double.tryParse(p.amount) ?? 0).toStringAsFixed(2)}'),
+                      Text(context.money(double.tryParse(p.amount) ?? 0)),
                     ],
                   ),
                 )),
@@ -997,7 +1000,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           Text(label,
               style: bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium),
           Text(
-            '\$${amount.toStringAsFixed(2)}',
+            context.money(amount),
             style: (bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium)
                 ?.copyWith(fontWeight: bold ? FontWeight.bold : null,
                     color: color),

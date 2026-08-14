@@ -13,6 +13,7 @@ import 'package:stockflow/core/widgets/shimmer_box.dart';
 import 'package:stockflow/features/sales/domain/cash_shift_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
 import 'package:stockflow/features/warehouses/presentation/providers/warehouses_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Cash Drawer Hero — the store owner's #1 question: "how much money is in the
 /// drawer right now, and does it reconcile?" Rendered as the dominant hero
@@ -224,7 +225,7 @@ class _ShiftHero extends StatelessWidget {
       stateColor = DesignTokens.error;
       pillIcon = Icons.error_outline;
       pillText = l10n.differenceAmount(
-        Formatters.currencyShort(shift.differenceValue),
+        context.moneyShort(shift.differenceValue),
       );
     }
 
@@ -307,7 +308,7 @@ class _ShiftHero extends StatelessWidget {
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Text(
-                Formatters.currency(shift.expectedClosingValue),
+                context.money(shift.expectedClosingValue),
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                   fontFeatures: const [FontFeature.tabularFigures()],
@@ -324,22 +325,22 @@ class _ShiftHero extends StatelessWidget {
               children: [
                 _MiniStat(
                   label: l10n.cashIn,
-                  value: Formatters.currencyShort(shift.cashInValue),
+                  value: context.moneyShort(shift.cashInValue),
                   color: DesignTokens.paymentCash,
                 ),
                 _MiniStat(
                   label: l10n.cashSales,
-                  value: Formatters.currencyShort(shift.cashSalesValue),
+                  value: context.moneyShort(shift.cashSalesValue),
                   color: DesignTokens.success,
                 ),
                 _MiniStat(
                   label: l10n.nonCash,
-                  value: Formatters.currencyShort(_nonCash),
+                  value: context.moneyShort(_nonCash),
                   color: DesignTokens.info,
                 ),
                 _MiniStat(
                   label: l10n.cashOut,
-                  value: Formatters.currencyShort(shift.cashOutValue),
+                  value: context.moneyShort(shift.cashOutValue),
                   color: DesignTokens.warning,
                 ),
               ],
@@ -363,7 +364,7 @@ class _ShiftHero extends StatelessWidget {
                       Flexible(
                         child: Text(
                           l10n.expectedClosing(
-                            Formatters.currency(shift.expectedClosingValue),
+                            context.money(shift.expectedClosingValue),
                           ),
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,

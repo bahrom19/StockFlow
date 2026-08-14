@@ -1,4 +1,5 @@
 import 'package:intl/intl.dart';
+import 'package:stockflow/core/currency/currency_catalog.dart';
 
 /// StockFlow Formatting Utilities
 class Formatters {
@@ -7,24 +8,16 @@ class Formatters {
   // ──────────────────────────────────
   // Currency
   // ──────────────────────────────────
-  static final NumberFormat _currencyFormat = NumberFormat.currency(
-    symbol: '\$',
-    decimalDigits: 2,
-  );
-
-  static String currency(dynamic value) {
-    final num amount = _parseNumeric(value);
-    return _currencyFormat.format(amount);
+  /// Formats [value] with the symbol of [currency] (default `KZT` → `₸`).
+  ///
+  /// Phase 4: symbol comes from [CurrencyCatalog]; layout/rounding/decimal
+  /// digits are unchanged (symbol prefix, 2 decimals, `1,234.56` grouping).
+  static String currency(dynamic value, {String currency = 'KZT'}) {
+    return CurrencyCatalog.format(value, code: currency);
   }
 
-  static String currencyShort(dynamic value) {
-    final num amount = _parseNumeric(value);
-    if (amount >= 1000000) {
-      return '\$${(amount / 1000000).toStringAsFixed(1)}M';
-    } else if (amount >= 1000) {
-      return '\$${(amount / 1000).toStringAsFixed(1)}K';
-    }
-    return _currencyFormat.format(amount);
+  static String currencyShort(dynamic value, {String currency = 'KZT'}) {
+    return CurrencyCatalog.formatShort(value, code: currency);
   }
 
   // ──────────────────────────────────

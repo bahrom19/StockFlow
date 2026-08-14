@@ -7,7 +7,6 @@ import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
-import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/error_state_widget.dart';
 import 'package:stockflow/core/widgets/shimmer_box.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
@@ -25,6 +24,7 @@ import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 import 'package:stockflow/features/payments/presentation/widgets/today_payments_card.dart';
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
 import 'package:stockflow/features/warehouses/presentation/providers/warehouses_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Production Dashboard Screen — answers "How is my business today?" in <5s.
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -373,7 +373,7 @@ class _KpiSection extends StatelessWidget {
     return ((summary.todaySales.count - y) / y) * 100;
   }
 
-  List<Widget> _cards(AppLocalizations l10n) {
+  List<Widget> _cards(AppLocalizations l10n, BuildContext context) {
     return [
       // Stage E — Revenue + Monthly Goal (first KPI, emphasized). The monthly
       // goal is a LOCAL owner setting (SharedPreferences), zero new requests.
@@ -389,7 +389,7 @@ class _KpiSection extends StatelessWidget {
       ),
       KpiCard(
         title: l10n.kpiGrossProfit,
-        value: Formatters.currency(summary.grossProfit),
+        value: context.money(summary.grossProfit),
         subtitle: l10n.kpiPeriodProfit,
         icon: Icons.account_balance,
         color: DesignTokens.profit,
@@ -397,7 +397,7 @@ class _KpiSection extends StatelessWidget {
       ),
       KpiCard(
         title: l10n.kpiInventoryValue,
-        value: Formatters.currencyShort(summary.inventoryValue),
+        value: context.moneyShort(summary.inventoryValue),
         subtitle: l10n.kpiTotalStockValue,
         icon: Icons.warehouse,
         color: DesignTokens.accent,
@@ -417,7 +417,7 @@ class _KpiSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final cards = _cards(context.l10n);
+    final cards = _cards(context.l10n, context);
 
     if (width >= AppSpacing.breakpointWide) {
       return Row(

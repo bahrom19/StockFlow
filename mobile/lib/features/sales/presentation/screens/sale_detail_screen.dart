@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
-import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
 import 'package:stockflow/features/sales/presentation/widgets/sales_widgets.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 // ──────────────────────────────────
 // Sale Detail Screen
@@ -279,8 +279,8 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   child: ListTile(
                     title: Text('Product ${item.productId.substring(0, 8)}',
                         maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text('\$${price.toStringAsFixed(2)} × $qty'),
-                    trailing: Text('\$${itemTotal.toStringAsFixed(2)}',
+                    subtitle: Text('${context.money(price)} × $qty'),
+                    trailing: Text(context.money(itemTotal),
                         style: theme.textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.bold)),
                   ),
@@ -301,7 +301,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                       subtitle: p.reference != null
                           ? Text(p.reference!, maxLines: 1)
                           : null,
-                      trailing: Text('\$${pAmount.toStringAsFixed(2)}',
+                      trailing: Text(context.money(pAmount),
                           style: theme.textTheme.titleSmall
                               ?.copyWith(fontWeight: FontWeight.bold)),
                     ),
@@ -353,7 +353,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   ? theme.textTheme.titleSmall
                   : theme.textTheme.bodyMedium),
           Text(
-            '\$${amount.toStringAsFixed(2)}',
+            context.money(amount),
             style: (bold
                     ? theme.textTheme.titleSmall
                     : theme.textTheme.bodyMedium)
@@ -532,7 +532,7 @@ class _PartialReturnDialogState extends State<_PartialReturnDialog> {
                 children: [
                   Text('Refund total', style: theme.textTheme.titleSmall),
                   Text(
-                    Formatters.currency(_refundTotal),
+                    context.money(_refundTotal),
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),

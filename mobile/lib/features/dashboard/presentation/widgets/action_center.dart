@@ -14,6 +14,7 @@ import 'package:stockflow/features/dashboard/presentation/providers/dashboard_pr
 import 'package:stockflow/features/dashboard/presentation/widgets/attention_event.dart';
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
 import 'package:stockflow/features/warehouses/presentation/providers/warehouses_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Threshold (hours) for the "shift open too long" attention event.
 ///
@@ -83,6 +84,7 @@ class _ActionCenterState extends ConsumerState<ActionCenter> {
       l10n: l10n,
       summary: dashState.summary,
       shiftState: shiftState,
+      currency: context.currencyCode,
       warehouseState: warehouseState,
       // Event #4 (pending POs). Null when loading/failed → no false "0"
       // event (per spec §10-11).
@@ -252,6 +254,7 @@ List<AttentionEvent> buildAttentionEvents({
   required WarehouseListState warehouseState,
   int pendingPoCount = 0,
   List<LowStockItem> lowStockItems = const [],
+  String currency = 'KZT',
 }) {
   final events = <AttentionEvent>[];
   final shift = shiftState is ShiftLoaded ? shiftState.current : null;
@@ -263,13 +266,15 @@ List<AttentionEvent> buildAttentionEvents({
     events.add(AttentionEvent(
       category: AttentionCategory.critical,
       weight: 200 + (diff.abs() / 100).clamp(0.0, 100.0).toDouble(),
-      title: l10n.eventDrawerDifferenceTitle(Formatters.currency(diff)),
+      title: l10n.eventDrawerDifferenceTitle(
+        Formatters.currency(diff, currency: currency),
+      ),
       reason: l10n.eventDrawerDifferenceReason(
-        Formatters.currency(shift.expectedClosingValue),
+        Formatters.currency(shift.expectedClosingValue, currency: currency),
       ),
       action: l10n.eventDrawerDifferenceAction,
       impact: l10n.eventDrawerDifferenceImpact(
-        Formatters.currency(diff.abs()),
+        Formatters.currency(diff.abs(), currency: currency),
       ),
       ctaLabel: l10n.eventReconcile,
       ctaRoute: RouteNames.saleNew,
@@ -291,7 +296,10 @@ List<AttentionEvent> buildAttentionEvents({
       // impact stays qualitative (never an invented $X).
       impact: avg != null
           ? l10n.eventOutOfStockImpactEstimate(
-              Formatters.currency(avg * summary.outOfStockProducts),
+              Formatters.currency(
+                avg * summary.outOfStockProducts,
+                currency: currency,
+              ),
             )
           : l10n.eventOutOfStockImpactRisk,
       ctaLabel: l10n.eventRestock,
@@ -407,7 +415,7 @@ List<AttentionEvent> buildAttentionEvents({
       reason: l10n.eventRevenueBelowReason,
       action: l10n.eventRevenueBelowAction,
       impact: l10n.eventRevenueBelowImpact(
-        Formatters.currency(yesterday - today),
+        Formatters.currency(yesterday - today, currency: currency),
       ),
       ctaLabel: l10n.eventViewReport,
       ctaRoute: RouteNames.reports,

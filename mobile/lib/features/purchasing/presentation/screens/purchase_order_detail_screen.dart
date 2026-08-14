@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
 import 'package:stockflow/features/purchasing/data/repositories/purchasing_repository.dart';
 import 'package:stockflow/features/purchasing/presentation/widgets/purchasing_widgets.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 class PurchaseOrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
@@ -126,7 +127,7 @@ class _PurchaseOrderDetailScreenState extends ConsumerState<PurchaseOrderDetailS
                 return Card(child: ListTile(
                   title: Text('Product ${item.productId.substring(0, 8)}', maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text('Qty: ${item.quantity}  |  Received: ${item.receivedQuantity}'),
-                  trailing: Text('\$${itemTotal.toStringAsFixed(2)}', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  trailing: Text(context.money(itemTotal), style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
                 ));
               }),
               if (order.notes != null && order.notes!.isNotEmpty) ...[
@@ -157,7 +158,7 @@ class _PurchaseOrderDetailScreenState extends ConsumerState<PurchaseOrderDetailS
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium),
-        Text('\$${amount.toStringAsFixed(2)}', style: (bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium)?.copyWith(fontWeight: bold ? FontWeight.bold : null, color: color)),
+        Text(context.money(amount), style: (bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium)?.copyWith(fontWeight: bold ? FontWeight.bold : null, color: color)),
       ],
     ));
   }

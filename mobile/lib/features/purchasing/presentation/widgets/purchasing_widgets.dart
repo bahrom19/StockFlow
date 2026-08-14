@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 // ── PO Status Badge ──
 class POStatusBadge extends StatelessWidget {
@@ -81,7 +82,7 @@ class POCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Text('\$${total.toStringAsFixed(2)}', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              Text(context.money(total), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(width: 8),
               Icon(Icons.chevron_right, color: theme.colorScheme.outline),
             ],

@@ -5,6 +5,7 @@ import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/sales/domain/cash_shift_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Cash shift strip above the POS workspace.
 ///
@@ -68,12 +69,12 @@ class PosShiftPanel extends ConsumerWidget {
             Flexible(
               child: Text(
                 context.l10n.posShiftTotals(
-                  Formatters.currency(shift!.bankTransferSalesValue),
-                  Formatters.currency(shift.cardSalesValue),
-                  Formatters.currency(shift.cashSalesValue),
-                  Formatters.currency(shift.qrSalesValue),
-                  Formatters.currency(shift.totalSalesValue),
-                  Formatters.currency(shift.mobileWalletSalesValue),
+                  context.money(shift!.bankTransferSalesValue),
+                  context.money(shift.cardSalesValue),
+                  context.money(shift.cashSalesValue),
+                  context.money(shift.qrSalesValue),
+                  context.money(shift.totalSalesValue),
+                  context.money(shift.mobileWalletSalesValue),
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -208,7 +209,7 @@ class ShiftReportView extends StatelessWidget {
                   fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
                 )),
             Text(
-              Formatters.currency(amount),
+              context.money(amount),
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
                 color: color,
@@ -254,7 +255,7 @@ class ShiftReportView extends StatelessWidget {
             padding: const EdgeInsets.only(top: AppSpacing.xs),
             child: Text(
               context.l10n.posBreakdownWarning(
-                Formatters.currency(shift.methodsSum),
+                context.money(shift.methodsSum),
               ),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.error,

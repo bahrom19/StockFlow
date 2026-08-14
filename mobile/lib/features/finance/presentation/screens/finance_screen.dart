@@ -6,6 +6,7 @@ import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
 import 'package:stockflow/features/finance/domain/finance_models.dart';
 import 'package:stockflow/features/finance/presentation/providers/finance_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Finance screen — trial balance with account-type filters and CSV export.
 class FinanceScreen extends ConsumerStatefulWidget {
@@ -133,11 +134,11 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                   )),
                   DataCell(Text(Formatters.status(r.accountType))),
                   DataCell(Text(
-                    Formatters.currency(r.debit),
+                    context.money(r.debit),
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   )),
                   DataCell(Text(
-                    Formatters.currency(r.credit),
+                    context.money(r.credit),
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   )),
                 ],
@@ -192,7 +193,7 @@ class _TotalChip extends StatelessWidget {
                 ),
           ),
           Text(
-            Formatters.currency(value),
+            context.money(value),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: color,
                   fontWeight: FontWeight.w700,

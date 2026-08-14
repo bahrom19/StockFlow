@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
-import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/dashboard/presentation/providers/monthly_goal_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 // ─────────────────────────────────────────────────────────────
 // Revenue Goal Card — Stage E.
@@ -81,8 +81,8 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
   /// Built from ARB keys so every fragment stays localized.
   String _goalSummaryText(AppLocalizations l10n, double monthGoal) {
     final base = l10n.revenueGoalProgress(
-      Formatters.currencyShort(_monthRevenue),
-      Formatters.currencyShort(monthGoal),
+      context.moneyShort(_monthRevenue),
+      context.moneyShort(monthGoal),
     );
     final count = widget.summary.monthSales.count;
     return count > 0 ? '$base${l10n.revenueGoalSalesCount(count)}' : base;
@@ -272,7 +272,7 @@ class _RevenueGoalCardState extends ConsumerState<RevenueGoalCard> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  Formatters.currency(_todayRevenue),
+                                  context.money(_todayRevenue),
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w800,
                                     fontFeatures: const [

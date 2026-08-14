@@ -145,7 +145,8 @@ void main() {
       await tester.pump(); // let load() microtask finish
 
       expect(find.text("Today's Revenue"), findsOneWidget);
-      expect(find.text('\$469,000.00'), findsOneWidget);
+      // Phase 4: default currency is KZT → ₸ (no USD $ display).
+      expect(find.text('₸469,000.00'), findsOneWidget);
       expect(find.text('Set monthly goal'), findsOneWidget);
       expect(find.byKey(const Key('monthly_goal_edit')), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsNothing);
@@ -158,8 +159,8 @@ void main() {
 
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
       expect(find.text('62%'), findsOneWidget);
-      // monthSales 1 240 000 → $1.2M of $2.0M · 128 sales
-      expect(find.textContaining('of \$2.0M'), findsOneWidget);
+      // monthSales 1 240 000 → ₸1.2M of ₸2.0M · 128 sales
+      expect(find.textContaining('of ₸2.0M'), findsOneWidget);
       expect(find.textContaining('128 sales'), findsOneWidget);
       expect(find.text('Set monthly goal'), findsNothing);
     });

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/constants/app_constants.dart';
+import 'package:stockflow/core/currency/currency_catalog.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/localization/locale_provider.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
@@ -60,6 +62,16 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _showLanguageDialog(context, ref),
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.payments_outlined),
+                  title: const Text('Currency'),
+                  subtitle: Text(
+                    currencyDisplayNames[ref.watch(currencyProvider)] ?? 'KZT ₸',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showCurrencyDialog(context, ref),
                 ),
                 const Divider(height: 1, indent: 56),
                 ListTile(
@@ -135,6 +147,28 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (selected != null) {
       await ref.read(localeProvider.notifier).setLocale(selected);
+    }
+  }
+
+  /// Currency picker (Phase 4) — all codes from the backend Currency enum.
+  Future<void> _showCurrencyDialog(BuildContext context, WidgetRef ref) async {
+    final current = ref.read(currencyProvider);
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Currency'),
+        children: [
+          for (final code in supportedCurrencyCodes)
+            ListTile(
+              title: Text(currencyDisplayNames[code] ?? code),
+              trailing: code == current ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.of(dialogContext).pop(code),
+            ),
+        ],
+      ),
+    );
+    if (selected != null) {
+      await ref.read(currencyProvider.notifier).setCurrency(selected);
     }
   }
 }

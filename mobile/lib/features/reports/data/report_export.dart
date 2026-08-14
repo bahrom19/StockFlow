@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 
 /// Builds an A4 PDF report from the dashboard summary + recent sales.
@@ -18,7 +19,11 @@ class ReportExport {
     required DashboardSummary summary,
     required List<RecentSale> sales,
     DateTime? generatedAt,
+    String currency = 'KZT',
   }) async {
+    // Phase 4: money cells render with the selected currency (PDF-safe symbol).
+    String money(String? v) =>
+        CurrencyCatalog.formatPdf(_amount(v), code: currency);
     final doc = pw.Document();
     doc.addPage(
       pw.MultiPage(
@@ -62,10 +67,10 @@ class ReportExport {
               ),
               pw.TableRow(
                 children: [
-                  _cell(summary.todaySales.revenue),
-                  _cell(summary.yesterdaySales.revenue),
-                  _cell(summary.monthSales.revenue),
-                  _cell(summary.grossProfit),
+                  _cell(money(summary.todaySales.revenue)),
+                  _cell(money(summary.yesterdaySales.revenue)),
+                  _cell(money(summary.monthSales.revenue)),
+                  _cell(money(summary.grossProfit)),
                 ],
               ),
             ],
@@ -86,14 +91,16 @@ class ReportExport {
               ),
               pw.TableRow(
                 children: [
-                  _cell(summary.inventoryValue),
+                  _cell(money(summary.inventoryValue)),
                   _cell(summary.ordersCount.toString()),
                   _cell(
                     summary.ordersCount > 0
-                        ? (_amount(summary.monthSales.revenue) /
-                                summary.ordersCount)
-                            .toStringAsFixed(2)
-                        : '0.00',
+                        ? money(
+                            (_amount(summary.monthSales.revenue) /
+                                    summary.ordersCount)
+                                .toString(),
+                          )
+                        : money('0'),
                   ),
                 ],
               ),
@@ -142,8 +149,8 @@ class ReportExport {
                       _cell(s.saleNumber),
                       _cell(s.createdAt),
                       _cell(s.status),
-                      _cell(_amount(s.total).toStringAsFixed(2)),
-                      _cell(_amount(s.paidAmount).toStringAsFixed(2)),
+                      _cell(money(s.total)),
+                      _cell(money(s.paidAmount)),
                     ],
                   ),
             ],

@@ -28,6 +28,7 @@ import 'package:stockflow/features/sales/presentation/widgets/pos_cart_panel.dar
 import 'package:stockflow/features/sales/presentation/widgets/pos_catalog_panel.dart';
 import 'package:stockflow/features/sales/presentation/widgets/pos_customer_picker.dart';
 import 'package:stockflow/features/sales/presentation/widgets/pos_shift_panel.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Desktop/tablet POS workspace — the cashier's full-screen terminal.
 ///
@@ -376,7 +377,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                     child: Text(
                       '${h.label} · '
                       '${context.l10n.posItemsCount(h.itemCount)} · '
-                      '${Formatters.currency(h.total)}',
+                      '${context.money(h.total)}',
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -543,7 +544,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
 
     if (totalPaid < cart.total - 0.005) {
       _showSnack(context.l10n
-          .posInsufficientPaymentNeeds(Formatters.currency(cart.total)));
+          .posInsufficientPaymentNeeds(context.money(cart.total)));
       _paymentFocus.requestFocus();
       return;
     }
@@ -565,6 +566,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       payments: payments,
       customerId: cart.customerId,
       notes: cart.notes,
+      currency: context.currencyCode,
     );
 
     if (sale == null) {
@@ -677,7 +679,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                             style: theme.textTheme.bodyMedium),
                         const SizedBox(width: AppSpacing.sm),
                         Text(
-                          '\$${(double.tryParse(item.total) ?? 0).toStringAsFixed(2)}',
+                          context.money(double.tryParse(item.total) ?? 0),
                           style: theme.textTheme.bodyMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
@@ -771,7 +773,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: style),
-          Text('\$${amount.toStringAsFixed(2)}', style: style),
+          Text(context.money(amount), style: style),
         ],
       ),
     );
@@ -779,7 +781,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
 
   Future<void> _downloadReceiptPdf(Sale sale) async {
     try {
-      final bytes = await ReceiptExport.buildPdf(sale, l10n: context.l10n);
+      final bytes = await ReceiptExport.buildPdf(sale,
+          l10n: context.l10n, currency: context.currencyCode);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
       _showSnack(context.l10n.posReceiptPdfDownloaded, isError: false);
     } catch (e) {
@@ -940,7 +943,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
         title: Text(context.l10n.posClearCartTitle),
         content: Text(
           context.l10n.posClearCartConfirm(
-            Formatters.currency(cart.total),
+            context.money(cart.total),
             cart.itemCount,
           ),
         ),
@@ -1020,7 +1023,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                   container: true,
                   child: Text(
                     context.l10n.posItemsTotalSummary(
-                      Formatters.currency(cart.total),
+                      context.money(cart.total),
                       cart.itemCount,
                     ),
                     style: theme.textTheme.titleSmall

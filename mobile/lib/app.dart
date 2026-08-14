@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/currency/currency_ext.dart';
+import 'core/currency/currency_provider.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/navigation/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -16,8 +18,13 @@ class StockFlowApp extends ConsumerWidget {
     // Phase 0: wired locale defaults to English — system ru/kk is NOT
     // auto-activated; the owner switches explicitly in Settings.
     final appLocale = ref.watch(localeProvider);
+    // Phase 4: selected currency (default KZT). Rebuilding this scope on
+    // change re-renders every `context.money` consumer reactively.
+    final currencyCode = ref.watch(currencyProvider);
 
-    return MaterialApp.router(
+    return CurrencyScope(
+      code: currencyCode,
+      child: MaterialApp.router(
       title: 'StockFlow',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
@@ -45,6 +52,7 @@ class StockFlowApp extends ConsumerWidget {
         }
         return const Locale('en', 'US');
       },
+      ),
     );
   }
 }

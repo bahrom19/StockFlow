@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 // ──────────────────────────────────
 // Sale Card — List item for sale history
@@ -50,7 +51,7 @@ class SaleCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '\$${total.toStringAsFixed(2)}',
+                context.money(total),
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
@@ -145,7 +146,7 @@ class PaymentChip extends StatelessWidget {
       avatar: Icon(_paymentIcon(method), size: 16),
       label: Text(
         amount != null
-            ? '${method} \$${amount!}'
+            ? '${method} ${context.money(amount!)}'
             : method,
         style: theme.textTheme.labelSmall,
       ),
@@ -248,7 +249,7 @@ class ProductSearchCard extends StatelessWidget {
           child: const Icon(Icons.inventory_2, size: 20),
         ),
         title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text('$sku  •  \$${price.toStringAsFixed(2)}',
+        subtitle: Text('$sku  •  ${context.money(price)}',
             style: theme.textTheme.bodySmall),
         trailing: FilledButton.tonal(
           onPressed: onAdd,

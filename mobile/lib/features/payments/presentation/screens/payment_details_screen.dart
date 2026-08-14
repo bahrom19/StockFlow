@@ -11,6 +11,7 @@ import 'package:stockflow/features/payments/data/payment_pdf_export.dart';
 import 'package:stockflow/features/payments/data/payments_repository.dart';
 import 'package:stockflow/features/payments/domain/payment_models.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Screen 2 — Payment Details.
 ///
@@ -223,7 +224,7 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
                         )),
                         DataCell(Text(_shortId(s.warehouseId))),
                         DataCell(_MethodCell(payments: s.payments)),
-                        DataCell(Text(Formatters.currency(
+                        DataCell(Text(context.money(
                           s.payments.fold(0.0,
                               (sum, p) => sum + (double.tryParse(p.amount) ?? 0)),
                         ))),
@@ -287,6 +288,7 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
     try {
       final bytes = await PaymentPdfExport.build(
         title: 'Payment Details',
+        currency: context.currencyCode,
         subtitle: _subtitle(),
         headers: const [
           'Date',

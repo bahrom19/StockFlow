@@ -10,6 +10,7 @@ import 'package:stockflow/core/widgets/app_dialog.dart';
 import 'package:stockflow/core/widgets/app_snackbar.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/products/presentation/providers/products_provider.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final String productId;
@@ -133,12 +134,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         Card(
           child: Column(
             children: [
-              _InfoRow(label: l10n.price, value: Formatters.currency(p.price)),
+              _InfoRow(label: l10n.price, value: context.money(p.price)),
               const Divider(height: 1, indent: 16, endIndent: 16),
               _InfoRow(
                 label: l10n.costPrice,
                 value: p.costPrice != null
-                    ? Formatters.currency(p.costPrice)
+                    ? context.money(p.costPrice)
                     : '-',
               ),
               const Divider(height: 1, indent: 16, endIndent: 16),

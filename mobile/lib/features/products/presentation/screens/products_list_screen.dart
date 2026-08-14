@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
-import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
 import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/products/presentation/providers/products_provider.dart';
 import 'package:stockflow/features/products/presentation/widgets/product_card.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Products management screen — desktop-first DataTable with search,
 /// CSV export, status filter and pagination.
@@ -149,7 +149,7 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
                   DataCell(Text(p.sku ?? '-')),
                   DataCell(Text(p.category ?? '-')),
                   DataCell(Text(p.unit ?? '-')),
-                  DataCell(Text(Formatters.currency(p.price))),
+                  DataCell(Text(context.money(p.price))),
                   DataCell(_StockCell(quantity: p.stockQuantity)),
                   DataCell(StatusBadge(
                     status: p.isActive ? 'ACTIVE' : 'INACTIVE',

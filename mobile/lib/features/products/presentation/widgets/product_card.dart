@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/theme/design_tokens.dart';
-import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Product Card for list view
 class ProductCard extends StatelessWidget {
@@ -83,7 +83,7 @@ class ProductCard extends StatelessWidget {
                           _CategoryChip(category: product.category!),
                         const Spacer(),
                         Text(
-                          Formatters.currency(product.price),
+                          context.money(product.price),
                           style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),

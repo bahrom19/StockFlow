@@ -9,6 +9,7 @@ import 'package:stockflow/core/widgets/page_header.dart';
 import 'package:stockflow/features/payments/domain/payment_models.dart';
 import 'package:stockflow/features/payments/presentation/providers/payment_analytics_provider.dart';
 import 'package:stockflow/features/payments/presentation/screens/payment_details_screen.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Screen 1 — Payment Analytics Dashboard.
 ///
@@ -115,8 +116,8 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    'Payment breakdown (${Formatters.currency(data.methodsSum)}) '
-                    'differs from total revenue (${Formatters.currency(data.totalRevenue)}).',
+                    'Payment breakdown (${context.money(data.methodsSum)}) '
+                    'differs from total revenue (${context.money(data.totalRevenue)}).',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onErrorContainer,
                       fontWeight: FontWeight.w600,
@@ -408,7 +409,7 @@ class _MethodCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                Formatters.currency(stat.amount),
+                context.money(stat.amount),
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -417,7 +418,7 @@ class _MethodCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '${stat.count} txns · avg ${Formatters.currency(stat.averageTicket)}',
+                '${stat.count} txns · avg ${context.money(stat.averageTicket)}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -557,7 +558,7 @@ class _PaymentPieChart extends StatelessWidget {
                 _LegendRow(
                   color: PaymentMethodMeta.byCode(m.code).color,
                   label: PaymentMethodMeta.byCode(m.code).label,
-                  value: Formatters.currency(m.amount),
+                  value: context.money(m.amount),
                 ),
                 const SizedBox(height: AppSpacing.xs),
               ],
@@ -612,7 +613,7 @@ class _DailyTrendChart extends StatelessWidget {
               reservedSize: 44,
               interval: safeMax / 4,
               getTitlesWidget: (v, meta) => Text(
-                Formatters.currencyShort(v),
+                context.moneyShort(v),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   fontSize: 10,
@@ -651,7 +652,7 @@ class _DailyTrendChart extends StatelessWidget {
               for (final spot in spots)
                 LineTooltipItem(
                   '${metas[spot.barIndex % metas.length].label}: '
-                  '${Formatters.currency(spot.y)}',
+                  '${context.money(spot.y)}',
                   TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
@@ -781,7 +782,7 @@ class _ComparisonBarChart extends StatelessWidget {
               reservedSize: 48,
               interval: safeMax / 4,
               getTitlesWidget: (v, meta) => Text(
-                Formatters.currencyShort(v),
+                context.moneyShort(v),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   fontSize: 10,
@@ -820,7 +821,7 @@ class _ComparisonBarChart extends StatelessWidget {
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final m = methods[group.x.toInt()];
               return BarTooltipItem(
-                '${m.label}\n${Formatters.currency(_valueOf(m))}',
+                '${m.label}\n${context.money(_valueOf(m))}',
                 TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
