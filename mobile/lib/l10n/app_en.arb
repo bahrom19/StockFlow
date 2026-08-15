@@ -752,5 +752,9 @@
   "refundTotal": "Refund total",
   "confirmReturn": "Confirm return",
   "partialReturnRecorded": "Partial return recorded",
-  "saleItemCount": "{count, plural, one{{count} item} other{{count} items}}"
+  "saleItemCount": "{count, plural, one{{count} item} other{{count} items}}",
+  "subtotal": "Subtotal",
+  "discount": "Discount",
+  "tax": "Tax",
+  "itemsCount": "Items ({count})"
 }

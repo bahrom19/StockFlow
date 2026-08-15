@@ -752,5 +752,9 @@
   "refundTotal": "Қайтару сомасы",
   "confirmReturn": "Қайтаруды растау",
   "partialReturnRecorded": "Ішінара қайтару тіркелді",
-  "saleItemCount": "{count, plural, one{{count} позиция} other{{count} позиция}}"
+  "saleItemCount": "{count, plural, one{{count} позиция} other{{count} позиция}}",
+  "subtotal": "Аралық қорытынды",
+  "discount": "Жеңілдік",
+  "tax": "Салық",
+  "itemsCount": "Позициялар ({count})"
 }

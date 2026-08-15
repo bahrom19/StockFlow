@@ -752,5 +752,9 @@
   "refundTotal": "Сумма возврата",
   "confirmReturn": "Подтвердить возврат",
   "partialReturnRecorded": "Частичный возврат записан",
-  "saleItemCount": "{count, plural, one{{count} позиция} few{{count} позиции} many{{count} позиций} other{{count} позиции}}"
+  "saleItemCount": "{count, plural, one{{count} позиция} few{{count} позиции} many{{count} позиций} other{{count} позиции}}",
+  "subtotal": "Подытог",
+  "discount": "Скидка",
+  "tax": "Налог",
+  "itemsCount": "Позиции ({count})"
 }
