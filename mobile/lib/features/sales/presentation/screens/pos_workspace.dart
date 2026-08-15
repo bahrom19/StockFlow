@@ -20,6 +20,7 @@ import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/sales/data/receipt_export.dart';
 import 'package:stockflow/features/sales/domain/cash_shift_models.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
+import 'package:stockflow/features/sales/presentation/labels.dart';
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
 import 'package:stockflow/features/sales/presentation/providers/held_sales_provider.dart';
 import 'package:stockflow/features/sales/presentation/providers/pos_catalog_provider.dart';
@@ -375,7 +376,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      '${h.label} · '
+                      '${heldSaleDisplayLabel(context.l10n, h.label)} · '
                       '${context.l10n.posItemsCount(h.itemCount)} · '
                       '${context.money(h.total)}',
                       overflow: TextOverflow.ellipsis,

@@ -772,5 +772,7 @@
   "reportPdfInventoryValue": "Қор құны",
   "reportPdfOrders": "Тапсырыстар",
   "reportPdfAvgOrder": "Орташа тапсырыс",
-  "reportPdfNoSalesInPeriod": "Бұл кезеңде сатылым жоқ."
+  "reportPdfNoSalesInPeriod": "Бұл кезеңде сатылым жоқ.",
+  "posHeldAtPrefix": "Кейінге қалдырылды",
+  "posHeldSaleFallback": "Кейінге қалдырылған сатылым"
 }

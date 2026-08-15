@@ -19,3 +19,21 @@ String receiptStatusLabel(String status, AppLocalizations l10n) {
       return status;
   }
 }
+
+/// Render-time localization for held-sale labels (POS Hold Sale flow).
+///
+/// Persisted data is never migrated: auto-generated labels (`Held HH:MM`) and
+/// the legacy `Held sale` fallback are localized at display time, while
+/// user-entered freeform labels pass through unchanged. This works for
+/// existing stored data and for live EN/RU/KK switching — the provider never
+/// needs a BuildContext.
+String heldSaleDisplayLabel(AppLocalizations l10n, String stored) {
+  final auto = RegExp(r'^Held (\d{2}:\d{2})$').firstMatch(stored);
+  if (auto != null) {
+    return '${l10n.posHeldAtPrefix} ${auto.group(1)}';
+  }
+  if (stored == 'Held sale') {
+    return l10n.posHeldSaleFallback;
+  }
+  return stored;
+}

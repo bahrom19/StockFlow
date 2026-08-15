@@ -772,5 +772,7 @@
   "reportPdfInventoryValue": "Inventory Value",
   "reportPdfOrders": "Orders",
   "reportPdfAvgOrder": "Avg. Order",
-  "reportPdfNoSalesInPeriod": "No sales in this period."
+  "reportPdfNoSalesInPeriod": "No sales in this period.",
+  "posHeldAtPrefix": "Held",
+  "posHeldSaleFallback": "Held sale"
 }

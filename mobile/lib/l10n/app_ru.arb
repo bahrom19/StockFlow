@@ -772,5 +772,7 @@
   "reportPdfInventoryValue": "Стоимость запасов",
   "reportPdfOrders": "Заказы",
   "reportPdfAvgOrder": "Средний заказ",
-  "reportPdfNoSalesInPeriod": "Продаж за этот период нет."
+  "reportPdfNoSalesInPeriod": "Продаж за этот период нет.",
+  "posHeldAtPrefix": "Отложено",
+  "posHeldSaleFallback": "Отложенная продажа"
 }
