@@ -704,5 +704,17 @@
   "maintenanceTitle": "Техникалық жұмыстар жүріп жатыр",
   "maintenanceMessage": "Біз жоспарлы техникалық жұмыстарды жүргізіп жатырмыз.\nКейінірек қайта кіріп көріңіз.",
   "noInternetTitle": "Интернетке қосылу жоқ",
-  "noInternetMessage": "Қосылымды тексеріп, қайталап көріңіз."
+  "noInternetMessage": "Қосылымды тексеріп, қайталап көріңіз.",
+  "preferences": "Параметрлер",
+  "darkMode": "Қараңғы режим",
+  "darkModeSubtitle": "Қараңғы/жарық тақырыпты ауыстыру",
+  "language": "Тіл",
+  "english": "Ағылшын",
+  "currency": "Валюта",
+  "kztTenge": "KZT ₸",
+  "manageNotifications": "Хабарландыруларды басқару",
+  "about": "Қолданба туралы",
+  "version": "Нұсқа",
+  "termsOfService": "Пайдалану шарттары",
+  "privacyPolicy": "Құпиялылық саясаты"
 }

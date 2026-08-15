@@ -704,5 +704,17 @@
   "maintenanceTitle": "Under Maintenance",
   "maintenanceMessage": "We are performing scheduled maintenance.\nPlease check back shortly.",
   "noInternetTitle": "No Internet Connection",
-  "noInternetMessage": "Please check your connection and try again."
+  "noInternetMessage": "Please check your connection and try again.",
+  "preferences": "Preferences",
+  "darkMode": "Dark Mode",
+  "darkModeSubtitle": "Toggle dark/light theme",
+  "language": "Language",
+  "english": "English",
+  "currency": "Currency",
+  "kztTenge": "KZT ₸",
+  "manageNotifications": "Manage notification preferences",
+  "about": "About",
+  "version": "Version",
+  "termsOfService": "Terms of Service",
+  "privacyPolicy": "Privacy Policy"
 }

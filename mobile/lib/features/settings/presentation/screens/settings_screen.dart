@@ -6,6 +6,7 @@ import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/constants/app_constants.dart';
 import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:stockflow/core/currency/currency_provider.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/localization/locale_provider.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
@@ -33,21 +34,21 @@ class SettingsScreen extends ConsumerWidget {
                       fontWeight: FontWeight.bold),
                 ),
               ),
-              title: Text(user?.fullName ?? 'User'),
+              title: Text(user?.fullName ?? context.l10n.user),
               subtitle: Text(user?.email ?? ''),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push(RouteNames.profile),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text('Preferences', style: theme.textTheme.titleMedium),
+          Text(context.l10n.preferences, style: theme.textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           Card(
             child: Column(
               children: [
                 SwitchListTile(
-                  title: const Text('Dark Mode'),
-                  subtitle: const Text('Toggle dark/light theme'),
+                  title: Text(context.l10n.darkMode),
+                  subtitle: Text(context.l10n.darkModeSubtitle),
                   secondary: const Icon(Icons.dark_mode_outlined),
                   value: theme.brightness == Brightness.dark,
                   onChanged: (_) {},
@@ -55,10 +56,10 @@ class SettingsScreen extends ConsumerWidget {
                 const Divider(height: 1, indent: 56),
                 ListTile(
                   leading: const Icon(Icons.language_outlined),
-                  title: const Text('Language'),
+                  title: Text(context.l10n.language),
                   subtitle: Text(
                     localeDisplayNames[ref.watch(localeProvider).languageCode] ??
-                        'English',
+                        context.l10n.english,
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _showLanguageDialog(context, ref),
@@ -66,9 +67,10 @@ class SettingsScreen extends ConsumerWidget {
                 const Divider(height: 1, indent: 56),
                 ListTile(
                   leading: const Icon(Icons.payments_outlined),
-                  title: const Text('Currency'),
+                  title: Text(context.l10n.currency),
                   subtitle: Text(
-                    currencyDisplayNames[ref.watch(currencyProvider)] ?? 'KZT ₸',
+                    currencyDisplayNames[ref.watch(currencyProvider)] ??
+                        context.l10n.kztTenge,
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _showCurrencyDialog(context, ref),
@@ -76,8 +78,8 @@ class SettingsScreen extends ConsumerWidget {
                 const Divider(height: 1, indent: 56),
                 ListTile(
                   leading: const Icon(Icons.notifications_outlined),
-                  title: const Text('Notifications'),
-                  subtitle: const Text('Manage notification preferences'),
+                  title: Text(context.l10n.notifications),
+                  subtitle: Text(context.l10n.manageNotifications),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {},
                 ),
@@ -85,27 +87,27 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text('About', style: theme.textTheme.titleMedium),
+          Text(context.l10n.about, style: theme.textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           Card(
             child: Column(
               children: [
                 ListTile(
                   leading: const Icon(Icons.info_outline),
-                  title: const Text('Version'),
+                  title: Text(context.l10n.version),
                   subtitle: const Text(AppConstants.appVersion),
                 ),
                 const Divider(height: 1, indent: 56),
                 ListTile(
                   leading: const Icon(Icons.description_outlined),
-                  title: const Text('Terms of Service'),
+                  title: Text(context.l10n.termsOfService),
                   trailing: const Icon(Icons.open_in_new),
                   onTap: () {},
                 ),
                 const Divider(height: 1, indent: 56),
                 ListTile(
                   leading: const Icon(Icons.shield_outlined),
-                  title: const Text('Privacy Policy'),
+                  title: Text(context.l10n.privacyPolicy),
                   trailing: const Icon(Icons.open_in_new),
                   onTap: () {},
                 ),
@@ -119,7 +121,8 @@ class SettingsScreen extends ConsumerWidget {
               onPressed: () => ref.read(authStateProvider.notifier).logout(),
               style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
               icon: const Icon(Icons.logout, color: Colors.red),
-              label: const Text('Sign Out', style: TextStyle(color: Colors.red)),
+              label: Text(context.l10n.signOut,
+                  style: const TextStyle(color: Colors.red)),
             ),
           ),
           const SizedBox(height: AppSpacing.xxl),
@@ -134,7 +137,7 @@ class SettingsScreen extends ConsumerWidget {
     final selected = await showDialog<String>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
-        title: const Text('Language'),
+        title: Text(dialogContext.l10n.language),
         children: [
           for (final code in supportedLocaleCodes)
             ListTile(
@@ -156,7 +159,7 @@ class SettingsScreen extends ConsumerWidget {
     final selected = await showDialog<String>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
-        title: const Text('Currency'),
+        title: Text(dialogContext.l10n.currency),
         children: [
           for (final code in supportedCurrencyCodes)
             ListTile(

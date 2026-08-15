@@ -704,5 +704,17 @@
   "maintenanceTitle": "Ведутся технические работы",
   "maintenanceMessage": "Мы проводим плановые технические работы.\nПожалуйста, зайдите позже.",
   "noInternetTitle": "Нет подключения к интернету",
-  "noInternetMessage": "Проверьте подключение и попробуйте снова."
+  "noInternetMessage": "Проверьте подключение и попробуйте снова.",
+  "preferences": "Предпочтения",
+  "darkMode": "Тёмный режим",
+  "darkModeSubtitle": "Переключить тёмную/светлую тему",
+  "language": "Язык",
+  "english": "Английский",
+  "currency": "Валюта",
+  "kztTenge": "KZT ₸",
+  "manageNotifications": "Управление уведомлениями",
+  "about": "О приложении",
+  "version": "Версия",
+  "termsOfService": "Условия использования",
+  "privacyPolicy": "Политика конфиденциальности"
 }
