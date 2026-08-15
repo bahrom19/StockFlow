@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
 import 'package:stockflow/core/widgets/status_badge.dart';
+import 'package:stockflow/features/payments/presentation/labels.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/sales_provider.dart';
 import 'package:stockflow/features/sales/presentation/widgets/sales_widgets.dart'
@@ -57,6 +59,7 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final state = ref.watch(saleListProvider);
 
     final loaded = state is SaleListLoaded ? state : null;
@@ -85,7 +88,7 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
                   const SizedBox(width: AppSpacing.xs),
                   Expanded(
                     child: Text(
-                      'Showing purchase history for this customer',
+                      l10n.saleHistoryBanner,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onPrimaryContainer,
                       ),
@@ -94,22 +97,22 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
                   TextButton(
                     onPressed: () =>
                         context.go(RouteNames.sales),
-                    child: const Text('Clear filter'),
+                    child: Text(l10n.clearFilter),
                   ),
                 ],
               ),
             ),
           ],
           PageHeader(
-            title: 'Sales',
+            title: l10n.sales,
             subtitle: customerFilterActive
-                ? 'Purchase history for this customer'
-                : 'Transactions, refunds and cash flow',
+                ? l10n.saleHistoryCustomerSubtitle
+                : l10n.saleHistorySubtitle,
             actions: [
               FilledButton.icon(
                 onPressed: () => context.push(RouteNames.saleNew),
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('New Sale'),
+                label: Text(l10n.newSale),
               ),
             ],
           ),
@@ -123,17 +126,17 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
               isLoadingMore: loaded?.isLoadingMore ?? false,
               onLoadMore: _onScroll,
               search: loaded?.search,
-              searchHint: 'Search by sale number…',
+              searchHint: l10n.saleSearchHint,
               onSearch: (q) => ref.read(saleListProvider.notifier).search(q),
               onRefresh: () => ref.read(saleListProvider.notifier).refresh(),
               onCreate: () => context.push(RouteNames.saleNew),
-              createLabel: 'New Sale',
-              filters: const [
-                EntityFilter('All', null),
-                EntityFilter('Draft', 'DRAFT'),
-                EntityFilter('Completed', 'COMPLETED'),
-                EntityFilter('Refunded', 'REFUNDED'),
-                EntityFilter('Cancelled', 'CANCELLED'),
+              createLabel: l10n.newSale,
+              filters: [
+                EntityFilter(l10n.all, null),
+                EntityFilter(l10n.statusDraft, 'DRAFT'),
+                EntityFilter(l10n.statusCompleted, 'COMPLETED'),
+                EntityFilter(l10n.statusRefunded, 'REFUNDED'),
+                EntityFilter(l10n.statusCancelled, 'CANCELLED'),
               ],
               onFilter: (v) =>
                   ref.read(saleListProvider.notifier).filterByStatus(v),
@@ -160,19 +163,19 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
                   ],
               ],
               columns: [
-                const DataColumn(label: Text('Sale')),
-                const DataColumn(label: Text('Date')),
-                const DataColumn(label: Text('Status')),
+                DataColumn(label: Text(l10n.sale)),
+                DataColumn(label: Text(l10n.date)),
+                DataColumn(label: Text(l10n.status)),
                 DataColumn(
-                  label: Text('Total', style: theme.textTheme.labelMedium),
+                  label: Text(l10n.total, style: theme.textTheme.labelMedium),
                   numeric: true,
                 ),
                 DataColumn(
-                  label: Text('Paid', style: theme.textTheme.labelMedium),
+                  label: Text(l10n.paid, style: theme.textTheme.labelMedium),
                   numeric: true,
                 ),
                 DataColumn(
-                  label: Text('Payment', style: theme.textTheme.labelMedium),
+                  label: Text(l10n.payment, style: theme.textTheme.labelMedium),
                 ),
               ],
               buildRow: (s) => DataRow(
@@ -194,8 +197,8 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
               ),
               onRowTap: (s) =>
                   context.push('${RouteNames.saleDetail.replaceAll(':id', s.id)}'),
-              emptyTitle: 'No sales found',
-              emptySubtitle: 'Complete your first sale to see it here',
+              emptyTitle: l10n.noSalesFound,
+              emptySubtitle: l10n.noSalesFoundSubtitle,
               emptyIcon: Icons.receipt_long_outlined,
               errorMessage:
                   state is SaleListError ? (state as SaleListError).message : null,
@@ -209,7 +212,8 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
 
   String _paymentLabel(List<Payment> payments) {
     if (payments.isEmpty) return '-';
-    final methods = payments.map((p) => Formatters.status(p.method)).toSet();
+    final methods =
+        payments.map((p) => paymentMethodLabel(p.method, context.l10n)).toSet();
     return methods.join(', ');
   }
 }

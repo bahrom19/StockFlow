@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:stockflow/core/theme/app_spacing.dart';
-import 'package:stockflow/features/sales/domain/sales_models.dart';
-import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
-import 'package:stockflow/features/sales/presentation/widgets/sales_widgets.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
+import 'package:stockflow/core/theme/app_spacing.dart';
+import 'package:stockflow/features/payments/presentation/labels.dart';
+import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
+import 'package:stockflow/features/sales/domain/sales_models.dart';
+import 'package:stockflow/features/sales/presentation/labels.dart';
+import 'package:stockflow/features/sales/presentation/widgets/sales_widgets.dart';
 
 // ──────────────────────────────────
 // Sale Detail Screen
@@ -54,8 +57,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
     if (result is SalesSuccess<Sale>) {
       setState(() => _sale = result.data);
       if (mounted) {
+        final message = switch (status) {
+          'COMPLETED' => context.l10n.saleCompletedMessage,
+          'CANCELLED' => context.l10n.saleCancelledMessage,
+          'REFUNDED' => context.l10n.saleRefundedMessage,
+          _ => 'Sale ${status.toLowerCase()}d',
+        };
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sale ${status.toLowerCase()}d')),
+          SnackBar(content: Text(message)),
         );
       }
     } else if (mounted) {
@@ -68,20 +77,39 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
     }
   }
 
-  Future<void> _confirmAction(String action, String status) async {
+  Future<void> _confirmAction(String status) async {
+    final l10n = context.l10n;
+    final (String title, String content, String button) = switch (status) {
+      'COMPLETED' => (
+          l10n.saleCompleteDialogTitle,
+          l10n.saleCompleteDialogContent,
+          l10n.complete,
+        ),
+      'CANCELLED' => (
+          l10n.saleCancelDialogTitle,
+          l10n.saleCancelDialogContent,
+          l10n.cancel,
+        ),
+      'REFUNDED' => (
+          l10n.saleRefundDialogTitle,
+          l10n.saleRefundDialogContent,
+          l10n.refund,
+        ),
+      _ => (status, status, status),
+    };
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('$action Sale'),
-        content: Text('Are you sure you want to $action this sale?'),
+        title: Text(title),
+        content: Text(content),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(action),
+            child: Text(button),
           ),
         ],
       ),
@@ -124,7 +152,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
       setState(() => _sale = result.data);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Partial return recorded')),
+          SnackBar(content: Text(context.l10n.partialReturnRecorded)),
         );
       }
     } else if (mounted) {
@@ -143,14 +171,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Sale Details')),
+        appBar: AppBar(title: Text(context.l10n.saleDetails)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Sale Details')),
+        appBar: AppBar(title: Text(context.l10n.saleDetails)),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -163,7 +191,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
               FilledButton.tonalIcon(
                 onPressed: _loadSale,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                label: Text(context.l10n.retry),
               ),
             ],
           ),
@@ -188,25 +216,25 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
           if (canComplete)
             IconButton(
               icon: const Icon(Icons.check_circle_outline),
-              tooltip: 'Complete',
-              onPressed: () => _confirmAction('Complete', 'COMPLETED'),
+              tooltip: context.l10n.complete,
+              onPressed: () => _confirmAction('COMPLETED'),
             ),
           if (canCancel)
             IconButton(
               icon: const Icon(Icons.cancel_outlined),
-              tooltip: 'Cancel',
-              onPressed: () => _confirmAction('Cancel', 'CANCELLED'),
+              tooltip: context.l10n.cancel,
+              onPressed: () => _confirmAction('CANCELLED'),
             ),
           if (canRefund)
             IconButton(
               icon: const Icon(Icons.keyboard_return),
-              tooltip: 'Full refund',
-              onPressed: () => _confirmAction('Refund', 'REFUNDED'),
+              tooltip: context.l10n.fullRefund,
+              onPressed: () => _confirmAction('REFUNDED'),
             ),
           if (canRefund)
             IconButton(
               icon: const Icon(Icons.currency_exchange),
-              tooltip: 'Partial return',
+              tooltip: context.l10n.partialReturn,
               onPressed: _partialReturn,
             ),
         ],
@@ -234,7 +262,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Created: ${_formatDate(sale.createdAt)}',
+                context.l10n.saleCreatedLabel(_formatDate(sale.createdAt)),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline),
               ),
@@ -246,20 +274,23 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      _detailRow('Subtotal', double.tryParse(sale.subtotal) ?? 0,
-                          theme),
+                      _detailRow(context.l10n.subtotal,
+                          double.tryParse(sale.subtotal) ?? 0, theme),
                       if ((double.tryParse(sale.discount) ?? 0) > 0)
                         _detailRow(
-                            'Discount', -(double.tryParse(sale.discount) ?? 0),
+                            context.l10n.discount,
+                            -(double.tryParse(sale.discount) ?? 0),
                             theme,
                             color: Colors.orange),
-                      _detailRow('Tax', double.tryParse(sale.tax) ?? 0, theme),
+                      _detailRow(context.l10n.tax,
+                          double.tryParse(sale.tax) ?? 0, theme),
                       const Divider(),
-                      _detailRow('Total', total, theme, bold: true),
-                      _detailRow('Paid', paid, theme,
+                      _detailRow(context.l10n.total, total, theme,
+                          bold: true),
+                      _detailRow(context.l10n.paid, paid, theme,
                           color: Colors.green, bold: true),
                       if (change > 0)
-                        _detailRow('Change', change, theme,
+                        _detailRow(context.l10n.posChange, change, theme,
                             color: Colors.orange),
                     ],
                   ),
@@ -268,7 +299,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
               const SizedBox(height: 16),
 
               // Items
-              Text('Items (${sale.items.length})',
+              Text(context.l10n.itemsCount(sale.items.length),
                   style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
               ...sale.items.map((item) {
@@ -277,7 +308,9 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
                 final price = double.tryParse(item.unitPrice) ?? 0;
                 return Card(
                   child: ListTile(
-                    title: Text('Product ${item.productId.substring(0, 8)}',
+                    title: Text(
+                        context.l10n.saleItemFallback(
+                            item.productId.substring(0, 8)),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text('${context.money(price)} × $qty'),
                     trailing: Text(context.money(itemTotal),
@@ -290,14 +323,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
 
               // Payments
               if (sale.payments.isNotEmpty) ...[
-                Text('Payments', style: theme.textTheme.titleSmall),
+                Text(context.l10n.payments, style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
                 ...sale.payments.map((p) {
                   final pAmount = double.tryParse(p.amount) ?? 0;
                   return Card(
                     child: ListTile(
                       leading: Icon(_paymentIcon(p.method)),
-                      title: Text(p.method),
+                      title: Text(paymentMethodLabel(p.method, context.l10n)),
                       subtitle: p.reference != null
                           ? Text(p.reference!, maxLines: 1)
                           : null,
@@ -312,16 +345,18 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
 
               // Receipts
               if (sale.receipts.isNotEmpty) ...[
-                Text('Receipts', style: theme.textTheme.titleSmall),
+                Text(context.l10n.receipts,
+                    style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
                 ...sale.receipts.map((r) => Card(
                       child: ListTile(
                         leading: const Icon(Icons.receipt),
                         title: Text(r.receiptNumber),
-                        subtitle: Text(r.status),
+                        subtitle: Text(
+                            receiptStatusLabel(r.status, context.l10n)),
                         trailing: TextButton(
                           onPressed: () => _showReceipt(context, r),
-                          child: const Text('View'),
+                          child: Text(context.l10n.view),
                         ),
                       ),
                     )),
@@ -330,7 +365,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
               // Notes
               if (sale.notes != null && sale.notes!.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text('Notes', style: theme.textTheme.titleSmall),
+                Text(context.l10n.notes, style: theme.textTheme.titleSmall),
                 const SizedBox(height: 4),
                 Text(sale.notes!, style: theme.textTheme.bodyMedium),
               ],
@@ -366,6 +401,7 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
   }
 
   void _showReceipt(BuildContext context, Receipt receipt) {
+    final l10n = context.l10n;
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -374,16 +410,16 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _dialogRow('Status', receipt.status),
-            _dialogRow('Printed', receipt.printed ? 'Yes' : 'No'),
-            _dialogRow('Emailed', receipt.emailed ? 'Yes' : 'No'),
-            _dialogRow('Created', _formatDate(receipt.createdAt)),
+            _dialogRow(l10n.status, receiptStatusLabel(receipt.status, l10n)),
+            _dialogRow(l10n.printed, receipt.printed ? l10n.yes : l10n.no),
+            _dialogRow(l10n.emailed, receipt.emailed ? l10n.yes : l10n.no),
+            _dialogRow(l10n.created, _formatDate(receipt.createdAt)),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close'),
+            child: Text(l10n.close),
           ),
         ],
       ),
@@ -470,9 +506,10 @@ class _PartialReturnDialogState extends State<_PartialReturnDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return AlertDialog(
       icon: const Icon(Icons.currency_exchange, size: 40),
-      title: const Text('Partial Return'),
+      title: Text(l10n.partialReturnTitle),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -481,7 +518,7 @@ class _PartialReturnDialogState extends State<_PartialReturnDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Select how many of each item to return.',
+                l10n.partialReturnDescription,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -502,7 +539,7 @@ class _PartialReturnDialogState extends State<_PartialReturnDialog> {
                           style: theme.textTheme.bodyMedium,
                         ),
                       ),
-                      Text('max ${item.quantity} · ',
+                      Text(l10n.saleMaxQuantity(item.quantity),
                           style: theme.textTheme.labelSmall),
                       SizedBox(
                         width: 70,
@@ -530,7 +567,7 @@ class _PartialReturnDialogState extends State<_PartialReturnDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Refund total', style: theme.textTheme.titleSmall),
+                  Text(l10n.refundTotal, style: theme.textTheme.titleSmall),
                   Text(
                     context.money(_refundTotal),
                     style: theme.textTheme.titleSmall?.copyWith(
@@ -546,13 +583,13 @@ class _PartialReturnDialogState extends State<_PartialReturnDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: _refundTotal <= 0
               ? null
               : () => Navigator.of(context).pop(true),
-          child: const Text('Confirm return'),
+          child: Text(l10n.confirmReturn),
         ),
       ],
     );

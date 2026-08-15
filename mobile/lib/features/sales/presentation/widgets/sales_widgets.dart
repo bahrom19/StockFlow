@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:stockflow/features/sales/domain/sales_models.dart';
-import 'package:stockflow/core/theme/app_colors.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
+import 'package:stockflow/core/theme/app_colors.dart';
+import 'package:stockflow/features/sales/domain/sales_models.dart';
 
 // ──────────────────────────────────
 // Sale Card — List item for sale history
@@ -43,7 +44,7 @@ class SaleCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$itemCount item${itemCount == 1 ? '' : 's'}  •  $date',
+                      '${context.l10n.saleItemCount(itemCount)}  •  $date',
                       style: theme.textTheme.bodySmall
                           ?.copyWith(color: theme.colorScheme.outline),
                     ),
