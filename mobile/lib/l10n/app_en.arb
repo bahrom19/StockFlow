@@ -696,5 +696,13 @@
   "lastName": "Last Name",
   "iin": "IIN",
   "notes": "Notes",
-  "createCustomer": "Create Customer"
+  "createCustomer": "Create Customer",
+  "pageNotFound": "Page Not Found",
+  "pageNotFoundCode": "404",
+  "pageNotFoundMessage": "The page you are looking for does not exist.",
+  "goHome": "Go Home",
+  "maintenanceTitle": "Under Maintenance",
+  "maintenanceMessage": "We are performing scheduled maintenance.\nPlease check back shortly.",
+  "noInternetTitle": "No Internet Connection",
+  "noInternetMessage": "Please check your connection and try again."
 }

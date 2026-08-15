@@ -81,6 +81,9 @@ void main() {
     testWidgets('should display offline message', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: OfflineStateWidget(onRetry: () {}),
           ),

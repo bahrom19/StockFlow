@@ -696,5 +696,13 @@
   "lastName": "Тегі",
   "iin": "ЖСН",
   "notes": "Ескертпелер",
-  "createCustomer": "Клиент жасау"
+  "createCustomer": "Клиент жасау",
+  "pageNotFound": "Бет табылмады",
+  "pageNotFoundCode": "404",
+  "pageNotFoundMessage": "Сіз іздеген бет жоқ.",
+  "goHome": "Басты бетке",
+  "maintenanceTitle": "Техникалық жұмыстар жүріп жатыр",
+  "maintenanceMessage": "Біз жоспарлы техникалық жұмыстарды жүргізіп жатырмыз.\nКейінірек қайта кіріп көріңіз.",
+  "noInternetTitle": "Интернетке қосылу жоқ",
+  "noInternetMessage": "Қосылымды тексеріп, қайталап көріңіз."
 }

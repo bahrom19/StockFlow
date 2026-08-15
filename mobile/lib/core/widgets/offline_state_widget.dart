@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../localization/l10n_ext.dart';
 import '../theme/app_spacing.dart';
 
 /// Offline State Widget
@@ -24,13 +25,13 @@ class OfflineStateWidget extends StatelessWidget {
             Icon(Icons.wifi_off, size: 80, color: theme.colorScheme.error.withOpacity(0.7)),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              message ?? 'No Internet Connection',
+              message ?? context.l10n.noInternetTitle,
               style: theme.textTheme.titleLarge,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Please check your connection and try again.',
+              context.l10n.noInternetMessage,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -41,7 +42,7 @@ class OfflineStateWidget extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                label: Text(context.l10n.retry),
               ),
             ],
           ],

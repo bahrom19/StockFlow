@@ -29,6 +29,7 @@ import '../../features/warehouses/presentation/screens/warehouses_list_screen.da
 import '../../features/payments/presentation/screens/payment_analytics_screen.dart';
 import '../../features/payments/presentation/screens/payment_details_screen.dart';
 import '../auth/auth_state.dart';
+import '../localization/l10n_ext.dart';
 import '../shell/app_shell.dart';
 import 'route_names.dart';
 
@@ -288,7 +289,7 @@ class _NotFoundScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Page Not Found')),
+      appBar: AppBar(title: Text(context.l10n.pageNotFound)),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -297,15 +298,16 @@ class _NotFoundScreen extends StatelessWidget {
             children: [
               Icon(Icons.search_off, size: 80, color: theme.colorScheme.error),
               const SizedBox(height: 16),
-              Text('404', style: theme.textTheme.displaySmall),
+              Text(context.l10n.pageNotFoundCode,
+                  style: theme.textTheme.displaySmall),
               const SizedBox(height: 8),
-              Text('The page you are looking for does not exist.',
+              Text(context.l10n.pageNotFoundMessage,
                   style: theme.textTheme.bodyLarge),
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () => context.go(RouteNames.dashboard),
                 icon: const Icon(Icons.home),
-                label: const Text('Go Home'),
+                label: Text(context.l10n.goHome),
               ),
             ],
           ),
@@ -330,9 +332,10 @@ class _MaintenanceScreen extends StatelessWidget {
             children: [
               Icon(Icons.construction, size: 80, color: theme.colorScheme.tertiary),
               const SizedBox(height: 16),
-              Text('Under Maintenance', style: theme.textTheme.headlineSmall),
+              Text(context.l10n.maintenanceTitle,
+                  style: theme.textTheme.headlineSmall),
               const SizedBox(height: 8),
-              Text('We are performing scheduled maintenance.\nPlease check back shortly.',
+              Text(context.l10n.maintenanceMessage,
                   style: theme.textTheme.bodyLarge, textAlign: TextAlign.center),
             ],
           ),
@@ -357,15 +360,16 @@ class _NoInternetScreen extends StatelessWidget {
             children: [
               Icon(Icons.wifi_off, size: 80, color: theme.colorScheme.error),
               const SizedBox(height: 16),
-              Text('No Internet Connection', style: theme.textTheme.headlineSmall),
+              Text(context.l10n.noInternetTitle,
+                  style: theme.textTheme.headlineSmall),
               const SizedBox(height: 8),
-              Text('Please check your connection and try again.',
+              Text(context.l10n.noInternetMessage,
                   style: theme.textTheme.bodyLarge, textAlign: TextAlign.center),
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () => context.go(RouteNames.dashboard),
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                label: Text(context.l10n.retry),
               ),
             ],
           ),
