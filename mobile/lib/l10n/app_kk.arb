@@ -760,5 +760,17 @@
   "fieldValue": "Мәні",
   "invalidDecimal": "Дұрыс ондық сан енгізіңіз",
   "minValueMessage": "{field} кемінде {min} болуы керек",
-  "maxValueMessage": "{field} ең көбі {max} болуы керек"
+  "maxValueMessage": "{field} ең көбі {max} болуы керек",
+  "reportPdfTitle": "StockFlow — Бизнес-есеп",
+  "reportPdfGeneratedAt": "Құрылған {date}",
+  "reportPdfPerformanceSummary": "Көрсеткіштер жиынтығы",
+  "reportPdfFooter": "StockFlow ERP · Есептер модулі құрды",
+  "reportPdfToday": "Бүгін",
+  "reportPdfYesterday": "Кеше",
+  "reportPdfMonth": "Ай",
+  "reportPdfGrossProfit": "Жалпы пайда",
+  "reportPdfInventoryValue": "Қор құны",
+  "reportPdfOrders": "Тапсырыстар",
+  "reportPdfAvgOrder": "Орташа тапсырыс",
+  "reportPdfNoSalesInPeriod": "Бұл кезеңде сатылым жоқ."
 }

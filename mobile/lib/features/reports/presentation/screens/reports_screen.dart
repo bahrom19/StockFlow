@@ -41,6 +41,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         summary: summary,
         sales: sales,
         currency: context.currencyCode,
+        l10n: context.l10n,
       );
       final stamp = DateTime.now();
       final name =

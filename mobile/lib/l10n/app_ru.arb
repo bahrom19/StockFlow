@@ -760,5 +760,17 @@
   "fieldValue": "Значение",
   "invalidDecimal": "Введите корректное десятичное число",
   "minValueMessage": "{field} должно быть не менее {min}",
-  "maxValueMessage": "{field} не должно превышать {max}"
+  "maxValueMessage": "{field} не должно превышать {max}",
+  "reportPdfTitle": "StockFlow — Бизнес-отчет",
+  "reportPdfGeneratedAt": "Сформировано {date}",
+  "reportPdfPerformanceSummary": "Сводка показателей",
+  "reportPdfFooter": "StockFlow ERP · Сформировано модулем отчетов",
+  "reportPdfToday": "Сегодня",
+  "reportPdfYesterday": "Вчера",
+  "reportPdfMonth": "Месяц",
+  "reportPdfGrossProfit": "Валовая прибыль",
+  "reportPdfInventoryValue": "Стоимость запасов",
+  "reportPdfOrders": "Заказы",
+  "reportPdfAvgOrder": "Средний заказ",
+  "reportPdfNoSalesInPeriod": "Продаж за этот период нет."
 }
