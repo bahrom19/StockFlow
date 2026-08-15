@@ -756,5 +756,9 @@
   "subtotal": "Подытог",
   "discount": "Скидка",
   "tax": "Налог",
-  "itemsCount": "Позиции ({count})"
+  "itemsCount": "Позиции ({count})",
+  "fieldValue": "Значение",
+  "invalidDecimal": "Введите корректное десятичное число",
+  "minValueMessage": "{field} должно быть не менее {min}",
+  "maxValueMessage": "{field} не должно превышать {max}"
 }

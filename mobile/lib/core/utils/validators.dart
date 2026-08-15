@@ -5,10 +5,13 @@ class Validators {
   Validators._();
 
   /// Required check with the English default message (used by non-localized
-  /// forms). Pass [l10n] through [requiredL10n] to localize it.
-  static String? required(String? value, [String fieldName = 'This field']) {
+  /// forms). Pass [l10n] through [requiredL10n] to localize it, or pass
+  /// [l10n] directly here to localize the "{field} is required" template so
+  /// localized field names never render in mixed-language text.
+  static String? required(String? value,
+      [String fieldName = 'This field', AppLocalizations? l10n]) {
     if (value == null || value.trim().isEmpty) {
-      return '$fieldName is required';
+      return l10n?.requiredField(fieldName) ?? '$fieldName is required';
     }
     return null;
   }
@@ -62,46 +65,63 @@ class Validators {
     return null;
   }
 
-  static String? phone(String? value) {
+  /// Phone check. [l10n] is optional — when provided the message is
+  /// localized, otherwise the original English message is returned, so
+  /// existing tear-off call sites keep working unchanged.
+  static String? phone(String? value, [AppLocalizations? l10n]) {
     if (value == null || value.trim().isEmpty) {
       return null; // Phone is optional
     }
     final phoneRegex = RegExp(r'^\+?[\d\s\-()]{7,20}$');
     if (!phoneRegex.hasMatch(value.trim())) {
-      return 'Please enter a valid phone number';
+      return l10n?.invalidPhone ?? 'Please enter a valid phone number';
     }
     return null;
   }
 
-  static String? decimal(String? value, [String fieldName = 'Value']) {
+  /// Decimal check. [l10n] is optional — when provided the messages are
+  /// localized, otherwise the original English messages are returned.
+  /// [fieldName] is the display label; when omitted the localized default
+  /// label is used.
+  static String? decimal(String? value,
+      [String? fieldName, AppLocalizations? l10n]) {
     if (value == null || value.trim().isEmpty) {
-      return '$fieldName is required';
+      return l10n?.requiredField(fieldName ?? l10n.fieldValue) ??
+          '${fieldName ?? 'Value'} is required';
     }
     final decimalRegex = RegExp(r'^\d+(\.\d{1,4})?$');
     if (!decimalRegex.hasMatch(value.trim())) {
-      return 'Please enter a valid decimal number';
+      return l10n?.invalidDecimal ?? 'Please enter a valid decimal number';
     }
     return null;
   }
 
-  static String? min(double minValue, String? value, [String fieldName = 'Value']) {
+  /// Minimum-value check. [l10n] is optional — when provided the message is
+  /// localized, otherwise the original English message is returned.
+  static String? min(double minValue, String? value,
+      [String? fieldName, AppLocalizations? l10n]) {
     if (value == null || value.trim().isEmpty) {
       return null;
     }
     final parsed = double.tryParse(value.trim());
     if (parsed == null || parsed < minValue) {
-      return '$fieldName must be at least $minValue';
+      return l10n?.minValueMessage(fieldName ?? l10n.fieldValue, minValue) ??
+          '${fieldName ?? 'Value'} must be at least $minValue';
     }
     return null;
   }
 
-  static String? max(double maxValue, String? value, [String fieldName = 'Value']) {
+  /// Maximum-value check. [l10n] is optional — when provided the message is
+  /// localized, otherwise the original English message is returned.
+  static String? max(double maxValue, String? value,
+      [String? fieldName, AppLocalizations? l10n]) {
     if (value == null || value.trim().isEmpty) {
       return null;
     }
     final parsed = double.tryParse(value.trim());
     if (parsed == null || parsed > maxValue) {
-      return '$fieldName must not exceed $maxValue';
+      return l10n?.maxValueMessage(fieldName ?? l10n.fieldValue, maxValue) ??
+          '${fieldName ?? 'Value'} must not exceed $maxValue';
     }
     return null;
   }

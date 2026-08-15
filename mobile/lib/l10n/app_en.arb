@@ -756,5 +756,9 @@
   "subtotal": "Subtotal",
   "discount": "Discount",
   "tax": "Tax",
-  "itemsCount": "Items ({count})"
+  "itemsCount": "Items ({count})",
+  "fieldValue": "Value",
+  "invalidDecimal": "Please enter a valid decimal number",
+  "minValueMessage": "{field} must be at least {min}",
+  "maxValueMessage": "{field} must not exceed {max}"
 }

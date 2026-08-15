@@ -213,7 +213,7 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
                     border: const OutlineInputBorder(),
                     isDense: true,
                   ),
-                  validator: (v) => Validators.required(v, l10n.quantity),
+                  validator: (v) => Validators.required(v, l10n.quantity, l10n),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 TextFormField(
@@ -438,7 +438,7 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
                     border: const OutlineInputBorder(),
                     isDense: true,
                   ),
-                  validator: (v) => Validators.required(v, l10n.quantity),
+                  validator: (v) => Validators.required(v, l10n.quantity, l10n),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 TextFormField(

@@ -117,7 +117,7 @@ class _TransferDialogState extends ConsumerState<TransferDialog> {
                 prefixIcon: const Icon(Icons.inventory),
               ),
               validator: (v) {
-                final req = Validators.required(v, l10n.quantity);
+                final req = Validators.required(v, l10n.quantity, l10n);
                 if (req != null) return req;
                 final qty = int.tryParse(v ?? '');
                 if (qty == null || qty <= 0) return l10n.positiveNumber;

@@ -756,5 +756,9 @@
   "subtotal": "Аралық қорытынды",
   "discount": "Жеңілдік",
   "tax": "Салық",
-  "itemsCount": "Позициялар ({count})"
+  "itemsCount": "Позициялар ({count})",
+  "fieldValue": "Мәні",
+  "invalidDecimal": "Дұрыс ондық сан енгізіңіз",
+  "minValueMessage": "{field} кемінде {min} болуы керек",
+  "maxValueMessage": "{field} ең көбі {max} болуы керек"
 }

@@ -239,7 +239,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 labelText: l10n.nameRequired,
                 prefixIcon: const Icon(Icons.inventory_2),
               ),
-              validator: (v) => Validators.required(v, l10n.name),
+              validator: (v) => Validators.required(v, l10n.name, l10n),
             ),
             const SizedBox(height: AppSpacing.sm),
             Row(
@@ -278,7 +278,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       labelText: l10n.priceRequired,
                       prefixText: '${context.currencySymbol} ',
                     ),
-                    validator: (v) => Validators.required(v, l10n.price),
+                    validator: (v) => Validators.required(v, l10n.price, l10n),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),

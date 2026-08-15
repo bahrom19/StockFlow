@@ -95,7 +95,7 @@ class _AdjustmentDialogState extends ConsumerState<AdjustmentDialog> {
                     Icon(_isIncrease ? Icons.add_circle : Icons.remove_circle),
               ),
               validator: (v) {
-                final req = Validators.required(v, l10n.quantity);
+                final req = Validators.required(v, l10n.quantity, l10n);
                 if (req != null) return req;
                 final qty = int.tryParse(v ?? '');
                 if (qty == null || qty <= 0) return l10n.positiveNumber;
