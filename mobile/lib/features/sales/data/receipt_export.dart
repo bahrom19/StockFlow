@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:stockflow/core/currency/currency_catalog.dart';
+import 'package:stockflow/core/utils/pdf_fonts.dart';
 import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 
@@ -19,11 +20,8 @@ class ReceiptExport {
 
   static double _amount(String? v) => double.tryParse(v ?? '') ?? 0;
 
-  static final pw.Font _base = pw.Font.helvetica();
-  static final pw.Font _bold = pw.Font.helveticaBold();
-
   static pw.TextStyle _style(double size, {bool bold = false}) =>
-      pw.TextStyle(font: bold ? _bold : _base, fontSize: size);
+      pw.TextStyle(font: bold ? PdfFonts.bold : PdfFonts.regular, fontSize: size);
 
   /// Machine-readable QR payload for the receipt.
   static String qrPayload(Sale sale) =>
@@ -71,6 +69,9 @@ class ReceiptExport {
     AppLocalizations? l10n,
     String currency = 'KZT',
   }) async {
+    // Phase 5D-6: Roboto TTFs (Unicode: Latin+Cyrillic+Kazakh) are the
+    // primary PDF fonts so RU/KK receipt copy actually renders.
+    await PdfFonts.ensureLoaded();
     final doc = pw.Document();
     doc.addPage(
       pw.Page(

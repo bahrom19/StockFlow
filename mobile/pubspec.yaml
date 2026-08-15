@@ -70,6 +70,17 @@ flutter:
     - env/.env.dev
     - env/.env.prod
 
+  fonts:
+    # Bundled Roboto TTFs used by the PDF exporters (report/receipt).
+    # Loaded at runtime via rootBundle + pw.Font.ttf so RU/KK (Cyrillic +
+    # Kazakh) PDF text renders — Helvetica/WinAnsi cannot encode those glyphs.
+    - family: RobotoPDF
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
+
 flutter_native_splash:
   color: '#1A73E8'
   image: assets/images/splash_logo.png

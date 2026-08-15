@@ -1,6 +1,10 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/features/sales/data/receipt_export.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
+
+import '../../helpers/pdf_text.dart';
 
 Sale _sale({String currency = 'KZT'}) {
   final now = DateTime.utc(2026, 8, 13, 12, 0);
@@ -49,7 +53,13 @@ Sale _sale({String currency = 'KZT'}) {
   );
 }
 
+AppLocalizations ru() => lookupAppLocalizations(const Locale('ru'));
+AppLocalizations kk() => lookupAppLocalizations(const Locale('kk'));
+
 void main() {
+  // rootBundle asset loading (Roboto TTFs) needs the binding in tests.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('ReceiptExport.buildHtml uses the selected currency', () {
     test('KZT renders ₸ (not \$)', () {
       final html = ReceiptExport.buildHtml(_sale(), currency: 'KZT');
@@ -80,6 +90,42 @@ void main() {
         expect(bytes.length, greaterThan(1000),
             reason: '$code PDF renders non-trivial output');
       }
+    });
+  });
+
+  group('Receipt PDF Unicode rendering (5D-6)', () {
+    test('RU receipt PDF contains Cyrillic copy', () async {
+      final bytes = await ReceiptExport.buildPdf(
+        _sale(),
+        l10n: ru(),
+        vatNumber: '123456',
+      );
+      final text = extractPdfText(bytes);
+      expect(text, contains('Товар'));
+      expect(text, contains('Кол-во'));
+      expect(text, contains('НДС'));
+      expect(text, contains('ИТОГО'));
+    });
+
+    test('KK receipt PDF contains Kazakh copy', () async {
+      final bytes = await ReceiptExport.buildPdf(
+        _sale(),
+        l10n: kk(),
+        vatNumber: '123456',
+      );
+      final text = extractPdfText(bytes);
+      expect(text, contains('Тауар'));
+      expect(text, contains('Саны'));
+      expect(text, contains('ҚҚС'));
+      expect(text, contains('БАРЛЫҒЫ'));
+    });
+
+    test('EN receipt PDF stays intact', () async {
+      final bytes = await ReceiptExport.buildPdf(_sale());
+      final text = extractPdfText(bytes);
+      expect(text, contains('Item'));
+      expect(text, contains('Qty'));
+      expect(text, contains('TOTAL'));
     });
   });
 
