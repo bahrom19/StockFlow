@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
+import 'package:stockflow/core/currency/currency_catalog.dart';
+import 'package:stockflow/core/currency/currency_ext.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
-import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/services/receipt_print_service.dart';
-import 'package:stockflow/core/widgets/app_dialog.dart';
+import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
+import 'package:stockflow/core/utils/pdf_fonts.dart';
+import 'package:stockflow/core/widgets/app_dialog.dart';
 import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:stockflow/features/inventory/data/repositories/inventory_repository.dart';
@@ -29,7 +33,6 @@ import 'package:stockflow/features/sales/presentation/widgets/pos_cart_panel.dar
 import 'package:stockflow/features/sales/presentation/widgets/pos_catalog_panel.dart';
 import 'package:stockflow/features/sales/presentation/widgets/pos_customer_picker.dart';
 import 'package:stockflow/features/sales/presentation/widgets/pos_shift_panel.dart';
-import 'package:stockflow/core/currency/currency_ext.dart';
 
 /// Desktop/tablet POS workspace — the cashier's full-screen terminal.
 ///
@@ -238,78 +241,21 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   }
 
   Future<void> _downloadShiftPdf(CashShift shift, {bool isZ = false}) async {
+    final l10n = context.l10n;
     try {
-      final l10n = context.l10n;
-      final doc = pw.Document();
-      doc.addPage(pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Center(
-              child: pw.Text(isZ ? l10n.posZReport : l10n.posXReport,
-                  style: pw.TextStyle(
-                      fontSize: 18, fontWeight: pw.FontWeight.bold)),
-            ),
-            pw.SizedBox(height: 4),
-            pw.Center(
-              child: pw.Text(Formatters.dateTime(shift.openedAt),
-                  style: const pw.TextStyle(fontSize: 10)),
-            ),
-            pw.Divider(),
-            pw.Text('${l10n.warehouse}: $_selectedWarehouseName',
-                style: const pw.TextStyle(fontSize: 10)),
-            pw.Text(
-                l10n.posStatus(StatusBadge.statusLabel(shift.status, l10n)),
-                style: const pw.TextStyle(fontSize: 10)),
-            pw.SizedBox(height: 8),
-            _pdfAmountRow(l10n.posOpeningBalance, shift.openingBalanceValue),
-            _pdfAmountRow(l10n.posCashSales, shift.cashSalesValue),
-            _pdfAmountRow(l10n.posCardSales, shift.cardSalesValue),
-            _pdfAmountRow(l10n.posQrSales, shift.qrSalesValue),
-            _pdfAmountRow(l10n.posBankSales, shift.bankTransferSalesValue),
-            _pdfAmountRow(l10n.posWalletSales, shift.mobileWalletSalesValue),
-            _pdfAmountRow(l10n.posTotalSales, shift.totalSalesValue, bold: true),
-            _pdfAmountRow(l10n.posCashIn, shift.cashInValue),
-            _pdfAmountRow(l10n.posCashOut, shift.cashOutValue),
-            if (isZ) ...[
-              pw.Divider(),
-              _pdfAmountRow(l10n.posExpectedClosing, shift.expectedClosingValue,
-                  bold: true),
-              _pdfAmountRow(l10n.posDifference, shift.differenceValue, bold: true),
-            ],
-          ],
-        ),
-      ));
-      final bytes = await doc.save();
+      final bytes = await ShiftReportPdf.build(
+        shift: shift,
+        isZ: isZ,
+        warehouseName: _selectedWarehouseName,
+        l10n: l10n,
+        currency: context.currencyCode,
+      );
       await ReceiptPrintService.downloadPdf(
           bytes, '${isZ ? 'Z' : 'X'}_report_${shift.id.substring(0, 6)}.pdf');
       _showSnack(l10n.posReportDownloaded, isError: false);
     } catch (e) {
-      _showSnack(context.l10n.posPdfExportFailed(e.toString()));
+      _showSnack(l10n.posPdfExportFailed(e.toString()));
     }
-  }
-
-  pw.Widget _pdfAmountRow(String label, double amount, {bool bold = false}) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 2),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(label,
-              style: pw.TextStyle(
-                  fontSize: 11,
-                  fontWeight:
-                      bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
-          pw.Text(amount.toStringAsFixed(2),
-              style: pw.TextStyle(
-                  fontSize: 11,
-                  fontWeight:
-                      bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
-        ],
-      ),
-    );
   }
 
   /// Shows a small amount prompt dialog; returns null when cancelled.
@@ -1167,6 +1113,91 @@ class _AmountPromptDialogState extends State<_AmountPromptDialog> {
           child: Text(widget.confirmLabel),
         ),
       ],
+    );
+  }
+}
+
+/// Pure, testable X/Z cash-shift report PDF builder.
+///
+/// Phase 5D-7F-1: Roboto TTFs (Unicode) are the PRIMARY fonts — the previous
+/// default Helvetica/WinAnsi silently dropped RU/KK copy from the content
+/// stream (proven in Phase 5D-7F). Amounts render via [CurrencyCatalog.formatPdf]
+/// like every other StockFlow PDF exporter.
+class ShiftReportPdf {
+  ShiftReportPdf._();
+
+  static Future<Uint8List> build({
+    required CashShift shift,
+    required bool isZ,
+    required String warehouseName,
+    required AppLocalizations l10n,
+    String currency = 'KZT',
+  }) async {
+    await PdfFonts.ensureLoaded();
+    final doc = pw.Document();
+    doc.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      build: (context) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Center(
+            child: pw.Text(isZ ? l10n.posZReport : l10n.posXReport,
+                style: pw.TextStyle(font: PdfFonts.bold, fontSize: 18)),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Center(
+            child: pw.Text(Formatters.dateTime(shift.openedAt),
+                style: pw.TextStyle(font: PdfFonts.regular, fontSize: 10)),
+          ),
+          pw.Divider(),
+          pw.Text('${l10n.warehouse}: $warehouseName',
+              style: pw.TextStyle(font: PdfFonts.regular, fontSize: 10)),
+          pw.Text(l10n.posStatus(StatusBadge.statusLabel(shift.status, l10n)),
+              style: pw.TextStyle(font: PdfFonts.regular, fontSize: 10)),
+          pw.SizedBox(height: 8),
+          _amountRow(l10n.posOpeningBalance, shift.openingBalanceValue,
+              currency: currency),
+          _amountRow(l10n.posCashSales, shift.cashSalesValue,
+              currency: currency),
+          _amountRow(l10n.posCardSales, shift.cardSalesValue,
+              currency: currency),
+          _amountRow(l10n.posQrSales, shift.qrSalesValue,
+              currency: currency),
+          _amountRow(l10n.posBankSales, shift.bankTransferSalesValue,
+              currency: currency),
+          _amountRow(l10n.posWalletSales, shift.mobileWalletSalesValue,
+              currency: currency),
+          _amountRow(l10n.posTotalSales, shift.totalSalesValue,
+              currency: currency, bold: true),
+          _amountRow(l10n.posCashIn, shift.cashInValue, currency: currency),
+          _amountRow(l10n.posCashOut, shift.cashOutValue, currency: currency),
+          if (isZ) ...[
+            pw.Divider(),
+            _amountRow(l10n.posExpectedClosing, shift.expectedClosingValue,
+                currency: currency, bold: true),
+            _amountRow(l10n.posDifference, shift.differenceValue,
+                currency: currency, bold: true),
+          ],
+        ],
+      ),
+    ));
+    return doc.save();
+  }
+
+  static pw.Widget _amountRow(String label, double amount,
+      {bool bold = false, required String currency}) {
+    final font = bold ? PdfFonts.bold : PdfFonts.regular;
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label, style: pw.TextStyle(font: font, fontSize: 11)),
+          pw.Text(CurrencyCatalog.formatPdf(amount, code: currency),
+              style: pw.TextStyle(font: font, fontSize: 11)),
+        ],
+      ),
     );
   }
 }
