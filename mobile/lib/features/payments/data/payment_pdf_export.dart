@@ -1,8 +1,10 @@
 import 'dart:typed_data';
 
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:stockflow/core/currency/currency_catalog.dart';
+import 'package:stockflow/core/utils/pdf_fonts.dart';
 
 /// Builds a Payment Details PDF document from CSV-style rows.
 ///
@@ -13,13 +15,21 @@ import 'package:stockflow/core/currency/currency_catalog.dart';
 class PaymentPdfExport {
   PaymentPdfExport._();
 
-  static final pw.Font _base = pw.Font.helvetica();
-  static final pw.Font _bold = pw.Font.helveticaBold();
-
-  static pw.TextStyle _style(double size, {bool bold = false}) =>
-      pw.TextStyle(font: bold ? _bold : _base, fontSize: size);
+  static pw.TextStyle _style(double size, {bool bold = false}) => pw.TextStyle(
+        font: bold ? PdfFonts.bold : PdfFonts.regular,
+        fontSize: size,
+      );
 
   /// Renders [headers] + [rows] (same shape as the CSV export) into PDF bytes.
+  ///
+  /// [amountColumnIndex] identifies the money column by its SEMANTIC position
+  /// in the row shape — never by localized display text, so RU/KK headers
+  /// (Сумма / Сома) resolve the column correctly. When omitted, the exporter
+  /// falls back to the legacy English-literal detection (plain 'Amount' /
+  /// 'Total' headers, existing tests).
+  ///
+  /// [l10n] localizes the generated/page/rows/total metadata lines; when
+  /// null they fall back to the English originals (byte-for-byte).
   ///
   /// [compress] enables FlateDecode on content streams (default). Tests pass
   /// `false` so the emitted text is directly inspectable.
@@ -30,22 +40,28 @@ class PaymentPdfExport {
     required List<List<String>> rows,
     bool compress = true,
     String currency = 'KZT',
+    int? amountColumnIndex,
+    AppLocalizations? l10n,
   }) async {
-    // Right-align the column named "Amount" (or "Total") — derived from the
-    // headers so reordering columns never silently misaligns the totals.
-    final amountColumnIndex = headers.indexWhere(
-      (h) => h.toLowerCase() == 'amount' || h.toLowerCase() == 'total',
-    );
+    // Phase 5D-7E: Roboto TTFs (Latin + Cyrillic + Kazakh) are the PRIMARY
+    // PDF fonts — Helvetica/WinAnsi silently dropped RU/KK copy from the
+    // content stream (proven in production). Same strategy as report/receipt.
+    await PdfFonts.ensureLoaded();
+
+    final amountCol =
+        amountColumnIndex ?? _legacyAmountColumnIndex(headers);
+
     final doc = pw.Document(compress: compress);
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4.landscape,
         margin: const pw.EdgeInsets.all(24),
-        header: (context) => _header(title, subtitle),
+        header: (context) => _header(title, subtitle, l10n),
         footer: (context) => pw.Align(
           alignment: pw.Alignment.centerRight,
           child: pw.Text(
-            'Page ${context.pageNumber} of ${context.pagesCount}',
+            l10n?.pdfPageOf(context.pageNumber, context.pagesCount) ??
+                'Page ${context.pageNumber} of ${context.pagesCount}',
             style: _style(8),
           ),
         ),
@@ -53,12 +69,12 @@ class PaymentPdfExport {
           pw.TableHelper.fromTextArray(
             context: context,
             headers: headers,
-            data: amountColumnIndex >= 0
+            data: amountCol >= 0
                 ? [
                     for (final row in rows)
                       [
                         for (var i = 0; i < row.length; i++)
-                          i == amountColumnIndex
+                          i == amountCol
                               ? CurrencyCatalog.formatPdf(
                                   double.tryParse(row[i]) ?? 0,
                                   code: currency,
@@ -78,7 +94,7 @@ class PaymentPdfExport {
             ),
             cellAlignments: {
               for (var i = 0; i < headers.length; i++)
-                i: amountColumnIndex >= 0 && i == amountColumnIndex
+                i: amountCol >= 0 && i == amountCol
                     ? pw.Alignment.centerRight
                     : pw.Alignment.centerLeft,
             },
@@ -88,12 +104,11 @@ class PaymentPdfExport {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                'Rows: ${rows.length}',
+                l10n?.pdfRows(rows.length) ?? 'Rows: ${rows.length}',
                 style: _style(9, bold: true),
               ),
               pw.Text(
-                'Total amount: '
-                '${CurrencyCatalog.formatPdf(_sumAmount(rows, amountColumnIndex), code: currency)}',
+                _totalAmountLabel(rows, amountCol, currency, l10n),
                 style: _style(9, bold: true),
               ),
             ],
@@ -102,6 +117,27 @@ class PaymentPdfExport {
       ),
     );
     return doc.save();
+  }
+
+  static String _totalAmountLabel(
+    List<List<String>> rows,
+    int amountCol,
+    String currency,
+    AppLocalizations? l10n,
+  ) {
+    final formatted = CurrencyCatalog.formatPdf(
+      _sumAmount(rows, amountCol),
+      code: currency,
+    );
+    return l10n?.pdfTotalAmount(formatted) ?? 'Total amount: $formatted';
+  }
+
+  /// Legacy English-literal detection — backward compatibility only.
+  /// Production callers pass [amountColumnIndex] explicitly.
+  static int _legacyAmountColumnIndex(List<String> headers) {
+    return headers.indexWhere(
+      (h) => h.toLowerCase() == 'amount' || h.toLowerCase() == 'total',
+    );
   }
 
   static double _sumAmount(List<List<String>> rows, int amountColumnIndex) {
@@ -115,10 +151,16 @@ class PaymentPdfExport {
     return total;
   }
 
-  static pw.Widget _header(String title, String? subtitle) {
+  static pw.Widget _header(
+    String title,
+    String? subtitle,
+    AppLocalizations? l10n,
+  ) {
     final subtitleLine = (subtitle != null && subtitle.isNotEmpty)
         ? pw.Text(subtitle, style: _style(9))
         : pw.SizedBox.shrink();
+    final generated =
+        DateTime.now().toLocal().toString().substring(0, 16);
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -127,7 +169,7 @@ class PaymentPdfExport {
           children: [
             pw.Text(title, style: _style(14, bold: true)),
             pw.Text(
-              'Generated: ${DateTime.now().toLocal().toString().substring(0, 16)}',
+              l10n?.pdfGeneratedAt(generated) ?? 'Generated: $generated',
               style: _style(8),
             ),
           ],

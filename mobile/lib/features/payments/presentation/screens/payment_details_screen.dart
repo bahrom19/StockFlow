@@ -38,6 +38,12 @@ class PaymentDetailsScreen extends ConsumerStatefulWidget {
 class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
   static const _pageSize = 50;
 
+  // Semantic index of the money column inside the exported rows/headers
+  // (date · receipt · cashier · customer · warehouse · method · amount ·
+  // status). Passed explicitly to the PDF exporter so the amount column is
+  // identified by position, never by localized display text (Сумма/Сома).
+  static const int _amountColumnIndex = 6;
+
   final _searchController = TextEditingController();
   Timer? _searchDebounce;
   int _requestSeq = 0; // discards stale responses on rapid search changes
@@ -304,6 +310,8 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
         subtitle: _subtitle(context),
         headers: _exportHeaders(context),
         rows: rows,
+        amountColumnIndex: _amountColumnIndex,
+        l10n: context.l10n,
       );
       await PdfDownloader.download('payment_details.pdf', bytes);
       if (!mounted) return;
