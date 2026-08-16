@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/validators.dart';
@@ -121,7 +122,7 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
     } else {
       final state = ref.read(adjustmentProvider);
       final message = state is AsyncError
-          ? state.error.toString()
+          ? localizedErrorLabel(context.l10n, state.error.toString())
           : context.l10n.adjustmentFailed;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
@@ -340,7 +341,7 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
     } else {
       final state = ref.read(transferProvider);
       final message = state is AsyncError
-          ? state.error.toString()
+          ? localizedErrorLabel(context.l10n, state.error.toString())
           : context.l10n.transferFailed;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
