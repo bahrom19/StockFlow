@@ -774,5 +774,11 @@
   "reportPdfAvgOrder": "Орташа тапсырыс",
   "reportPdfNoSalesInPeriod": "Бұл кезеңде сатылым жоқ.",
   "posHeldAtPrefix": "Кейінге қалдырылды",
-  "posHeldSaleFallback": "Кейінге қалдырылған сатылым"
+  "posHeldSaleFallback": "Кейінге қалдырылған сатылым",
+  "errConnectionTimeout": "Қосылу уақыты аяқталды. Интернет байланысын тексеріңіз.",
+  "errNoInternet": "Интернетке қосылым жоқ. Желіні тексеріңіз.",
+  "errUnexpectedError": "Күтпеген қате орын алды. Қайталап көріңіз.",
+  "errRequestCancelled": "Сұрау болдырмалды.",
+  "errUnknownError": "Белгісіз қате",
+  "errSomethingWentWrong": "Бірдеңе дұрыс болмады. Қайталап көріңіз."
 }

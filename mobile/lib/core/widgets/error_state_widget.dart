@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import '../theme/app_spacing.dart';
 
@@ -35,7 +36,9 @@ class ErrorStateWidget extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              message,
+              // Render-time localization: canonical ErrorHandler fallbacks are
+              // substituted for RU/KK; everything else passes through.
+              localizedErrorLabel(context.l10n, message),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

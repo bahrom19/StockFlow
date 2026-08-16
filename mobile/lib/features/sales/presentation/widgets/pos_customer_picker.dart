@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/features/customers/data/customers_repository.dart';
@@ -196,7 +197,7 @@ class _PosCustomerPickerDialogState
         if (_error != null)
           Padding(
             padding: const EdgeInsets.all(AppSpacing.sm),
-            child: Text(_error!,
+            child: Text(localizedErrorLabel(context.l10n, _error!),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.error)),
           ),
@@ -289,7 +290,7 @@ class _PosCustomerPickerDialogState
           ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.sm),
-            Text(_error!,
+            Text(localizedErrorLabel(context.l10n, _error!),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.error)),
           ],

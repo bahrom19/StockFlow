@@ -774,5 +774,11 @@
   "reportPdfAvgOrder": "Avg. Order",
   "reportPdfNoSalesInPeriod": "No sales in this period.",
   "posHeldAtPrefix": "Held",
-  "posHeldSaleFallback": "Held sale"
+  "posHeldSaleFallback": "Held sale",
+  "errConnectionTimeout": "Connection timeout. Please check your internet.",
+  "errNoInternet": "No internet connection. Please check your network.",
+  "errUnexpectedError": "An unexpected error occurred. Please try again.",
+  "errRequestCancelled": "Request was cancelled.",
+  "errUnknownError": "Unknown error",
+  "errSomethingWentWrong": "Something went wrong. Please try again."
 }

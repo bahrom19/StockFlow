@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/widgets/status_badge.dart';
@@ -183,7 +184,8 @@ class _PosCatalogPanelState extends ConsumerState<PosCatalogPanel> {
           children: [
             Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
             const SizedBox(height: AppSpacing.sm),
-            Text(state.error!, textAlign: TextAlign.center),
+            Text(localizedErrorLabel(context.l10n, state.error!),
+                textAlign: TextAlign.center),
             const SizedBox(height: AppSpacing.md),
             FilledButton.tonalIcon(
               onPressed: () =>

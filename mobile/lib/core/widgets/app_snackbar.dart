@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 
 /// StockFlow Snackbar Helpers
@@ -22,6 +23,10 @@ class AppSnackbar {
   }
 
   static void _show(BuildContext context, String message, Color color) {
+    // Render-time localization: canonical ErrorHandler fallbacks (English in
+    // `Failure.message`) are substituted with the localized label (RU/KK);
+    // already-localized or freeform/backend messages pass through unchanged.
+    final label = localizedErrorLabel(context.l10n, message);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -34,7 +39,7 @@ class AppSnackbar {
                 size: 20,
               ),
               const SizedBox(width: 12),
-              Expanded(child: Text(message)),
+              Expanded(child: Text(label)),
             ],
           ),
           backgroundColor: color,

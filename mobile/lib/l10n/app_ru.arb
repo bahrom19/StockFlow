@@ -774,5 +774,11 @@
   "reportPdfAvgOrder": "Средний заказ",
   "reportPdfNoSalesInPeriod": "Продаж за этот период нет.",
   "posHeldAtPrefix": "Отложено",
-  "posHeldSaleFallback": "Отложенная продажа"
+  "posHeldSaleFallback": "Отложенная продажа",
+  "errConnectionTimeout": "Превышено время ожидания. Проверьте интернет-соединение.",
+  "errNoInternet": "Нет подключения к интернету. Проверьте сеть.",
+  "errUnexpectedError": "Произошла непредвиденная ошибка. Попробуйте ещё раз.",
+  "errRequestCancelled": "Запрос был отменён.",
+  "errUnknownError": "Неизвестная ошибка",
+  "errSomethingWentWrong": "Что-то пошло не так. Попробуйте ещё раз."
 }

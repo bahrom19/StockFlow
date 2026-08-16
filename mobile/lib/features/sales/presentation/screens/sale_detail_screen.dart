@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/features/payments/presentation/labels.dart';
@@ -70,7 +71,8 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text((result as SalesFailure<Sale>).error.message),
+          content: Text(localizedErrorLabel(
+              context.l10n, (result as SalesFailure<Sale>).error.message)),
           backgroundColor: Colors.red,
         ),
       );
@@ -158,7 +160,8 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text((result as SalesFailure<Sale>).error.message),
+          content: Text(localizedErrorLabel(
+              context.l10n, (result as SalesFailure<Sale>).error.message)),
           backgroundColor: Colors.red,
         ),
       );
@@ -186,7 +189,8 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
               Icon(Icons.error_outline,
                   size: 64, color: theme.colorScheme.error),
               const SizedBox(height: 16),
-              Text(_error!, style: theme.textTheme.bodyMedium),
+              Text(localizedErrorLabel(context.l10n, _error!),
+                  style: theme.textTheme.bodyMedium),
               const SizedBox(height: 16),
               FilledButton.tonalIcon(
                 onPressed: _loadSale,

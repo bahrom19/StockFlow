@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/features/customers/data/customers_repository.dart';
@@ -67,7 +68,8 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text((result as CustomersFailure).error.message),
+          content: Text(localizedErrorLabel(
+              context.l10n, (result as CustomersFailure).error.message)),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -155,7 +157,8 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text((result as CustomersFailure).error.message),
+          content: Text(localizedErrorLabel(
+              context.l10n, (result as CustomersFailure).error.message)),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );

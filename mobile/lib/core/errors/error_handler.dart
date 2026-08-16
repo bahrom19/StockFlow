@@ -3,6 +3,24 @@ import '../logger/app_logger.dart';
 import 'exceptions.dart';
 import 'failures.dart';
 
+/// Canonical client-side generic error messages produced by [ErrorHandler].
+///
+/// These exact strings are the EN display contract AND the keys used by
+/// `localizedErrorLabel()` (core/localization/error_labels.dart) to substitute
+/// RU/KK translations at render time — keep them in sync with the ARB EN
+/// values of the `err*` keys.
+abstract final class ErrorMessages {
+  static const connectionTimeout =
+      'Connection timeout. Please check your internet.';
+  static const noInternet =
+      'No internet connection. Please check your network.';
+  static const unexpectedError =
+      'An unexpected error occurred. Please try again.';
+  static const requestCancelled = 'Request was cancelled.';
+  static const unknownError = 'Unknown error';
+  static const somethingWentWrong = 'Something went wrong. Please try again.';
+}
+
 /// Central Error Handler
 /// Maps exceptions to user-friendly failures.
 class ErrorHandler {
@@ -25,7 +43,7 @@ class ErrorHandler {
       return NotFoundFailure(message: error.message);
     } else {
       _logger.error('Unhandled error: $error', error);
-      return ServerFailure(message: 'An unexpected error occurred. Please try again.');
+      return ServerFailure(message: ErrorMessages.unexpectedError);
     }
   }
 
@@ -34,26 +52,28 @@ class ErrorHandler {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.receiveTimeout:
       case DioExceptionType.sendTimeout:
-        return NetworkFailure(message: 'Connection timeout. Please check your internet.');
+        return NetworkFailure(message: ErrorMessages.connectionTimeout);
 
       case DioExceptionType.connectionError:
-        return NetworkFailure(message: 'No internet connection. Please check your network.');
+        return NetworkFailure(message: ErrorMessages.noInternet);
 
       case DioExceptionType.badResponse:
         return _handleStatusCode(error.response);
 
       case DioExceptionType.cancel:
-        return ServerFailure(message: 'Request was cancelled.');
+        return ServerFailure(message: ErrorMessages.requestCancelled);
 
       default:
-        return ServerFailure(message: 'Something went wrong. Please try again.');
+        return ServerFailure(message: ErrorMessages.somethingWentWrong);
     }
   }
 
   Failure _handleStatusCode(Response? response) {
     final statusCode = response?.statusCode ?? 0;
     final body = response?.data;
-    final message = body is Map ? (body['message']?.toString() ?? 'Unknown error') : 'Unknown error';
+    final message = body is Map
+        ? (body['message']?.toString() ?? ErrorMessages.unknownError)
+        : ErrorMessages.unknownError;
 
     switch (statusCode) {
       case 400:

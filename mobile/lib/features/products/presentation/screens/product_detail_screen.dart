@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
@@ -68,7 +69,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   Icon(Icons.error_outline, size: 48,
                       color: theme.colorScheme.error),
                   const SizedBox(height: AppSpacing.md),
-                  Text(msg, style: theme.textTheme.bodyLarge),
+                  Text(localizedErrorLabel(context.l10n, msg),
+                      style: theme.textTheme.bodyLarge),
                   const SizedBox(height: AppSpacing.md),
                   FilledButton(
                     onPressed: () => ref
