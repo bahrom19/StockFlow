@@ -12,8 +12,7 @@ import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/payments/presentation/labels.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/sales_provider.dart';
-import 'package:stockflow/features/sales/presentation/widgets/sales_widgets.dart'
-    hide StatusBadge;
+import 'package:stockflow/features/sales/presentation/widgets/sales_widgets.dart';
 
 // ──────────────────────────────────
 // Sale History Screen

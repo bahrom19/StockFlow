@@ -4,11 +4,11 @@ import 'package:stockflow/core/currency/currency_ext.dart';
 import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/payments/presentation/labels.dart';
 import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/labels.dart';
-import 'package:stockflow/features/sales/presentation/widgets/sales_widgets.dart';
 
 // ──────────────────────────────────
 // Sale Detail Screen

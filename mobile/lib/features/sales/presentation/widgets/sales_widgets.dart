@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
-import 'package:stockflow/core/theme/app_colors.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 
 // ──────────────────────────────────
@@ -63,71 +63,6 @@ class SaleCard extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-// ──────────────────────────────────
-// Status Badge
-// ──────────────────────────────────
-class StatusBadge extends StatelessWidget {
-  final String status;
-
-  const StatusBadge({super.key, required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final rawColor = StockFlowColors.statusColor(status);
-    final color = Color(rawColor);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            _statusLabel(status),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _statusLabel(String status) {
-    switch (status) {
-      case 'DRAFT':
-        return 'Draft';
-      case 'PENDING':
-        return 'Pending';
-      case 'COMPLETED':
-        return 'Completed';
-      case 'REFUNDED':
-        return 'Refunded';
-      case 'CANCELLED':
-        return 'Cancelled';
-      case 'PARTIALLY_REFUNDED':
-        return 'Partially Refunded';
-      default:
-        return status;
-    }
   }
 }
 
