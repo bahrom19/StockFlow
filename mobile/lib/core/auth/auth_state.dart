@@ -1,4 +1,5 @@
 import 'dart:async' show unawaited;
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
@@ -93,6 +94,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   Future<void> login({
     required String email,
     required String password,
+    AppLocalizations? l10n,
   }) async {
     state = const AuthLoading();
     try {
@@ -111,12 +113,12 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       } else {
         final message = result is ApiFailure<LoginResponse>
             ? result.error.message
-            : 'Login failed';
+            : (l10n?.loginError ?? 'Invalid email or password');
         state = AuthError(message);
       }
     } catch (e) {
       _logger.error('Login failed', e);
-      state = AuthError('Login failed. Please check your credentials.');
+      state = AuthError(l10n?.loginError ?? 'Invalid email or password');
     }
   }
 

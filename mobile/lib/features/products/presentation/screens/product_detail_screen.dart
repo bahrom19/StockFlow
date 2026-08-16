@@ -27,7 +27,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     super.initState();
     Future.microtask(() {
       ref.read(productDetailProvider(widget.productId).notifier)
-          .loadProduct(widget.productId);
+          .loadProduct(widget.productId, l10n: context.l10n);
     });
   }
 
@@ -73,7 +73,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   FilledButton(
                     onPressed: () => ref
                         .read(productDetailProvider(widget.productId).notifier)
-                        .loadProduct(widget.productId),
+                        .loadProduct(widget.productId, l10n: context.l10n),
                     child: Text(context.l10n.retry),
                   ),
                 ],

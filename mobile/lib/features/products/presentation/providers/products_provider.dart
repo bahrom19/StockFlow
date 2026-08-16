@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/features/products/data/repositories/products_repository.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
@@ -117,17 +118,24 @@ class ProductDetailNotifier extends StateNotifier<ProductsState> {
 
   ProductDetailNotifier(this._ref) : super(const ProductDetailLoading());
 
-  Future<void> loadProduct(String id) async {
+  Future<void> loadProduct(String id, {AppLocalizations? l10n}) async {
     state = const ProductDetailLoading();
     final repo = _ref.read(productsRepositoryProvider);
-    final result = await repo.getById(id);
-
-    state = result is ProductsSuccess<Product>
-        ? ProductDetailLoaded(result.data)
-        : ProductDetailError(
-            result is ProductsFail<Product>
-                ? result.error.message
-                : 'Failed to load');
+    try {
+      final result = await repo.getById(id);
+      state = result is ProductsSuccess<Product>
+          ? ProductDetailLoaded(result.data)
+          : ProductDetailError(
+              result is ProductsFail<Product>
+                  ? result.error.message
+                  : (l10n?.failedToLoadProduct ?? 'Failed to load product'));
+    } catch (_) {
+      // Unexpected repository error — surface a localized message instead of
+      // letting the exception escape the async caller unhandled.
+      state = ProductDetailError(
+        l10n?.failedToLoadProduct ?? 'Failed to load product',
+      );
+    }
   }
 
   Future<bool> deleteProduct(String id) async {
