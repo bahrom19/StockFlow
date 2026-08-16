@@ -2,8 +2,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Preferences Storage Provider
-final preferencesStorageProvider = Provider<PreferencesStorage>((ref) {
-  return PreferencesStorage();
+///
+/// Initializes the storage through the provider lifecycle so every consumer
+/// receives a ready-to-use instance on every platform (web/mobile/desktop).
+///
+/// Previously this provider returned a fresh, never-initialized
+/// `PreferencesStorage()` while `main.dart` initialized a separate instance
+/// that was never wired into it — reads/writes through the provider threw a
+/// `StateError` that callers silently swallowed (e.g. held-sale persistence on
+/// web never survived a reload).
+final preferencesStorageProvider =
+    FutureProvider<PreferencesStorage>((ref) async {
+  final storage = PreferencesStorage();
+  await storage.initialize();
+  return storage;
 });
 
 /// Typed wrapper around SharedPreferences.

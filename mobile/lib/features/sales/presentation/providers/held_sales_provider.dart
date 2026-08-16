@@ -75,7 +75,7 @@ class HeldSalesNotifier extends StateNotifier<HeldSalesState> {
   Future<void> load() async {
     if (_loaded) return;
     try {
-      final storage = _ref.read(preferencesStorageProvider);
+      final storage = await _ref.read(preferencesStorageProvider.future);
       final raw = storage.getString(_storageKey);
       if (raw != null && raw.isNotEmpty) {
         final list = (jsonDecode(raw) as List<dynamic>)
@@ -128,7 +128,7 @@ class HeldSalesNotifier extends StateNotifier<HeldSalesState> {
 
   Future<void> _persist() async {
     try {
-      final storage = _ref.read(preferencesStorageProvider);
+      final storage = await _ref.read(preferencesStorageProvider.future);
       await storage.setString(
         _storageKey,
         jsonEncode(state.held.map((h) => h.toJson()).toList()),

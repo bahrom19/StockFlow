@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
@@ -1151,6 +1152,15 @@ void main() {
       expect(container.read(heldSalesProvider).held.length, 1);
       expect(container.read(heldSalesProvider).held.first.total, 20);
 
+      // Real persistence: the payload must exist in SharedPreferences.
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('held_sales_v1');
+      expect(raw, isNotNull,
+          reason: 'hold must persist the payload to storage');
+      final stored = jsonDecode(raw!) as List<dynamic>;
+      expect(stored, hasLength(1));
+      expect((stored.first as Map<String, dynamic>)['label'], 'Test hold');
+
       final resumed = await notifier.resume(
         container.read(heldSalesProvider).held.first.id,
       );
@@ -1158,6 +1168,12 @@ void main() {
       expect(resumed!.items.length, 1);
       expect(resumed.customerName, 'Anna');
       expect(container.read(heldSalesProvider).held, isEmpty);
+
+      // Resuming must also update storage.
+      final after = jsonDecode((await SharedPreferences.getInstance())
+          .getString('held_sales_v1')!) as List<dynamic>;
+      expect(after, isEmpty,
+          reason: 'resume must remove the sale from storage');
     });
   });
 

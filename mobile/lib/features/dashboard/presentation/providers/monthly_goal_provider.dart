@@ -12,11 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// network requests.
 ///
 /// Implementation note: reads/writes go through `SharedPreferences.getInstance()`
-/// directly rather than `preferencesStorageProvider` — that provider creates a
-/// fresh, un-initialized `PreferencesStorage()` instance (the one initialized
-/// in `main.dart` is never wired into it), so persistence through it would
-/// silently no-op. Direct `getInstance()` is the canonical API and works in
-/// both production and tests (`SharedPreferences.setMockInitialValues`).
+/// directly — the canonical API that works in both production and tests
+/// (`SharedPreferences.setMockInitialValues`).
 final monthlyGoalProvider =
     StateNotifierProvider<MonthlyGoalNotifier, double?>((ref) {
   return MonthlyGoalNotifier();
