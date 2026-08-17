@@ -321,19 +321,35 @@ export class PurchaseReturnService {
           });
 
           const beforeQty = stock?.quantity ?? 0;
-          const afterQty = Math.max(0, beforeQty - item.quantity);
+          const reservedQty = stock?.reservedQuantity ?? 0;
+
+          // Strict stock (Policy A): a purchase return can never drive the
+          // balance negative — reject and roll back the whole return instead
+          // of silently clamping.
+          if (beforeQty - reservedQty < item.quantity) {
+            throw new BadRequestException('Insufficient stock');
+          }
+
+          const afterQty = beforeQty - item.quantity;
 
           if (stock) {
-            await tx.stock.update({
-              where: { id: stock.id },
+            // Atomic decrement with a quantity guard — safe under concurrent
+            // stock changes on the same row.
+            const result = await tx.stock.updateMany({
+              where: {
+                id: stock.id,
+                companyId,
+                quantity: { gte: item.quantity + reservedQty },
+              },
               data: {
-                quantity: afterQty,
-                availableQuantity: Math.max(
-                  0,
-                  afterQty - stock.reservedQuantity,
-                ),
+                quantity: { decrement: item.quantity },
+                availableQuantity: { decrement: item.quantity },
+                rowVersion: { increment: 1 },
               },
             });
+            if (result.count === 0) {
+              throw new BadRequestException('Insufficient stock');
+            }
           }
 
           await tx.stockMovement.create({

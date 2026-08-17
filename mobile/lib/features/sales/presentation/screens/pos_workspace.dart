@@ -9,6 +9,7 @@ import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/services/receipt_print_service.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
@@ -525,7 +526,14 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     final completed = await posNotifier.completeSale(sale.id);
     if (completed == null) {
       if (mounted) setState(() => _isCompleting = false);
-      _showSnack(context.l10n.posFailedCompleteSale);
+      // Surface the real failure (e.g. localized insufficient stock) instead
+      // of a generic message — canonical ErrorHandler messages localize via
+      // localizedErrorLabel; anything else falls back to the generic text.
+      final raw = ref.read(posProvider).error;
+      final message = raw is String && raw.isNotEmpty ? raw : null;
+      _showSnack(
+        localizedErrorLabel(context.l10n, message ?? context.l10n.posFailedCompleteSale),
+      );
       return;
     }
 

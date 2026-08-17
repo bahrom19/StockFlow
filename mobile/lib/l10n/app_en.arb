@@ -813,5 +813,6 @@
   "errUnexpectedError": "An unexpected error occurred. Please try again.",
   "errRequestCancelled": "Request was cancelled.",
   "errUnknownError": "Unknown error",
-  "errSomethingWentWrong": "Something went wrong. Please try again."
+  "errSomethingWentWrong": "Something went wrong. Please try again.",
+  "insufficientStock": "Insufficient stock"
 }

@@ -19,6 +19,7 @@ abstract final class ErrorMessages {
   static const requestCancelled = 'Request was cancelled.';
   static const unknownError = 'Unknown error';
   static const somethingWentWrong = 'Something went wrong. Please try again.';
+  static const insufficientStock = 'Insufficient stock';
 }
 
 /// Central Error Handler

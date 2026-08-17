@@ -813,5 +813,6 @@
   "errUnexpectedError": "Күтпеген қате орын алды. Қайталап көріңіз.",
   "errRequestCancelled": "Сұрау болдырмалды.",
   "errUnknownError": "Белгісіз қате",
-  "errSomethingWentWrong": "Бірдеңе дұрыс болмады. Қайталап көріңіз."
+  "errSomethingWentWrong": "Бірдеңе дұрыс болмады. Қайталап көріңіз.",
+  "insufficientStock": "Қоймадағы тауар жеткіліксіз"
 }

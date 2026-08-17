@@ -813,5 +813,6 @@
   "errUnexpectedError": "Произошла непредвиденная ошибка. Попробуйте ещё раз.",
   "errRequestCancelled": "Запрос был отменён.",
   "errUnknownError": "Неизвестная ошибка",
-  "errSomethingWentWrong": "Что-то пошло не так. Попробуйте ещё раз."
+  "errSomethingWentWrong": "Что-то пошло не так. Попробуйте ещё раз.",
+  "insufficientStock": "Недостаточно товара на складе"
 }

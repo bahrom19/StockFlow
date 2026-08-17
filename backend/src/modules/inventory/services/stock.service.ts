@@ -126,10 +126,12 @@ export class StockService {
       }
 
       const beforeQuantity = stock.quantity;
-      const afterQuantity = Math.max(0, beforeQuantity + dto.quantity);
+      const afterQuantity = beforeQuantity + dto.quantity;
 
+      // Strict stock (Policy A): an adjustment that would drive the balance
+      // negative must be rejected, not silently clamped.
       if (afterQuantity < 0) {
-        throw new BadRequestException('Stock quantity cannot become negative');
+        throw new BadRequestException('Insufficient stock');
       }
 
       const rowVer = stock.rowVersion ?? 0;

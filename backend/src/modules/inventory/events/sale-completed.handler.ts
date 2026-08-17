@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { StockMovementType } from '@prisma/client';
 import { EventHandler } from '../../../common/events';
 import { SaleCompletedEvent } from '../../sales/events/sale-completed.event';
@@ -34,20 +34,36 @@ export class SaleCompletedEventHandler implements EventHandler<SaleCompletedEven
         );
 
       const beforeQty = stock?.quantity ?? 0;
-      const afterQty = Math.max(0, beforeQty - item.quantity);
+      const reservedQty = stock?.reservedQuantity ?? 0;
+
+      // Strict stock (Policy A): never sell more than is available. The
+      // conditional update below also guards against concurrent sales racing
+      // on the same stock row, so oversell is rejected under all conditions.
+      if (beforeQty - reservedQty < item.quantity) {
+        throw new BadRequestException('Insufficient stock');
+      }
+
+      const afterQty = beforeQty - item.quantity;
 
       if (stock) {
-        const rowVer = stock.rowVersion ?? 0;
-        await this.inventoryRepository.updateStock(
-          stock.id,
-          {
-            quantity: afterQty,
-            availableQuantity: Math.max(0, afterQty - stock.reservedQuantity),
+        // Atomic decrement: the WHERE re-check runs on the committed row, so
+        // a concurrent decrement that leaves insufficient stock makes this
+        // update match 0 rows and the sale transaction rolls back.
+        const result = await tx.stock.updateMany({
+          where: {
+            id: stock.id,
+            companyId: event.payload.companyId,
+            quantity: { gte: item.quantity + reservedQty },
           },
-          event.payload.companyId,
-          rowVer,
-          tx,
-        );
+          data: {
+            quantity: { decrement: item.quantity },
+            availableQuantity: { decrement: item.quantity },
+            rowVersion: { increment: 1 },
+          },
+        });
+        if (result.count === 0) {
+          throw new BadRequestException('Insufficient stock');
+        }
       }
 
       await tx.stockMovement.create({

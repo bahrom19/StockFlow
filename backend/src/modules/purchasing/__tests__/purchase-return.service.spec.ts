@@ -241,7 +241,7 @@ describe('PurchaseReturnService', () => {
             quantity: 50,
             reservedQuantity: 0,
           }),
-          update: jest.fn(),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
         stockMovement: { create: jest.fn() },
       };
@@ -260,14 +260,95 @@ describe('PurchaseReturnService', () => {
       );
       expect(result).toBeDefined();
       expect(mockTx.stock.findFirst).toHaveBeenCalled();
-      expect(mockTx.stock.update).toHaveBeenCalled();
+      expect(mockTx.stock.updateMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          id: 's-1',
+          companyId,
+          quantity: { gte: 5 },
+        }),
+        data: expect.objectContaining({
+          quantity: { decrement: 5 },
+          availableQuantity: { decrement: 5 },
+          rowVersion: { increment: 1 },
+        }),
+      });
       expect(mockTx.stockMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           type: StockMovementType.RETURN,
           quantity: -5,
+          beforeQuantity: 50,
+          afterQuantity: 45,
         }),
       });
+      const movement = mockTx.stockMovement.create.mock.calls[0][0].data;
+      expect(movement.beforeQuantity + movement.quantity).toBe(
+        movement.afterQuantity,
+      );
       expect(mockEventBus.publish).toHaveBeenCalled();
+    });
+
+    it('should reject COMPLETED when stock is insufficient (strict stock)', async () => {
+      const approved = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
+      const mockTx = {
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(baseReturn.items),
+        },
+        stock: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 's-1',
+            quantity: 3,
+            reservedQuantity: 0,
+          }),
+          updateMany: jest.fn(),
+        },
+        stockMovement: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(approved as any);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(new BadRequestException('Insufficient stock'));
+      // No partial stock update, no movement, no event.
+      expect(mockTx.stock.updateMany).not.toHaveBeenCalled();
+      expect(mockTx.stockMovement.create).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('should reject COMPLETED when a concurrent race leaves insufficient stock', async () => {
+      const approved = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
+      const mockTx = {
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(baseReturn.items),
+        },
+        stock: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 's-1',
+            quantity: 10,
+            reservedQuantity: 0,
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
+        stockMovement: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(approved as any);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(new BadRequestException('Insufficient stock'));
+      expect(mockTx.stockMovement.create).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
     });
 
     it('should transition DRAFT to CANCELLED and set cancelledBy', async () => {

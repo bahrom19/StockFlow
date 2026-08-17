@@ -23,6 +23,8 @@ String localizedErrorLabel(AppLocalizations l10n, String message) {
       return l10n.errUnknownError;
     case ErrorMessages.somethingWentWrong:
       return l10n.errSomethingWentWrong;
+    case ErrorMessages.insufficientStock:
+      return l10n.insufficientStock;
     default:
       return message;
   }
