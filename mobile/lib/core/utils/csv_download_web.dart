@@ -1,10 +1,11 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
-import 'dart:convert';
 import 'dart:html' as html;
+import 'csv_web_bytes.dart';
 
-/// Web CSV downloader — builds a Blob and triggers a browser download.
+/// Web CSV downloader — builds a Blob (UTF-8 with BOM, so Windows Excel
+/// detects the encoding) and triggers a browser download.
 Future<void> downloadCsv(String filename, String csv) async {
-  final blob = html.Blob([utf8.encode(csv)], 'text/csv;charset=utf-8');
+  final blob = html.Blob([webCsvBytes(csv)], 'text/csv;charset=utf-8');
   final url = html.Url.createObjectUrl(blob);
   final anchor = html.AnchorElement(href: url)
     ..download = filename
