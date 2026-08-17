@@ -174,7 +174,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const SuppliersListScreen(),
             routes: [
               GoRoute(path: 'new', name: 'supplierNew', builder: (context, state) => const SupplierFormScreen()),
-              GoRoute(path: ':id', name: 'supplierDetail', builder: (context, state) => SupplierFormScreen(supplier: null)),
+              GoRoute(
+                path: ':id',
+                name: 'supplierDetail',
+                builder: (context, state) => SupplierFormScreen(
+                  supplierId: state.pathParameters['id'],
+                ),
+              ),
             ],
           ),
           GoRoute(
