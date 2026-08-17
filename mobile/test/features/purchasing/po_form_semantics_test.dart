@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SemanticsAction;
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/api/api_client.dart';
@@ -107,7 +108,13 @@ Future<void> _pumpScreen(WidgetTester tester) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: PurchaseOrderFormScreen()),
+      child: MaterialApp(
+        // Phase 5C: the screen now resolves strings through context.l10n,
+        // so the harness must register the generated localizations.
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const PurchaseOrderFormScreen(),
+      ),
     ),
   );
   await tester.pumpAndSettle();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/widgets/entity_table.dart';
 import 'package:stockflow/core/widgets/page_header.dart';
@@ -53,8 +54,8 @@ class _SuppliersListScreenState extends ConsumerState<SuppliersListScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
-            title: 'Suppliers',
-            subtitle: 'Manage vendors, contracts and purchasing partners',
+            title: context.l10n.suppliers,
+            subtitle: context.l10n.suppliersSubtitle,
           ),
           Expanded(
             child: EntityTable<Supplier>(
@@ -66,21 +67,21 @@ class _SuppliersListScreenState extends ConsumerState<SuppliersListScreen> {
               isLoadingMore: loaded?.isLoadingMore ?? false,
               onLoadMore: _onScroll,
               search: loaded?.search,
-              searchHint: 'Search by company name or BIN…',
+              searchHint: context.l10n.suppliersSearchHint,
               onSearch: (q) =>
                   ref.read(supplierListProvider.notifier).search(q),
               onRefresh: () =>
                   ref.read(supplierListProvider.notifier).refresh(),
               onCreate: () => context.push(RouteNames.supplierNew),
-              createLabel: 'New Supplier',
+              createLabel: context.l10n.newSupplier,
               exportFileName: 'suppliers.csv',
-              exportHeaders: const [
-                'Company',
-                'BIN',
-                'Phone',
-                'Email',
-                'Website',
-                'Status',
+              exportHeaders: [
+                context.l10n.company,
+                context.l10n.bin,
+                context.l10n.phone,
+                context.l10n.email,
+                context.l10n.website,
+                context.l10n.status,
               ],
               exportRows: () => [
                 for (final s in items)
@@ -94,13 +95,14 @@ class _SuppliersListScreenState extends ConsumerState<SuppliersListScreen> {
                   ],
               ],
               columns: [
-                const DataColumn(label: Text('Company')),
-                const DataColumn(label: Text('BIN')),
-                const DataColumn(label: Text('Phone')),
-                const DataColumn(label: Text('Email')),
-                const DataColumn(label: Text('Status')),
+                DataColumn(label: Text(context.l10n.company)),
+                DataColumn(label: Text(context.l10n.bin)),
+                DataColumn(label: Text(context.l10n.phone)),
+                DataColumn(label: Text(context.l10n.email)),
+                DataColumn(label: Text(context.l10n.status)),
                 DataColumn(
-                  label: Text('Actions', style: theme.textTheme.labelMedium),
+                  label: Text(context.l10n.actions,
+                      style: theme.textTheme.labelMedium),
                 ),
               ],
               buildRow: (s) => DataRow(
@@ -117,7 +119,7 @@ class _SuppliersListScreenState extends ConsumerState<SuppliersListScreen> {
                   )),
                   DataCell(
                     IconButton(
-                      tooltip: 'Edit',
+                      tooltip: context.l10n.edit,
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       onPressed: () =>
                           context.push('${RouteNames.supplierDetail.replaceAll(':id', s.id)}'),
@@ -132,8 +134,8 @@ class _SuppliersListScreenState extends ConsumerState<SuppliersListScreen> {
               ),
               onRowTap: (s) =>
                   context.push('${RouteNames.supplierDetail.replaceAll(':id', s.id)}'),
-              emptyTitle: 'No suppliers found',
-              emptySubtitle: 'Add your first supplier to start purchasing',
+              emptyTitle: context.l10n.noSuppliersFound,
+              emptySubtitle: context.l10n.suppliersEmptySubtitle,
               emptyIcon: Icons.business_outlined,
               errorMessage: state is SupplierListError
                   ? (state as SupplierListError).message

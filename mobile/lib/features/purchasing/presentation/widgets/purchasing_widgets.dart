@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
+import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
@@ -26,22 +28,36 @@ class POStatusBadge extends StatelessWidget {
         children: [
           Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 4),
-          Text(_statusLabel(status), style: theme.textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w600)),
+          Text(_statusLabel(context, status), style: theme.textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 
-  String _statusLabel(String s) {
+  /// PO status label — localized through l10n (Phase 5C).
+  ///
+  /// EN keeps the historical display byte-for-byte (incl. "Partially
+  /// Received", which differs from the shared StatusBadge's lower-cased
+  /// "Partially received"). RU/KK localize every known status; unknown
+  /// values fall back to the raw code. Backend enum is never changed.
+  String _statusLabel(BuildContext context, String s) {
     switch (s) {
-      case 'DRAFT': return 'Draft';
-      case 'PENDING': return 'Pending';
-      case 'APPROVED': return 'Approved';
-      case 'ORDERED': return 'Ordered';
-      case 'PARTIALLY_RECEIVED': return 'Partially Received';
-      case 'RECEIVED': return 'Received';
-      case 'CANCELLED': return 'Cancelled';
-      default: return s;
+      case 'DRAFT':
+        return context.l10n.statusDraft;
+      case 'PENDING':
+        return context.l10n.statusPending;
+      case 'APPROVED':
+        return context.l10n.statusApproved;
+      case 'ORDERED':
+        return context.l10n.statusOrdered;
+      case 'PARTIALLY_RECEIVED':
+        return context.l10n.poStatusPartiallyReceived;
+      case 'RECEIVED':
+        return context.l10n.statusReceived;
+      case 'CANCELLED':
+        return context.l10n.statusCancelled;
+      default:
+        return s;
     }
   }
 }
@@ -78,7 +94,9 @@ class POCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('Date: $date', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
+                    Text(context.l10n.poCardDate(date),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.outline)),
                   ],
                 ),
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 
 class SupplierCard extends StatelessWidget {
@@ -35,7 +36,11 @@ class SupplierCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                            child: Text('Inactive', style: theme.textTheme.labelSmall?.copyWith(color: Colors.red, fontSize: 10)),
+                            child: Text(
+                              context.l10n.statusInactive,
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(color: Colors.red, fontSize: 10),
+                            ),
                           ),
                       ],
                     ),

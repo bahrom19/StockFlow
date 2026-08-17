@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/features/purchasing/data/repositories/purchasing_repository.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
+import 'package:stockflow/core/localization/error_labels.dart';
+import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/features/products/data/repositories/products_repository.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/suppliers/data/repositories/suppliers_repository.dart';
@@ -67,7 +69,7 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
       final selected = await showDialog<Product>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Select Product'),
+          title: Text(ctx.l10n.selectProduct),
           content: SizedBox(
             width: double.maxFinite,
             child: ListView.builder(
@@ -97,7 +99,10 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedSupplierId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a supplier'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(context.l10n.selectSupplierFirst),
+        backgroundColor: Colors.red,
+      ));
       return;
     }
     setState(() => _isSaving = true);
@@ -117,11 +122,21 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
 
     setState(() => _isSaving = false);
     if (result is PurchasingSuccess && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Purchase order created')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.purchaseOrderCreated)),
+      );
       context.pop();
     } else if (result is PurchasingFailure && mounted) {
+      // Render-time localization: canonical ErrorHandler fallbacks get the
+      // localized label (RU/KK); backend/freeform messages pass through.
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text((result as PurchasingFailure).error.message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(localizedErrorLabel(
+            context.l10n,
+            (result as PurchasingFailure).error.message,
+          )),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -130,7 +145,7 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('New Purchase Order')),
+      appBar: AppBar(title: Text(context.l10n.newPurchaseOrder)),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -139,13 +154,16 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
             // Supplier dropdown
             DropdownButtonFormField<String>(
               value: _selectedSupplierId,
-              decoration: const InputDecoration(labelText: 'Supplier *', border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: context.l10n.supplierRequired,
+                border: const OutlineInputBorder(),
+              ),
               items: _suppliers.map((s) => DropdownMenuItem(value: s.id, child: Text(s.companyName))).toList(),
               onChanged: (v) {
                 final s = _suppliers.firstWhere((s) => s.id == v);
                 setState(() { _selectedSupplierId = v; _selectedSupplierName = s.companyName; });
               },
-              validator: (v) => v == null ? 'Required' : null,
+              validator: (v) => v == null ? context.l10n.required : null,
             ),
             const SizedBox(height: 16),
 
@@ -158,10 +176,15 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
                 // the header from document.body.innerText.
                 Semantics(
                   container: true,
-                  child: Text('Items', style: theme.textTheme.titleSmall),
+                  child: Text(context.l10n.items,
+                      style: theme.textTheme.titleSmall),
                 ),
                 const Spacer(),
-                TextButton.icon(onPressed: _addItem, icon: const Icon(Icons.add, size: 18), label: const Text('Add Item')),
+                TextButton.icon(
+                  onPressed: _addItem,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text(context.l10n.addItem),
+                ),
               ],
             ),
             ..._items.asMap().entries.map((entry) {
@@ -177,10 +200,17 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
                         Expanded(
                           child: TextFormField(
                             controller: item.productCtrl,
-                            decoration: const InputDecoration(labelText: 'Product', border: OutlineInputBorder(), isDense: true),
+                            decoration: InputDecoration(
+                              labelText: context.l10n.product,
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
                             readOnly: true,
                             onTap: () => _selectProduct(i),
-                            validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                            validator: (v) =>
+                                v == null || v.isEmpty
+                                    ? context.l10n.required
+                                    : null,
                           ),
                         ),
                         IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setState(() => _items.removeAt(i))),
@@ -190,7 +220,11 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
                         Expanded(
                           child: TextFormField(
                             controller: item.qtyCtrl,
-                            decoration: const InputDecoration(labelText: 'Qty', border: OutlineInputBorder(), isDense: true),
+                            decoration: InputDecoration(
+                              labelText: context.l10n.qty,
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
                             keyboardType: TextInputType.number,
                           ),
                         ),
@@ -198,7 +232,11 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
                         Expanded(
                           child: TextFormField(
                             controller: item.priceCtrl,
-                            decoration: const InputDecoration(labelText: 'Unit Cost', border: OutlineInputBorder(), isDense: true),
+                            decoration: InputDecoration(
+                              labelText: context.l10n.unitCost,
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           ),
                         ),
@@ -209,13 +247,29 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
               );
             }),
             const SizedBox(height: 8),
-            TextFormField(controller: _notesCtrl, decoration: const InputDecoration(labelText: 'Notes', border: OutlineInputBorder()), maxLines: 2),
+            TextFormField(
+              controller: _notesCtrl,
+              decoration: InputDecoration(
+                labelText: context.l10n.notes,
+                border: const OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 onPressed: _isSaving ? null : _save,
-                child: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Create Purchase Order'),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(context.l10n.createPurchaseOrder),
               ),
             ),
           ],
