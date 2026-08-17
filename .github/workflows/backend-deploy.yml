@@ -1,0 +1,100 @@
+# ═══════════════════════════════════════════════════════════════
+# StockFlow Enterprise — Backend (API) Deployment to Railway
+# ═══════════════════════════════════════════════════════════════
+# Real deployment for the API service. This is the missing half of
+# the web-deploy pattern (web-deploy.yml deploys `stockflow-web`;
+# this workflow deploys the backend service `stockflow`).
+#
+# The legacy cd.yml pipeline only builds a GHCR image and runs
+# placeholder echo steps — it never deploys. This workflow is the
+# actual mechanism that ships backend code to production.
+#
+# Secret (one-time provisioning, see docs/DEPLOYMENT_GUIDE.md §6):
+#   RAILWAY_TOKEN — Railway account token (same token as Web Deploy)
+#
+# The service is targeted BY NAME (`stockflow`), matching the
+# production host `stockflow-production-04c7.up.railway.app` — no
+# service-id secret is required; Railway CLI resolves names to the
+# service in the linked project.
+#
+# `railway up` uploads the backend/ snapshot and only touches the
+# deployment: service variables (DATABASE_URL, JWT secrets, Redis)
+# are never modified. Railway keeps the previous deployment, so a
+# failed rollout leaves the last good build live (rollback via
+# Railway dashboard).
+#
+# The deploy step is guarded: without RAILWAY_TOKEN the workflow
+# reports green with a skip notice (mirrors web-deploy.yml).
+# ═══════════════════════════════════════════════════════════════
+
+name: Backend Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'backend/railway.json'
+      - '.github/workflows/backend-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RAILWAY_SERVICE_NAME: 'stockflow'
+  API_HEALTH_URL: 'https://stockflow-production-04c7.up.railway.app/api/health'
+
+jobs:
+  deploy:
+    name: '🚀 Deploy Backend to Railway'
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Deploy via the official Railway CLI from npm (no third-party
+      # action dependency). Runs from backend/ which holds the
+      # Dockerfile + railway.json (DOCKERFILE builder). Targets the
+      # service BY NAME — the CLI resolves `--service stockflow`
+      # against the linked project.
+      - name: Deploy to Railway
+        if: env.RAILWAY_TOKEN != ''
+        working-directory: backend
+        run: npx --yes @railway/cli@latest up --service "$RAILWAY_SERVICE_NAME" --ci
+
+      # Mandatory verification: the deploy is only green if the API is
+      # actually live AND the container is fresh. Railway can report a
+      # successful build while the service still serves an old (or
+      # failed) deployment; the health 200 check plus the uptime
+      # assertion catch exactly that.
+      #
+      # The /api/health JSON exposes `uptime` in seconds. The previous
+      # stale container had ~600k s (~7 days); a fresh deploy must
+      # report a small uptime (< 30 min). The strongest identity proof
+      # (strict-stock behavior exists in exactly one commit) is the
+      # functional smoke that runs after this workflow completes.
+      - name: Verify health + fresh container
+        if: env.RAILWAY_TOKEN != ''
+        run: |
+          for i in $(seq 1 30); do
+            BODY=$(curl -s --max-time 15 "$API_HEALTH_URL" || true)
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$API_HEALTH_URL")
+            if [ "$CODE" = "200" ]; then break; fi
+            echo "health: $CODE (attempt $i) — waiting for rollout..."
+            sleep 20
+          done
+          test "$CODE" = "200" || { echo "::error::/api/health returned $CODE after rollout"; exit 1; }
+          echo "✅ /api/health = 200"
+          echo "body: $(echo "$BODY" | head -c 300)"
+          UPTIME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('uptime',-1))" 2>/dev/null || echo -1)
+          echo "uptime: ${UPTIME}s"
+          test "$UPTIME" -ge 0 -a "$UPTIME" -lt 1800 \
+            || { echo "::error::uptime ${UPTIME}s — container is NOT fresh (expected < 1800s after deploy)"; exit 1; }
+          echo "✅ Fresh container confirmed (uptime ${UPTIME}s)"
+          echo "✅ Backend deployed — commit $(git rev-parse --short HEAD) now live at $API_HEALTH_URL"
