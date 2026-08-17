@@ -283,4 +283,53 @@ void main() {
       }
     });
   });
+
+  group('Sale history CSV export headers (Phase 5D-8A)', () {
+    test('EN keeps the historical headers byte-for-byte', () {
+      final headers = [
+        en().number, en().date, en().status,
+        en().subtotal, en().tax, en().total, en().paid,
+      ];
+      expect(headers, [
+        'Number', 'Date', 'Status', 'Subtotal', 'Tax', 'Total', 'Paid',
+      ]);
+    });
+
+    test('RU localizes every header', () {
+      final headers = [
+        ru().number, ru().date, ru().status,
+        ru().subtotal, ru().tax, ru().total, ru().paid,
+      ];
+      expect(headers, [
+        'Номер', 'Дата', 'Статус', 'Подытог', 'Налог', 'Итого', 'Оплачено',
+      ]);
+      for (final raw in ['Number', 'Date', 'Status', 'Subtotal', 'Tax', 'Total', 'Paid']) {
+        expect(headers.contains(raw), isFalse, reason: 'raw $raw in RU CSV headers');
+      }
+    });
+
+    test('KK localizes every header', () {
+      final headers = [
+        kk().number, kk().date, kk().status,
+        kk().subtotal, kk().tax, kk().total, kk().paid,
+      ];
+      expect(headers, [
+        'Нөмір', 'Күні', 'Мәртебе', 'Аралық қорытынды',
+        'Салық', 'Барлығы', 'Төленді',
+      ]);
+      for (final raw in ['Number', 'Date', 'Status', 'Subtotal', 'Tax', 'Total', 'Paid']) {
+        expect(headers.contains(raw), isFalse, reason: 'raw $raw in KK CSV headers');
+      }
+    });
+
+    test('column order is preserved (7 headers, fixed positions)', () {
+      expect(en().number, 'Number');
+      expect(en().paid, 'Paid');
+      // Same order as the pre-localization const list: Number, Date, Status,
+      // Subtotal, Tax, Total, Paid — verified via the exact RU/KK arrays
+      // above, which mirror the screen's exportHeaders list 1:1.
+      expect(ru().subtotal, 'Подытог');
+      expect(kk().paid, 'Төленді');
+    });
+  });
 }

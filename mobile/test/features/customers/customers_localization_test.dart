@@ -150,13 +150,25 @@ void main() {
       }
     });
 
-    test('CSV export row values stay raw (contract)', () {
-      // The export file keeps raw backend values on purpose — this pins the
-      // contract so a future "localize the CSV" change is deliberate.
-      expect(en().customer, 'Customer');
-      // Raw enum literals used by exportRows (customers_list_screen):
-      expect('Active', 'Active');
-      expect('Inactive', 'Inactive');
+    test('CSV export status values localize (Phase 5D-8A)', () {
+      // EN keeps the historical CSV display byte-for-byte via the ARB values.
+      expect(en().statusActive, 'Active');
+      expect(en().statusInactive, 'Inactive');
+      // RU/KK are localized — never raw 'Active'/'Inactive'.
+      expect(ru().statusActive, 'Активный');
+      expect(ru().statusInactive, 'Неактивный');
+      expect(kk().statusActive, 'Белсенді');
+      expect(kk().statusInactive, 'Белсенді емес');
+      for (final raw in ['Active', 'Inactive']) {
+        expect(ru().statusActive.contains(raw), isFalse,
+            reason: 'raw $raw in RU statusActive');
+        expect(ru().statusInactive.contains(raw), isFalse,
+            reason: 'raw $raw in RU statusInactive');
+        expect(kk().statusActive.contains(raw), isFalse,
+            reason: 'raw $raw in KK statusActive');
+        expect(kk().statusInactive.contains(raw), isFalse,
+            reason: 'raw $raw in KK statusInactive');
+      }
     });
   });
 }

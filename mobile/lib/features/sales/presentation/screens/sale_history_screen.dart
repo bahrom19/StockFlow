@@ -140,14 +140,14 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
               onFilter: (v) =>
                   ref.read(saleListProvider.notifier).filterByStatus(v),
               exportFileName: 'sales.csv',
-              exportHeaders: const [
-                'Number',
-                'Date',
-                'Status',
-                'Subtotal',
-                'Tax',
-                'Total',
-                'Paid',
+              exportHeaders: [
+                l10n.number,
+                l10n.date,
+                l10n.status,
+                l10n.subtotal,
+                l10n.tax,
+                l10n.total,
+                l10n.paid,
               ],
               exportRows: () => [
                 for (final s in items)

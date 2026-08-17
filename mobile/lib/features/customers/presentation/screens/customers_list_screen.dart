@@ -137,7 +137,9 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                     c.email ?? '',
                     c.bonusPoints.toString(),
                     c.currentDebt ?? '',
-                    c.isActive ? 'Active' : 'Inactive',
+                    c.isActive
+                        ? context.l10n.statusActive
+                        : context.l10n.statusInactive,
                   ],
               ],
               columns: [
