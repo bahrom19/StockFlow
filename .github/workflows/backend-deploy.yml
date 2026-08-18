@@ -59,13 +59,15 @@ jobs:
         uses: actions/checkout@v4
 
       # Deploy via the official Railway CLI from npm (no third-party
-      # action dependency). Runs from backend/ which holds the
-      # Dockerfile + railway.json (DOCKERFILE builder). Targets the
-      # service BY NAME — the CLI resolves `--service stockflow`
-      # against the linked project.
+      # action dependency). Must run from the REPO ROOT — not backend/ —
+      # because the Railway service `StockFlow` has Root Directory =
+      # backend: the uploaded snapshot must contain a top-level backend/
+      # path (the layout GitHub-connect auto-deploy produces). A snapshot
+      # rooted at the backend/ contents made Railway fail resolving
+      # <snapshot>/backend/ (fsutil.NewFS ... lstat: no such file or
+      # directory). Targets the service BY NAME.
       - name: Deploy to Railway
         if: env.RAILWAY_TOKEN != ''
-        working-directory: backend
         run: npx --yes @railway/cli@latest up --service "$RAILWAY_SERVICE_NAME" --ci
 
       # Mandatory verification: the deploy is only green if the API is
