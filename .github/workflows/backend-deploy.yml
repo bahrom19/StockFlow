@@ -43,7 +43,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RAILWAY_SERVICE_NAME: 'stockflow'
+  RAILWAY_SERVICE_NAME: 'StockFlow'
   API_HEALTH_URL: 'https://stockflow-production-04c7.up.railway.app/api/health'
 
 jobs:
