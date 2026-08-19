@@ -101,7 +101,10 @@ class _SaleItem extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    Formatters.dateTime(DateTime.tryParse(sale.createdAt)),
+                    Formatters.dateTime(
+                      DateTime.tryParse(sale.createdAt),
+                      locale: Localizations.localeOf(context).toLanguageTag(),
+                    ),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

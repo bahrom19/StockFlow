@@ -134,7 +134,10 @@ class _PurchaseOrderListScreenState
                     o.orderNumber,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   )),
-                  DataCell(Text(Formatters.date(o.orderDate))),
+                  DataCell(Text(Formatters.date(
+                    o.orderDate,
+                    locale: Localizations.localeOf(context).toLanguageTag(),
+                  ))),
                   DataCell(StatusBadge(status: o.status)),
                   DataCell(Text('${o.items.length}')),
                   DataCell(Text(context.money(o.grandTotal))),

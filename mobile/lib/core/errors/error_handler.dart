@@ -20,6 +20,12 @@ abstract final class ErrorMessages {
   static const unknownError = 'Unknown error';
   static const somethingWentWrong = 'Something went wrong. Please try again.';
   static const insufficientStock = 'Insufficient stock';
+  static const invalidCredentials = 'Invalid credentials. Please login again.';
+  static const permissionDenied =
+      'You do not have permission to perform this action.';
+  static const tooManyRequests =
+      'Too many requests. Please wait and try again.';
+  static const serverUnavailable = 'Server error. Please try again later.';
 }
 
 /// Central Error Handler
@@ -80,9 +86,9 @@ class ErrorHandler {
       case 400:
         return ValidationFailure(message: message, errors: body is Map ? body['errors'] as Map<String, dynamic>? : null);
       case 401:
-        return AuthFailure(message: 'Invalid credentials. Please login again.');
+        return AuthFailure(message: ErrorMessages.invalidCredentials);
       case 403:
-        return AuthFailure(message: 'You do not have permission to perform this action.');
+        return AuthFailure(message: ErrorMessages.permissionDenied);
       case 404:
         return NotFoundFailure(message: message);
       case 409:
@@ -90,11 +96,11 @@ class ErrorHandler {
       case 422:
         return ValidationFailure(message: message);
       case 429:
-        return ServerFailure(message: 'Too many requests. Please wait and try again.');
+        return ServerFailure(message: ErrorMessages.tooManyRequests);
       case 500:
       case 502:
       case 503:
-        return ServerFailure(message: 'Server error. Please try again later.');
+        return ServerFailure(message: ErrorMessages.serverUnavailable);
       default:
         return ServerFailure(message: message);
     }

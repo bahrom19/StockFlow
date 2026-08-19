@@ -220,11 +220,19 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         Card(
           child: Column(
             children: [
-              _InfoRow(label: l10n.created,
-                  value: Formatters.dateTime(DateTime.tryParse(p.createdAt))),
+              _InfoRow(
+                  label: l10n.created,
+                  value: Formatters.dateTime(
+                    DateTime.tryParse(p.createdAt),
+                    locale: Localizations.localeOf(context).toLanguageTag(),
+                  )),
               const Divider(height: 1, indent: 16, endIndent: 16),
-              _InfoRow(label: l10n.updated,
-                  value: Formatters.dateTime(DateTime.tryParse(p.updatedAt))),
+              _InfoRow(
+                  label: l10n.updated,
+                  value: Formatters.dateTime(
+                    DateTime.tryParse(p.updatedAt),
+                    locale: Localizations.localeOf(context).toLanguageTag(),
+                  )),
             ],
           ),
         ),

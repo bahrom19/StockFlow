@@ -159,7 +159,7 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
                   title: context.l10n
                       .dailyTrendTitle(paymentPeriodLabel(data.period, context.l10n)),
                   subtitle:
-                      '${Formatters.date(data.from)} – ${Formatters.date(data.to)}',
+                      '${Formatters.date(data.from, locale: Localizations.localeOf(context).toLanguageTag())} – ${Formatters.date(data.to, locale: Localizations.localeOf(context).toLanguageTag())}',
                   child: _DailyTrendChart(points: data.dailyTrend),
                 ),
               ),
@@ -175,7 +175,7 @@ class _PaymentAnalyticsScreenState extends ConsumerState<PaymentAnalyticsScreen>
             title: context.l10n
                 .dailyTrendTitle(paymentPeriodLabel(data.period, context.l10n)),
             subtitle:
-                '${Formatters.date(data.from)} – ${Formatters.date(data.to)}',
+                '${Formatters.date(data.from, locale: Localizations.localeOf(context).toLanguageTag())} – ${Formatters.date(data.to, locale: Localizations.localeOf(context).toLanguageTag())}',
             child: _DailyTrendChart(points: data.dailyTrend),
           ),
         ],

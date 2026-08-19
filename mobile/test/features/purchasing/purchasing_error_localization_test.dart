@@ -19,7 +19,7 @@ import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 /// canonical English ErrorHandler fallback to RU/KK users. They now route
 /// through `localizedErrorLabel`. Guard 1: EN keeps the canonical text.
 /// Guard 2: RU/KK localize known canonical messages. Guard 3: arbitrary
-/// backend/freeform messages pass through unchanged.
+/// backend/freeform messages use a safe generic fallback in RU/KK.
 AppLocalizations en() => lookupAppLocalizations(const Locale('en'));
 AppLocalizations ru() => lookupAppLocalizations(const Locale('ru'));
 AppLocalizations kk() => lookupAppLocalizations(const Locale('kk'));
@@ -140,13 +140,13 @@ void main() {
       );
     });
 
-    testWidgets('freeform backend message passes through in RU',
+    testWidgets('freeform backend message uses the safe fallback in RU',
         (tester) async {
       await pumpAndSubmit(
         tester,
         locale: const Locale('ru'),
         canonical: 'Supplier validation failed',
-        expected: 'Supplier validation failed',
+        expected: 'Не удалось выполнить операцию. Повторите попытку.',
       );
     });
   });
@@ -220,13 +220,13 @@ void main() {
       );
     });
 
-    testWidgets('freeform backend message passes through in KK',
+    testWidgets('freeform backend message uses the safe fallback in KK',
         (tester) async {
       await pumpAndLoad(
         tester,
         locale: const Locale('kk'),
         canonical: 'Order not found',
-        expected: 'Order not found',
+        expected: 'Операцияны орындау мүмкін болмады. Қайталап көріңіз.',
       );
     });
   });

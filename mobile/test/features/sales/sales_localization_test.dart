@@ -206,7 +206,7 @@ void main() {
       expect(kk().saleRefundedMessage, 'Сатылым қайтарылды');
       expect(kk().partialReturnRecorded, 'Ішінара қайтару тіркелді');
       expect(kk().saleCreatedLabel('2026-08-15'), 'Құрылған: 2026-08-15');
-      expect(kk().saleItemFallback('abc12345'), 'Өнім abc12345');
+      expect(kk().saleItemFallback('abc12345'), 'Тауар abc12345');
       expect(kk().saleItemCount(1), '1 позиция');
       expect(kk().saleItemCount(3), '3 позиция');
       expect(kk().saleMaxQuantity(5), 'макс 5 · ');
@@ -314,7 +314,7 @@ void main() {
         kk().subtotal, kk().tax, kk().total, kk().paid,
       ];
       expect(headers, [
-        'Нөмір', 'Күні', 'Мәртебе', 'Аралық қорытынды',
+        'Нөмір', 'Күні', 'Мәртебе', 'Аралық сома',
         'Салық', 'Барлығы', 'Төленді',
       ]);
       for (final raw in ['Number', 'Date', 'Status', 'Subtotal', 'Tax', 'Total', 'Paid']) {

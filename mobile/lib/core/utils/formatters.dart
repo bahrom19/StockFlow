@@ -16,8 +16,11 @@ class Formatters {
     return CurrencyCatalog.format(value, code: currency);
   }
 
-  static String currencyShort(dynamic value, {String currency = 'KZT'}) {
-    return CurrencyCatalog.formatShort(value, code: currency);
+  /// Backward-compatible compact variant; when [locale] is provided the RU/KK
+  /// suffixes (`тыс.`/`млн`/`мың`) are applied instead of `K`/`M`.
+  static String currencyShort(dynamic value,
+      {String currency = 'KZT', String? locale}) {
+    return CurrencyCatalog.formatShort(value, code: currency, locale: locale);
   }
 
   // ──────────────────────────────────
@@ -39,14 +42,14 @@ class Formatters {
   // ──────────────────────────────────
   // Dates
   // ──────────────────────────────────
-  static String date(DateTime? date) {
+  static String date(DateTime? date, {String? locale}) {
     if (date == null) return '-';
-    return DateFormat('MMM dd, yyyy').format(date);
+    return DateFormat.yMMMd(locale).format(date);
   }
 
-  static String dateTime(DateTime? date) {
+  static String dateTime(DateTime? date, {String? locale}) {
     if (date == null) return '-';
-    return DateFormat('MMM dd, yyyy HH:mm').format(date);
+    return DateFormat.yMMMd(locale).add_Hm().format(date);
   }
 
   static String time(DateTime? date) {

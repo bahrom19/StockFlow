@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
 
@@ -46,6 +48,27 @@ void main() {
       const MaterialApp(home: Scaffold(body: _Probe(amount: 200))),
     );
     expect(find.text('KZT|₸|₸200.00|₸1.5M'), findsOneWidget);
+  });
+
+  testWidgets('moneyShort applies RU compact suffixes from the UI locale',
+      (tester) async {
+    await tester.pumpWidget(
+      const CurrencyScope(
+        code: 'RUB',
+        child: MaterialApp(
+          locale: Locale('ru'),
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: [Locale('ru')],
+          home: Scaffold(body: _Probe(amount: 1234.5)),
+        ),
+      ),
+    );
+    expect(find.text('RUB|₽|₽1,234.50|₽1.5млн'), findsOneWidget);
   });
 
   testWidgets('CurrencyScope.of throws outside the tree', (tester) async {

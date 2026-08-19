@@ -235,7 +235,10 @@ class ShiftReportView extends StatelessWidget {
         const SizedBox(height: 2),
         Center(
           child: Text(
-            Formatters.dateTime(shift.openedAt),
+            Formatters.dateTime(
+              shift.openedAt,
+              locale: Localizations.localeOf(context).toLanguageTag(),
+            ),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -282,7 +285,10 @@ class ShiftReportView extends StatelessWidget {
               padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Center(
                 child: Text(
-                  context.l10n.posClosedAt(Formatters.dateTime(closedAt)),
+                  context.l10n.posClosedAt(Formatters.dateTime(
+                    closedAt,
+                    locale: Localizations.localeOf(context).toLanguageTag(),
+                  )),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

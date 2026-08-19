@@ -189,7 +189,7 @@ class ProductSearchCard extends StatelessWidget {
             style: theme.textTheme.bodySmall),
         trailing: FilledButton.tonal(
           onPressed: onAdd,
-          child: const Text('Add'),
+          child: Text(context.l10n.posAdd),
         ),
       ),
     );

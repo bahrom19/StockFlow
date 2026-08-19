@@ -51,7 +51,7 @@ void main() {
 
   group('RU translations', () {
     test('header + table chrome localize', () {
-      expect(ru().reportsTitle, 'Отчеты');
+      expect(ru().reportsTitle, 'Отчёты');
       expect(ru().reportsSubtitle, 'Бизнес-показатели с первого взгляда');
       expect(ru().exportPdf, 'Экспорт PDF');
       expect(ru().reportExportedAsPdf, 'Отчет экспортирован в PDF');
@@ -82,7 +82,7 @@ void main() {
       expect(kk().exportPdf, 'PDF экспорты');
       expect(kk().reportExportedAsPdf, 'Есеп PDF-ке экспортталды');
       expect(kk().pdfExportFailed('қате'),
-          'PDF экспорты сәтсіз аяқталды: қате');
+          'PDF экспорты қатесі: қате');
       expect(kk().recentSales, 'Соңғы сатылымдар');
       expect(kk().number, 'Нөмір');
       expect(kk().total, 'Барлығы');

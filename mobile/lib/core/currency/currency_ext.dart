@@ -49,7 +49,8 @@ extension CurrencyX on BuildContext {
   String money(dynamic value) =>
       CurrencyCatalog.format(value, code: currencyCode);
 
-  /// Compact variant (e.g. `₸1.2M`, `₸1.2K`).
-  String moneyShort(dynamic value) =>
-      CurrencyCatalog.formatShort(value, code: currencyCode);
+  /// Compact variant (e.g. `₸1.2M`, `₸1.2K`). Suffixes follow the active UI
+  /// locale: `M`/`K` (EN), `млн`/`тыс.` (RU), `млн`/`мың` (KK).
+  String moneyShort(dynamic value) => CurrencyCatalog.formatShort(
+      value, code: currencyCode, locale: Localizations.localeOf(this).languageCode);
 }

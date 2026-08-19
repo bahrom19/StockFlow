@@ -814,5 +814,10 @@
   "errRequestCancelled": "Request was cancelled.",
   "errUnknownError": "Unknown error",
   "errSomethingWentWrong": "Something went wrong. Please try again.",
+  "errInvalidCredentials": "Invalid credentials. Please login again.",
+  "errPermissionDenied": "You do not have permission to perform this action.",
+  "errTooManyRequests": "Too many requests. Please wait and try again.",
+  "errServerUnavailable": "Server error. Please try again later.",
+  "errGenericServer": "Unable to complete the operation. Please try again.",
   "insufficientStock": "Insufficient stock"
 }

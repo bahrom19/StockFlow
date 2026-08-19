@@ -183,7 +183,10 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
                     s.saleNumber,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   )),
-                  DataCell(Text(Formatters.dateTime(s.createdAt))),
+                  DataCell(Text(Formatters.dateTime(
+                    s.createdAt,
+                    locale: Localizations.localeOf(context).toLanguageTag(),
+                  ))),
                   DataCell(StatusBadge(status: s.status)),
                   DataCell(Text(context.money(s.total))),
                   DataCell(Text(context.money(s.paidAmount))),

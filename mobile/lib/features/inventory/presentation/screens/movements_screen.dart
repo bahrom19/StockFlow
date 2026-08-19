@@ -104,6 +104,7 @@ class _MovementsScreenState extends ConsumerState<MovementsScreen> {
                 cells: [
                   DataCell(Text(Formatters.dateTime(
                     DateTime.tryParse(m.createdAt),
+                    locale: Localizations.localeOf(context).toLanguageTag(),
                   ))),
                   DataCell(StatusBadge(
                     status: m.type,

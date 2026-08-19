@@ -16,7 +16,7 @@ import 'package:stockflow/features/suppliers/presentation/screens/supplier_form_
 /// English ErrorHandler fallback to RU/KK users. It now routes through
 /// `localizedErrorLabel`. Guard 1: EN keeps the canonical text. Guard 2:
 /// RU/KK localize known canonical messages. Guard 3: arbitrary
-/// backend/freeform messages pass through unchanged.
+/// backend/freeform messages use a safe generic fallback in RU/KK.
 AppLocalizations en() => lookupAppLocalizations(const Locale('en'));
 AppLocalizations ru() => lookupAppLocalizations(const Locale('ru'));
 AppLocalizations kk() => lookupAppLocalizations(const Locale('kk'));
@@ -113,13 +113,13 @@ void main() {
       );
     });
 
-    testWidgets('freeform backend message passes through in RU',
+    testWidgets('freeform backend message uses the safe fallback in RU',
         (tester) async {
       await pumpAndSubmit(
         tester,
         locale: const Locale('ru'),
         canonical: 'Backend rejected the request',
-        expected: 'Backend rejected the request',
+        expected: 'Не удалось выполнить операцию. Повторите попытку.',
       );
     });
   });

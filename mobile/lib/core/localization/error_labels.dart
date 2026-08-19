@@ -6,9 +6,10 @@ import 'package:stockflow/core/errors/error_handler.dart';
 /// Phase 5D-7B: `ErrorHandler` bakes canonical English fallback messages into
 /// `Failure.message` at the repository layer (where no `BuildContext` exists).
 /// Those exact strings are the keys this helper matches — for RU/KK the
-/// matching `err*` ARB label is substituted, for EN (and for any backend or
-/// freeform message that is not one of the canonical strings) the original
-/// message passes through unchanged, preserving the EN display contract.
+/// matching `err*` ARB label is substituted for known canonical messages, and
+/// any unknown backend/freeform message falls back to a safe localized generic
+/// label so untranslated English never leaks to RU/KK users. EN keeps the
+/// original message unchanged, preserving the EN display contract.
 String localizedErrorLabel(AppLocalizations l10n, String message) {
   switch (message) {
     case ErrorMessages.connectionTimeout:
@@ -25,7 +26,18 @@ String localizedErrorLabel(AppLocalizations l10n, String message) {
       return l10n.errSomethingWentWrong;
     case ErrorMessages.insufficientStock:
       return l10n.insufficientStock;
+    case ErrorMessages.invalidCredentials:
+      return l10n.errInvalidCredentials;
+    case ErrorMessages.permissionDenied:
+      return l10n.errPermissionDenied;
+    case ErrorMessages.tooManyRequests:
+      return l10n.errTooManyRequests;
+    case ErrorMessages.serverUnavailable:
+      return l10n.errServerUnavailable;
     default:
-      return message;
+      // Canonical client errors above have explicit translations. Unknown
+      // backend text is still retained by the failure/logger, but must not
+      // leak as untranslated user-facing text in RU/KK.
+      return l10n.localeName.startsWith('en') ? message : l10n.errGenericServer;
   }
 }

@@ -63,6 +63,17 @@ void main() {
       expect(CurrencyCatalog.formatShort(999), '₸999.00');
       expect(CurrencyCatalog.formatShort(1000), '₸1.0K');
     });
+
+    test('locale-aware suffixes for RU/KK', () {
+      expect(CurrencyCatalog.formatShort(2000000, locale: 'ru'), '₸2.0млн');
+      expect(CurrencyCatalog.formatShort(1500, locale: 'ru'), '₸1.5тыс.');
+      expect(CurrencyCatalog.formatShort(2000000, locale: 'kk'), '₸2.0млн');
+      expect(CurrencyCatalog.formatShort(1500, locale: 'kk'), '₸1.5мың');
+      // Default (no locale) and explicit 'en' keep M/K.
+      expect(CurrencyCatalog.formatShort(1500, code: 'USD'), r'$1.5K');
+      expect(CurrencyCatalog.formatShort(1500, code: 'USD', locale: 'en'),
+          r'$1.5K');
+    });
   });
 
   group('formatPdf — PDF-safe symbols', () {

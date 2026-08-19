@@ -38,6 +38,26 @@ void main() {
     expect(container.read(localeProvider), const Locale('kk'));
   });
 
+  test('localeFromCode maps RU/KK and falls back to English', () {
+    expect(LocaleNotifier.localeFromCode('ru'), const Locale('ru'));
+    expect(LocaleNotifier.localeFromCode('kk'), const Locale('kk'));
+    expect(LocaleNotifier.localeFromCode('en'), const Locale('en'));
+    expect(LocaleNotifier.localeFromCode(null), const Locale('en'));
+    expect(LocaleNotifier.localeFromCode('fr'), const Locale('en'));
+  });
+
+  test('initialLocale seeds the state so startup never flashes English',
+      () async {
+    SharedPreferences.setMockInitialValues({'app_locale': 'ru'});
+    // Mimic main(): derive the initial locale from storage and construct the
+    // notifier with it — the very first read is already RU (no English flash).
+    final prefs = await SharedPreferences.getInstance();
+    final initial =
+        LocaleNotifier.localeFromCode(prefs.getString(LocaleNotifier.storageKey));
+    final notifier = LocaleNotifier(initialLocale: initial);
+    expect(notifier.state, const Locale('ru'));
+  });
+
   test('invalid persisted value falls back to English', () async {
     SharedPreferences.setMockInitialValues({'app_locale': 'fr'});
     final container = ProviderContainer();

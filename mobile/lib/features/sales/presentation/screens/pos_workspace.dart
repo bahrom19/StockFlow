@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:qr_flutter/qr_flutter.dart';
@@ -592,7 +593,10 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                 const SizedBox(height: AppSpacing.xxs),
                 Center(
                   child: Text(
-                    Formatters.dateTime(sale.createdAt),
+                    Formatters.dateTime(
+                      sale.createdAt,
+                      locale: Localizations.localeOf(context).toLanguageTag(),
+                    ),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -1142,6 +1146,7 @@ class ShiftReportPdf {
     String currency = 'KZT',
   }) async {
     await PdfFonts.ensureLoaded();
+    await initializeDateFormatting(l10n.localeName);
     final doc = pw.Document();
     doc.addPage(pw.Page(
       pageFormat: PdfPageFormat.a4,
@@ -1155,7 +1160,11 @@ class ShiftReportPdf {
           ),
           pw.SizedBox(height: 4),
           pw.Center(
-            child: pw.Text(Formatters.dateTime(shift.openedAt),
+            child: pw.Text(
+                Formatters.dateTime(
+                  shift.openedAt,
+                  locale: l10n.localeName,
+                ),
                 style: pw.TextStyle(font: PdfFonts.regular, fontSize: 10)),
           ),
           pw.Divider(),

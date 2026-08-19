@@ -184,6 +184,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       )),
                       DataCell(Text(Formatters.dateTime(
                         DateTime.tryParse(s.createdAt),
+                        locale: Localizations.localeOf(context).toLanguageTag(),
                       ))),
                       DataCell(StatusBadge(status: s.status)),
                       DataCell(Text(context.money(s.total))),

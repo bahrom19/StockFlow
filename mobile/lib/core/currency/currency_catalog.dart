@@ -87,14 +87,28 @@ class CurrencyCatalog {
     return numberFormatFor(code).format(amount);
   }
 
-  /// Compact variant: `₸1.2M` / `₸1.2K` / `₸1,234.56`.
-  static String formatShort(dynamic value, {String code = 'KZT'}) {
+  /// Compact variant: `₸1.2M` / `₸1.2K` / `₸1,234.56` in the default (English)
+  /// UI, or the locale-aware suffixes for RU (`тыс.`/`млн`) and KK
+  /// (`мың`/`млн`) when [locale] is provided.
+  static String formatShort(dynamic value, {String code = 'KZT', String? locale}) {
     final num amount = _parseNumeric(value);
     final symbol = symbolFor(code);
+    final String millionSuffix;
+    final String thousandSuffix;
+    if (locale?.startsWith('ru') == true) {
+      millionSuffix = 'млн';
+      thousandSuffix = 'тыс.';
+    } else if (locale?.startsWith('kk') == true) {
+      millionSuffix = 'млн';
+      thousandSuffix = 'мың';
+    } else {
+      millionSuffix = 'M';
+      thousandSuffix = 'K';
+    }
     if (amount >= 1000000) {
-      return '$symbol${(amount / 1000000).toStringAsFixed(1)}M';
+      return '$symbol${(amount / 1000000).toStringAsFixed(1)}$millionSuffix';
     } else if (amount >= 1000) {
-      return '$symbol${(amount / 1000).toStringAsFixed(1)}K';
+      return '$symbol${(amount / 1000).toStringAsFixed(1)}$thousandSuffix';
     }
     return numberFormatFor(code).format(amount);
   }

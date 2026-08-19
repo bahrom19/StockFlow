@@ -25,7 +25,7 @@
   "@_Navigation": {},
   "dashboard": "Дашборд",
   "products": "Товары",
-  "inventory": "Склад",
+  "inventory": "Остатки",
   "warehouses": "Склады",
   "sales": "Продажи",
   "purchasing": "Закупки",
@@ -600,7 +600,7 @@
   "recentSalesEmptySubtitle": "Последние продажи появятся здесь",
   "reportExportedAsPdf": "Отчет экспортирован в PDF",
   "reportsSubtitle": "Бизнес-показатели с первого взгляда",
-  "reportsTitle": "Отчеты",
+  "reportsTitle": "Отчёты",
   "total": "Итого",
   "totalCredit": "Итого кредит",
   "totalDebit": "Итого дебет",
@@ -814,5 +814,10 @@
   "errRequestCancelled": "Запрос был отменён.",
   "errUnknownError": "Неизвестная ошибка",
   "errSomethingWentWrong": "Что-то пошло не так. Попробуйте ещё раз.",
+  "errInvalidCredentials": "Неверные учётные данные. Войдите снова.",
+  "errPermissionDenied": "У вас нет прав для этого действия.",
+  "errTooManyRequests": "Слишком много запросов. Подождите и повторите попытку.",
+  "errServerUnavailable": "Ошибка сервера. Повторите попытку позже.",
+  "errGenericServer": "Не удалось выполнить операцию. Повторите попытку.",
   "insufficientStock": "Недостаточно товара на складе"
 }

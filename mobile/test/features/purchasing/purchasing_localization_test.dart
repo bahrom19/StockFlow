@@ -177,7 +177,7 @@ void main() {
       expect(kk().grandTotal, 'Жалпы қорытынды');
       expect(kk().noPurchaseOrders, 'Сатып алу тапсырыстары жоқ');
       expect(kk().orderDateLabel('2026-07-14'), 'Тапсырыс күні: 2026-07-14');
-      expect(kk().subtotal, 'Аралық қорытынды');
+      expect(kk().subtotal, 'Аралық сома');
       expect(kk().discount, 'Жеңілдік');
       expect(kk().tax, 'Салық');
       expect(kk().receiveGoods, 'Тауарларды қабылдау');

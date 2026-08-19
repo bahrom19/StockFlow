@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'core/config/environment.dart';
+import 'core/localization/locale_provider.dart';
 import 'core/logger/app_logger.dart';
 import 'core/services/connectivity_service.dart';
 import 'core/storage/preferences_storage.dart';
@@ -45,9 +47,23 @@ Future<void> main() async {
 
   logger.info('StockFlow initialized in ${Environment.name} mode');
 
+  // Read the persisted locale BEFORE the first frame so a previously selected
+  // RU/KK locale is applied immediately — otherwise `localeProvider` would
+  // start on English and flip after the async load, flashing English at launch.
+  // `setLocale` continues to persist `app_locale`; this only seeds the initial
+  // value and does not change supported locales / resolution.
+  final prefs = await SharedPreferences.getInstance();
+  final initialLocale =
+      LocaleNotifier.localeFromCode(prefs.getString(LocaleNotifier.storageKey));
+
   runApp(
-    const ProviderScope(
-      child: StockFlowApp(),
+    ProviderScope(
+      overrides: [
+        localeProvider.overrideWith(
+          (ref) => LocaleNotifier(initialLocale: initialLocale),
+        ),
+      ],
+      child: const StockFlowApp(),
     ),
   );
 }

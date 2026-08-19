@@ -183,7 +183,7 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
                     onRefresh: () => _load(reset: true),
                     exportFileName: 'payment_details.csv',
                     exportHeaders: _exportHeaders(context),
-                    exportRows: _exportRows,
+                    exportRows: () => _exportRows(context),
                     columns: [
                       DataColumn(
                         label:
@@ -211,7 +211,11 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
                     buildRow: (s) => DataRow(
                       cells: [
                         DataCell(Text(
-                          Formatters.dateTime(s.createdAt),
+                          Formatters.dateTime(
+                            s.createdAt,
+                            locale:
+                                Localizations.localeOf(context).toLanguageTag(),
+                          ),
                           style: theme.textTheme.bodySmall,
                         )),
                         DataCell(Text(
@@ -283,12 +287,15 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
   String _shortId(String id) => id.length <= 8 ? id : id.substring(0, 8);
 
   /// Same row shape as the CSV export — reused by the PDF export.
-  List<List<String>> _exportRows() {
+  List<List<String>> _exportRows(BuildContext context) {
     return [
       for (final s in _sales)
         for (final p in s.payments)
           [
-            Formatters.dateTime(s.createdAt),
+            Formatters.dateTime(
+              s.createdAt,
+              locale: Localizations.localeOf(context).toLanguageTag(),
+            ),
             s.saleNumber,
             _shortId(s.cashierId),
             s.customerId == null ? '' : _shortId(s.customerId!),
@@ -301,7 +308,7 @@ class _PaymentDetailsScreenState extends ConsumerState<PaymentDetailsScreen> {
   }
 
   Future<void> _exportPdf() async {
-    final rows = _exportRows();
+    final rows = _exportRows(context);
     if (rows.isEmpty) return;
     try {
       final bytes = await PaymentPdfExport.build(

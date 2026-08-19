@@ -13,8 +13,8 @@ import 'package:stockflow/features/inventory/presentation/widgets/stock_action_d
 /// the canonical English ErrorHandler message to RU/KK users (bypassing the
 /// AppSnackbar chokepoint). They now route through `localizedErrorLabel`.
 /// Guard 1: EN keeps the canonical text. Guard 2: RU/KK localize known
-/// canonical messages. Guard 3: arbitrary backend/freeform messages pass
-/// through unchanged. Both dialogs (adjust + transfer) are exercised through
+/// canonical messages. Guard 3: arbitrary backend/freeform messages use a
+/// safe localized fallback in RU/KK. Both dialogs (adjust + transfer) are exercised through
 /// the real widget path.
 AppLocalizations en() => lookupAppLocalizations(const Locale('en'));
 AppLocalizations ru() => lookupAppLocalizations(const Locale('ru'));
@@ -126,7 +126,7 @@ void main() {
             reason: '$name dialog, ${locale.languageCode}: expected snackbar');
         // The no-leak guard only applies when the localized label actually
         // differs from the raw canonical (RU/KK known messages); for EN and
-        // for freeform pass-through they are the same string by design.
+        // for the EN fallback they are the same string by design.
         if (expected != canonical) {
           expect(find.text(canonical), findsNothing,
               reason: 'raw canonical must not leak in ${locale.languageCode}');
@@ -169,12 +169,13 @@ void main() {
         );
       });
 
-      testWidgets('freeform backend message passes through in RU', (tester) async {
+      testWidgets('freeform backend message uses the safe fallback in RU',
+          (tester) async {
         await pumpAndSubmit(
           tester,
           locale: const Locale('ru'),
           canonical: 'Backend rejected the request',
-          expected: 'Backend rejected the request',
+          expected: 'Не удалось выполнить операцию. Повторите попытку.',
         );
       });
     });

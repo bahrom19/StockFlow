@@ -31,7 +31,8 @@ class LocaleNotifier extends StateNotifier<Locale> {
   static const String storageKey = 'app_locale';
   Future<void>? _loading;
 
-  LocaleNotifier() : super(const Locale('en')) {
+  LocaleNotifier({Locale initialLocale = const Locale('en')})
+      : super(initialLocale) {
     load();
   }
 
@@ -44,9 +45,9 @@ class LocaleNotifier extends StateNotifier<Locale> {
   Future<void> _doLoad() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      state = _localeFromCode(prefs.getString(storageKey));
+      state = localeFromCode(prefs.getString(storageKey));
     } catch (_) {
-      // Storage unavailable — keep the default (en).
+      // Storage unavailable — keep the current locale.
     }
   }
 
@@ -60,10 +61,14 @@ class LocaleNotifier extends StateNotifier<Locale> {
     } catch (_) {
       // Best-effort: apply the in-memory value even if persistence fails.
     }
-    state = _localeFromCode(code);
+    state = localeFromCode(code);
   }
 
-  Locale _localeFromCode(String? code) {
+  /// Maps a persisted locale code to a [Locale]. Unknown or null codes fall
+  /// back to English (the app default) — mirroring the app's
+  /// `localeResolutionCallback`. Used both at startup (to avoid an English
+  /// flash) and when reloading the persisted value.
+  static Locale localeFromCode(String? code) {
     switch (code) {
       case 'ru':
         return const Locale('ru');
