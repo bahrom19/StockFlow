@@ -90,7 +90,7 @@ class AiInsightsCard extends StatelessWidget {
                   const SizedBox(width: AppSpacing.xs),
                   _FeatureChip(icon: Icons.insights, label: l10n.analytics),
                   const SizedBox(width: AppSpacing.xs),
-                  _FeatureChip(icon: Icons.chat_outlined, label: 'NLP'),
+                  _FeatureChip(icon: Icons.chat_outlined, label: l10n.aiInsightsNlp),
                 ],
               ),
             ],

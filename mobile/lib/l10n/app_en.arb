@@ -819,5 +819,9 @@
   "errTooManyRequests": "Too many requests. Please wait and try again.",
   "errServerUnavailable": "Server error. Please try again later.",
   "errGenericServer": "Unable to complete the operation. Please try again.",
-  "insufficientStock": "Insufficient stock"
+  "insufficientStock": "Insufficient stock",
+  "aiInsightsNlp": "NLP",
+  "noData": "No data",
+  "comingSoonMessage": "This module is coming soon in the web client.\nThe backend API is ready — the UI is being prepared.",
+  "goBack": "Go Back"
 }

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../localization/l10n_ext.dart';
 import '../theme/app_spacing.dart';
 
-/// Placeholder screen for modules that are not yet implemented in the
-/// StockFlow web client. The backend API contract already covers these
-/// modules; they are progressively ported.
+/// Placeholder screen displayed for features not yet available on mobile.
 class ComingSoonScreen extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -18,6 +17,7 @@ class ComingSoonScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
@@ -41,8 +41,7 @@ class ComingSoonScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'This module is coming soon in the web client.\n'
-              'The backend API is ready — it is being ported progressively.',
+              l10n.comingSoonMessage,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -52,7 +51,7 @@ class ComingSoonScreen extends StatelessWidget {
             FilledButton.tonalIcon(
               onPressed: () => context.pop(),
               icon: const Icon(Icons.arrow_back),
-              label: const Text('Go Back'),
+              label: Text(l10n.goBack),
             ),
           ],
         ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../localization/l10n_ext.dart';
 import 'error_state_widget.dart';
 import 'empty_state_widget.dart';
 import 'loading_state_widget.dart';
@@ -49,7 +50,7 @@ class AppScaffold extends StatelessWidget {
     }
     if (isEmpty) {
       return EmptyStateWidget(
-        title: emptyTitle ?? 'No data',
+        title: emptyTitle ?? context.l10n.noData,
         subtitle: emptySubtitle,
         icon: emptyIcon ?? Icons.inbox_outlined,
         actionLabel: emptyActionLabel,
