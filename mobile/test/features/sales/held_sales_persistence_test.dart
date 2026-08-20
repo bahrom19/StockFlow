@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/held_sales_provider.dart';
 import 'package:stockflow/features/sales/presentation/providers/sales_provider.dart';
@@ -31,8 +32,8 @@ CartState _cart(String sku, double unitPrice, {String? customerName}) =>
           productName: 'Item $sku',
           productSku: sku,
           quantity: 2,
-          unitPrice: unitPrice,
-          costPrice: unitPrice / 2,
+          unitPrice: Money.fromMinorUnits((unitPrice * 100).round(), 'KZT'),
+          costPrice: Money.fromMinorUnits((unitPrice * 50).round(), 'KZT'),
         ),
       ],
       customerId: customerName == null ? null : 'c-$sku',
@@ -57,7 +58,10 @@ void main() {
 
       // In-memory state.
       expect(container.read(heldSalesProvider).held.length, 1);
-      expect(container.read(heldSalesProvider).held.first.total, 20);
+      expect(
+        container.read(heldSalesProvider).held.first.total,
+        Money.fromMinorUnits(2000, 'KZT'),
+      );
 
       // Real storage round-trip through the DI provider.
       final raw = await _storedRaw();
@@ -75,7 +79,7 @@ void main() {
       expect(parsed.label, 'Test hold');
       expect(parsed.items.length, 1);
       expect(parsed.items.first.productName, 'Item ESP');
-      expect(parsed.total, 20);
+      expect(parsed.total, Money.fromMinorUnits(2000, 'KZT'));
     });
 
     test('a new provider instance restores saved sales (reload-equivalent)',
@@ -102,7 +106,7 @@ void main() {
       expect(held, hasLength(2));
       expect(held.map((h) => h.label), containsAll(['First', 'Second']));
       final first = held.firstWhere((h) => h.label == 'First');
-      expect(first.total, 20);
+      expect(first.total, Money.fromMinorUnits(2000, 'KZT'));
       expect(first.customerName, 'Anna');
       expect(first.customerId, 'c-A1');
     });

@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/api/api_endpoints.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
+import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
 import 'package:stockflow/features/sales/presentation/providers/held_sales_provider.dart';
@@ -366,22 +367,22 @@ void main() {
         productName: 'A',
         productSku: 'S1',
         quantity: 1,
-        unitPrice: 10,
-        costPrice: 5,
+        unitPrice: const Money(minorUnits: 1000, currency: 'KZT'),
+        costPrice: const Money(minorUnits: 500, currency: 'KZT'),
       ));
       notifier.addItem(const CartItem(
         productId: 'p1',
         productName: 'A',
         productSku: 'S1',
         quantity: 2,
-        unitPrice: 10,
-        costPrice: 5,
+        unitPrice: const Money(minorUnits: 1000, currency: 'KZT'),
+        costPrice: const Money(minorUnits: 500, currency: 'KZT'),
       ));
 
       final state = container.read(cartProvider);
       expect(state.items.length, 1);
       expect(state.itemCount, 3);
-      expect(state.subtotal, 30);
+      expect(state.subtotal, Money.fromMinorUnits(3000, 'KZT'));
     });
 
     test('updateQuantity, updateDiscount, removeItem and clear work', () {
@@ -394,15 +395,24 @@ void main() {
         productName: 'A',
         productSku: 'S1',
         quantity: 2,
-        unitPrice: 10,
-        costPrice: 5,
+        unitPrice: const Money(minorUnits: 1000, currency: 'KZT'),
+        costPrice: const Money(minorUnits: 500, currency: 'KZT'),
       ));
       notifier.updateQuantity('p1', 5);
       expect(container.read(cartProvider).itemCount, 5);
 
-      notifier.updateDiscount('p1', 5);
-      expect(container.read(cartProvider).totalDiscount, 5);
-      expect(container.read(cartProvider).total, 45);
+      notifier.updateDiscount(
+        'p1',
+        const Money(minorUnits: 500, currency: 'KZT'),
+      );
+      expect(
+        container.read(cartProvider).totalDiscount,
+        Money.fromMinorUnits(500, 'KZT'),
+      );
+      expect(
+        container.read(cartProvider).total,
+        Money.fromMinorUnits(4500, 'KZT'),
+      );
 
       notifier.removeItem('p1');
       expect(container.read(cartProvider).items, isEmpty);
@@ -412,12 +422,12 @@ void main() {
         productName: 'B',
         productSku: 'S2',
         quantity: 1,
-        unitPrice: 3,
-        costPrice: 1,
+        unitPrice: const Money(minorUnits: 300, currency: 'KZT'),
+        costPrice: const Money(minorUnits: 100, currency: 'KZT'),
       ));
       notifier.clear();
       expect(container.read(cartProvider).items, isEmpty);
-      expect(container.read(cartProvider).total, 0);
+      expect(container.read(cartProvider).total, Money.zero('KZT'));
     });
 
     test('validate rejects empty carts and negative prices', () {
@@ -432,21 +442,24 @@ void main() {
         productName: 'A',
         productSku: 'S1',
         quantity: 1,
-        unitPrice: -5,
-        costPrice: 5,
+        unitPrice: const Money(minorUnits: -500, currency: 'KZT'),
+        costPrice: const Money(minorUnits: 500, currency: 'KZT'),
       ));
       expect(notifier.validate(), isNotNull);
 
       notifier.updateQuantity('p1', 2);
-      notifier.updateDiscount('p1', 1);
+      notifier.updateDiscount(
+        'p1',
+        const Money(minorUnits: 100, currency: 'KZT'),
+      );
       notifier.removeItem('p1');
       notifier.addItem(const CartItem(
         productId: 'p1',
         productName: 'A',
         productSku: 'S1',
         quantity: 1,
-        unitPrice: 5,
-        costPrice: 5,
+        unitPrice: const Money(minorUnits: 500, currency: 'KZT'),
+        costPrice: const Money(minorUnits: 500, currency: 'KZT'),
       ));
       expect(notifier.validate(), isNull);
     });
@@ -531,7 +544,8 @@ void main() {
       final notifier = container.read(posCatalogProvider.notifier);
       await notifier.init();
       final requestsBefore = fake.requests
-          .where((r) => r['method'] == 'GET' && r['path'] == ApiEndpoints.products)
+          .where(
+              (r) => r['method'] == 'GET' && r['path'] == ApiEndpoints.products)
           .length;
 
       // Three rapid keystrokes within the debounce window.
@@ -541,12 +555,14 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 350));
 
       final requestsAfter = fake.requests
-          .where((r) => r['method'] == 'GET' && r['path'] == ApiEndpoints.products)
+          .where(
+              (r) => r['method'] == 'GET' && r['path'] == ApiEndpoints.products)
           .length;
       // Only ONE fetch fired despite three keystrokes.
       expect(requestsAfter - requestsBefore, 1);
       expect(container.read(posCatalogProvider).products.length, 1);
-      expect(container.read(posCatalogProvider).products.first.name, 'Espresso');
+      expect(
+          container.read(posCatalogProvider).products.first.name, 'Espresso');
     });
 
     test('loads a 1000+ product catalog via lazy pagination', () async {
@@ -706,13 +722,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('0 items'), findsWidgets);
 
-      final postPaths =
-          fake.requests.where((r) => r['method'] == 'POST').map((r) => r['path']).toList();
+      final postPaths = fake.requests
+          .where((r) => r['method'] == 'POST')
+          .map((r) => r['path'])
+          .toList();
       expect(postPaths, contains(ApiEndpoints.sales));
       expect(postPaths.any((p) => p.endsWith('/complete')), isTrue);
 
-      final getPaths =
-          fake.requests.where((r) => r['method'] == 'GET').map((r) => r['path']).toList();
+      final getPaths = fake.requests
+          .where((r) => r['method'] == 'GET')
+          .map((r) => r['path'])
+          .toList();
       // Dashboard, sales history and inventory were refreshed.
       expect(getPaths, contains(ApiEndpoints.dashboard));
       expect(getPaths, contains(ApiEndpoints.sales));
@@ -769,8 +789,10 @@ void main() {
 
       // No POST happened and the success dialog never opened.
       expect(find.text('Sale completed'), findsNothing);
-      final postPaths =
-          fake.requests.where((r) => r['method'] == 'POST').map((r) => r['path']).toList();
+      final postPaths = fake.requests
+          .where((r) => r['method'] == 'POST')
+          .map((r) => r['path'])
+          .toList();
       expect(postPaths, isEmpty);
     });
 
@@ -1029,19 +1051,20 @@ void main() {
       await tester.pumpAndSettle();
 
       // Each wrapped toolbar block is its own NON-tappable text leaf.
-      final titleData = tester
-          .getSemantics(find.text('Cashier Terminal'))
-          .getSemanticsData();
+      final titleData =
+          tester.getSemantics(find.text('Cashier Terminal')).getSemanticsData();
       expect(titleData.label, contains('Cashier Terminal'));
       expect(titleData.hasAction(SemanticsAction.tap), isFalse);
 
-      final hintsData =
-          tester.getSemantics(find.textContaining('F2 search')).getSemanticsData();
+      final hintsData = tester
+          .getSemantics(find.textContaining('F2 search'))
+          .getSemanticsData();
       expect(hintsData.label, contains('F2 search'));
       expect(hintsData.hasAction(SemanticsAction.tap), isFalse);
 
-      final itemsData =
-          tester.getSemantics(find.textContaining('items ·')).getSemanticsData();
+      final itemsData = tester
+          .getSemantics(find.textContaining('items ·'))
+          .getSemanticsData();
       expect(itemsData.label, contains('items ·'));
       expect(itemsData.hasAction(SemanticsAction.tap), isFalse);
 
@@ -1096,9 +1119,8 @@ void main() {
       await tester.tap(find.text('Espresso'));
       await tester.pumpAndSettle();
 
-      final cartData = tester
-          .getSemantics(find.text('Cart (1 items)'))
-          .getSemanticsData();
+      final cartData =
+          tester.getSemantics(find.text('Cart (1 items)')).getSemanticsData();
       expect(cartData.label, contains('Cart (1 items)'));
       expect(cartData.hasAction(SemanticsAction.tap), isFalse);
 
@@ -1140,8 +1162,8 @@ void main() {
             productName: 'Espresso',
             productSku: 'ESP',
             quantity: 2,
-            unitPrice: 10,
-            costPrice: 5,
+            unitPrice: const Money(minorUnits: 1000, currency: 'KZT'),
+            costPrice: const Money(minorUnits: 500, currency: 'KZT'),
           ),
         ],
         customerId: 'c1',
@@ -1150,7 +1172,10 @@ void main() {
 
       await notifier.hold(cart, label: 'Test hold');
       expect(container.read(heldSalesProvider).held.length, 1);
-      expect(container.read(heldSalesProvider).held.first.total, 20);
+      expect(
+        container.read(heldSalesProvider).held.first.total,
+        Money.fromMinorUnits(2000, 'KZT'),
+      );
 
       // Real persistence: the payload must exist in SharedPreferences.
       final prefs = await SharedPreferences.getInstance();
@@ -1253,8 +1278,7 @@ void main() {
         ]
         ..warehouses = [_warehouse()];
 
-      await tester.pumpWidget(
-          buildWorkspaceLocale(fake, const Locale('ru')));
+      await tester.pumpWidget(buildWorkspaceLocale(fake, const Locale('ru')));
       await tester.pumpAndSettle();
 
       // Toolbar + hints + empty cart + shift strip are localized.
@@ -1294,7 +1318,8 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('KK renders localized POS chrome with a tappable open-shift CTA',
+    testWidgets(
+        'KK renders localized POS chrome with a tappable open-shift CTA',
         (tester) async {
       useDesktopSurface(tester);
       final fake = _FakePosApi()
@@ -1304,8 +1329,7 @@ void main() {
         ]
         ..warehouses = [_warehouse()];
 
-      await tester.pumpWidget(
-          buildWorkspaceLocale(fake, const Locale('kk')));
+      await tester.pumpWidget(buildWorkspaceLocale(fake, const Locale('kk')));
       await tester.pumpAndSettle();
 
       expect(find.text('Кассалық терминал'), findsOneWidget);

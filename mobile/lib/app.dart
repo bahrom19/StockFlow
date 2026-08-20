@@ -7,6 +7,7 @@ import 'core/currency/currency_provider.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/navigation/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/sales/presentation/providers/sales_provider.dart';
 
 /// StockFlow Enterprise Application Widget
 class StockFlowApp extends ConsumerWidget {
@@ -21,37 +22,42 @@ class StockFlowApp extends ConsumerWidget {
     // Phase 4: selected currency (default KZT). Rebuilding this scope on
     // change re-renders every `context.money` consumer reactively.
     final currencyCode = ref.watch(currencyProvider);
+    // Keep the POS cart currency in lock-step with the provider — the sole
+    // source of truth. Riverpod removes this listener automatically on rebuild.
+    ref.listen<String>(currencyProvider, (prev, next) {
+      ref.read(cartProvider.notifier).syncFromCurrency();
+    });
 
     return CurrencyScope(
       code: currencyCode,
       child: MaterialApp.router(
-      title: 'StockFlow',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
-      routerConfig: router,
-      locale: appLocale,
-      // Localization support
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('en', 'US'),
-        Locale('ru', 'RU'),
-        Locale('kk', 'KZ'),
-      ],
-      localeResolutionCallback: (locale, supportedLocales) {
-        for (final supported in supportedLocales) {
-          if (supported.languageCode == locale?.languageCode) {
-            return supported;
+        title: 'StockFlow',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: ThemeMode.system,
+        routerConfig: router,
+        locale: appLocale,
+        // Localization support
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('en', 'US'),
+          Locale('ru', 'RU'),
+          Locale('kk', 'KZ'),
+        ],
+        localeResolutionCallback: (locale, supportedLocales) {
+          for (final supported in supportedLocales) {
+            if (supported.languageCode == locale?.languageCode) {
+              return supported;
+            }
           }
-        }
-        return const Locale('en', 'US');
-      },
+          return const Locale('en', 'US');
+        },
       ),
     );
   }

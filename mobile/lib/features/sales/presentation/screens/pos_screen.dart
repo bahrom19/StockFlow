@@ -17,6 +17,7 @@ import 'package:stockflow/features/sales/data/receipt_export.dart';
 import 'package:stockflow/features/sales/presentation/screens/pos_workspace.dart';
 import 'package:stockflow/features/sales/presentation/widgets/pos_customer_picker.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/money.dart';
 
 // ──────────────────────────────────
 // POS Screen — Responsive Terminal
@@ -103,17 +104,20 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
   }
 
   void _addToCart(Product product) {
-    final price = double.tryParse(product.price ?? '0') ?? 0;
-    final costPrice = double.tryParse(product.costPrice ?? '0') ?? 0;
+    final cartCurrency = ref.read(cartProvider).currency;
+    final price = product.price ?? '0';
+    final costPrice = product.costPrice ?? '0';
     ref.read(cartProvider.notifier).addItem(CartItem(
-      productId: product.id,
-      productName: product.name,
-      productSku: product.sku ?? '',
-      barcode: product.barcode,
-      quantity: 1,
-      unitPrice: price,
-      costPrice: costPrice,
-    ));
+          productId: product.id,
+          productName: product.name,
+          productSku: product.sku ?? '',
+          barcode: product.barcode,
+          quantity: 1,
+          unitPrice:
+              Money.tryParse(price, cartCurrency) ?? Money.zero(cartCurrency),
+          costPrice: Money.tryParse(costPrice, cartCurrency) ??
+              Money.zero(cartCurrency),
+        ));
     _searchController.clear();
     setState(() {
       _searchResults = [];
@@ -122,6 +126,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
   }
 
   void _showCheckout() {
+    ref.read(cartProvider.notifier).syncFromCurrency();
     final cart = ref.read(cartProvider);
     final error = ref.read(cartProvider.notifier).validate(context.l10n);
     if (error != null) {
@@ -136,16 +141,16 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       builder: (ctx) => _CheckoutSheet(
-        cart: cart,
-        selectedWarehouseId: _selectedWarehouseId,
-        onComplete: () {
-        Navigator.of(context).pop(); // close modal
-        ref.read(cartProvider.notifier).clear();
-        setState(() {
-          _searchResults = [];
-          _isSearching = false;
-        });
-      }),
+          cart: cart,
+          selectedWarehouseId: _selectedWarehouseId,
+          onComplete: () {
+            Navigator.of(context).pop(); // close modal
+            ref.read(cartProvider.notifier).clear();
+            setState(() {
+              _searchResults = [];
+              _isSearching = false;
+            });
+          }),
     );
   }
 
@@ -183,10 +188,12 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                   ],
                 ),
               ),
-              itemBuilder: (_) => _warehouses.map((w) => PopupMenuItem(
-                value: w.id,
-                child: Text(w.name),
-              )).toList(),
+              itemBuilder: (_) => _warehouses
+                  .map((w) => PopupMenuItem(
+                        value: w.id,
+                        child: Text(w.name),
+                      ))
+                  .toList(),
             ),
           if (cart.itemCount > 0)
             TextButton.icon(
@@ -238,7 +245,8 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
             SizedBox(
               height: 200,
               child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 itemCount: _searchResults.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, index) {
@@ -250,7 +258,8 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                       backgroundColor: theme.colorScheme.primaryContainer,
                       child: const Icon(Icons.inventory_2, size: 20),
                     ),
-                    title: Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    title: Text(product.name,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
                       '${product.sku ?? ''}  •  ${context.money(price)}',
                       style: theme.textTheme.bodySmall,
@@ -364,7 +373,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
 class _CartItemTile extends StatelessWidget {
   final CartItem item;
   final ValueChanged<int> onQuantityChanged;
-  final ValueChanged<double> onDiscountChanged;
+  final ValueChanged<Money> onDiscountChanged;
   final VoidCallback onRemove;
 
   const _CartItemTile({
@@ -399,10 +408,10 @@ class _CartItemTile extends StatelessWidget {
                     '${context.money(item.unitPrice)} × ${item.quantity}',
                     style: theme.textTheme.bodyMedium,
                   ),
-                  if (item.discount > 0)
+                  if (item.effectiveDiscount.isPositive)
                     Text(
-                      context.l10n
-                          .posDiscountLine(item.discount.toStringAsFixed(2)),
+                      context.l10n.posDiscountLine(
+                          item.effectiveDiscount.toDecimalString()),
                       style: theme.textTheme.bodySmall
                           ?.copyWith(color: Colors.orange),
                     ),
@@ -484,7 +493,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
   @override
   void initState() {
     super.initState();
-    _cashController.text = widget.cart.total.toStringAsFixed(2);
+    _cashController.text = widget.cart.total.toDecimalString();
   }
 
   @override
@@ -495,12 +504,14 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
     super.dispose();
   }
 
-  double get _totalPaid {
-    final cash = double.tryParse(_cashController.text) ?? 0;
-    final card = double.tryParse(_cardController.text) ?? 0;
-    final qr = double.tryParse(_qrController.text) ?? 0;
-    return cash + card + qr;
-  }
+  Money _money(String text) =>
+      Money.tryParse(text, widget.cart.currency) ??
+      Money.zero(widget.cart.currency);
+
+  Money get _totalPaid =>
+      _money(_cashController.text) +
+      _money(_cardController.text) +
+      _money(_qrController.text);
 
   bool get _isAmountValid => _totalPaid >= widget.cart.total;
 
@@ -518,17 +529,29 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
     setState(() => _isProcessing = true);
 
     final payments = <CreatePayment>[];
-    final cash = double.tryParse(_cashController.text) ?? 0;
-    final card = double.tryParse(_cardController.text) ?? 0;
-    final qr = double.tryParse(_qrController.text) ?? 0;
+    final cash = _money(_cashController.text);
+    final card = _money(_cardController.text);
+    final qr = _money(_qrController.text);
 
-    if (cash > 0) payments.add(CreatePayment(method: 'CASH', amount: cash));
-    if (card > 0) payments.add(CreatePayment(method: 'CARD', amount: card));
-    if (qr > 0) payments.add(CreatePayment(method: 'QR', amount: qr));
+    if (cash.isPositive) {
+            payments.add(
+        CreatePayment(method: 'CASH', amount: cash.toApiNumber().toDouble()),
+      );
+    }
+    if (card.isPositive) {
+            payments.add(
+        CreatePayment(method: 'CARD', amount: card.toApiNumber().toDouble()),
+      );
+    }
+    if (qr.isPositive) {
+            payments.add(
+        CreatePayment(method: 'QR', amount: qr.toApiNumber().toDouble()),
+      );
+    }
 
     if (payments.isEmpty) {
       payments.add(CreatePayment(
-          method: 'CASH', amount: widget.cart.total));
+                    method: 'CASH', amount: widget.cart.total.toApiNumber().toDouble()));
     }
 
     if (widget.selectedWarehouseId == null) {
@@ -552,7 +575,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
       // The sheet may have picked a customer after [widget.cart] was snapshotted.
       customerId: _customer?.id ?? widget.cart.customerId,
       notes: widget.cart.notes,
-      currency: context.currencyCode,
+      currency: widget.cart.currency,
     );
 
     if (sale != null && mounted) {
@@ -604,7 +627,8 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
             // Handle
             Container(
               margin: const EdgeInsets.symmetric(vertical: 8),
-              width: 40, height: 4,
+              width: 40,
+              height: 4,
               decoration: BoxDecoration(
                 color: theme.colorScheme.outlineVariant,
                 borderRadius: BorderRadius.circular(2),
@@ -640,8 +664,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
                     onPressed: _pickCustomer,
                     icon: const Icon(Icons.person_outline, size: 18),
                     label: Text(
-                      _customer?.displayName ??
-                          context.l10n.posWalkInCustomer,
+                      _customer?.displayName ?? context.l10n.posWalkInCustomer,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -662,12 +685,14 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
                   const SizedBox(height: 16),
 
                   // Split payment inputs
-                  if (_paymentMethod == 'CASH' || _paymentMethod == 'MIXED') ...[
-                    _amountField(
-                        context.l10n.posCashAmount, _cashController, Icons.money),
+                  if (_paymentMethod == 'CASH' ||
+                      _paymentMethod == 'MIXED') ...[
+                    _amountField(context.l10n.posCashAmount, _cashController,
+                        Icons.money),
                     const SizedBox(height: 8),
                   ],
-                  if (_paymentMethod == 'CARD' || _paymentMethod == 'MIXED') ...[
+                  if (_paymentMethod == 'CARD' ||
+                      _paymentMethod == 'MIXED') ...[
                     _amountField(context.l10n.posCardAmount, _cardController,
                         Icons.credit_card),
                     const SizedBox(height: 8),
@@ -687,8 +712,9 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
                           children: [
                             _splitRow(context.l10n.posTotal, widget.cart.total),
                             _splitRow(context.l10n.posPaid, _totalPaid,
-                                color: _isAmountValid ? Colors.green : Colors.red),
-                            if (change >= 0)
+                                color:
+                                    _isAmountValid ? Colors.green : Colors.red),
+                            if (!change.isNegative)
                               _splitRow(context.l10n.posChange, change,
                                   color: Colors.orange),
                           ],
@@ -712,15 +738,16 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
                         : _processCheckout,
                     icon: _isProcessing
                         ? const SizedBox(
-                            width: 18, height: 18,
+                            width: 18,
+                            height: 18,
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.check_circle),
                     label: Text(_isProcessing
                         ? context.l10n.posProcessing
-                        : change >= 0
+                        : !change.isNegative
                             ? context.l10n
-                                .posCompleteSale(_totalPaid.toStringAsFixed(2))
+                                .posCompleteSale(_totalPaid.toDecimalString())
                             : context.l10n.posInsufficientPaymentCaps),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -771,7 +798,8 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
     );
   }
 
-  Widget _amountField(String label, TextEditingController controller, IconData icon) {
+  Widget _amountField(
+      String label, TextEditingController controller, IconData icon) {
     return TextField(
       controller: controller,
       decoration: InputDecoration(
@@ -784,7 +812,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
     );
   }
 
-  Widget _splitRow(String label, double amount, {Color? color}) {
+  Widget _splitRow(String label, dynamic amount, {Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -894,10 +922,10 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
             child: Column(
               children: [
                 // Receipt header
-                Icon(Icons.receipt_long, size: 48, color: theme.colorScheme.primary),
+                Icon(Icons.receipt_long,
+                    size: 48, color: theme.colorScheme.primary),
                 const SizedBox(height: 8),
-                Text(sale.saleNumber,
-                    style: theme.textTheme.titleLarge),
+                Text(sale.saleNumber, style: theme.textTheme.titleLarge),
                 const SizedBox(height: 4),
                 Text(
                   context.l10n.posStatus(
@@ -917,8 +945,10 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text('${item.productId.substring(0, 8)} × ${item.quantity}',
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                              '${item.productId.substring(0, 8)} × ${item.quantity}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
                         ),
                         Text(context.money(itemTotal),
                             style: theme.textTheme.bodyMedium
@@ -947,15 +977,15 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                     style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
                 ...sale.payments.map((p) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(_paymentMethodLabel(p.method, context.l10n)),
-                      Text(context.money(double.tryParse(p.amount) ?? 0)),
-                    ],
-                  ),
-                )),
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(_paymentMethodLabel(p.method, context.l10n)),
+                          Text(context.money(double.tryParse(p.amount) ?? 0)),
+                        ],
+                      ),
+                    )),
                 const Divider(),
                 _receiptRow(context.l10n.posPaid, paid, theme, bold: true),
                 if (change > 0)
@@ -998,12 +1028,16 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium),
+              style: bold
+                  ? theme.textTheme.titleSmall
+                  : theme.textTheme.bodyMedium),
           Text(
             context.money(amount),
-            style: (bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium)
-                ?.copyWith(fontWeight: bold ? FontWeight.bold : null,
-                    color: color),
+            style:
+                (bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium)
+                    ?.copyWith(
+                        fontWeight: bold ? FontWeight.bold : null,
+                        color: color),
           ),
         ],
       ),

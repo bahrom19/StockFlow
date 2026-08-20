@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
+import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
@@ -234,12 +235,12 @@ void main() {
         productName: 'Test Product',
         productSku: 'SKU-001',
         quantity: 3,
-        unitPrice: 100.0,
-        costPrice: 70.0,
-        discount: 20.0,
+        unitPrice: Money.fromMinorUnits(10000, 'KZT'),
+        costPrice: Money.fromMinorUnits(7000, 'KZT'),
+        discount: Money.fromMinorUnits(2000, 'KZT'),
       );
-      expect(item.subtotal, 300.0);
-      expect(item.total, 280.0);
+      expect(item.subtotal, Money.fromMinorUnits(30000, 'KZT'));
+      expect(item.total, Money.fromMinorUnits(28000, 'KZT'));
     });
 
     test('subtotal without discount equals total', () {
@@ -248,11 +249,11 @@ void main() {
         productName: 'No Discount',
         productSku: 'SKU-002',
         quantity: 1,
-        unitPrice: 50.0,
-        costPrice: 30.0,
+        unitPrice: Money.fromMinorUnits(5000, 'KZT'),
+        costPrice: Money.fromMinorUnits(3000, 'KZT'),
       );
-      expect(item.subtotal, 50.0);
-      expect(item.total, 50.0);
+      expect(item.subtotal, Money.fromMinorUnits(5000, 'KZT'));
+      expect(item.total, Money.fromMinorUnits(5000, 'KZT'));
     });
   });
 
@@ -293,8 +294,6 @@ void main() {
       expect(response.limit, 20);
     });
   });
-
-
 
   // ──────────────────────────────
   // Sales Result Tests
@@ -467,4 +466,3 @@ class _RecordingApiClient extends ApiClient {
     );
   }
 }
-

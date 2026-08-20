@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/storage/preferences_storage.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/sales_provider.dart';
@@ -13,6 +14,7 @@ class HeldSale {
   final List<CartItem> items;
   final String? customerId;
   final String? customerName;
+  final String currency;
 
   const HeldSale({
     required this.id,
@@ -21,9 +23,11 @@ class HeldSale {
     required this.items,
     this.customerId,
     this.customerName,
+    this.currency = 'KZT',
   });
 
-  double get total => items.fold(0.0, (sum, i) => sum + i.total);
+  Money get total =>
+      items.fold(Money.zero(currency), (sum, i) => sum + i.total);
   int get itemCount => items.fold(0, (sum, i) => sum + i.quantity);
 
   Map<String, dynamic> toJson() => {
@@ -33,20 +37,23 @@ class HeldSale {
         'items': items.map((i) => i.toJson()).toList(),
         'customerId': customerId,
         'customerName': customerName,
+        'currency': currency,
       };
 
   factory HeldSale.fromJson(Map<String, dynamic> json) {
+    final currency = (json['currency'] as String?) ?? 'KZT';
     final rawItems = (json['items'] as List<dynamic>? ?? const []);
     return HeldSale(
       id: json['id'] as String,
       label: (json['label'] as String?) ?? 'Held sale',
-      heldAt: DateTime.tryParse(json['heldAt'] as String? ?? '') ??
-          DateTime.now(),
+      heldAt:
+          DateTime.tryParse(json['heldAt'] as String? ?? '') ?? DateTime.now(),
       items: rawItems
           .map((e) => CartItem.fromJson(e as Map<String, dynamic>))
           .toList(),
       customerId: json['customerId'] as String?,
       customerName: json['customerName'] as String?,
+      currency: currency,
     );
   }
 }
@@ -102,6 +109,7 @@ class HeldSalesNotifier extends StateNotifier<HeldSalesState> {
       items: cart.items,
       customerId: cart.customerId,
       customerName: cart.customerName,
+      currency: cart.currency,
     );
     state = HeldSalesState(held: [held, ...state.held]);
     await _persist();

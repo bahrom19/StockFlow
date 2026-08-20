@@ -10,6 +10,7 @@ import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/services/receipt_print_service.dart';
@@ -129,9 +130,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       hint: l10n.posOpeningBalanceHint,
     );
     if (openingBalance == null || !mounted) return;
-    final shift = await ref
-        .read(cashShiftProvider.notifier)
-        .openShift(openingBalance);
+    final shift =
+        await ref.read(cashShiftProvider.notifier).openShift(openingBalance);
     if (shift != null && mounted) {
       _showSnack(l10n.posShiftOpened, isError: false);
     } else if (mounted) {
@@ -319,8 +319,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
               onPressed: () => Navigator.of(ctx).pop(h),
               child: Row(
                 children: [
-                  Icon(Icons.pause_circle_outline, size: 18,
-                      color: Theme.of(ctx).colorScheme.primary),
+                  Icon(Icons.pause_circle_outline,
+                      size: 18, color: Theme.of(ctx).colorScheme.primary),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
@@ -342,7 +342,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       ),
     );
     if (selected == null || !mounted) return;
-    final restored = await ref.read(heldSalesProvider.notifier).resume(selected.id);
+    final restored =
+        await ref.read(heldSalesProvider.notifier).resume(selected.id);
     if (restored == null || !mounted) return;
     final notifier = ref.read(cartProvider.notifier);
     notifier.clear();
@@ -367,9 +368,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
               child: Row(
                 children: [
                   Icon(
-                    w.isDefault
-                        ? Icons.star_rounded
-                        : Icons.warehouse_outlined,
+                    w.isDefault ? Icons.star_rounded : Icons.warehouse_outlined,
                     size: 18,
                     color: Theme.of(ctx).colorScheme.primary,
                   ),
@@ -445,16 +444,19 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   }
 
   void _addProduct(Product product) {
-    final price = double.tryParse(product.price ?? '0') ?? 0;
-    final costPrice = double.tryParse(product.costPrice ?? '0') ?? 0;
+    final cartCurrency = ref.read(cartProvider).currency;
+    final price = product.price ?? '0';
+    final costPrice = product.costPrice ?? '0';
     ref.read(cartProvider.notifier).addItem(CartItem(
           productId: product.id,
           productName: product.name,
           productSku: product.sku ?? '',
           barcode: product.barcode,
           quantity: 1,
-          unitPrice: price,
-          costPrice: costPrice,
+          unitPrice:
+              Money.tryParse(price, cartCurrency) ?? Money.zero(cartCurrency),
+          costPrice: Money.tryParse(costPrice, cartCurrency) ??
+              Money.zero(cartCurrency),
         ));
   }
 
@@ -474,6 +476,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   Future<void> _completeSale() async {
     if (_isCompleting) return;
 
+    // Guarantee the cart currency mirrors the provider at submit time.
+    ref.read(cartProvider.notifier).syncFromCurrency();
     final cart = ref.read(cartProvider);
     final validationError =
         ref.read(cartProvider.notifier).validate(context.l10n);
@@ -486,24 +490,39 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       return;
     }
 
-    final cash = double.tryParse(_cashController.text) ?? 0;
-    final card = double.tryParse(_cardController.text) ?? 0;
-    final qr = double.tryParse(_qrController.text) ?? 0;
+    final cartCurrency = cart.currency;
+    final cash = Money.tryParse(_cashController.text, cartCurrency) ??
+        Money.zero(cartCurrency);
+    final card = Money.tryParse(_cardController.text, cartCurrency) ??
+        Money.zero(cartCurrency);
+    final qr = Money.tryParse(_qrController.text, cartCurrency) ??
+        Money.zero(cartCurrency);
     final totalPaid = cash + card + qr;
 
-    if (totalPaid < cart.total - 0.005) {
-      _showSnack(context.l10n
-          .posInsufficientPaymentNeeds(context.money(cart.total)));
+    // Exact comparison — no epsilon: a payment one minor unit short is refused.
+    if (totalPaid < cart.total) {
+      _showSnack(
+          context.l10n.posInsufficientPaymentNeeds(context.money(cart.total)));
       _paymentFocus.requestFocus();
       return;
     }
 
     final payments = <CreatePayment>[];
-    if (cash > 0) payments.add(CreatePayment(method: 'CASH', amount: cash));
-    if (card > 0) payments.add(CreatePayment(method: 'CARD', amount: card));
-    if (qr > 0) payments.add(CreatePayment(method: 'QR', amount: qr));
+    if (cash.isPositive) {
+      payments.add(
+          CreatePayment(method: 'CASH', amount: cash.toApiNumber().toDouble()));
+    }
+    if (card.isPositive) {
+      payments.add(
+          CreatePayment(method: 'CARD', amount: card.toApiNumber().toDouble()));
+    }
+    if (qr.isPositive) {
+      payments.add(
+          CreatePayment(method: 'QR', amount: qr.toApiNumber().toDouble()));
+    }
     if (payments.isEmpty) {
-      payments.add(CreatePayment(method: 'CASH', amount: cart.total));
+      payments.add(CreatePayment(
+          method: 'CASH', amount: cart.total.toApiNumber().toDouble()));
     }
 
     setState(() => _isCompleting = true);
@@ -515,7 +534,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       payments: payments,
       customerId: cart.customerId,
       notes: cart.notes,
-      currency: context.currencyCode,
+      currency: cart.currency,
     );
 
     if (sale == null) {
@@ -533,7 +552,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       final raw = ref.read(posProvider).error;
       final message = raw is String && raw.isNotEmpty ? raw : null;
       _showSnack(
-        localizedErrorLabel(context.l10n, message ?? context.l10n.posFailedCompleteSale),
+        localizedErrorLabel(
+            context.l10n, message ?? context.l10n.posFailedCompleteSale),
       );
       return;
     }
@@ -576,7 +596,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.check_circle, size: 44, color: Color(0xFF0F9D58)),
+        icon:
+            const Icon(Icons.check_circle, size: 44, color: Color(0xFF0F9D58)),
         title: Text(context.l10n.posSaleCompleted),
         content: SizedBox(
           width: 420,
@@ -646,18 +667,17 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                     ),
                   ),
                 const Divider(height: AppSpacing.md),
-                _receiptRow(
-                    context.l10n.posSubtotal,
+                _receiptRow(context.l10n.posSubtotal,
                     double.tryParse(sale.subtotal) ?? 0),
                 if ((double.tryParse(sale.discount) ?? 0) > 0)
                   _receiptRow(
                     context.l10n.posDiscount,
                     -(double.tryParse(sale.discount) ?? 0),
                   ),
-                _receiptRow(context.l10n.posTax,
-                    double.tryParse(sale.tax) ?? 0),
-                _receiptRow(context.l10n.posTotal,
-                    double.tryParse(sale.total) ?? 0,
+                _receiptRow(
+                    context.l10n.posTax, double.tryParse(sale.tax) ?? 0),
+                _receiptRow(
+                    context.l10n.posTotal, double.tryParse(sale.total) ?? 0,
                     bold: true),
                 const Divider(height: AppSpacing.md),
                 for (final p in sale.payments)
@@ -665,8 +685,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                     _paymentLabel(p.method),
                     double.tryParse(p.amount) ?? 0,
                   ),
-                _receiptRow(context.l10n.posPaid,
-                    double.tryParse(sale.paidAmount) ?? 0,
+                _receiptRow(
+                    context.l10n.posPaid, double.tryParse(sale.paidAmount) ?? 0,
                     bold: true),
                 if ((double.tryParse(sale.changeAmount) ?? 0) > 0)
                   _receiptRow(
@@ -897,8 +917,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.delete_sweep_outlined,
-            color: Color(0xFFD93025)),
+        icon: const Icon(Icons.delete_sweep_outlined, color: Color(0xFFD93025)),
         title: Text(context.l10n.posClearCartTitle),
         content: Text(
           context.l10n.posClearCartConfirm(
@@ -946,8 +965,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest
-                  .withOpacity(0.4),
+              color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.4),
               border: Border(
                 bottom: BorderSide(color: theme.colorScheme.outlineVariant),
               ),
@@ -1104,8 +1122,7 @@ class _AmountPromptDialogState extends State<_AmountPromptDialog> {
             key: const Key('pos_prompt_field'),
             controller: _controller,
             autofocus: true,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               labelText: widget.hint,
               border: const OutlineInputBorder(),
@@ -1179,8 +1196,7 @@ class ShiftReportPdf {
               currency: currency),
           _amountRow(l10n.posCardSales, shift.cardSalesValue,
               currency: currency),
-          _amountRow(l10n.posQrSales, shift.qrSalesValue,
-              currency: currency),
+          _amountRow(l10n.posQrSales, shift.qrSalesValue, currency: currency),
           _amountRow(l10n.posBankSales, shift.bankTransferSalesValue,
               currency: currency),
           _amountRow(l10n.posWalletSales, shift.mobileWalletSalesValue,

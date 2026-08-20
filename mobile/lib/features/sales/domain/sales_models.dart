@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:stockflow/core/currency/money.dart';
 
 part 'sales_models.freezed.dart';
 part 'sales_models.g.dart';
@@ -253,9 +254,9 @@ class CartItem {
   final String productSku;
   final String? barcode;
   final int quantity;
-  final double unitPrice;
-  final double costPrice;
-  final double discount;
+  final Money unitPrice;
+  final Money costPrice;
+  final Money? discount;
 
   const CartItem({
     required this.productId,
@@ -265,11 +266,19 @@ class CartItem {
     required this.quantity,
     required this.unitPrice,
     required this.costPrice,
-    this.discount = 0,
+    this.discount,
   });
 
-  double get subtotal => unitPrice * quantity;
-  double get total => subtotal - discount;
+  /// Effective (non-null) discount, defaulting to zero in the item's currency.
+  Money get effectiveDiscount => discount ?? Money.zero(unitPrice.currency);
+
+  Money get subtotal => unitPrice * quantity;
+
+  Money get total {
+    final t = subtotal - effectiveDiscount;
+    // Clamp so a discount can never produce a negative line total.
+    return t.isNegative ? Money.zero(unitPrice.currency) : t;
+  }
 
   CartItem copyWith({
     String? productId,
@@ -277,9 +286,9 @@ class CartItem {
     String? productSku,
     String? barcode,
     int? quantity,
-    double? unitPrice,
-    double? costPrice,
-    double? discount,
+    Money? unitPrice,
+    Money? costPrice,
+    Money? discount,
   }) {
     return CartItem(
       productId: productId ?? this.productId,
@@ -294,26 +303,32 @@ class CartItem {
   }
 
   Map<String, dynamic> toJson() => {
-    'productId': productId,
-    'productName': productName,
-    'productSku': productSku,
-    'barcode': barcode,
-    'quantity': quantity,
-    'unitPrice': unitPrice,
-    'costPrice': costPrice,
-    'discount': discount,
-  };
+        'productId': productId,
+        'productName': productName,
+        'productSku': productSku,
+        'barcode': barcode,
+        'quantity': quantity,
+        'unitPrice': unitPrice.toDecimalString(),
+        'costPrice': costPrice.toDecimalString(),
+        'discount': effectiveDiscount.toDecimalString(),
+        'currency': unitPrice.currency,
+      };
 
-  factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
-        productId: json['productId'] as String,
-        productName: (json['productName'] as String?) ?? '',
-        productSku: (json['productSku'] as String?) ?? '',
-        barcode: json['barcode'] as String?,
-        quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-        unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
-        costPrice: (json['costPrice'] as num?)?.toDouble() ?? 0,
-        discount: (json['discount'] as num?)?.toDouble() ?? 0,
-      );
+  factory CartItem.fromJson(Map<String, dynamic> json) {
+    final currency = (json['currency'] as String?) ?? 'KZT';
+    return CartItem(
+      productId: json['productId'] as String,
+      productName: (json['productName'] as String?) ?? '',
+      productSku: (json['productSku'] as String?) ?? '',
+      barcode: json['barcode'] as String?,
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      unitPrice:
+          Money.fromJson(json['unitPrice'], currency) ?? Money.zero(currency),
+      costPrice:
+          Money.fromJson(json['costPrice'], currency) ?? Money.zero(currency),
+      discount: Money.fromJson(json['discount'], currency),
+    );
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -325,5 +340,3 @@ class CartItem {
   @override
   int get hashCode => productId.hashCode;
 }
-
-

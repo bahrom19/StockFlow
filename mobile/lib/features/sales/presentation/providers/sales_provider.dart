@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
+import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
@@ -39,20 +41,29 @@ class CartState {
     );
   }
 
-  double get subtotal =>
-      items.fold(0.0, (sum, item) => sum + item.subtotal);
+  Money get subtotal =>
+      items.fold(Money.zero(currency), (sum, item) => sum + item.subtotal);
 
-  double get totalDiscount =>
-      items.fold(0.0, (sum, item) => sum + item.discount);
+  Money get totalDiscount => items.fold(
+      Money.zero(currency), (sum, item) => sum + item.effectiveDiscount);
 
   /// Estimated tax — the backend computes the authoritative amount at sale
   /// creation; the receipt shows the returned `sale.tax`. A cart-level rate
   /// keeps the register transparent about the line before completion.
   double get taxRate => 0;
 
-  double get tax => subtotal * taxRate;
+  Money get tax {
+    final rateBp = (taxRate * 100).round();
+    if (rateBp == 0) return Money.zero(currency);
+    // Exact percentage of subtotal in minor units (rateBp per-mille).
+    return Money.fromMinorUnits(
+        (subtotal.minorUnits * rateBp) ~/ 10000, currency);
+  }
 
-  double get total => subtotal - totalDiscount;
+  Money get total {
+    final t = subtotal - totalDiscount;
+    return t.isNegative ? Money.zero(currency) : t;
+  }
 
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
 }
@@ -67,6 +78,7 @@ class CartNotifier extends StateNotifier<CartState> {
   CartNotifier(this._ref) : super(const CartState());
 
   void addItem(CartItem item) {
+    syncFromCurrency();
     final existingIdx = state.items.indexWhere(
       (i) => i.productId == item.productId,
     );
@@ -84,6 +96,7 @@ class CartNotifier extends StateNotifier<CartState> {
   }
 
   void updateQuantity(String productId, int quantity) {
+    syncFromCurrency();
     if (quantity <= 0) {
       removeItem(productId);
       return;
@@ -95,34 +108,54 @@ class CartNotifier extends StateNotifier<CartState> {
     state = state.copyWith(items: newItems);
   }
 
-  void updateDiscount(String productId, double discount) {
+  void updateDiscount(String productId, Money discount) {
+    syncFromCurrency();
     final idx = state.items.indexWhere((i) => i.productId == productId);
     if (idx < 0) return;
+    final item = state.items[idx];
+    // A discount can never exceed the line subtotal nor go below zero.
+    final clamped = discount.clamp(Money.zero(state.currency), item.subtotal);
     final newItems = [...state.items];
-    newItems[idx] = newItems[idx].copyWith(discount: discount);
+    newItems[idx] = newItems[idx].copyWith(discount: clamped);
     state = state.copyWith(items: newItems);
   }
 
   void removeItem(String productId) {
+    syncFromCurrency();
     state = state.copyWith(
       items: state.items.where((i) => i.productId != productId).toList(),
     );
   }
 
   void setCustomer(String? id, String? name) {
+    syncFromCurrency();
     state = state.copyWith(customerId: id, customerName: name);
   }
 
+  /// Keeps [currencyProvider] the single source of truth. Any caller updating
+  /// the cart's currency routes through the provider value instead of storing
+  /// a competing value on the cart.
   void setCurrency(String currency) {
+    syncFromCurrency();
+  }
+
+  /// Re-syncs the cart currency to the current [currencyProvider] value.
+  void syncFromCurrency() {
+    final currency = _ref.read(currencyProvider);
+    if (currency == state.currency) return;
     state = state.copyWith(currency: currency);
   }
 
   void setNotes(String? notes) {
+    syncFromCurrency();
     state = state.copyWith(notes: notes);
   }
 
   void clear() {
-    state = const CartState();
+    // Preserve the active provider currency — never fall back to a hard-coded
+    // default here.
+    final currency = _ref.read(currencyProvider);
+    state = CartState(currency: currency);
   }
 
   /// Validate cart before checkout.
@@ -139,7 +172,7 @@ class CartNotifier extends StateNotifier<CartState> {
         return l10n?.posInvalidQuantity(item.productName) ??
             'Invalid quantity for ${item.productName}';
       }
-      if (item.unitPrice < 0) {
+      if (item.unitPrice.isNegative) {
         return l10n?.posInvalidPrice(item.productName) ??
             'Invalid price for ${item.productName}';
       }
@@ -297,9 +330,8 @@ class SaleListNotifier extends StateNotifier<SaleListState> {
 
   Future<void> loadMore() async {
     final current = state;
-    if (current is! SaleListLoaded ||
-        current.isLoadingMore ||
-        !current.hasMore) return;
+    if (current is! SaleListLoaded || current.isLoadingMore || !current.hasMore)
+      return;
 
     state = current.copyWith(isLoadingMore: true);
     await _fetch(page: current.page + 1, append: true);
@@ -376,13 +408,17 @@ class PosNotifier extends StateNotifier<AsyncValue<Sale?>> {
       customerId: customerId,
       currency: currency ?? 'KZT',
       notes: notes,
-      items: cartItems.map((c) => CreateSaleItem(
-        productId: c.productId,
-        quantity: c.quantity,
-        unitPrice: c.unitPrice,
-        costPrice: c.costPrice,
-        discount: c.discount,
-      )).toList(),
+      items: cartItems
+          .map((c) => CreateSaleItem(
+                productId: c.productId,
+                quantity: c.quantity,
+                // API-boundary adapter: the backend DTO expects a JSON number, so
+                // Money converts losslessly here via toApiNumber().
+                unitPrice: c.unitPrice.toApiNumber().toDouble(),
+                costPrice: c.costPrice.toApiNumber().toDouble(),
+                discount: c.effectiveDiscount.toApiNumber().toDouble(),
+              ))
+          .toList(),
       payments: payments,
     );
     final result = await repo.create(request);
@@ -438,7 +474,9 @@ class PosNotifier extends StateNotifier<AsyncValue<Sale?>> {
 // Providers
 // ──────────────────────────────────
 final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) {
-  return CartNotifier(ref);
+  final notifier = CartNotifier(ref);
+  notifier.syncFromCurrency(); // initial currency mirrors current provider.
+  return notifier;
 });
 
 final saleListProvider =

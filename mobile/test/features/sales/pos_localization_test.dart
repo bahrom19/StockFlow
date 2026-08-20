@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/utils/formatters.dart';
 import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
@@ -24,7 +25,8 @@ void main() {
   group('EN byte-for-byte contract — POS workspace', () {
     test('toolbar + hotkeys unchanged', () {
       expect(en().posCashierTerminal, 'Cashier Terminal');
-      expect(en().posToolbarHints,
+      expect(
+          en().posToolbarHints,
           'F2 search · F4 customer · F8 payment · F9 complete · '
           'Ctrl+Del clear · Enter add · ESC clear');
       expect(en().posItemsTotalSummary(r'$50.00', 2), r'2 items · $50.00');
@@ -51,8 +53,8 @@ void main() {
     });
 
     test('catalog unchanged', () {
-      expect(en().posCatalogSearchHint,
-          'Search by name, SKU or barcode…  (F2)');
+      expect(
+          en().posCatalogSearchHint, 'Search by name, SKU or barcode…  (F2)');
       expect(en().posCatalogFooter(10, 35),
           '10 of 35 · Enter to add · ↑↓ to navigate');
       expect(en().posNoProductsFound, 'No products found');
@@ -72,8 +74,8 @@ void main() {
       expect(en().posCloseShiftLabel, 'Close Shift');
       expect(en().posTooltipOpenShift, 'Open cash shift (F5)');
       expect(
-        en().posShiftTotals('100.00', '200.00', '300.00', '400.00', '500.00',
-            '600.00'),
+        en().posShiftTotals(
+            '100.00', '200.00', '300.00', '400.00', '500.00', '600.00'),
         '· Cash 300.00 · Card 200.00 · QR 400.00 · Bank 100.00 · '
         'Wallet 600.00 · Total 500.00',
       );
@@ -132,7 +134,8 @@ void main() {
   group('RU translations — POS', () {
     test('toolbar + cart + catalog are natural Russian', () {
       expect(ru().posCashierTerminal, 'Кассовый терминал');
-      expect(ru().posToolbarHints,
+      expect(
+          ru().posToolbarHints,
           'F2 поиск · F4 клиент · F8 оплата · F9 завершить · '
           'Ctrl+Del очистить · Enter добавить · ESC очистить');
       expect(ru().posCartEmpty, 'Корзина пуста');
@@ -160,7 +163,8 @@ void main() {
   group('KK translations — POS', () {
     test('toolbar + cart + catalog are natural Kazakh', () {
       expect(kk().posCashierTerminal, 'Кассалық терминал');
-      expect(kk().posToolbarHints,
+      expect(
+          kk().posToolbarHints,
           'F2 іздеу · F4 клиент · F8 төлем · F9 аяқтау · '
           'Ctrl+Del тазалау · Enter қосу · ESC тазалау');
       expect(kk().posCartEmpty, 'Себет бос');
@@ -220,8 +224,8 @@ void main() {
         productName: 'Croissant',
         productSku: 'CRS',
         quantity: 0,
-        unitPrice: 50,
-        costPrice: 20,
+        unitPrice: const Money(minorUnits: 5000, currency: 'KZT'),
+        costPrice: const Money(minorUnits: 2000, currency: 'KZT'),
       ));
       expect(notifier.validate(), 'Invalid quantity for Croissant');
       expect(notifier.validate(ru()), ru().posInvalidQuantity('Croissant'));
@@ -233,8 +237,8 @@ void main() {
         productName: 'Croissant',
         productSku: 'CRS',
         quantity: 1,
-        unitPrice: -5,
-        costPrice: 20,
+        unitPrice: const Money(minorUnits: -500, currency: 'KZT'),
+        costPrice: const Money(minorUnits: 2000, currency: 'KZT'),
       ));
       expect(notifier.validate(), 'Invalid price for Croissant');
       expect(notifier.validate(ru()), ru().posInvalidPrice('Croissant'));

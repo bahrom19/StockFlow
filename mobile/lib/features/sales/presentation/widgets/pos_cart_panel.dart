@@ -5,6 +5,7 @@ import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/sales_provider.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/money.dart';
 
 /// POS cart panel — the cashier's checkout column (~30% width).
 ///
@@ -47,17 +48,21 @@ class PosCartPanel extends ConsumerStatefulWidget {
 }
 
 class _PosCartPanelState extends ConsumerState<PosCartPanel> {
-  double get _cash => double.tryParse(widget.cashController.text) ?? 0;
-  double get _card => double.tryParse(widget.cardController.text) ?? 0;
-  double get _qr => double.tryParse(widget.qrController.text) ?? 0;
-  double get _totalPaid => _cash + _card + _qr;
+  Money _paid(String text, String currency) =>
+      Money.tryParse(text, currency) ?? Money.zero(currency);
 
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
+    final currency = cart.currency;
     final total = cart.total;
-    final change = _totalPaid - total;
-    final isAmountValid = _totalPaid >= total - 0.005;
+    final cash = _paid(widget.cashController.text, currency);
+    final card = _paid(widget.cardController.text, currency);
+    final qr = _paid(widget.qrController.text, currency);
+    final totalPaid = cash + card + qr;
+    final change = totalPaid - total;
+    // Exact comparison — no epsilon tolerance in money equality.
+    final isAmountValid = totalPaid >= total;
     final canComplete = cart.items.isNotEmpty &&
         widget.warehouseId != null &&
         isAmountValid &&
@@ -144,10 +149,10 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                         child: Column(
                           children: [
                             _totalRow(context.l10n.posSubtotal, cart.subtotal),
-                            if (cart.totalDiscount > 0)
+                            if (cart.totalDiscount.isPositive)
                               _totalRow(
                                 context.l10n.posDiscount,
-                                -cart.totalDiscount,
+                                cart.totalDiscount.negate,
                                 color: const Color(0xFFFB8C00),
                               ),
                             _totalRow(context.l10n.posTax, cart.tax),
@@ -176,8 +181,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                   const SizedBox(width: AppSpacing.xs),
                                   Text(
                                     context.l10n.posPayment,
-                                    style:
-                                        theme.textTheme.titleSmall?.copyWith(
+                                    style: theme.textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -233,9 +237,8 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                     style: theme.textTheme.bodySmall,
                                   ),
                                   Text(
-                                    context.money(_totalPaid),
-                                    style:
-                                        theme.textTheme.bodySmall?.copyWith(
+                                    context.money(totalPaid),
+                                    style: theme.textTheme.bodySmall?.copyWith(
                                       fontWeight: FontWeight.w600,
                                       color: isAmountValid
                                           ? const Color(0xFF0F9D58)
@@ -245,7 +248,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                 ],
                               ),
                             ),
-                            if (_totalPaid > 0) ...[
+                            if (totalPaid.isPositive) ...[
                               const SizedBox(height: AppSpacing.xxs),
                               Semantics(
                                 container: true,
@@ -257,7 +260,8 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                         style: theme.textTheme.bodySmall),
                                     Text(
                                       context.money(change),
-                                      style: theme.textTheme.bodySmall?.copyWith(
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
                                         fontWeight: FontWeight.w600,
                                         color: const Color(0xFFFB8C00),
                                       ),
@@ -278,8 +282,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                         onPressed: cart.items.isEmpty
                                             ? null
                                             : widget.onHold,
-                                        icon: const Icon(Icons.pause,
-                                            size: 16),
+                                        icon: const Icon(Icons.pause, size: 16),
                                         label: Text(context.l10n.posHold),
                                       ),
                                     ),
@@ -303,11 +306,12 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                             // Complete button
                             FilledButton.icon(
                               key: const Key('pos_complete_button'),
-                              onPressed:
-                                  canComplete ? () => widget.onComplete() : null,
+                              onPressed: canComplete
+                                  ? () => widget.onComplete()
+                                  : null,
                               style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
                                 backgroundColor: const Color(0xFF0F9D58),
                               ),
                               icon: widget.isCompleting
@@ -324,8 +328,8 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
                                 widget.isCompleting
                                     ? context.l10n.posCompleting
                                     : isAmountValid
-                                        ? context.l10n
-                                            .posCompleteSale(context.money(total))
+                                        ? context.l10n.posCompleteSale(
+                                            context.money(total))
                                         : context.l10n.posInsufficientPayment,
                               ),
                             ),
@@ -399,8 +403,7 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.delete_sweep_outlined,
-            color: Color(0xFFD93025)),
+        icon: const Icon(Icons.delete_sweep_outlined, color: Color(0xFFD93025)),
         title: Text(context.l10n.posClearCartTitle),
         content: Text(
           context.l10n.posClearCartConfirm(
@@ -458,13 +461,14 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
 
   Widget _totalRow(
     String label,
-    double amount, {
+    dynamic amount, {
     bool bold = false,
     bool large = false,
     Color? color,
   }) {
     final theme = Theme.of(context);
-    final base = large ? theme.textTheme.titleMedium : theme.textTheme.bodyMedium;
+    final base =
+        large ? theme.textTheme.titleMedium : theme.textTheme.bodyMedium;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       // Label-less semantics boundary: label + amount stay one innerText leaf
@@ -511,8 +515,7 @@ class _EmptyCart extends StatelessWidget {
           Icon(Icons.add_shopping_cart_outlined,
               size: 56, color: theme.colorScheme.outline),
           const SizedBox(height: AppSpacing.sm),
-          Text(context.l10n.posCartEmpty,
-              style: theme.textTheme.titleMedium),
+          Text(context.l10n.posCartEmpty, style: theme.textTheme.titleMedium),
           const SizedBox(height: AppSpacing.xxs),
           Text(
             context.l10n.posCartEmptyHint,
@@ -533,7 +536,7 @@ class _EmptyCart extends StatelessWidget {
 class _CartItemCard extends StatelessWidget {
   final CartItem item;
   final ValueChanged<int> onQuantityChanged;
-  final ValueChanged<double> onDiscountChanged;
+  final ValueChanged<Money> onDiscountChanged;
   final VoidCallback onRemove;
 
   const _CartItemCard({
@@ -646,7 +649,9 @@ class _CartItemCard extends StatelessWidget {
                   width: 90,
                   child: TextField(
                     controller: TextEditingController(
-                      text: item.discount > 0 ? '${item.discount}' : '',
+                      text: item.effectiveDiscount.isPositive
+                          ? '${item.effectiveDiscount}'
+                          : '',
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
@@ -654,8 +659,12 @@ class _CartItemCard extends StatelessWidget {
                     decoration: const InputDecoration(isDense: true),
                     style: theme.textTheme.bodySmall,
                     onSubmitted: (v) {
-                      final d = double.tryParse(v) ?? 0;
-                      onDiscountChanged(d.clamp(0, item.subtotal));
+                      final parsed = Money.tryParse(v, item.unitPrice.currency);
+                      if (parsed == null) return;
+                      onDiscountChanged(parsed.clamp(
+                        Money.zero(item.unitPrice.currency),
+                        item.subtotal,
+                      ));
                     },
                   ),
                 ),

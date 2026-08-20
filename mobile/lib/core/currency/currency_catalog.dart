@@ -1,4 +1,5 @@
 import 'package:intl/intl.dart';
+import 'package:stockflow/core/currency/money.dart';
 
 /// Currency codes supported by StockFlow — mirrors the backend Prisma
 /// `Currency` enum (backend/prisma/schema.prisma). The UI layer never invents
@@ -90,7 +91,8 @@ class CurrencyCatalog {
   /// Compact variant: `₸1.2M` / `₸1.2K` / `₸1,234.56` in the default (English)
   /// UI, or the locale-aware suffixes for RU (`тыс.`/`млн`) and KK
   /// (`мың`/`млн`) when [locale] is provided.
-  static String formatShort(dynamic value, {String code = 'KZT', String? locale}) {
+  static String formatShort(dynamic value,
+      {String code = 'KZT', String? locale}) {
     final num amount = _parseNumeric(value);
     final symbol = symbolFor(code);
     final String millionSuffix;
@@ -145,6 +147,7 @@ class CurrencyCatalog {
 
   static num _parseNumeric(dynamic value) {
     if (value == null) return 0;
+    if (value is Money) return (value as Money).toApiNumber();
     if (value is num) return value;
     if (value is String) return num.tryParse(value) ?? 0;
     return 0;
