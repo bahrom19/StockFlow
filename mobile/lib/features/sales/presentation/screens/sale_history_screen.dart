@@ -31,8 +31,9 @@ class _SaleHistoryScreenState extends ConsumerState<SaleHistoryScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    final customerId = GoRouterState.of(context).uri.queryParameters['customerId'];
-    Future.microtask(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final customerId =
+          GoRouterState.of(context).uri.queryParameters['customerId'];
       final notifier = ref.read(saleListProvider.notifier);
       if (customerId != null && customerId.isNotEmpty) {
         notifier.filterByCustomer(customerId);
