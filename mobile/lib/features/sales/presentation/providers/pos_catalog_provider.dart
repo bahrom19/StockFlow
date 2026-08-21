@@ -181,7 +181,8 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
       query: s.query,
       category: s.category,
       categories: categories,
-      selectedIndex: s.selectedIndex.clamp(0, merged.length - 1),
+      selectedIndex:
+          merged.isEmpty ? 0 : s.selectedIndex.clamp(0, merged.length - 1),
       error: null,
     );
   }

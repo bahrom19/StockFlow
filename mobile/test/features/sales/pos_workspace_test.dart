@@ -716,6 +716,56 @@ void main() {
       expect(state.products.length, 35);
       expect(state.hasMore, isFalse);
     });
+
+    // Regression: searching when the query matches zero products used to
+    // crash with `Invalid argument(s): 0` because int.clamp(0, -1) was
+    // called on an empty merged list (merged.length - 1 == -1).
+    test('searchNow with empty result does not crash', () async {
+      final fake = _FakePosApi()
+        ..products = [
+          _product('p1', 'Espresso', sku: 'ESP'),
+          _product('p2', 'Croissant', sku: 'CRS'),
+        ];
+      final container = ProviderContainer(overrides: [
+        apiClientProvider.overrideWith((ref) => fake),
+      ]);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(posCatalogProvider.notifier);
+      await notifier.init();
+
+      // A search that matches nothing → merged list is empty.
+      await notifier.searchNow('ZZZ-NO-MATCH');
+
+      final state = container.read(posCatalogProvider);
+      expect(state.products, isEmpty);
+      expect(state.selectedIndex, 0);
+      expect(state.selected, isNull);
+    });
+
+    // Regression: navigating after an empty result must not throw.
+    test('moveSelection after empty result does not crash', () async {
+      final fake = _FakePosApi()
+        ..products = [
+          _product('p1', 'Espresso', sku: 'ESP'),
+        ];
+      final container = ProviderContainer(overrides: [
+        apiClientProvider.overrideWith((ref) => fake),
+      ]);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(posCatalogProvider.notifier);
+      await notifier.init();
+      await notifier.searchNow('ZZZ-NO-MATCH');
+
+      // Must not throw even though products is empty.
+      expect(() => notifier.moveSelection(1), returnsNormally);
+      expect(() => notifier.moveSelection(-1), returnsNormally);
+
+      final state = container.read(posCatalogProvider);
+      expect(state.products, isEmpty);
+      expect(state.selected, isNull);
+    });
   });
 
   // ──────────────────────────────────
