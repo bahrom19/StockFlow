@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/api/api_endpoints.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
@@ -462,6 +463,68 @@ void main() {
         costPrice: const Money(minorUnits: 500, currency: 'KZT'),
       ));
       expect(notifier.validate(), isNull);
+    });
+
+    test('cross-currency item is rejected and the cart stays unchanged',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      // Do not leak the mock prefs into later tests in this file.
+      addTearDown(() => SharedPreferences.setMockInitialValues({}));
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(cartProvider.notifier);
+
+      // Operating currency mirrors the provider default (KZT).
+      expect(container.read(currencyProvider), 'KZT');
+      expect(container.read(cartProvider).currency, 'KZT');
+
+      // A RUB item must be rejected on the KZT cart — no silent conversion.
+      expect(
+        () => notifier.addItem(const CartItem(
+          productId: 'p1',
+          productName: 'RUB item',
+          productSku: 'R1',
+          quantity: 1,
+          unitPrice: Money(minorUnits: 1000, currency: 'RUB'),
+          costPrice: Money(minorUnits: 500, currency: 'RUB'),
+        )),
+        throwsArgumentError,
+        reason: 'mixed-currency carts are not supported',
+      );
+
+      // The rejected add must not mutate the cart.
+      final state = container.read(cartProvider);
+      expect(state.currency, 'KZT');
+      expect(state.items, isEmpty);
+      expect(state.total, Money.zero('KZT'));
+    });
+
+    test('after switching the provider to RUB the cart operates in RUB',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      // The provider persists the switch to the mock store — reset it so the
+      // leaked 'RUB' cannot cascade into later tests in this file.
+      addTearDown(() => SharedPreferences.setMockInitialValues({}));
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      await container.read(currencyProvider.notifier).setCurrency('RUB');
+      final notifier = container.read(cartProvider.notifier);
+      notifier.clear(); // new cart inherits the provider currency.
+      notifier.addItem(const CartItem(
+        productId: 'p1',
+        productName: 'RUB item',
+        productSku: 'R1',
+        quantity: 2,
+        unitPrice: Money(minorUnits: 1000, currency: 'RUB'),
+        costPrice: Money(minorUnits: 500, currency: 'RUB'),
+      ));
+
+      final state = container.read(cartProvider);
+      expect(state.currency, 'RUB');
+      expect(state.items.single.unitPrice.currency, 'RUB');
+      expect(state.items.single.costPrice.currency, 'RUB');
+      expect(state.total, Money.fromMinorUnits(2000, 'RUB'));
     });
   });
 
@@ -935,6 +998,73 @@ void main() {
       await tester.tap(find.textContaining('Held').first);
       await tester.pumpAndSettle();
       expect(find.textContaining('1 items'), findsWidgets);
+    });
+
+    testWidgets(
+        'resuming a RUB held sale restores the RUB operating + cart currency',
+        (tester) async {
+      useDesktopSurface(tester);
+      SharedPreferences.setMockInitialValues({});
+      // resume() writes the held currency ('RUB') to the mock store via the
+      // provider — reset it so later tests start from a clean slate.
+      addTearDown(() => SharedPreferences.setMockInitialValues({}));
+      final fake = _FakePosApi()
+        ..products = [
+          _product('p1', 'Espresso', sku: 'ESP', price: '100.00'),
+        ]
+        ..warehouses = [_warehouse()];
+
+      await tester.pumpWidget(buildWorkspace(fake));
+      await tester.pumpAndSettle();
+
+      final container =
+          ProviderScope.containerOf(tester.element(find.byType(PosWorkspace)));
+
+      // Pre-seed a held sale that was created while the operating currency was
+      // RUB (e.g. the register operated in RUB earlier in the day).
+      await container.read(currencyProvider.notifier).setCurrency('RUB');
+      await container.read(heldSalesProvider.notifier).hold(
+            const CartState(
+              currency: 'RUB',
+              items: [
+                CartItem(
+                  productId: 'p1',
+                  productName: 'Espresso',
+                  productSku: 'ESP',
+                  quantity: 2,
+                  unitPrice: Money(minorUnits: 10000, currency: 'RUB'),
+                  costPrice: Money(minorUnits: 5000, currency: 'RUB'),
+                ),
+              ],
+            ),
+            label: 'RUB hold',
+          );
+
+      // The current operating currency is back to KZT.
+      await container.read(currencyProvider.notifier).setCurrency('KZT');
+      expect(container.read(currencyProvider), 'KZT');
+
+      // Resume the held sale (Ctrl+H) and pick it from the dialog.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Resume held sale'), findsOneWidget);
+      await tester.tap(find.textContaining('RUB hold').first);
+      await tester.pumpAndSettle();
+
+      // Operating currency restored to the held sale's currency.
+      expect(container.read(currencyProvider), 'RUB');
+
+      // Cart currency and item amounts are all RUB.
+      final state = container.read(cartProvider);
+      expect(state.currency, 'RUB');
+      expect(state.items, hasLength(1));
+      expect(state.items.single.unitPrice.currency, 'RUB');
+      expect(state.items.single.costPrice.currency, 'RUB');
+      expect(state.total, Money.fromMinorUnits(20000, 'RUB'));
+      expect(find.textContaining('2 items'), findsWidgets);
     });
 
     testWidgets('F5 opens a cash shift when none is open', (tester) async {

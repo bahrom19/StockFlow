@@ -39,5 +39,4 @@ class AppConstants {
   // ──────────────────────────────────
   static const int maxDecimalPlaces = 2;
   static const int maxQuantityDecimalPlaces = 4;
-  static const String defaultCurrency = 'USD';
 }

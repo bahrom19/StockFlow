@@ -10,6 +10,7 @@ import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
@@ -326,7 +327,10 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                     child: Text(
                       '${heldSaleDisplayLabel(context.l10n, h.label)} · '
                       '${context.l10n.posItemsCount(h.itemCount)} · '
-                      '${context.money(h.total)}',
+                      // The held sale keeps its own currency — render it with
+                      // the held currency, never the (possibly changed)
+                      // operating currency.
+                      '${CurrencyCatalog.format(h.total, code: h.currency)}',
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -345,6 +349,9 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     final restored =
         await ref.read(heldSalesProvider.notifier).resume(selected.id);
     if (restored == null || !mounted) return;
+    // Restore the operating currency to match the resumed sale — cart,
+    // receipt and payment must all render in the currency the sale was held in.
+    await ref.read(currencyProvider.notifier).setCurrency(restored.currency);
     final notifier = ref.read(cartProvider.notifier);
     notifier.clear();
     for (final item in restored.items) {
@@ -761,7 +768,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   Future<void> _downloadReceiptPdf(Sale sale) async {
     try {
       final bytes = await ReceiptExport.buildPdf(sale,
-          l10n: context.l10n, currency: context.currencyCode);
+          l10n: context.l10n, currency: sale.currency);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
       _showSnack(context.l10n.posReceiptPdfDownloaded, isError: false);
     } catch (e) {
@@ -772,7 +779,8 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   Future<void> _printReceipt(Sale sale) async {
     try {
       await ReceiptPrintService.printHtml(
-        ReceiptExport.buildHtml(sale, l10n: context.l10n),
+        ReceiptExport.buildHtml(sale,
+            l10n: context.l10n, currency: sale.currency),
       );
     } catch (e) {
       _showSnack(context.l10n.posPrintFailed(e.toString()));

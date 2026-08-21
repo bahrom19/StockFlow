@@ -534,24 +534,24 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
     final qr = _money(_qrController.text);
 
     if (cash.isPositive) {
-            payments.add(
+      payments.add(
         CreatePayment(method: 'CASH', amount: cash.toApiNumber().toDouble()),
       );
     }
     if (card.isPositive) {
-            payments.add(
+      payments.add(
         CreatePayment(method: 'CARD', amount: card.toApiNumber().toDouble()),
       );
     }
     if (qr.isPositive) {
-            payments.add(
+      payments.add(
         CreatePayment(method: 'QR', amount: qr.toApiNumber().toDouble()),
       );
     }
 
     if (payments.isEmpty) {
       payments.add(CreatePayment(
-                    method: 'CASH', amount: widget.cart.total.toApiNumber().toDouble()));
+          method: 'CASH', amount: widget.cart.total.toApiNumber().toDouble()));
     }
 
     if (widget.selectedWarehouseId == null) {
@@ -846,7 +846,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     setState(() => _isPdfExporting = true);
     try {
       final bytes = await ReceiptExport.buildPdf(sale,
-          l10n: context.l10n, currency: context.currencyCode);
+          l10n: context.l10n, currency: sale.currency);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -870,7 +870,8 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   Future<void> _print() async {
     try {
       await ReceiptPrintService.printHtml(
-        ReceiptExport.buildHtml(widget.sale, l10n: context.l10n),
+        ReceiptExport.buildHtml(widget.sale,
+            l10n: context.l10n, currency: widget.sale.currency),
       );
     } catch (e) {
       if (mounted) {

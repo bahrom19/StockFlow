@@ -79,6 +79,16 @@ class CartNotifier extends StateNotifier<CartState> {
 
   void addItem(CartItem item) {
     syncFromCurrency();
+    // Single operating-currency invariant: a cart never mixes currencies.
+    // Reject (do not silently convert) any item whose currency differs —
+    // this mirrors Money's own cross-currency safety behavior.
+    if (item.unitPrice.currency != state.currency) {
+      throw ArgumentError(
+        'Cannot add an item in ${item.unitPrice.currency} to a '
+        'cart operating in ${state.currency}; mixed-currency '
+        'carts are not supported.',
+      );
+    }
     final existingIdx = state.items.indexWhere(
       (i) => i.productId == item.productId,
     );
@@ -406,7 +416,7 @@ class PosNotifier extends StateNotifier<AsyncValue<Sale?>> {
     final request = CreateSaleRequest(
       warehouseId: warehouseId,
       customerId: customerId,
-      currency: currency ?? 'KZT',
+      currency: currency ?? _ref.read(currencyProvider),
       notes: notes,
       items: cartItems
           .map((c) => CreateSaleItem(
