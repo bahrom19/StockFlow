@@ -1,7 +1,12 @@
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart' show Printer;
 import 'package:stockflow/core/services/receipt_print_service.dart';
+import 'package:stockflow/core/services/receipt_print_service_windows.dart'
+    as win;
 import 'package:stockflow/features/sales/data/receipt_export.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 
@@ -85,6 +90,15 @@ void main() {
       expect(markup.contains('src="http'), isFalse);
       expect(markup.contains("src='http"), isFalse);
     });
+
+    test('carries quantity and money cells for thermal rendering', () {
+      final markup =
+          ReceiptExport.buildHtml(_sale(), productNames: {'p1': 'Espresso'});
+      // Quantity cell rendered verbatim.
+      expect(markup, contains('<td>2</td>'));
+      // Line total in the sale's currency.
+      expect(markup, contains('>₸100.00</td>'));
+    });
   });
 
   // ──────────────────────────────────
@@ -94,6 +108,14 @@ void main() {
     test('still builds non-trivial PDF bytes', () async {
       final bytes = await ReceiptExport.buildPdf(_sale());
       expect(bytes.length, greaterThan(1000));
+    });
+
+    test('still produces a well-formed PDF document for the print pipeline',
+        () async {
+      final bytes = await ReceiptExport.buildPdf(_sale());
+      // Magic header: a valid PDF reaches the Windows spooler / browser
+      // download — never truncated bytes.
+      expect(String.fromCharCodes(bytes.sublist(0, 5)), '%PDF-');
     });
   });
 
@@ -135,6 +157,118 @@ void main() {
           ),
         ),
       );
+    });
+
+    // On non-Windows hosts the stub routes nowhere and fails fast; on a
+    // Windows host this same call would enter the real native pipeline
+    // (platform channels are unavailable in flutter_test), so the assertion
+    // is scoped to non-Windows hosts to stay deterministic.
+    test('facade printReceipt fails fast off-Windows with a typed error',
+        () async {
+      await expectLater(
+        ReceiptPrintService.printReceipt(
+          html: '<html><body></body></html>',
+          pdf: () async => Uint8List(0),
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+    }, skip: Platform.isWindows ? 'Windows host runs the real pipeline' : false);
+  });
+
+  // ──────────────────────────────────
+  // 4. Windows native printing pipeline (receipt_print_service_windows).
+  //
+  // The real `printing` plugin needs platform channels + physical printers,
+  // so these tests inject fakes through the file's visibleForTesting seam.
+  // They verify the abstraction contract — NOT that a physical printer
+  // printed (that requires the manual Windows smoke test).
+  // ──────────────────────────────────
+  group('Windows native printing pipeline', () {
+    tearDown(() => win.debugConfigureWindowsPrintPipeline());
+
+    test('shared contract: completes when the spooler accepts the job',
+        () async {
+      var pdfBuilds = 0;
+      var handedBytes = Uint8List(0);
+      String? jobName;
+      win.debugConfigureWindowsPrintPipeline(
+        lister: () async => const <Printer>[
+          Printer(url: 'th-80', name: 'Thermal 80mm'),
+        ],
+        launcher: ({required onLayout, required name}) async {
+          jobName = name;
+          handedBytes = await onLayout(PdfPageFormat.roll80);
+          return true;
+        },
+      );
+
+      await win.printReceipt(
+        html: '<html><body>unused on windows</body></html>',
+        pdf: () async {
+          pdfBuilds++;
+          return Uint8List.fromList(const [0x25, 0x50, 0x44, 0x46]); // %PDF
+        },
+      );
+
+      // Lazy PDF builder ran exactly once, its bytes went to the job,
+      // and the spooler job is named for the user's print queue.
+      expect(pdfBuilds, 1);
+      expect(handedBytes, hasLength(4));
+      expect(jobName, 'StockFlow receipt');
+    });
+
+    test('job rejection surfaces a catchable Future error (no fake success)',
+        () async {
+      win.debugConfigureWindowsPrintPipeline(
+        lister: () async => const <Printer>[Printer(url: 'th-80')],
+        launcher:
+            ({required onLayout, required name}) async => false, // cancelled
+      );
+
+      await expectLater(
+        win.printReceipt(html: '', pdf: () async => Uint8List(4)),
+        throwsA(isA<win.ReceiptPrintException>()
+            .having((e) => e.code, 'code', 'printJobFailed')
+            .having((e) => e.message, 'message', 'Print job failed')),
+      );
+    });
+
+    test('platform crash is wrapped into a safe error, raw details logged',
+        () async {
+      win.debugConfigureWindowsPrintPipeline(
+        lister: () async => const <Printer>[Printer(url: 'th-80')],
+        launcher: ({required onLayout, required name}) async =>
+            throw StateError('raw DEVMODE failure'),
+      );
+
+      // The POS layer catches any error from the Future; users only ever see
+      // the safe message via the localized snackbar — never the StateError.
+      await expectLater(
+        win.printReceipt(html: '', pdf: () async => Uint8List(4)),
+        throwsA(isA<win.ReceiptPrintException>()
+            .having((e) => e.code, 'code', 'printJobFailed')
+            .having((e) => e.toString(), 'toString', 'Print job failed')),
+      );
+    });
+
+    test('no installed printers -> printerNotFound, dialog never opened',
+        () async {
+      var launched = false;
+      win.debugConfigureWindowsPrintPipeline(
+        lister: () async => const <Printer>[],
+        launcher: ({required onLayout, required name}) async {
+          launched = true;
+          return true;
+        },
+      );
+
+      await expectLater(
+        win.printReceipt(html: '', pdf: () async => Uint8List(0)),
+        throwsA(isA<win.ReceiptPrintException>()
+            .having((e) => e.code, 'code', 'printerNotFound')
+            .having((e) => e.message, 'message', 'Printer not found')),
+      );
+      expect(launched, isFalse);
     });
   });
 }

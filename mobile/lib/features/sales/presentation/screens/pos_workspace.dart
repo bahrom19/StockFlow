@@ -778,8 +778,10 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
 
   Future<void> _printReceipt(Sale sale) async {
     try {
-      await ReceiptPrintService.printHtml(
-        ReceiptExport.buildHtml(sale,
+      await ReceiptPrintService.printReceipt(
+        html: ReceiptExport.buildHtml(sale,
+            l10n: context.l10n, currency: sale.currency),
+        pdf: () => ReceiptExport.buildPdf(sale,
             l10n: context.l10n, currency: sale.currency),
       );
     } catch (e) {

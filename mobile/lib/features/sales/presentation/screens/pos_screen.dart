@@ -869,8 +869,10 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
 
   Future<void> _print() async {
     try {
-      await ReceiptPrintService.printHtml(
-        ReceiptExport.buildHtml(widget.sale,
+      await ReceiptPrintService.printReceipt(
+        html: ReceiptExport.buildHtml(widget.sale,
+            l10n: context.l10n, currency: widget.sale.currency),
+        pdf: () => ReceiptExport.buildPdf(widget.sale,
             l10n: context.l10n, currency: widget.sale.currency),
       );
     } catch (e) {

@@ -69,3 +69,17 @@ Future<void> printHtml(String markup) async {
   await Future<void>.delayed(const Duration(milliseconds: 300));
   iframe.remove();
 }
+
+/// Prints a receipt on the web (part of the shared facade contract with the
+/// Windows implementation).
+///
+/// The native/Windows pipeline needs PDF bytes, so the facade also passes a
+/// lazy [pdf] builder — but on web we keep the proven hidden-iframe HTML flow
+/// unchanged and simply never invoke that builder (no wasted PDF generation,
+/// zero behavioral change for the web build).
+Future<void> printReceipt({
+  required String html,
+  required Future<Uint8List> Function() pdf,
+}) {
+  return printHtml(html);
+}
