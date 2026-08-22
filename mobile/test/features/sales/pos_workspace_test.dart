@@ -939,6 +939,45 @@ void main() {
       expect(postPaths.any((p) => p.endsWith('/complete')), isTrue);
     });
 
+    // Regression: the receipt dialog's print action must run the print flow
+    // and degrade gracefully where native printing is not implemented yet —
+    // the service stub fails fast by design and the workspace shows a
+    // localized "Print failed" snackbar instead of an unhandled exception.
+    // On web builds the same tap opens the browser print dialog.
+    testWidgets('receipt print action runs flow and degrades gracefully',
+        (tester) async {
+      useDesktopSurface(tester);
+      final fake = _FakePosApi()
+        ..products = [
+          _product('p1', 'Espresso', sku: 'ESP', price: '100.00'),
+        ]
+        ..warehouses = [_warehouse()];
+
+      await tester.pumpWidget(buildWorkspace(fake));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Espresso'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('pos_cash_field')),
+        '100.00',
+      );
+      await tester.pump();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.f9);
+      await tester.pumpAndSettle();
+      expect(find.text('Sale completed'), findsOneWidget);
+
+      // Tap the receipt dialog's print button. On the test VM the facade
+      // resolves to the native stub; the error must be caught and surfaced
+      // as a snackbar — never escape to the zone.
+      await tester.tap(find.text('Print'));
+      await tester.pump(); // start the snackbar animation
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.textContaining('Print failed'), findsOneWidget);
+    });
+
     testWidgets('Ctrl+Delete clears the cart after confirmation',
         (tester) async {
       useDesktopSurface(tester);

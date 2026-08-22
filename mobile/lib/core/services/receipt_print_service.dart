@@ -7,8 +7,11 @@ import 'receipt_print_service_stub.dart'
 ///
 /// - Web: downloads PDF bytes via a Blob anchor and prints the receipt HTML
 ///   through a hidden iframe (window.print on the iframe content).
-/// - Native: intentionally unsupported (throws) — receipts are a web concern
-///   for the cashier terminal.
+/// - Native (Windows/desktop/mobile): intentionally unsupported — receipts are
+///   a web-terminal concern today. Real Windows native printing (print dialog
+///   via a platform channel) is the recorded NEXT PHASE; until then the stub
+///   fails fast with a documented UnsupportedError, which the POS surfaces as
+///   a localized "Print failed" snackbar instead of crashing.
 class ReceiptPrintService {
   ReceiptPrintService._();
 
