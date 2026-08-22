@@ -34,6 +34,16 @@ export class UpdateProductDto {
   @MaxLength(100)
   barcode?: string;
 
+  /**
+   * NTIN (National Trade Item Number). Send `null` explicitly to clear it;
+   * omitting the field keeps the current value (partial update semantics).
+   */
+  @ApiPropertyOptional({ example: '123456789', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  ntin?: string | null;
+
   @ApiPropertyOptional({ example: 49.99 })
   @IsOptional()
   @Type(() => Number)

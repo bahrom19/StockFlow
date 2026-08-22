@@ -15,6 +15,7 @@ export class ProductMapper {
       description: product.description,
       sku: product.sku,
       barcode: product.barcode,
+      ntin: product.ntin ?? null,
       price: this.toMoneyValue(product.price),
       costPrice: this.toMoneyValue(product.costPrice),
       // The unit relation is included on product reads; expose the unit NAME

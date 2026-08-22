@@ -189,6 +189,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 _InfoRow(label: l10n.barcode, value: p.barcode!,
                     icon: Icons.qr_code),
               ],
+              if (p.ntin != null && p.ntin!.isNotEmpty) ...[
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                _InfoRow(label: l10n.ntin, value: p.ntin!,
+                    icon: Icons.numbers),
+              ],
               if (p.brand != null) ...[
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 _InfoRow(label: l10n.brand, value: p.brand!),

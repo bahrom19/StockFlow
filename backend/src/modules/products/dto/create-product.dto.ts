@@ -48,6 +48,13 @@ export class CreateProductDto {
   @MaxLength(100)
   barcode?: string;
 
+  /** NTIN (National Trade Item Number) — independent of SKU and barcode. */
+  @ApiPropertyOptional({ example: '123456789' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  ntin?: string;
+
   @ApiProperty({ example: 49.99 })
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 4 })

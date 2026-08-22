@@ -23,6 +23,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   late TextEditingController _nameCtrl;
   late TextEditingController _skuCtrl;
   late TextEditingController _barcodeCtrl;
+  late TextEditingController _ntinCtrl;
   late TextEditingController _priceCtrl;
   late TextEditingController _costPriceCtrl;
   late TextEditingController _unitCtrl;
@@ -44,6 +45,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _nameCtrl = TextEditingController(text: p?.name ?? '');
     _skuCtrl = TextEditingController(text: p?.sku ?? '');
     _barcodeCtrl = TextEditingController(text: p?.barcode ?? '');
+    _ntinCtrl = TextEditingController(text: p?.ntin ?? '');
     _priceCtrl = TextEditingController(text: p?.price ?? '');
     _costPriceCtrl = TextEditingController(text: p?.costPrice ?? '');
     _unitCtrl = TextEditingController(text: p?.unit ?? '');
@@ -71,6 +73,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _nameCtrl.text = loaded.name;
         _skuCtrl.text = loaded.sku ?? '';
         _barcodeCtrl.text = loaded.barcode ?? '';
+        _ntinCtrl.text = loaded.ntin ?? '';
         _priceCtrl.text = loaded.price ?? '';
         _costPriceCtrl.text = loaded.costPrice ?? '';
         _unitCtrl.text = loaded.unit ?? '';
@@ -96,6 +99,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _nameCtrl.dispose();
     _skuCtrl.dispose();
     _barcodeCtrl.dispose();
+    _ntinCtrl.dispose();
     _priceCtrl.dispose();
     _costPriceCtrl.dispose();
     _unitCtrl.dispose();
@@ -113,6 +117,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     if (_skuCtrl.text != (p.sku ?? '')) map['sku'] = _skuCtrl.text;
     if (_barcodeCtrl.text != (p.barcode ?? '')) {
       map['barcode'] = _barcodeCtrl.text;
+    }
+    if (_ntinCtrl.text != (p.ntin ?? '')) {
+      // Explicit null so clearing the field stores NULL, not an empty string.
+      map['ntin'] = _ntinCtrl.text.isEmpty ? null : _ntinCtrl.text;
     }
     if (_priceCtrl.text != (p.price ?? '')) {
       map['price'] = _priceCtrl.text;
@@ -170,6 +178,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           name: _nameCtrl.text,
           sku: _skuCtrl.text.isNotEmpty ? _skuCtrl.text : null,
           barcode: _barcodeCtrl.text.isNotEmpty ? _barcodeCtrl.text : null,
+          ntin: _ntinCtrl.text.isNotEmpty ? _ntinCtrl.text : null,
           price: _priceCtrl.text,
           costPrice: _costPriceCtrl.text.isNotEmpty
               ? _costPriceCtrl.text
@@ -264,6 +273,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextFormField(
+              controller: _ntinCtrl,
+              decoration: InputDecoration(
+                labelText: l10n.ntin,
+                prefixIcon: const Icon(Icons.numbers),
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             Text(l10n.pricing, style: theme.textTheme.titleMedium),

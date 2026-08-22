@@ -636,6 +636,7 @@ model Product {
   description     String?           @db.Text
   sku             String?           @db.VarChar(100)
   barcode         String?           @db.VarChar(100)
+  ntin            String?           @db.VarChar(100)
   price           Decimal           @db.Decimal(18, 4)
   costPrice       Decimal?          @db.Decimal(18, 4)
   unitId          String?           @db.Uuid
@@ -660,6 +661,7 @@ model Product {
   @@index([name])
   @@index([sku])
   @@index([barcode])
+  @@index([ntin])
   @@index([category])
   @@index([isActive])
   @@index([createdAt])

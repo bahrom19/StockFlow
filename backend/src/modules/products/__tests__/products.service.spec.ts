@@ -32,6 +32,7 @@ describe('ProductsService', () => {
     deletedAt: null,
     description: null,
     barcode: null,
+    ntin: null,
     category: null,
     brand: null,
     unit: null,

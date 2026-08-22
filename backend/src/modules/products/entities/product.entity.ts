@@ -20,6 +20,10 @@ export class ProductEntity {
   @ApiPropertyOptional({ example: '1234567890123' })
   barcode!: string | null;
 
+  /** NTIN (National Trade Item Number) — independent identifier. */
+  @ApiPropertyOptional({ example: '123456789', nullable: true })
+  ntin!: string | null;
+
   @ApiProperty({ example: '49.9900' })
   price!: Decimal | string | null;
 

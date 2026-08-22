@@ -91,6 +91,7 @@ export class ProductsRepository {
     name?: string;
     sku?: string;
     barcode?: string;
+    ntin?: string;
     category?: string;
     isActive?: boolean;
     page?: number;
@@ -104,6 +105,7 @@ export class ProductsRepository {
       name,
       sku,
       barcode,
+      ntin,
       category,
       isActive,
       page = 1,
@@ -120,6 +122,7 @@ export class ProductsRepository {
       ...(barcode
         ? { barcode: { contains: barcode, mode: 'insensitive' } }
         : {}),
+      ...(ntin ? { ntin: { contains: ntin, mode: 'insensitive' } } : {}),
       ...(category
         ? { category: { contains: category, mode: 'insensitive' } }
         : {}),
@@ -130,6 +133,7 @@ export class ProductsRepository {
               { name: { contains: search, mode: 'insensitive' } },
               { sku: { contains: search, mode: 'insensitive' } },
               { barcode: { contains: search, mode: 'insensitive' } },
+              { ntin: { contains: search, mode: 'insensitive' } },
             ],
           }
         : {}),

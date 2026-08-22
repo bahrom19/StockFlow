@@ -26,6 +26,7 @@ mixin _$Product {
   String? get description => throw _privateConstructorUsedError;
   String? get sku => throw _privateConstructorUsedError;
   String? get barcode => throw _privateConstructorUsedError;
+  String? get ntin => throw _privateConstructorUsedError;
   String? get price => throw _privateConstructorUsedError;
   String? get costPrice => throw _privateConstructorUsedError;
   String? get unit => throw _privateConstructorUsedError;
@@ -58,6 +59,7 @@ abstract class $ProductCopyWith<$Res> {
       String? description,
       String? sku,
       String? barcode,
+      String? ntin,
       String? price,
       String? costPrice,
       String? unit,
@@ -91,6 +93,7 @@ class _$ProductCopyWithImpl<$Res, $Val extends Product>
     Object? description = freezed,
     Object? sku = freezed,
     Object? barcode = freezed,
+    Object? ntin = freezed,
     Object? price = freezed,
     Object? costPrice = freezed,
     Object? unit = freezed,
@@ -126,6 +129,10 @@ class _$ProductCopyWithImpl<$Res, $Val extends Product>
       barcode: freezed == barcode
           ? _value.barcode
           : barcode // ignore: cast_nullable_to_non_nullable
+              as String?,
+      ntin: freezed == ntin
+          ? _value.ntin
+          : ntin // ignore: cast_nullable_to_non_nullable
               as String?,
       price: freezed == price
           ? _value.price
@@ -185,6 +192,7 @@ abstract class _$$ProductImplCopyWith<$Res> implements $ProductCopyWith<$Res> {
       String? description,
       String? sku,
       String? barcode,
+      String? ntin,
       String? price,
       String? costPrice,
       String? unit,
@@ -216,6 +224,7 @@ class __$$ProductImplCopyWithImpl<$Res>
     Object? description = freezed,
     Object? sku = freezed,
     Object? barcode = freezed,
+    Object? ntin = freezed,
     Object? price = freezed,
     Object? costPrice = freezed,
     Object? unit = freezed,
@@ -251,6 +260,10 @@ class __$$ProductImplCopyWithImpl<$Res>
       barcode: freezed == barcode
           ? _value.barcode
           : barcode // ignore: cast_nullable_to_non_nullable
+              as String?,
+      ntin: freezed == ntin
+          ? _value.ntin
+          : ntin // ignore: cast_nullable_to_non_nullable
               as String?,
       price: freezed == price
           ? _value.price
@@ -306,6 +319,7 @@ class _$ProductImpl implements _Product {
       this.description,
       this.sku,
       this.barcode,
+      this.ntin,
       this.price,
       this.costPrice,
       this.unit,
@@ -333,6 +347,8 @@ class _$ProductImpl implements _Product {
   @override
   final String? barcode;
   @override
+  final String? ntin;
+  @override
   final String? price;
   @override
   final String? costPrice;
@@ -357,7 +373,7 @@ class _$ProductImpl implements _Product {
 
   @override
   String toString() {
-    return 'Product(id: $id, companyId: $companyId, name: $name, description: $description, sku: $sku, barcode: $barcode, price: $price, costPrice: $costPrice, unit: $unit, category: $category, brand: $brand, stockQuantity: $stockQuantity, isActive: $isActive, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt)';
+    return 'Product(id: $id, companyId: $companyId, name: $name, description: $description, sku: $sku, barcode: $barcode, ntin: $ntin, price: $price, costPrice: $costPrice, unit: $unit, category: $category, brand: $brand, stockQuantity: $stockQuantity, isActive: $isActive, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt)';
   }
 
   @override
@@ -373,6 +389,7 @@ class _$ProductImpl implements _Product {
                 other.description == description) &&
             (identical(other.sku, sku) || other.sku == sku) &&
             (identical(other.barcode, barcode) || other.barcode == barcode) &&
+            (identical(other.ntin, ntin) || other.ntin == ntin) &&
             (identical(other.price, price) || other.price == price) &&
             (identical(other.costPrice, costPrice) ||
                 other.costPrice == costPrice) &&
@@ -402,6 +419,7 @@ class _$ProductImpl implements _Product {
       description,
       sku,
       barcode,
+      ntin,
       price,
       costPrice,
       unit,
@@ -437,6 +455,7 @@ abstract class _Product implements Product {
       final String? description,
       final String? sku,
       final String? barcode,
+      final String? ntin,
       final String? price,
       final String? costPrice,
       final String? unit,
@@ -462,6 +481,8 @@ abstract class _Product implements Product {
   String? get sku;
   @override
   String? get barcode;
+  @override
+  String? get ntin;
   @override
   String? get price;
   @override
@@ -714,6 +735,7 @@ mixin _$ProductFormData {
   String get name => throw _privateConstructorUsedError;
   String? get sku => throw _privateConstructorUsedError;
   String? get barcode => throw _privateConstructorUsedError;
+  String? get ntin => throw _privateConstructorUsedError;
   String get price => throw _privateConstructorUsedError;
   String? get costPrice => throw _privateConstructorUsedError;
   String? get unit => throw _privateConstructorUsedError;
@@ -743,6 +765,7 @@ abstract class $ProductFormDataCopyWith<$Res> {
       {String name,
       String? sku,
       String? barcode,
+      String? ntin,
       String price,
       String? costPrice,
       String? unit,
@@ -771,6 +794,7 @@ class _$ProductFormDataCopyWithImpl<$Res, $Val extends ProductFormData>
     Object? name = null,
     Object? sku = freezed,
     Object? barcode = freezed,
+    Object? ntin = freezed,
     Object? price = null,
     Object? costPrice = freezed,
     Object? unit = freezed,
@@ -792,6 +816,10 @@ class _$ProductFormDataCopyWithImpl<$Res, $Val extends ProductFormData>
       barcode: freezed == barcode
           ? _value.barcode
           : barcode // ignore: cast_nullable_to_non_nullable
+              as String?,
+      ntin: freezed == ntin
+          ? _value.ntin
+          : ntin // ignore: cast_nullable_to_non_nullable
               as String?,
       price: null == price
           ? _value.price
@@ -841,6 +869,7 @@ abstract class _$$ProductFormDataImplCopyWith<$Res>
       {String name,
       String? sku,
       String? barcode,
+      String? ntin,
       String price,
       String? costPrice,
       String? unit,
@@ -867,6 +896,7 @@ class __$$ProductFormDataImplCopyWithImpl<$Res>
     Object? name = null,
     Object? sku = freezed,
     Object? barcode = freezed,
+    Object? ntin = freezed,
     Object? price = null,
     Object? costPrice = freezed,
     Object? unit = freezed,
@@ -888,6 +918,10 @@ class __$$ProductFormDataImplCopyWithImpl<$Res>
       barcode: freezed == barcode
           ? _value.barcode
           : barcode // ignore: cast_nullable_to_non_nullable
+              as String?,
+      ntin: freezed == ntin
+          ? _value.ntin
+          : ntin // ignore: cast_nullable_to_non_nullable
               as String?,
       price: null == price
           ? _value.price
@@ -932,6 +966,7 @@ class _$ProductFormDataImpl implements _ProductFormData {
       {required this.name,
       this.sku,
       this.barcode,
+      this.ntin,
       required this.price,
       this.costPrice,
       this.unit,
@@ -950,6 +985,8 @@ class _$ProductFormDataImpl implements _ProductFormData {
   final String? sku;
   @override
   final String? barcode;
+  @override
+  final String? ntin;
   @override
   final String price;
   @override
@@ -971,7 +1008,7 @@ class _$ProductFormDataImpl implements _ProductFormData {
 
   @override
   String toString() {
-    return 'ProductFormData(name: $name, sku: $sku, barcode: $barcode, price: $price, costPrice: $costPrice, unit: $unit, category: $category, brand: $brand, description: $description, stockQuantity: $stockQuantity, isActive: $isActive)';
+    return 'ProductFormData(name: $name, sku: $sku, barcode: $barcode, ntin: $ntin, price: $price, costPrice: $costPrice, unit: $unit, category: $category, brand: $brand, description: $description, stockQuantity: $stockQuantity, isActive: $isActive)';
   }
 
   @override
@@ -982,6 +1019,7 @@ class _$ProductFormDataImpl implements _ProductFormData {
             (identical(other.name, name) || other.name == name) &&
             (identical(other.sku, sku) || other.sku == sku) &&
             (identical(other.barcode, barcode) || other.barcode == barcode) &&
+            (identical(other.ntin, ntin) || other.ntin == ntin) &&
             (identical(other.price, price) || other.price == price) &&
             (identical(other.costPrice, costPrice) ||
                 other.costPrice == costPrice) &&
@@ -999,7 +1037,7 @@ class _$ProductFormDataImpl implements _ProductFormData {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, name, sku, barcode, price,
+  int get hashCode => Object.hash(runtimeType, name, sku, barcode, ntin, price,
       costPrice, unit, category, brand, description, stockQuantity, isActive);
 
   /// Create a copy of ProductFormData
@@ -1024,6 +1062,7 @@ abstract class _ProductFormData implements ProductFormData {
       {required final String name,
       final String? sku,
       final String? barcode,
+      final String? ntin,
       required final String price,
       final String? costPrice,
       final String? unit,
@@ -1042,6 +1081,8 @@ abstract class _ProductFormData implements ProductFormData {
   String? get sku;
   @override
   String? get barcode;
+  @override
+  String? get ntin;
   @override
   String get price;
   @override
@@ -1076,6 +1117,7 @@ mixin _$CreateProductRequest {
   String get name => throw _privateConstructorUsedError;
   String? get sku => throw _privateConstructorUsedError;
   String? get barcode => throw _privateConstructorUsedError;
+  String? get ntin => throw _privateConstructorUsedError;
   String get price => throw _privateConstructorUsedError;
   String? get costPrice => throw _privateConstructorUsedError;
   String? get unit => throw _privateConstructorUsedError;
@@ -1105,6 +1147,7 @@ abstract class $CreateProductRequestCopyWith<$Res> {
       {String name,
       String? sku,
       String? barcode,
+      String? ntin,
       String price,
       String? costPrice,
       String? unit,
@@ -1134,6 +1177,7 @@ class _$CreateProductRequestCopyWithImpl<$Res,
     Object? name = null,
     Object? sku = freezed,
     Object? barcode = freezed,
+    Object? ntin = freezed,
     Object? price = null,
     Object? costPrice = freezed,
     Object? unit = freezed,
@@ -1155,6 +1199,10 @@ class _$CreateProductRequestCopyWithImpl<$Res,
       barcode: freezed == barcode
           ? _value.barcode
           : barcode // ignore: cast_nullable_to_non_nullable
+              as String?,
+      ntin: freezed == ntin
+          ? _value.ntin
+          : ntin // ignore: cast_nullable_to_non_nullable
               as String?,
       price: null == price
           ? _value.price
@@ -1204,6 +1252,7 @@ abstract class _$$CreateProductRequestImplCopyWith<$Res>
       {String name,
       String? sku,
       String? barcode,
+      String? ntin,
       String price,
       String? costPrice,
       String? unit,
@@ -1230,6 +1279,7 @@ class __$$CreateProductRequestImplCopyWithImpl<$Res>
     Object? name = null,
     Object? sku = freezed,
     Object? barcode = freezed,
+    Object? ntin = freezed,
     Object? price = null,
     Object? costPrice = freezed,
     Object? unit = freezed,
@@ -1251,6 +1301,10 @@ class __$$CreateProductRequestImplCopyWithImpl<$Res>
       barcode: freezed == barcode
           ? _value.barcode
           : barcode // ignore: cast_nullable_to_non_nullable
+              as String?,
+      ntin: freezed == ntin
+          ? _value.ntin
+          : ntin // ignore: cast_nullable_to_non_nullable
               as String?,
       price: null == price
           ? _value.price
@@ -1295,6 +1349,7 @@ class _$CreateProductRequestImpl implements _CreateProductRequest {
       {required this.name,
       this.sku,
       this.barcode,
+      this.ntin,
       required this.price,
       this.costPrice,
       this.unit,
@@ -1313,6 +1368,8 @@ class _$CreateProductRequestImpl implements _CreateProductRequest {
   final String? sku;
   @override
   final String? barcode;
+  @override
+  final String? ntin;
   @override
   final String price;
   @override
@@ -1334,7 +1391,7 @@ class _$CreateProductRequestImpl implements _CreateProductRequest {
 
   @override
   String toString() {
-    return 'CreateProductRequest(name: $name, sku: $sku, barcode: $barcode, price: $price, costPrice: $costPrice, unit: $unit, category: $category, brand: $brand, description: $description, stockQuantity: $stockQuantity, isActive: $isActive)';
+    return 'CreateProductRequest(name: $name, sku: $sku, barcode: $barcode, ntin: $ntin, price: $price, costPrice: $costPrice, unit: $unit, category: $category, brand: $brand, description: $description, stockQuantity: $stockQuantity, isActive: $isActive)';
   }
 
   @override
@@ -1345,6 +1402,7 @@ class _$CreateProductRequestImpl implements _CreateProductRequest {
             (identical(other.name, name) || other.name == name) &&
             (identical(other.sku, sku) || other.sku == sku) &&
             (identical(other.barcode, barcode) || other.barcode == barcode) &&
+            (identical(other.ntin, ntin) || other.ntin == ntin) &&
             (identical(other.price, price) || other.price == price) &&
             (identical(other.costPrice, costPrice) ||
                 other.costPrice == costPrice) &&
@@ -1362,7 +1420,7 @@ class _$CreateProductRequestImpl implements _CreateProductRequest {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, name, sku, barcode, price,
+  int get hashCode => Object.hash(runtimeType, name, sku, barcode, ntin, price,
       costPrice, unit, category, brand, description, stockQuantity, isActive);
 
   /// Create a copy of CreateProductRequest
@@ -1388,6 +1446,7 @@ abstract class _CreateProductRequest implements CreateProductRequest {
       {required final String name,
       final String? sku,
       final String? barcode,
+      final String? ntin,
       required final String price,
       final String? costPrice,
       final String? unit,
@@ -1406,6 +1465,8 @@ abstract class _CreateProductRequest implements CreateProductRequest {
   String? get sku;
   @override
   String? get barcode;
+  @override
+  String? get ntin;
   @override
   String get price;
   @override

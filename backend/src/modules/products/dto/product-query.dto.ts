@@ -35,6 +35,11 @@ export class ProductQueryDto {
   @IsString()
   barcode?: string;
 
+  @ApiPropertyOptional({ example: '123456789' })
+  @IsOptional()
+  @IsString()
+  ntin?: string;
+
   @ApiPropertyOptional({ example: 'Electronics' })
   @IsOptional()
   @IsString()

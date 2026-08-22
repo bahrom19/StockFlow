@@ -64,11 +64,13 @@ void main() {
       expect(en().products, 'Products');
       expect(en().productsSubtitle,
           'Manage your catalog, pricing and stock levels');
-      expect(en().searchByNameSkuBarcode, 'Search by name, SKU or barcode…');
+      expect(en().searchByNameSkuBarcode,
+          'Search by name, SKU, barcode or NTIN…');
       expect(en().newProduct, 'New Product');
       expect(en().name, 'Name');
       expect(en().sku, 'SKU');
       expect(en().barcode, 'Barcode');
+      expect(en().ntin, 'NTIN');
       expect(en().category, 'Category');
       expect(en().brand, 'Brand');
       expect(en().unit, 'Unit');
