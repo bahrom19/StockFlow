@@ -90,16 +90,21 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
               const SizedBox(width: AppSpacing.xs),
               // Label-less semantics boundary: cart header text stays its own
               // innerText leaf; the Clear CTA remains a separate sibling.
-              Semantics(
-                container: true,
-                child: Text(
-                  context.l10n.posCartItemsCount(cart.itemCount),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
+              // Expanded keeps long item counts from pushing the Clear CTA
+              // out of the panel on narrow windows.
+              Expanded(
+                child: Semantics(
+                  container: true,
+                  child: Text(
+                    context.l10n.posCartItemsCount(cart.itemCount),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
-              const Spacer(),
               if (cart.items.isNotEmpty)
                 TextButton.icon(
                   onPressed: () => _confirmClearCart(),
@@ -478,11 +483,17 @@ class _PosCartPanelState extends ConsumerState<PosCartPanel> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
-              style: base?.copyWith(
-                fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-                color: color,
+            // Expanded keeps the row overflow-proof at any panel width: the
+            // label yields (ellipsis) while the amount is always fully shown.
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: base?.copyWith(
+                  fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+                  color: color,
+                ),
               ),
             ),
             Text(
@@ -589,11 +600,18 @@ class _CartItemCard extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: AppSpacing.xs),
+            // Same compact single row as before (unit price × stepper × line
+            // total) — identical card height; Flexible/Expanded let the texts
+            // yield gracefully instead of overflowing on narrow terminals.
             Row(
               children: [
-                Text(
-                  '${context.money(item.unitPrice)} × ',
-                  style: theme.textTheme.bodySmall,
+                Flexible(
+                  child: Text(
+                    '${context.money(item.unitPrice)} × ',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
                 ),
                 // Quantity stepper
                 IconButton(
@@ -603,22 +621,31 @@ class _CartItemCard extends StatelessWidget {
                       : null,
                   visualDensity: VisualDensity.compact,
                 ),
-                SizedBox(
-                  width: 34,
-                  child: TextField(
-                    textAlign: TextAlign.center,
-                    controller: TextEditingController(
-                      text: '${item.quantity}',
+                // Adaptive width: hugs its digits so 1–2 digit quantities keep
+                // the original 34px footprint while 3-digit values ("100",
+                // "999") stay fully visible; maxWidth caps hand-typed numbers.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 34,
+                    maxWidth: 64,
+                  ),
+                  child: IntrinsicWidth(
+                    child: TextField(
+                      key: const Key('pos_qty_field'),
+                      textAlign: TextAlign.center,
+                      controller: TextEditingController(
+                        text: '${item.quantity}',
+                      ),
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(isDense: true),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      onSubmitted: (v) {
+                        final qty = int.tryParse(v);
+                        if (qty != null && qty > 0) onQuantityChanged(qty);
+                      },
                     ),
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(isDense: true),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                    onSubmitted: (v) {
-                      final qty = int.tryParse(v);
-                      if (qty != null && qty > 0) onQuantityChanged(qty);
-                    },
                   ),
                 ),
                 IconButton(
@@ -626,11 +653,15 @@ class _CartItemCard extends StatelessWidget {
                   onPressed: () => onQuantityChanged(item.quantity + 1),
                   visualDensity: VisualDensity.compact,
                 ),
-                const Spacer(),
-                Text(
-                  context.money(item.total),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Text(
+                    context.money(item.total),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -645,27 +676,33 @@ class _CartItemCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
-                SizedBox(
-                  width: 90,
-                  child: TextField(
-                    controller: TextEditingController(
-                      text: item.effectiveDiscount.isPositive
-                          ? '${item.effectiveDiscount}'
-                          : '',
+                // Flexible instead of a hard width: the field keeps its 90px
+                // footprint when there is room and shrinks gracefully on
+                // narrow cards instead of overflowing the row.
+                Flexible(
+                  child: SizedBox(
+                    width: 90,
+                    child: TextField(
+                      controller: TextEditingController(
+                        text: item.effectiveDiscount.isPositive
+                            ? '${item.effectiveDiscount}'
+                            : '',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(isDense: true),
+                      style: theme.textTheme.bodySmall,
+                      onSubmitted: (v) {
+                        final parsed =
+                            Money.tryParse(v, item.unitPrice.currency);
+                        if (parsed == null) return;
+                        onDiscountChanged(parsed.clamp(
+                          Money.zero(item.unitPrice.currency),
+                          item.subtotal,
+                        ));
+                      },
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(isDense: true),
-                    style: theme.textTheme.bodySmall,
-                    onSubmitted: (v) {
-                      final parsed = Money.tryParse(v, item.unitPrice.currency);
-                      if (parsed == null) return;
-                      onDiscountChanged(parsed.clamp(
-                        Money.zero(item.unitPrice.currency),
-                        item.subtotal,
-                      ));
-                    },
                   ),
                 ),
               ],

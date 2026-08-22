@@ -1056,6 +1056,67 @@ void main() {
       expect(find.textContaining('1 items'), findsWidgets);
     });
 
+    // Regression: the cart quantity field used to be a hard-coded
+    // SizedBox(width: 34). A TextField needs ~16px of decorator padding on
+    // top of the text itself, so 3-digit quantities ("100") were visually
+    // clipped. The field now hugs its content (min 34 / max 64) and the
+    // whole row must stay overflow-free at every supported POS width.
+    testWidgets('cart quantity stays fully visible for large values',
+        (tester) async {
+      addTearDown(tester.view.reset);
+      SharedPreferences.setMockInitialValues({});
+      addTearDown(() => SharedPreferences.setMockInitialValues({}));
+      final fake = _FakePosApi()
+        ..products = [
+          _product('p1', 'Milk 1L', sku: 'MLK', price: '500.00'),
+        ]
+        ..warehouses = [_warehouse()];
+
+      for (final width in <double>[768, 1024, 1440]) {
+        // Simulate each supported desktop terminal size.
+        tester.view.physicalSize = Size(width, 900);
+        tester.view.devicePixelRatio = 1.0;
+
+        await tester.pumpWidget(buildWorkspace(fake));
+        await tester.pumpAndSettle();
+
+        // Add the product to the cart.
+        await tester.tap(find.text('Milk 1L').first);
+        await tester.pumpAndSettle();
+
+        // Type a 3-digit quantity straight into the field.
+        await tester.enterText(find.byKey(const Key('pos_qty_field')), '100');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+
+        // Quantity applied end-to-end — header count reflects it.
+        expect(find.text('Cart (100 items)'), findsOneWidget);
+
+        // The rendered field is wide enough for its content; the old fixed
+        // 34px box fails this check.
+        final qtyBox = tester.renderObject<RenderBox>(
+          find.byKey(const Key('pos_qty_field')),
+        );
+        expect(qtyBox.size.width, greaterThanOrEqualTo(36));
+        expect(qtyBox.size.width, lessThanOrEqualTo(64));
+
+        // The +/- steppers remain reachable and still update the quantity.
+        await tester.tap(find.byIcon(Icons.add_circle_outline));
+        await tester.pumpAndSettle();
+        expect(find.text('Cart (101 items)'), findsOneWidget);
+
+        await tester.tap(find.byIcon(Icons.remove_circle_outline));
+        await tester.pumpAndSettle();
+        expect(find.text('Cart (100 items)'), findsOneWidget);
+      }
+
+      // Close the simulated keyboard and drop focus so the following tests
+      // start from a pristine surface (no lingering viewInsets).
+      FocusManager.instance.primaryFocus?.unfocus();
+      tester.testTextInput.hide();
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('F6 holds the sale and Ctrl+H resumes it', (tester) async {
       useDesktopSurface(tester);
       SharedPreferences.setMockInitialValues({});

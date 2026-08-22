@@ -428,12 +428,20 @@ class _CartItemTile extends StatelessWidget {
                       ? () => onQuantityChanged(item.quantity - 1)
                       : null,
                 ),
-                SizedBox(
-                  width: 32,
-                  child: Text(
-                    '${item.quantity}',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium,
+                // Adaptive width: grows with the digits so multi-digit
+                // quantities stay fully visible instead of wrapping.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    maxWidth: 56,
+                  ),
+                  child: IntrinsicWidth(
+                    child: Text(
+                      '${item.quantity}',
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleMedium,
+                    ),
                   ),
                 ),
                 IconButton(
