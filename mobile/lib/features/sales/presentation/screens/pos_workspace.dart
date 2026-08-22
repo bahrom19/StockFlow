@@ -459,6 +459,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
           productName: product.name,
           productSku: product.sku ?? '',
           barcode: product.barcode,
+          ntin: product.ntin,
           quantity: 1,
           unitPrice:
               Money.tryParse(price, cartCurrency) ?? Money.zero(cartCurrency),
@@ -573,6 +574,10 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     final productNames = {
       for (final i in cart.items) i.productId: i.productName,
     };
+    // NTINs ride along the same way and are printed under the item name.
+    final productNtins = {
+      for (final i in cart.items) i.productId: i.ntin,
+    };
     final cashierName = ref.read(currentUserProvider)?.fullName;
 
     ref.read(cartProvider.notifier).clear();
@@ -586,6 +591,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     _showReceipt(
       completed,
       productNames: productNames,
+      productNtins: productNtins,
       cashierName: cashierName,
       warehouseName: _selectedWarehouseName,
     );
@@ -595,6 +601,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   void _showReceipt(
     Sale sale, {
     Map<String, String>? productNames,
+    Map<String, String?>? productNtins,
     String? cashierName,
     String? warehouseName,
   }) {
@@ -655,11 +662,29 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            _receiptItemName(item, productNames),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _receiptItemName(item, productNames),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                              // Mirrors the printed receipt: NTIN only when
+                              // the product carries one.
+                              if (_receiptItemNtin(item, productNtins) !=
+                                  null)
+                                Text(
+                                  'NTIN: '
+                                  '${_receiptItemNtin(item, productNtins)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         Text('×${item.quantity}',
@@ -726,13 +751,14 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
         ),
         actions: [
           TextButton.icon(
-            onPressed: () =>
-                _downloadReceiptPdf(sale, productNames: productNames),
+            onPressed: () => _downloadReceiptPdf(sale,
+                productNames: productNames, productNtins: productNtins),
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
             label: Text(context.l10n.posPdf),
           ),
           TextButton.icon(
-            onPressed: () => _printReceipt(sale, productNames: productNames),
+            onPressed: () => _printReceipt(sale,
+                productNames: productNames, productNtins: productNtins),
             icon: const Icon(Icons.print, size: 18),
             label: Text(context.l10n.posPrint),
           ),
@@ -769,10 +795,12 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   Future<void> _downloadReceiptPdf(
     Sale sale, {
     Map<String, String>? productNames,
+    Map<String, String?>? productNtins,
   }) async {
     try {
       final bytes = await ReceiptExport.buildPdf(sale,
           productNames: productNames,
+          productNtins: productNtins,
           l10n: context.l10n,
           currency: sale.currency);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
@@ -785,15 +813,18 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
   Future<void> _printReceipt(
     Sale sale, {
     Map<String, String>? productNames,
+    Map<String, String?>? productNtins,
   }) async {
     try {
       await ReceiptPrintService.printReceipt(
         html: ReceiptExport.buildHtml(sale,
             productNames: productNames,
+            productNtins: productNtins,
             l10n: context.l10n,
             currency: sale.currency),
         pdf: () => ReceiptExport.buildPdf(sale,
             productNames: productNames,
+            productNtins: productNtins,
             l10n: context.l10n,
             currency: sale.currency),
       );
@@ -823,6 +854,13 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     return item.productId.length <= 12
         ? item.productId
         : context.l10n.posItemFallback(item.productId.substring(0, 10));
+  }
+
+  /// NTIN for the receipt preview — null when the product carries none
+  /// (mirrors [ReceiptExport], which prints nothing in that case).
+  String? _receiptItemNtin(SaleItem item, Map<String, String?>? productNtins) {
+    final ntin = productNtins?[item.productId]?.trim();
+    return (ntin == null || ntin.isEmpty) ? null : ntin;
   }
 
   void _showSnack(String message, {bool isError = true}) {

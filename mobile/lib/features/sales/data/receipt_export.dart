@@ -56,11 +56,14 @@ class ReceiptExport {
   ///
   /// [productNames] maps a productId to its display name (the backend's
   /// SaleItem does not include the product name, so the POS passes the cart
-  /// mapping). [cashierName], [warehouseName] and [storeName] decorate the
-  /// header when provided.
+  /// mapping). [productNtins] maps a productId to its NTIN and follows the
+  /// same cart-captured pattern; an item without an NTIN prints no NTIN line.
+  /// SKU / barcode / productId are never printed. [cashierName],
+  /// [warehouseName] and [storeName] decorate the header when provided.
   static Future<Uint8List> buildPdf(
     Sale sale, {
     Map<String, String>? productNames,
+    Map<String, String?>? productNtins,
     String? cashierName,
     String? warehouseName,
     String? storeName,
@@ -80,6 +83,7 @@ class ReceiptExport {
         build: (context) => _buildBody(
           sale,
           productNames: productNames,
+          productNtins: productNtins,
           cashierName: cashierName,
           warehouseName: warehouseName,
           storeName: storeName,
@@ -96,6 +100,7 @@ class ReceiptExport {
   static pw.Widget _buildBody(
     Sale sale, {
     Map<String, String>? productNames,
+    Map<String, String?>? productNtins,
     String? cashierName,
     String? warehouseName,
     String? storeName,
@@ -131,22 +136,7 @@ class ReceiptExport {
         ],
       ),
       for (final item in sale.items)
-        pw.TableRow(
-          children: [
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(vertical: 2),
-              child: pw.Text(
-                _itemName(item, productNames),
-                style: _style(9),
-              ),
-            ),
-            pw.Text('${item.quantity}', style: _style(9)),
-            pw.Text(
-              CurrencyCatalog.formatPdf(_amount(item.total), code: currency),
-              style: _style(9),
-            ),
-          ],
-        ),
+        _pdfItemRow(item, productNames, productNtins, currency),
     ];
 
     final store = (storeName?.isNotEmpty ?? false)
@@ -280,6 +270,46 @@ class ReceiptExport {
     return _shortId(item.productId);
   }
 
+  /// NTIN of a sale item, resolved through the cart-captured [productNtins]
+  /// map. Returns null when the map has no usable entry for the item —
+  /// missing / blank NTINs print nothing at all. SKU, barcode and productId
+  /// are deliberately never surfaced here.
+  static String? _ntinOf(SaleItem item, Map<String, String?>? productNtins) {
+    final ntin = productNtins?[item.productId]?.trim();
+    return (ntin == null || ntin.isEmpty) ? null : ntin;
+  }
+
+  /// One receipt table row: name (plus optional small NTIN line under it),
+  /// quantity and line total.
+  static pw.TableRow _pdfItemRow(
+    SaleItem item,
+    Map<String, String>? productNames,
+    Map<String, String?>? productNtins,
+    String currency,
+  ) {
+    final ntin = _ntinOf(item, productNtins);
+    return pw.TableRow(
+      children: [
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 2),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(_itemName(item, productNames), style: _style(9)),
+              if (ntin != null)
+                pw.Text('NTIN: $ntin', style: _style(7)),
+            ],
+          ),
+        ),
+        pw.Text('${item.quantity}', style: _style(9)),
+        pw.Text(
+          CurrencyCatalog.formatPdf(_amount(item.total), code: currency),
+          style: _style(9),
+        ),
+      ],
+    );
+  }
+
   /// Payment method display label — EN keeps the backend value byte-for-byte.
   static String _paymentLabel(String method, AppLocalizations? l10n) {
     if (l10n == null) return method;
@@ -299,6 +329,7 @@ class ReceiptExport {
   static String buildHtml(
     Sale sale, {
     Map<String, String>? productNames,
+    Map<String, String?>? productNtins,
     String? cashierName,
     String? warehouseName,
     String? storeName,
@@ -327,13 +358,15 @@ class ReceiptExport {
         ? '<div style="text-align:center;margin-top:8px"><img src="$qrPngDataUri" width="88" height="88"><br>${_esc(sale.saleNumber)}</div>'
         : '';
     String fmt(num v) => CurrencyCatalog.format(v, code: currency);
-    final items = sale.items
-        .map((i) => '<tr>'
-            '<td>${_esc(_itemName(i, productNames))}</td>'
-            '<td>${i.quantity}</td>'
-            '<td>${_esc(fmt(_amount(i.total)))}</td>'
-            '</tr>')
-        .join();
+    final items = sale.items.map((i) {
+      final ntin = _ntinOf(i, productNtins);
+      return '<tr>'
+          '<td>${_esc(_itemName(i, productNames))}'
+          '${ntin != null ? '<div class="ntin">NTIN: ${_esc(ntin)}</div>' : ''}</td>'
+          '<td>${i.quantity}</td>'
+          '<td>${_esc(fmt(_amount(i.total)))}</td>'
+          '</tr>';
+    }).join();
     final payments = sale.payments
         .map((p) => '<tr><td>${_esc(_paymentLabel(p.method, l10n))}</td>'
             '<td>${_esc(fmt(_amount(p.amount)))}</td></tr>')
@@ -349,6 +382,7 @@ class ReceiptExport {
   .meta { text-align: center; font-size: 10px; margin-bottom: 6px; }
   table { width: 100%; border-collapse: collapse; }
   td { padding: 2px 0; }
+  .ntin { font-size: 10px; }
   .total td { font-weight: bold; border-top: 1px dashed #000; }
 </style></head>
 <body>

@@ -253,6 +253,10 @@ class CartItem {
   final String productName;
   final String productSku;
   final String? barcode;
+
+  /// National Trade Item Number — carried from [Product] purely for the
+  /// printed/exported receipt (the backend SaleItem does not store it).
+  final String? ntin;
   final int quantity;
   final Money unitPrice;
   final Money costPrice;
@@ -263,6 +267,7 @@ class CartItem {
     required this.productName,
     required this.productSku,
     this.barcode,
+    this.ntin,
     required this.quantity,
     required this.unitPrice,
     required this.costPrice,
@@ -285,6 +290,7 @@ class CartItem {
     String? productName,
     String? productSku,
     String? barcode,
+    String? ntin,
     int? quantity,
     Money? unitPrice,
     Money? costPrice,
@@ -295,6 +301,7 @@ class CartItem {
       productName: productName ?? this.productName,
       productSku: productSku ?? this.productSku,
       barcode: barcode ?? this.barcode,
+      ntin: ntin ?? this.ntin,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       costPrice: costPrice ?? this.costPrice,
@@ -307,6 +314,7 @@ class CartItem {
         'productName': productName,
         'productSku': productSku,
         'barcode': barcode,
+        'ntin': ntin,
         'quantity': quantity,
         'unitPrice': unitPrice.toDecimalString(),
         'costPrice': costPrice.toDecimalString(),
@@ -321,6 +329,8 @@ class CartItem {
       productName: (json['productName'] as String?) ?? '',
       productSku: (json['productSku'] as String?) ?? '',
       barcode: json['barcode'] as String?,
+      // Nullable + absent in pre-NTIN persisted carts (held sales) — safe.
+      ntin: json['ntin'] as String?,
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
       unitPrice:
           Money.fromJson(json['unitPrice'], currency) ?? Money.zero(currency),

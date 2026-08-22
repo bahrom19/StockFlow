@@ -112,6 +112,7 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
           productName: product.name,
           productSku: product.sku ?? '',
           barcode: product.barcode,
+          ntin: product.ntin,
           quantity: 1,
           unitPrice:
               Money.tryParse(price, cartCurrency) ?? Money.zero(cartCurrency),
@@ -596,6 +597,10 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
         final productNames = {
           for (final i in widget.cart.items) i.productId: i.productName,
         };
+        // Same capture for NTINs (printed under the item name on receipts).
+        final productNtins = {
+          for (final i in widget.cart.items) i.productId: i.ntin,
+        };
         widget.onComplete();
         // Show receipt
         if (mounted) {
@@ -604,6 +609,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
               builder: (_) => ReceiptScreen(
                 sale: completed,
                 productNames: productNames,
+                productNtins: productNtins,
               ),
             ),
           );
@@ -854,7 +860,16 @@ class ReceiptScreen extends ConsumerStatefulWidget {
   /// was cleared (the backend SaleItem carries no product name).
   final Map<String, String>? productNames;
 
-  const ReceiptScreen({super.key, required this.sale, this.productNames});
+  /// productId → NTIN mapping captured alongside [productNames]; items
+  /// without an NTIN print no NTIN line.
+  final Map<String, String?>? productNtins;
+
+  const ReceiptScreen({
+    super.key,
+    required this.sale,
+    this.productNames,
+    this.productNtins,
+  });
 
   @override
   ConsumerState<ReceiptScreen> createState() => _ReceiptScreenState();
@@ -869,6 +884,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     try {
       final bytes = await ReceiptExport.buildPdf(sale,
           productNames: widget.productNames,
+          productNtins: widget.productNtins,
           l10n: context.l10n,
           currency: sale.currency);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
@@ -896,10 +912,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       await ReceiptPrintService.printReceipt(
         html: ReceiptExport.buildHtml(widget.sale,
             productNames: widget.productNames,
+            productNtins: widget.productNtins,
             l10n: context.l10n,
             currency: widget.sale.currency),
         pdf: () => ReceiptExport.buildPdf(widget.sale,
             productNames: widget.productNames,
+            productNtins: widget.productNtins,
             l10n: context.l10n,
             currency: widget.sale.currency),
       );
