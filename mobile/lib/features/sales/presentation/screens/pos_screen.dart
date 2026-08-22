@@ -582,12 +582,21 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
       final completed = await posNotifier.completeSale(sale.id);
       if (completed != null && mounted) {
         setState(() => _isProcessing = false);
+        // Capture product names BEFORE onComplete() clears the cart — the
+        // backend SaleItem carries only productId, so the receipt needs the
+        // cart mapping to render real product names instead of IDs.
+        final productNames = {
+          for (final i in widget.cart.items) i.productId: i.productName,
+        };
         widget.onComplete();
         // Show receipt
         if (mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => ReceiptScreen(sale: completed),
+              builder: (_) => ReceiptScreen(
+                sale: completed,
+                productNames: productNames,
+              ),
             ),
           );
         }
@@ -832,7 +841,12 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
 // ──────────────────────────────────
 class ReceiptScreen extends ConsumerStatefulWidget {
   final Sale sale;
-  const ReceiptScreen({super.key, required this.sale});
+
+  /// productId → display name mapping captured from the POS cart before it
+  /// was cleared (the backend SaleItem carries no product name).
+  final Map<String, String>? productNames;
+
+  const ReceiptScreen({super.key, required this.sale, this.productNames});
 
   @override
   ConsumerState<ReceiptScreen> createState() => _ReceiptScreenState();
@@ -846,7 +860,9 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     setState(() => _isPdfExporting = true);
     try {
       final bytes = await ReceiptExport.buildPdf(sale,
-          l10n: context.l10n, currency: sale.currency);
+          productNames: widget.productNames,
+          l10n: context.l10n,
+          currency: sale.currency);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -871,9 +887,13 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     try {
       await ReceiptPrintService.printReceipt(
         html: ReceiptExport.buildHtml(widget.sale,
-            l10n: context.l10n, currency: widget.sale.currency),
+            productNames: widget.productNames,
+            l10n: context.l10n,
+            currency: widget.sale.currency),
         pdf: () => ReceiptExport.buildPdf(widget.sale,
-            l10n: context.l10n, currency: widget.sale.currency),
+            productNames: widget.productNames,
+            l10n: context.l10n,
+            currency: widget.sale.currency),
       );
     } catch (e) {
       if (mounted) {

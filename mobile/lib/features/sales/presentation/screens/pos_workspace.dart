@@ -726,12 +726,13 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
         ),
         actions: [
           TextButton.icon(
-            onPressed: () => _downloadReceiptPdf(sale),
+            onPressed: () =>
+                _downloadReceiptPdf(sale, productNames: productNames),
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
             label: Text(context.l10n.posPdf),
           ),
           TextButton.icon(
-            onPressed: () => _printReceipt(sale),
+            onPressed: () => _printReceipt(sale, productNames: productNames),
             icon: const Icon(Icons.print, size: 18),
             label: Text(context.l10n.posPrint),
           ),
@@ -765,10 +766,15 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     );
   }
 
-  Future<void> _downloadReceiptPdf(Sale sale) async {
+  Future<void> _downloadReceiptPdf(
+    Sale sale, {
+    Map<String, String>? productNames,
+  }) async {
     try {
       final bytes = await ReceiptExport.buildPdf(sale,
-          l10n: context.l10n, currency: sale.currency);
+          productNames: productNames,
+          l10n: context.l10n,
+          currency: sale.currency);
       await ReceiptPrintService.downloadPdf(bytes, '${sale.saleNumber}.pdf');
       _showSnack(context.l10n.posReceiptPdfDownloaded, isError: false);
     } catch (e) {
@@ -776,13 +782,20 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     }
   }
 
-  Future<void> _printReceipt(Sale sale) async {
+  Future<void> _printReceipt(
+    Sale sale, {
+    Map<String, String>? productNames,
+  }) async {
     try {
       await ReceiptPrintService.printReceipt(
         html: ReceiptExport.buildHtml(sale,
-            l10n: context.l10n, currency: sale.currency),
+            productNames: productNames,
+            l10n: context.l10n,
+            currency: sale.currency),
         pdf: () => ReceiptExport.buildPdf(sale,
-            l10n: context.l10n, currency: sale.currency),
+            productNames: productNames,
+            l10n: context.l10n,
+            currency: sale.currency),
       );
     } catch (e) {
       _showSnack(context.l10n.posPrintFailed(e.toString()));
