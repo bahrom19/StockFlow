@@ -316,7 +316,7 @@
   "noChangesToSave": "Нет изменений для сохранения",
   "productUpdated": "Товар обновлён",
   "updateFailed": "Не удалось обновить",
-  "productCreated": "Товар создан",
+  "productCreated": "Товар успешно добавлен",
   "createFailed": "Не удалось создать",
   "editProduct": "Изменить товар",
   "basicInformation": "Основная информация",

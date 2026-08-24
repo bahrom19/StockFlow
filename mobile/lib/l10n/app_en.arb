@@ -316,7 +316,7 @@
   "noChangesToSave": "No changes to save",
   "productUpdated": "Product updated",
   "updateFailed": "Update failed",
-  "productCreated": "Product created",
+  "productCreated": "Product added successfully",
   "createFailed": "Create failed",
   "editProduct": "Edit Product",
   "basicInformation": "Basic Information",

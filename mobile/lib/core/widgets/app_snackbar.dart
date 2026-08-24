@@ -23,10 +23,17 @@ class AppSnackbar {
   }
 
   static void _show(BuildContext context, String message, Color color) {
-    // Render-time localization: canonical ErrorHandler fallbacks (English in
-    // `Failure.message`) are substituted with the localized label (RU/KK);
-    // already-localized or freeform/backend messages pass through unchanged.
-    final label = localizedErrorLabel(context.l10n, message);
+    // Render-time localization applies to FAILURE messages only (red
+    // snackbars): canonical English fallbacks baked into `Failure.message`
+    // are substituted with the localized err* label (RU/KK). Success / info /
+    // warning messages are always composed from l10n at the call site, so
+    // they must pass through unchanged — routing them through
+    // `localizedErrorLabel` overwrote them with the generic server fallback
+    // (`errGenericServer`) in RU/KK (e.g. after successfully adding a
+    // product the user saw an error text instead of the success message).
+    final label = color == Colors.red
+        ? localizedErrorLabel(context.l10n, message)
+        : message;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(

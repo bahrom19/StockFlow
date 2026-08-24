@@ -103,7 +103,7 @@ void main() {
       expect(en().noChangesToSave, 'No changes to save');
       expect(en().productUpdated, 'Product updated');
       expect(en().updateFailed, 'Update failed');
-      expect(en().productCreated, 'Product created');
+      expect(en().productCreated, 'Product added successfully');
       expect(en().createFailed, 'Create failed');
       expect(en().editProduct, 'Edit Product');
       expect(en().basicInformation, 'Basic Information');
