@@ -12,6 +12,7 @@ import 'package:stockflow/core/widgets/shimmer_box.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
 import 'package:stockflow/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:stockflow/features/dashboard/presentation/widgets/attention_event.dart';
+import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
 import 'package:stockflow/features/warehouses/presentation/providers/warehouses_provider.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
@@ -303,7 +304,13 @@ List<AttentionEvent> buildAttentionEvents({
             )
           : l10n.eventOutOfStockImpactRisk,
       ctaLabel: l10n.eventRestock,
+      // → Products with the "Нет в наличии" (out of stock) filter active,
+      // so the owner lands exactly on the alerted products.
       ctaRoute: RouteNames.products,
+      ctaQueryParameters: {
+        ProductStockFilter.queryParameterKey:
+            ProductStockFilter.out.queryParam,
+      },
       source: 'dashboardProvider (/reports/dashboard)',
     ));
   }
@@ -357,7 +364,15 @@ List<AttentionEvent> buildAttentionEvents({
       details: lowStockDetailLines(lowStockItems),
       detailsMore: lowStockMoreNote(lowStockItems, l10n: l10n),
       ctaLabel: l10n.eventReviewStock,
-      ctaRoute: RouteNames.inventory,
+      // → Products with the "Низкий остаток" (low stock) filter active —
+      // NOT the generic Inventory screen (bug fix: this alert is about
+      // specific products, while Inventory lists per-warehouse rows and has
+      // no low-stock filter).
+      ctaRoute: RouteNames.products,
+      ctaQueryParameters: {
+        ProductStockFilter.queryParameterKey:
+            ProductStockFilter.low.queryParam,
+      },
       source: 'dashboardProvider (/reports/inventory/low-stock)',
     ));
   }
@@ -709,9 +724,9 @@ class _AttentionEventRowState extends State<_AttentionEventRow> {
     );
 
     final cta = FilledButton.tonalIcon(
-      onPressed: event.ctaRoute == null
+      onPressed: event.ctaUri == null
           ? null
-          : () => context.push(event.ctaRoute!),
+          : () => context.push(event.ctaUri!.toString()),
       icon: const Icon(Icons.arrow_forward, size: 16),
       label: Text(event.ctaLabel),
       style: FilledButton.styleFrom(

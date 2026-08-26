@@ -10,6 +10,7 @@ import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/finance/presentation/screens/finance_screen.dart';
 import '../../features/inventory/presentation/screens/inventory_list_screen.dart';
 import '../../features/inventory/presentation/screens/movements_screen.dart';
+import '../../features/products/domain/product_models.dart';
 import '../../features/products/presentation/screens/product_detail_screen.dart';
 import '../../features/products/presentation/screens/product_form_screen.dart';
 import '../../features/products/presentation/screens/products_list_screen.dart';
@@ -137,7 +138,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: RouteNames.products,
             name: 'products',
-            builder: (context, state) => const ProductsListScreen(),
+            // Deep link from the Dashboard "Requires attention" alerts:
+            // /products?stock=low → «Низкий остаток»,
+            // /products?stock=out → «Нет в наличии». A plain /products entry
+            // has no query parameter and opens the unfiltered list.
+            builder: (context, state) => ProductsListScreen(
+              initialStockFilter: ProductStockFilter.fromQueryParam(
+                state.uri.queryParameters[
+                    ProductStockFilter.queryParameterKey],
+              ),
+            ),
           ),
           GoRoute(
             path: RouteNames.productCreate,

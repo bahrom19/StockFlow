@@ -24,7 +24,8 @@ enum AttentionCategory { critical, attention, opportunity }
 ///    "+4 more") when the underlying data set is larger than the shown top
 ///    items. Keeps the event compact without hiding the full scope.
 ///  - [ctaLabel]/[ctaRoute] — the explicit action button (null route →
-///    informational row only)
+///    informational row only); [ctaQueryParameters] are appended to
+///    [ctaRoute] when navigating (e.g. `/products?stock=low`)
 ///  - [source]  — which already-loaded provider/endpoint backs this event
 class AttentionEvent {
   final AttentionCategory category;
@@ -37,6 +38,7 @@ class AttentionEvent {
   final String? detailsMore;
   final String ctaLabel;
   final String? ctaRoute;
+  final Map<String, String>? ctaQueryParameters;
   final String source;
 
   const AttentionEvent({
@@ -50,6 +52,21 @@ class AttentionEvent {
     this.detailsMore,
     required this.ctaLabel,
     this.ctaRoute,
+    this.ctaQueryParameters,
     required this.source,
   });
+
+  /// The location pushed when the CTA is tapped: [ctaRoute] with
+  /// [ctaQueryParameters] encoded into its query string (null route → null).
+  Uri? get ctaUri {
+    final route = ctaRoute;
+    if (route == null) return null;
+    return Uri(
+      path: route,
+      queryParameters:
+          (ctaQueryParameters == null || ctaQueryParameters!.isEmpty)
+              ? null
+              : ctaQueryParameters,
+    );
+  }
 }
