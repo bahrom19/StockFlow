@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { ProductsService } from '../services/products.service';
 import { ProductsRepository } from '../repositories/products.repository';
 import { ProductMapper } from '../mappers/product.mapper';
+import { StockService } from '../../inventory/services';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 
 /**
@@ -60,6 +61,8 @@ describe('ProductsService — NTIN', () => {
       providers: [
         ProductsService,
         { provide: ProductsRepository, useValue: mockRepo },
+        // NTIN tests never send stockQuantity, so a no-op StockService is enough.
+        { provide: StockService, useValue: { adjustStock: jest.fn() } },
       ],
     }).compile();
 

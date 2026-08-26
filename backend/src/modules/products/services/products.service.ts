@@ -11,10 +11,18 @@ import { ProductEntity } from '../entities/product.entity';
 import { ProductMapper } from '../mappers/product.mapper';
 import { ProductsRepository } from '../repositories/products.repository';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+// Reused so PATCH /products/:id with stockQuantity goes through the SAME
+// adjustment mechanism as POST /inventory/stock/adjust (ADJUSTMENT ledger
+// movement, strict no-negative-stock policy, cost layer sync) instead of a
+// parallel direct write to the Stock table.
+import { StockService } from '../../inventory/services';
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly productsRepository: ProductsRepository) {}
+  constructor(
+    private readonly productsRepository: ProductsRepository,
+    private readonly stockService: StockService,
+  ) {}
 
   async create(
     createProductDto: CreateProductDto,
@@ -169,10 +177,63 @@ export class ProductsService {
         updateData[key] = value;
       }
     }
-    // stockQuantity and unit are managed via the inventory module,
-    // not through product updates.
-    delete updateData.stockQuantity;
+    // unit is managed via the inventory module's UoM endpoints, not through
+    // product updates.
     delete updateData.unit;
+
+    // stockQuantity is NOT a Product column — stock lives in the Stock table
+    // (per warehouse) and every change must produce a StockMovement ledger
+    // entry. When the client explicitly sends a quantity we reconcile the
+    // current total across warehouses to the requested value through the
+    // EXISTING adjustment mechanism (StockService.adjustStock), which writes
+    // an ADJUSTMENT movement, keeps cost layers/finance in sync and enforces
+    // the strict no-negative-stock policy. Omitting the field leaves stock
+    // untouched (partial update semantics, same as name/sku/barcode/ntin).
+    let adjusted = false;
+    if (updateProductDto.stockQuantity !== undefined) {
+      // findById includes the per-warehouse stock rows (PRODUCT_INCLUDE);
+      // the declared Prisma Product type just does not surface them.
+      const stocks = (
+        existing as unknown as { stocks?: { quantity?: number | null }[] }
+      ).stocks;
+      const currentTotal = Array.isArray(stocks)
+        ? stocks.reduce((sum, s) => sum + (s?.quantity ?? 0), 0)
+        : 0;
+      const delta = updateProductDto.stockQuantity - currentTotal;
+
+      if (delta !== 0) {
+        // Resolve the warehouse BEFORE any write so an absent warehouse fails
+        // the whole request without a partial save (same fail-fast contract
+        // and message as create()).
+        const targetWarehouse =
+          await this.productsRepository.findDefaultWarehouse(
+            currentUser.companyId,
+          );
+        if (!targetWarehouse) {
+          throw new UnprocessableEntityException(
+            'Cannot persist stockQuantity: no active warehouse exists for ' +
+              'this company. Create a warehouse first.',
+          );
+        }
+
+        await this.stockService.adjustStock(
+          {
+            productId: id,
+            warehouseId: targetWarehouse.id,
+            quantity: delta,
+            referenceType: 'PRODUCT',
+            referenceId: id,
+            comment: 'Stock reconciled from product card edit',
+          },
+          currentUser.companyId,
+          currentUser.userId,
+        );
+        adjusted = true;
+      }
+      // The raw field must never reach Prisma — Product has no such column.
+      delete updateData.stockQuantity;
+    }
+
     const rowVer = existing.rowVersion ?? 0;
     const updatedProduct = await this.productsRepository.update(
       id,
@@ -180,6 +241,19 @@ export class ProductsService {
       currentUser.companyId,
       rowVer,
     );
+
+    // After an adjustment the nested stocks snapshot inside updatedProduct is
+    // stale (it was read during the product-row update), so re-read to return
+    // the fresh total — same response contract as create().
+    if (adjusted) {
+      const refreshed = await this.productsRepository.findById(
+        id,
+        currentUser.companyId,
+      );
+      if (refreshed) {
+        return ProductMapper.toEntity(refreshed);
+      }
+    }
 
     return ProductMapper.toEntity(updatedProduct);
   }

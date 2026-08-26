@@ -7,11 +7,13 @@ import {
 import { Prisma } from '@prisma/client';
 import { ProductsService } from '../services/products.service';
 import { ProductsRepository } from '../repositories/products.repository';
+import { StockService } from '../../inventory/services';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 
 describe('ProductsService', () => {
   let service: ProductsService;
   let mockRepo: jest.Mocked<ProductsRepository>;
+  let mockStockService: { adjustStock: jest.Mock };
 
   const currentUser: JwtPayload = {
     userId: 'me',
@@ -40,6 +42,7 @@ describe('ProductsService', () => {
     rowVersion: 0,
     unitId: null,
     costingMethod: 'AVERAGE' as const,
+    stocks: [] as { quantity: number }[],
   };
 
   beforeEach(async () => {
@@ -54,10 +57,13 @@ describe('ProductsService', () => {
       createInitialStock: jest.fn(),
     } as unknown as jest.Mocked<ProductsRepository>;
 
+    mockStockService = { adjustStock: jest.fn() };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductsService,
         { provide: ProductsRepository, useValue: mockRepo },
+        { provide: StockService, useValue: mockStockService },
       ],
     }).compile();
 
@@ -250,6 +256,160 @@ describe('ProductsService', () => {
     const data = mockRepo.update.mock.calls[0]![1] as Record<string, unknown>;
     expect(data).toEqual({ name: 'Renamed', price: 88.88 });
     expect(Object.prototype.hasOwnProperty.call(data, 'costPrice')).toBe(false);
+  });
+
+  // ── Regression: stockQuantity on PATCH /products/:id ────────────────
+  // The product card must be able to change stock. Quantity is not a Product
+  // column — updates reconcile the total through StockService.adjustStock so
+  // an ADJUSTMENT StockMovement is written by the existing mechanism.
+  describe('update — stockQuantity reconciliation', () => {
+    const productWithStock = (qty: number) => ({
+      ...baseProduct,
+      stocks: [{ quantity: qty }],
+    });
+
+    beforeEach(() => {
+      mockStockService.adjustStock.mockResolvedValue({} as any);
+      mockRepo.findDefaultWarehouse.mockResolvedValue({ id: 'wh-1' });
+      mockRepo.update.mockResolvedValue(baseProduct as any);
+    });
+
+    it.each([
+      [10, 25, 15],
+      [10, 0, -10],
+      [10, 1, -9],
+      [10, 100, 90],
+    ])(
+      'reconciles %i -> %i with a single adjustment of %+i',
+      async (currentQty, requestedQty, expectedDelta) => {
+        mockRepo.findById
+          .mockResolvedValueOnce(productWithStock(currentQty) as any)
+          .mockResolvedValueOnce(productWithStock(requestedQty) as any);
+
+        await service.update(
+          'prod-1',
+          { stockQuantity: requestedQty } as any,
+          currentUser,
+        );
+
+        expect(mockStockService.adjustStock).toHaveBeenCalledTimes(1);
+        expect(mockStockService.adjustStock).toHaveBeenCalledWith(
+          {
+            productId: 'prod-1',
+            warehouseId: 'wh-1',
+            quantity: expectedDelta,
+            referenceType: 'PRODUCT',
+            referenceId: 'prod-1',
+            comment: 'Stock reconciled from product card edit',
+          },
+          'comp-1',
+          'me',
+        );
+        // The raw field must never reach Prisma — Product has no such column.
+        const data = mockRepo.update.mock.calls[0]![1] as Record<
+          string,
+          unknown
+        >;
+        expect(
+          Object.prototype.hasOwnProperty.call(data, 'stockQuantity'),
+        ).toBe(false);
+        // Response is re-read after the adjustment so the fresh total comes back.
+        expect(mockRepo.findById).toHaveBeenCalledTimes(2);
+      },
+    );
+
+    it('returns the refreshed quantity after the adjustment (10 -> 25 → response 25)', async () => {
+      mockRepo.findById
+        .mockResolvedValueOnce(productWithStock(10) as any)
+        .mockResolvedValueOnce({
+          ...productWithStock(25),
+          name: 'Diag Widget',
+        } as any);
+
+      const result = await service.update(
+        'prod-1',
+        { stockQuantity: 25 } as any,
+        currentUser,
+      );
+
+      expect(result.stockQuantity).toBe(25);
+    });
+
+    it('does not adjust when the sent quantity equals the current total (10 -> 10)', async () => {
+      mockRepo.findById.mockResolvedValue(productWithStock(10) as any);
+
+      await service.update(
+        'prod-1',
+        { stockQuantity: 10 } as any,
+        currentUser,
+      );
+
+      expect(mockStockService.adjustStock).not.toHaveBeenCalled();
+      expect(mockRepo.findById).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not touch stock when stockQuantity is omitted (partial update)', async () => {
+      mockRepo.findById.mockResolvedValue(productWithStock(10) as any);
+
+      await service.update('prod-1', { name: 'Renamed' } as any, currentUser);
+
+      expect(mockStockService.adjustStock).not.toHaveBeenCalled();
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          mockRepo.update.mock.calls[0]![1],
+          'stockQuantity',
+        ),
+      ).toBe(false);
+    });
+
+    it('fails fast with 422 when no active warehouse exists and delta != 0', async () => {
+      mockRepo.findById.mockResolvedValue(productWithStock(10) as any);
+      mockRepo.findDefaultWarehouse.mockResolvedValue(null);
+
+      await expect(
+        service.update(
+          'prod-1',
+          { stockQuantity: 25 } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(UnprocessableEntityException);
+      // Fail-fast: nothing written before the warehouse check.
+      expect(mockStockService.adjustStock).not.toHaveBeenCalled();
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('propagates the strict-stock rejection when the adjustment would go negative', async () => {
+      mockRepo.findById.mockResolvedValue(productWithStock(10) as any);
+      mockStockService.adjustStock.mockRejectedValue(
+        new BadRequestException('Insufficient stock'),
+      );
+
+      await expect(
+        service.update(
+          'prod-1',
+          { stockQuantity: 0 } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('creates stock from zero without a prior Stock row (no stocks relation)', async () => {
+      mockRepo.findById
+        .mockResolvedValueOnce(baseProduct as any) // no `stocks` key at all
+        .mockResolvedValueOnce(productWithStock(5) as any);
+
+      await service.update(
+        'prod-1',
+        { stockQuantity: 5 } as any,
+        currentUser,
+      );
+
+      expect(mockStockService.adjustStock).toHaveBeenCalledWith(
+        expect.objectContaining({ quantity: 5 }),
+        'comp-1',
+        'me',
+      );
+    });
   });
 
   it('should reject body companyId that mismatches the JWT company', async () => {
