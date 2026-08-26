@@ -45,8 +45,21 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             IconButton(
               icon: const Icon(Icons.edit_outlined),
               tooltip: context.l10n.edit,
-              onPressed: () => context
-                  .push(RouteNames.productEdit.replaceAll(':id', widget.productId)),
+              onPressed: () async {
+                // Capture l10n before the async gap (use_build_context_synchronously).
+                final l10n = context.l10n;
+                await context
+                    .push<bool>(RouteNames.productEdit
+                        .replaceAll(':id', widget.productId));
+                // The detail screen stays mounted under the pushed edit route,
+                // and the family provider is not autoDispose — without an
+                // explicit reload it kept rendering the pre-edit Product even
+                // though PATCH had already persisted the change to the DB.
+                if (mounted) {
+                  ref.read(productDetailProvider(widget.productId).notifier)
+                      .loadProduct(widget.productId, l10n: l10n);
+                }
+              },
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),

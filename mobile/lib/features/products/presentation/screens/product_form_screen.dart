@@ -163,8 +163,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         final result = await repo.update(_editingId, payload);
         if (result is ProductsSuccess<Product> && mounted) {
           AppSnackbar.success(context, context.l10n.productUpdated);
-          ref.read(productsListProvider.notifier).refresh();
-          Navigator.of(context).pop();
+          // Refresh BEFORE popping so the list/detail screens behind already
+          // show the persisted values instead of a stale pre-edit snapshot.
+          await ref.read(productsListProvider.notifier).refresh();
+          if (mounted) Navigator.of(context).pop();
         } else if (mounted) {
           AppSnackbar.error(
             context,
@@ -196,8 +198,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         final result = await repo.create(request);
         if (result is ProductsSuccess<Product> && mounted) {
           AppSnackbar.success(context, context.l10n.productCreated);
-          ref.read(productsListProvider.notifier).refresh();
-          Navigator.of(context).pop();
+          // Same as update: refresh before popping so the list behind shows
+          // the newly created product immediately.
+          await ref.read(productsListProvider.notifier).refresh();
+          if (mounted) Navigator.of(context).pop();
         } else if (mounted) {
           AppSnackbar.error(
             context,

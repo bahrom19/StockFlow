@@ -230,6 +230,61 @@ void main() {
     });
   });
 
+  group('UPDATE payload reaches the PATCH body (edit must persist)', () {
+    testWidgets('Scenario A: renaming sends exactly {name} — diff semantics',
+        (tester) async {
+      final repo = await _pumpForm(tester,
+          locale: const Locale('en'), productId: 'prod-1');
+
+      // Only the name changes — every untouched field must stay out of the
+      // PATCH body so a partial update can never overwrite unrelated data.
+      await _fill(tester, 0, 'Молоко 1 л');
+      await _tapSave(tester, en());
+
+      expect(repo.updateCalled, isTrue, reason: 'save must call PATCH');
+      expect(repo.updatedId, 'prod-1');
+      expect(
+        repo.updatedPayload,
+        {'name': 'Молоко 1 л'},
+        reason: 'unchanged fields must NOT be sent (diff semantics)',
+      );
+    });
+
+    testWidgets('Scenario B+D: name/sku/barcode/ntin all reach the payload',
+        (tester) async {
+      final repo = await _pumpForm(tester,
+          locale: const Locale('en'), productId: 'prod-1');
+
+      await _fill(tester, 0, 'Молоко 1 л');
+      await _fill(tester, 1, 'SKU-200');
+      await _fill(tester, 2, '4870000000000');
+      await _fill(tester, 3, '789012');
+      await _tapSave(tester, en());
+
+      expect(repo.updatedPayload?['name'], 'Молоко 1 л');
+      expect(repo.updatedPayload?['sku'], 'SKU-200');
+      expect(repo.updatedPayload?['barcode'], '4870000000000');
+      expect(repo.updatedPayload?['ntin'], '789012');
+    });
+
+    testWidgets('Scenario C: clearing NTIN sends explicit null, not ""',
+        (tester) async {
+      final repo = await _pumpForm(tester,
+          locale: const Locale('en'), productId: 'prod-1');
+
+      // Fixture loads NTIN=123456789; clearing the field must produce an
+      // explicit JSON null so the backend stores NULL instead of '' or no-op.
+      await tester.enterText(find.byType(TextFormField).at(3), '');
+      await _tapSave(tester, en());
+
+      expect(repo.updateCalled, isTrue);
+      expect(repo.updatedPayload!.containsKey('ntin'), isTrue,
+          reason: 'cleared NTIN must be present in the payload');
+      expect(repo.updatedPayload!['ntin'], isNull,
+          reason: 'cleared NTIN must serialize as null, never "" ');
+    });
+  });
+
   group('UPDATE keeps its own message', () {
     testWidgets(
         'EN: editing shows "Product updated", never the CREATE message',
