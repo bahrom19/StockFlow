@@ -57,6 +57,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      // P2002 (unique constraint violation) is a conflict: the write raced a
+      // concurrent one or the request was already applied. 409 lets
+      // idempotent clients (e.g. the mobile outbox sync) recognize
+      // "already exists"; every other known request error stays a 400.
+      if (exception.code === 'P2002') {
+        return HttpStatus.CONFLICT;
+      }
       return HttpStatus.BAD_REQUEST;
     }
 
