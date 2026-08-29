@@ -62,6 +62,11 @@ Future<void> main() async {
         localeProvider.overrideWith(
           (ref) => LocaleNotifier(initialLocale: initialLocale),
         ),
+        // Inject THE single, eagerly-initialized ConnectivityService so every
+        // consumer (status provider, offline banner, lifecycle refresh)
+        // observes the same instance. Before this override the provider body
+        // silently created a second, never-initialized instance.
+        connectivityServiceProvider.overrideWithValue(connectivity),
       ],
       child: const StockFlowApp(),
     ),

@@ -10,13 +10,23 @@ class ApiClient {
   late final Dio _dio;
   final AppLogger _logger = AppLogger('ApiClient');
   final TokenStorage _tokenStorage;
-  final _RefreshTokenQueue _refreshQueue = _RefreshTokenQueue();
+  final _RefreshTokenQueue _refreshQueue;
 
   static const int _maxRetries = 3;
 
   /// [dio] is optional and allows tests to inject a mocked instance.
-  ApiClient({required TokenStorage tokenStorage, Dio? dio})
-      : _tokenStorage = tokenStorage {
+  /// [refreshDio] is optional and exists only so tests can intercept the
+  /// standalone token-refresh request — production refresh semantics are
+  /// unchanged (standalone interceptor-free Dio POSTing /auth/refresh).
+  /// [retryDelay] scales the per-attempt retry backoff; production keeps the
+  /// historical 1s/2s/3s sequence, tests pass [Duration.zero].
+  ApiClient({
+    required TokenStorage tokenStorage,
+    Dio? dio,
+    Dio? refreshDio,
+    Duration retryDelay = const Duration(seconds: 1),
+  })  : _tokenStorage = tokenStorage,
+        _refreshQueue = _RefreshTokenQueue(refreshDio: refreshDio) {
     _dio = dio ??
         Dio(
           BaseOptions(
@@ -34,7 +44,7 @@ class ApiClient {
     _dio.interceptors.addAll([
       _AuthInterceptor(this, tokenStorage, _refreshQueue),
       _LoggingInterceptor(_logger),
-      _RetryInterceptor(_logger),
+      _RetryInterceptor(_dio, _logger, retryDelay: retryDelay),
     ]);
   }
 
@@ -113,6 +123,11 @@ class ApiClient {
 // Refresh Token Queue
 // ──────────────────────────────────
 class _RefreshTokenQueue {
+  _RefreshTokenQueue({Dio? refreshDio}) : _injectedRefreshDio = refreshDio;
+
+  /// Optional test double for the token-refresh endpoint. Production always
+  /// builds its own standalone Dio (see getOrRefresh).
+  final Dio? _injectedRefreshDio;
   bool _isRefreshing = false;
   final List<_PendingRequest> _pending = [];
 
@@ -132,7 +147,8 @@ class _RefreshTokenQueue {
           return null;
         }
 
-        final refreshDio = Dio(BaseOptions(baseUrl: Environment.apiBaseUrl));
+        final refreshDio = _injectedRefreshDio ??
+            Dio(BaseOptions(baseUrl: Environment.apiBaseUrl));
         final response = await refreshDio.post(
           '/auth/refresh',
           data: {'refreshToken': refreshTokenValue},
@@ -275,9 +291,26 @@ class _LoggingInterceptor extends Interceptor {
 // Retry Interceptor (server errors only)
 // ──────────────────────────────────
 class _RetryInterceptor extends Interceptor {
+  /// Methods that are safe to replay automatically. Everything that can
+  /// mutate server state (POST/PUT/PATCH/DELETE — sales, complete/cancel,
+  /// cash-in/out, stock adjust/transfer, any CRUD) is NEVER auto-retried:
+  /// a timeout does not tell whether the server applied the mutation, so a
+  /// blind replay can duplicate it. Idempotency keys are a later phase.
+  static const _retryableMethods = {'GET', 'HEAD', 'OPTIONS'};
+
+  _RetryInterceptor(
+    this._dio,
+    this._logger, {
+    this.retryDelay = const Duration(seconds: 1),
+  });
+
+  /// Re-sending through the SAME dio keeps the configured BaseOptions/adapter
+  /// and lets _AuthInterceptor stamp fresh auth headers on the retry.
+  final Dio _dio;
   final AppLogger _logger;
 
-  _RetryInterceptor(this._logger);
+  /// Production default reproduces the historical 1s/2s/3s backoff.
+  final Duration retryDelay;
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
@@ -286,10 +319,9 @@ class _RetryInterceptor extends Interceptor {
       if (retryCount < ApiClient._maxRetries) {
         err.requestOptions.extra['retryCount'] = retryCount + 1;
         _logger.warning('🔄 Retry ${retryCount + 1}/${ApiClient._maxRetries}: ${err.requestOptions.path}');
-        await Future.delayed(Duration(seconds: retryCount + 1));
+        await Future.delayed(retryDelay * (retryCount + 1));
         try {
-          final freshDio = Dio(BaseOptions(baseUrl: Environment.apiBaseUrl));
-          final response = await freshDio.fetch(err.requestOptions);
+          final response = await _dio.fetch(err.requestOptions);
           handler.resolve(response);
           return;
         } catch (_) {}
@@ -299,6 +331,9 @@ class _RetryInterceptor extends Interceptor {
   }
 
   bool _shouldRetry(DioException err) {
+    // Hard gate: automatic retry for idempotent reads only.
+    final method = err.requestOptions.method.toUpperCase();
+    if (!_retryableMethods.contains(method)) return false;
     return err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.receiveTimeout ||
         err.type == DioExceptionType.connectionError ||
