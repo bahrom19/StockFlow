@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
+import 'package:stockflow/core/outbox/outbox_controller.dart';
 import 'package:stockflow/features/auth/data/repositories/auth_repository.dart';
 
 // ──────────────────────────────────
@@ -131,6 +132,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
           ),
     );
     await storage.clearTokens();
+    // Offline 1B-min: queued offline sales are wiped on logout — they carry
+    // the leaving user's company/user scope and must never be flushed under
+    // another account. (The sync worker's scope guard is the second layer.)
+    await _ref.read(outboxControllerProvider.notifier).clearForLogout();
     state = const AuthUnauthenticated();
   }
 }

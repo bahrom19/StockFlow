@@ -9,6 +9,8 @@ import 'core/currency/currency_provider.dart';
 import 'core/localization/l10n_ext.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/navigation/app_router.dart';
+import 'core/outbox/outbox_indicator.dart';
+import 'core/outbox/outbox_sync_service.dart';
 import 'core/services/connectivity_service.dart';
 import 'core/theme/app_spacing.dart';
 import 'core/theme/app_theme.dart';
@@ -79,6 +81,13 @@ final coreDataRefreshProvider = Provider<List<Future<void> Function()>>((ref) {
     () => ref.read(productsListProvider.notifier).refresh(),
     () => ref.read(inventoryListProvider.notifier).refresh(),
     () => ref.read(customersListProvider.notifier).refresh(),
+    // Offline 1B-min: flush the durable outbox queue in the same debounced
+    // burst (the worker's other trigger is the manual Retry action in the
+    // outbox indicator). Fire-and-forget like the tasks above — failures are
+    // mapped to PENDING / FAILED_PERMANENT inside the worker itself.
+    () async {
+      await ref.read(outboxSyncProvider).syncAll();
+    },
   ];
 });
 
@@ -171,8 +180,11 @@ class _StockFlowAppState extends ConsumerState<StockFlowApp>
           return const Locale('en', 'US');
         },
         // Global offline indicator above every routed screen.
-        builder: (context, child) =>
-            OfflineBannerScope(child: child ?? const SizedBox.shrink()),
+        builder: (context, child) => OfflineBannerScope(
+          // Offline 1B-min: the outbox bar renders below the offline banner
+          // and above the routed content whenever sales are queued.
+          child: OutboxIndicatorScope(child: child ?? const SizedBox.shrink()),
+        ),
       ),
     );
   }

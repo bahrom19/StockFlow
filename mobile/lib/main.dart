@@ -7,6 +7,7 @@ import 'app.dart';
 import 'core/config/environment.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/logger/app_logger.dart';
+import 'core/outbox/outbox_storage.dart';
 import 'core/services/connectivity_service.dart';
 import 'core/storage/preferences_storage.dart';
 
@@ -67,6 +68,10 @@ Future<void> main() async {
         // observes the same instance. Before this override the provider body
         // silently created a second, never-initialized instance.
         connectivityServiceProvider.overrideWithValue(connectivity),
+        // Offline 1B-min: the single warmed OutboxStorage over THE app
+        // PreferencesStorage — hydrated before the first frame, so the queue
+        // survives restarts and an offline sale can be enqueued at any moment.
+        outboxStorageProvider.overrideWithValue(OutboxStorage(preferences)),
       ],
       child: const StockFlowApp(),
     ),

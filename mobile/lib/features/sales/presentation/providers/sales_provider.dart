@@ -403,17 +403,18 @@ class PosNotifier extends StateNotifier<AsyncValue<Sale?>> {
   PosNotifier(this._ref) : super(const AsyncData(null));
 
   /// Create sale as DRAFT
-  Future<Sale?> createDraft({
+  /// Single source of truth for the CREATE_SALE request body — shared by the
+  /// online draft flow and the offline outbox (Offline 1B-min) so both paths
+  /// send identical payloads.
+  CreateSaleRequest buildCreateSaleRequest({
     required String warehouseId,
     required List<CartItem> cartItems,
     required List<CreatePayment> payments,
     String? customerId,
     String? currency,
     String? notes,
-  }) async {
-    state = const AsyncLoading();
-    final repo = _ref.read(salesRepositoryProvider);
-    final request = CreateSaleRequest(
+  }) {
+    return CreateSaleRequest(
       warehouseId: warehouseId,
       customerId: customerId,
       currency: currency ?? _ref.read(currencyProvider),
@@ -430,6 +431,26 @@ class PosNotifier extends StateNotifier<AsyncValue<Sale?>> {
               ))
           .toList(),
       payments: payments,
+    );
+  }
+
+  Future<Sale?> createDraft({
+    required String warehouseId,
+    required List<CartItem> cartItems,
+    required List<CreatePayment> payments,
+    String? customerId,
+    String? currency,
+    String? notes,
+  }) async {
+    state = const AsyncLoading();
+    final repo = _ref.read(salesRepositoryProvider);
+    final request = buildCreateSaleRequest(
+      warehouseId: warehouseId,
+      cartItems: cartItems,
+      payments: payments,
+      customerId: customerId,
+      currency: currency,
+      notes: notes,
     );
     final result = await repo.create(request);
     if (result is SalesSuccess<Sale>) {

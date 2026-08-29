@@ -8,7 +8,9 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stockflow/app.dart';
 import 'package:stockflow/core/navigation/app_router.dart';
+import 'package:stockflow/core/outbox/outbox_storage.dart';
 import 'package:stockflow/core/services/connectivity_service.dart';
+import 'package:stockflow/core/storage/preferences_storage.dart';
 
 class _FakeConnectivity implements Connectivity {
   _FakeConnectivity(this.initial);
@@ -38,6 +40,10 @@ Future<void> _pumpApp(
   ConnectivityService service,
   int Function() refreshCount,
 ) async {
+  // The app now hosts the offline outbox indicator (Offline 1B-min); inject
+  // an empty in-memory-backed storage so the indicator has nothing to show.
+  final prefs = PreferencesStorage();
+  await prefs.initialize();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -46,6 +52,7 @@ Future<void> _pumpApp(
           () async => refreshCount(),
         ]),
         routerProvider.overrideWithValue(_router()),
+        outboxStorageProvider.overrideWithValue(OutboxStorage(prefs)),
       ],
       child: const StockFlowApp(),
     ),

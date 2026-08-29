@@ -828,5 +828,26 @@
   "aiInsightsNlp": "NLP",
   "noData": "Деректер жоқ",
   "comingSoonMessage": "Бұл модуль веб-клиентте жақында қолжетімді болады.\nBackend API дайын — интерфейс әзірленіп жатыр.",
-  "goBack": "Артқа"
+  "goBack": "Артқа",
+  "outboxPendingSales": "{count, plural, =1{1 күтетін сату} other{{count} күтетін сатылым}}",
+  "outboxFailedSales": "{count, plural, =1{1 сату жіберілмеген} other{{count} сату жіберілмеген}}",
+  "outboxSyncNow": "Жіберу",
+  "outboxFailedTitle": "Қателері бар күтетін сатылымдар",
+  "outboxDiscard": "Өшіру",
+  "outboxOfflineSaleQueued": "Сату офлайн сақталды. Нөмір: {number}. Автоматты жіберілед.",
+  "@outboxPendingSales": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "@outboxFailedSales": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "@outboxOfflineSaleQueued": {
+    "placeholders": {
+      "number": { "type": "String" }
+    }
+  }
 }

@@ -828,5 +828,26 @@
   "aiInsightsNlp": "NLP",
   "noData": "No data",
   "comingSoonMessage": "This module is coming soon in the web client.\nThe backend API is ready — the UI is being prepared.",
-  "goBack": "Go Back"
+  "goBack": "Go Back",
+  "outboxPendingSales": "{count, plural, =1{1 pending sale} other{{count} pending sales}}",
+  "outboxFailedSales": "{count, plural, =1{1 sale failed to sync} other{{count} sales failed to sync}}",
+  "outboxSyncNow": "Send now",
+  "outboxFailedTitle": "Offline sales with errors",
+  "outboxDiscard": "Discard",
+  "outboxOfflineSaleQueued": "Sale saved offline. Number: {number}. It will be sent automatically.",
+  "@outboxPendingSales": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "@outboxFailedSales": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "@outboxOfflineSaleQueued": {
+    "placeholders": {
+      "number": { "type": "String" }
+    }
+  }
 }

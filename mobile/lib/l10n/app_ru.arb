@@ -828,5 +828,26 @@
   "aiInsightsNlp": "NLP",
   "noData": "Нет данных",
   "comingSoonMessage": "Этот модуль скоро будет доступен в веб-клиенте.\nBackend API уже готов — интерфейс готовится.",
-  "goBack": "Назад"
+  "goBack": "Назад",
+  "outboxPendingSales": "{count, plural, =1{1 отложенная продажа} one{{count} отложенная продажа} few{{count} отложенные продажи} many{{count} отложенных продаж} other{{count} отложенных продаж}}",
+  "outboxFailedSales": "{count, plural, =1{1 продажа не отправлена} one{{count} продажа не отправлена} few{{count} продажи не отправлены} many{{count} продаж не отправлено} other{{count} продаж не отправлено}}",
+  "outboxSyncNow": "Отправить",
+  "outboxFailedTitle": "Отложенные продажи с ошибками",
+  "outboxDiscard": "Отклонить",
+  "outboxOfflineSaleQueued": "Продажа сохранена офлайн. Номер: {number}. Отправится автоматически.",
+  "@outboxPendingSales": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "@outboxFailedSales": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "@outboxOfflineSaleQueued": {
+    "placeholders": {
+      "number": { "type": "String" }
+    }
+  }
 }

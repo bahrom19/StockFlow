@@ -14,6 +14,7 @@ import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
+import 'package:stockflow/core/services/connectivity_service.dart';
 import 'package:stockflow/core/services/receipt_print_service.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
 import 'package:stockflow/core/utils/formatters.dart';
@@ -25,6 +26,7 @@ import 'package:stockflow/features/inventory/data/repositories/inventory_reposit
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 import 'package:stockflow/features/inventory/presentation/providers/inventory_provider.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
+import 'package:stockflow/features/sales/data/offline_sale_queue.dart';
 import 'package:stockflow/features/sales/data/receipt_export.dart';
 import 'package:stockflow/features/sales/domain/cash_shift_models.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
@@ -535,6 +537,33 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
 
     setState(() => _isCompleting = true);
     final posNotifier = ref.read(posProvider.notifier);
+
+    // ── Offline 1B-min: CREATE_SALE is the ONLY mutation allowed offline.
+    //    The byte-identical request body is parked in the durable outbox with
+    //    a client-generated saleNumber (OFF-…); the sync worker flushes it on
+    //    the OFFLINE→ONLINE transition (duplicate-safe via the server-side
+    //    saleNumber unique constraint). Nothing else leaves the device.
+    if (!ref.read(connectivityStatusProvider)) {
+      final request = posNotifier.buildCreateSaleRequest(
+        warehouseId: _selectedWarehouseId!,
+        cartItems: cart.items,
+        payments: payments,
+        customerId: cart.customerId,
+        currency: cart.currency,
+        notes: cart.notes,
+      );
+      final number = await ref
+          .read(offlineSaleQueueProvider)
+          .enqueueCreateSale(request: request);
+      if (!mounted) return;
+      setState(() => _isCompleting = false);
+      ref.read(cartProvider.notifier).clear();
+      _cashController.clear();
+      _cardController.clear();
+      _qrController.clear();
+      _showSnack(context.l10n.outboxOfflineSaleQueued(number), isError: false);
+      return;
+    }
 
     final sale = await posNotifier.createDraft(
       warehouseId: _selectedWarehouseId!,
