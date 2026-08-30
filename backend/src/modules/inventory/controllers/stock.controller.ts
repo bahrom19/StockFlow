@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Post,
   Query,
@@ -85,8 +86,14 @@ export class StockController {
   async adjustStock(
     @Body() dto: AdjustStockDto,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<StockMovementEntity> {
-    return this.stockService.adjustStock(dto, user.companyId, user.userId);
+    return this.stockService.adjustStock(
+      dto,
+      user.companyId,
+      user.userId,
+      idempotencyKey,
+    );
   }
 
   @Post('transfer')
@@ -97,7 +104,13 @@ export class StockController {
   async transferStock(
     @Body() dto: TransferStockDto,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<StockMovementEntity[]> {
-    return this.stockService.transferStock(dto, user.companyId, user.userId);
+    return this.stockService.transferStock(
+      dto,
+      user.companyId,
+      user.userId,
+      idempotencyKey,
+    );
   }
 }

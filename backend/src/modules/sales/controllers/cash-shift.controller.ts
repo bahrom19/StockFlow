@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -93,12 +94,14 @@ export class CashShiftController {
     @Body() dto: CashInOutDto,
     @Query('warehouseId') warehouseId: string,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<CashShiftEntity> {
     return this.cashShiftService.cashIn(
       dto,
       user.userId,
       user.companyId,
       warehouseId,
+      idempotencyKey,
     );
   }
 
@@ -117,12 +120,14 @@ export class CashShiftController {
     @Body() dto: CashInOutDto,
     @Query('warehouseId') warehouseId: string,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<CashShiftEntity> {
     return this.cashShiftService.cashOut(
       dto,
       user.userId,
       user.companyId,
       warehouseId,
+      idempotencyKey,
     );
   }
 

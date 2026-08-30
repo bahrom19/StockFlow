@@ -2,6 +2,7 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { EventBus, EVENT_BUS } from '../../common/events';
 import { PrismaModule } from '../../common/prisma';
+import { IdempotencyModule } from '../../infrastructure/idempotency/idempotency.module';
 import { SharedModule } from '../shared/shared.module';
 import { FinanceModule } from '../finance/finance.module';
 import { GoodsReceiptController } from './controllers/goods-receipt.controller';
@@ -26,7 +27,7 @@ import { PurchasingFinanceService } from './services/purchasing-finance.service'
 import { AuditLogService } from '../shared/services/audit-log.service';
 
 @Module({
-  imports: [PrismaModule, SharedModule, FinanceModule],
+  imports: [PrismaModule, SharedModule, FinanceModule, IdempotencyModule],
   controllers: [
     PurchaseOrderController,
     GoodsReceiptController,

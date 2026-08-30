@@ -172,7 +172,7 @@ export class IdempotencyService {
     return {
       type: 'replayed',
       status: existing.responseStatus,
-      body: existing.responseBody,
+      body: IdempotencyService.normalizeBody(existing.responseBody),
     };
   }
 
@@ -222,7 +222,10 @@ export class IdempotencyService {
     if (!record) return null;
     if (record.expiresAt.getTime() <= Date.now()) return null;
     if (record.responseStatus === IDEMPOTENCY_PENDING_STATUS) return null;
-    return { status: record.responseStatus, body: record.responseBody };
+    return {
+      status: record.responseStatus,
+      body: IdempotencyService.normalizeBody(record.responseBody),
+    };
   }
 
   /**
@@ -301,6 +304,16 @@ export class IdempotencyService {
   ): Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue {
     if (body === null || body === undefined) return Prisma.DbNull;
     return JSON.parse(JSON.stringify(body)) as Prisma.InputJsonValue;
+  }
+
+  /**
+   * Normalize a stored JSONB value back into its JS representation.
+   *
+   * Prisma returns `Prisma.DbNull` for JSON `null` in the database — convert
+   * that back to a plain JS `null` so callers never see the sentinel.
+   */
+  private static normalizeBody(body: unknown): unknown {
+    return body === Prisma.DbNull ? null : body;
   }
 }
 

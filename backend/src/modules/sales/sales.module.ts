@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SharedModule } from '../shared/shared.module';
+import { IdempotencyModule } from '../../infrastructure/idempotency/idempotency.module';
 import { CashShiftController } from './controllers/cash-shift.controller';
 import { SalesController } from './controllers/sales.controller';
 import { CashShiftRepository } from './repositories/cash-shift.repository';
@@ -8,7 +9,7 @@ import { CashShiftService } from './services/cash-shift.service';
 import { SalesService } from './services/sales.service';
 
 @Module({
-  imports: [SharedModule],
+  imports: [SharedModule, IdempotencyModule],
   // CashShiftController must be registered BEFORE SalesController so that the
   // literal route `sales/cash-shifts` wins over the parameterized `sales/:id`.
   // Otherwise `GET /sales/cash-shifts` binds id="cash-shifts" and sale.findFirst()

@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { CashShiftService } from '../services/cash-shift.service';
 import { CashShiftRepository } from '../repositories/cash-shift.repository';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -63,6 +64,10 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
         CashShiftService,
         { provide: CashShiftRepository, useValue: repo },
         { provide: PrismaService, useValue: mockPrisma },
+        {
+          provide: IdempotencyService,
+          useValue: { hashRequest: jest.fn().mockReturnValue('hash') },
+        },
       ],
     }).compile();
 

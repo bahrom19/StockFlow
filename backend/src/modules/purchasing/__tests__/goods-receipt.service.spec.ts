@@ -16,6 +16,7 @@ import { PurchaseOrderService } from '../services/purchase-order.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { PurchasingFinanceService } from '../services/purchasing-finance.service';
 import { EVENT_BUS } from '../../../common/events';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { CreateGoodsReceiptDto } from '../dto/create-goods-receipt.dto';
 
 const companyId = 'comp-1';
@@ -117,6 +118,10 @@ describe('GoodsReceiptService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: PurchasingFinanceService, useValue: mockFinanceService },
         { provide: EVENT_BUS, useValue: mockEventBus },
+        {
+          provide: IdempotencyService,
+          useValue: { hashRequest: jest.fn().mockReturnValue('hash') },
+        },
       ],
     }).compile();
     service = mod.get(GoodsReceiptService);

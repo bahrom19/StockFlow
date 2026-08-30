@@ -3,6 +3,7 @@ import { StockMovementType } from '@prisma/client';
 import { StockService } from '../services/stock.service';
 import { InventoryRepository } from '../repositories/inventory.repository';
 import { PrismaService } from '../../../common/prisma';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { CostingService } from '../services/costing.service';
 import { EVENT_BUS } from '../../../common/events';
@@ -75,11 +76,16 @@ describe('StockService.adjustStock — strict stock (Policy A)', () => {
       $transaction: jest.fn((cb: any) => cb(mockPrisma)),
     };
 
+    const idempotencyService = {
+      hashRequest: jest.fn().mockReturnValue('hash'),
+    } as unknown as IdempotencyService;
+
     service = new StockService(
       repo as unknown as InventoryRepository,
       mockPrisma as unknown as PrismaService,
       auditLog as unknown as AuditLogService,
       costing as unknown as CostingService,
+      idempotencyService,
       eventBus as any,
     );
   });

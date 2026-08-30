@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -46,11 +47,13 @@ export class GoodsReceiptController {
   async create(
     @Body() dto: CreateGoodsReceiptDto,
     @CurrentUser() currentUser: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<GoodsReceiptEntity> {
     return this.goodsReceiptService.create(
       dto,
       currentUser.userId,
       currentUser.companyId,
+      idempotencyKey,
     );
   }
 

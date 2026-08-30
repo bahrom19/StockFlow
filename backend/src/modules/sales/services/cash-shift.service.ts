@@ -1,12 +1,15 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
+import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
 import { CashShiftEntity } from '../entities/cash-shift.entity';
 import { CashShiftMapper } from '../mappers/cash-shift.mapper';
 import { CashShiftRepository } from '../repositories/cash-shift.repository';
@@ -21,6 +24,7 @@ export class CashShiftService {
   constructor(
     private readonly cashShiftRepository: CashShiftRepository,
     private readonly prismaService: PrismaService,
+    private readonly idempotencyService: IdempotencyService,
   ) {}
 
   /**
@@ -133,13 +137,15 @@ export class CashShiftService {
     userId: string,
     companyId: string,
     warehouseId: string,
+    idempotencyKey?: string,
   ): Promise<CashShiftEntity> {
-    return this.cashShiftServiceMutation(
+    return this.cashMutation(
       dto,
       userId,
       companyId,
       warehouseId,
       'cashIn',
+      idempotencyKey,
     );
   }
 
@@ -148,14 +154,50 @@ export class CashShiftService {
     userId: string,
     companyId: string,
     warehouseId: string,
+    idempotencyKey?: string,
   ): Promise<CashShiftEntity> {
-    return this.cashShiftServiceMutation(
+    return this.cashMutation(
       dto,
       userId,
       companyId,
       warehouseId,
       'cashOut',
+      idempotencyKey,
     );
+  }
+
+  /**
+   * F2 — idempotency-aware entry point for cashIn/cashOut.
+   *
+   * The reservation, the read-modify-write mutation and the saved response
+   * run inside ONE Prisma transaction (via `runWithIdempotency`), so the same
+   * Idempotency-Key can never increment `CashShift.cashIn`/`cashOut` twice.
+   * Because the shift lookup and amount arithmetic are part of the same
+   * transaction, the atomicity and optimistic-locking (rowVersion) guarantees
+   * of the underlying mutation are preserved on the keyed path.
+   */
+  private async cashMutation(
+    dto: CashInOutDto,
+    userId: string,
+    companyId: string,
+    warehouseId: string,
+    kind: 'cashIn' | 'cashOut',
+    idempotencyKey?: string,
+  ): Promise<CashShiftEntity> {
+    const result = await runWithIdempotency({
+      prisma: this.prismaService,
+      idempotency: this.idempotencyService,
+      companyId,
+      idempotencyKey,
+      endpoint: kind === 'cashIn' ? 'cash-in' : 'cash-out',
+      // The warehouse and acting user both change which open shift is
+      // credited, so they are part of the request hash.
+      requestHashPayload: { ...dto, warehouseId, userId },
+      status: HttpStatus.OK,
+      work: (tx) =>
+        this.applyCashMutation(dto, userId, companyId, warehouseId, kind, tx),
+    });
+    return result.body as CashShiftEntity;
   }
 
   /**
@@ -163,47 +205,46 @@ export class CashShiftService {
    * Decimal arithmetic and the rowVersion-guarded write all happen inside one
    * transaction, so a concurrent mutation cannot be silently lost.
    */
-  private async cashShiftServiceMutation(
+  private async applyCashMutation(
     dto: CashInOutDto,
     userId: string,
     companyId: string,
     warehouseId: string,
     kind: 'cashIn' | 'cashOut',
+    tx: Prisma.TransactionClient,
   ): Promise<CashShiftEntity> {
-    return this.prismaService.$transaction(async (tx) => {
-      const shift = await this.cashShiftRepository.findOpenShift(
-        warehouseId,
-        userId,
-        companyId,
-        tx,
-      );
-      if (!shift) throw new NotFoundException('No open shift found');
+    const shift = await this.cashShiftRepository.findOpenShift(
+      warehouseId,
+      userId,
+      companyId,
+      tx,
+    );
+    if (!shift) throw new NotFoundException('No open shift found');
 
-      const amount = new Decimal(dto.amount);
-      if (amount.isNegative()) {
-        throw new BadRequestException('Amount must not be negative');
-      }
+    const amount = new Decimal(dto.amount);
+    if (amount.isNegative()) {
+      throw new BadRequestException('Amount must not be negative');
+    }
 
-      const current =
-        kind === 'cashIn'
-          ? new Decimal(shift.cashIn.toString())
-          : new Decimal(shift.cashOut.toString());
+    const current =
+      kind === 'cashIn'
+        ? new Decimal(shift.cashIn.toString())
+        : new Decimal(shift.cashOut.toString());
 
-      const updated = await this.cashShiftRepository.update(
-        shift.id,
-        {
-          [kind]: current.add(amount),
-          notes: dto.reason
-            ? `${shift.notes ?? ''} ${kind === 'cashIn' ? 'In' : 'Out'}: ${dto.reason}`.trim()
-            : shift.notes,
-        },
-        companyId,
-        shift.rowVersion ?? 0,
-        tx,
-      );
+    const updated = await this.cashShiftRepository.update(
+      shift.id,
+      {
+        [kind]: current.add(amount),
+        notes: dto.reason
+          ? `${shift.notes ?? ''} ${kind === 'cashIn' ? 'In' : 'Out'}: ${dto.reason}`.trim()
+          : shift.notes,
+      },
+      companyId,
+      shift.rowVersion ?? 0,
+      tx,
+    );
 
-      return CashShiftMapper.toEntity(updated);
-    });
+    return CashShiftMapper.toEntity(updated);
   }
 
   async getXReport(
