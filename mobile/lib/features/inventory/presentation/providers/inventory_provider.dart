@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/outbox/outbox_mutation_queue.dart';
+import 'package:stockflow/core/outbox/outbox_operation.dart';
+import 'package:stockflow/core/services/connectivity_service.dart';
 import 'package:stockflow/features/inventory/data/repositories/inventory_repository.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 
@@ -135,14 +138,34 @@ class AdjustmentNotifier extends StateNotifier<AsyncValue<StockMovement?>> {
 
   Future<StockMovement?> adjust(AdjustStockDto dto) async {
     state = const AsyncLoading();
+    // Phase F4-D: send-or-park (see OutboxMutationQueue). The payload is the
+    // DTO verbatim — warehouseId is already part of AdjustStockDto, no query
+    // is needed for the /inventory/stock/adjust spec.
+    final online = _ref.read(connectivityStatusProvider);
+    final queue = _ref.read(outboxMutationQueueProvider);
     final repo = _ref.read(inventoryRepositoryProvider);
-    final result = await repo.adjustStock(dto);
-    if (result is InvSuccess<StockMovement>) {
-      state = AsyncData(result.data);
-      return result.data;
+    final outcome = await queue.mutate<InvResult<StockMovement>>(
+      kind: OutboxOperationKind.adjustStock,
+      payload: dto.toJson(),
+      online: online,
+      sendOnline: (key) => repo.adjustStock(dto, idempotencyKey: key),
+    );
+    if (outcome is OutboxMutationSent<InvResult<StockMovement>>) {
+      final result = outcome.result;
+      if (result is InvSuccess<StockMovement>) {
+        state = AsyncData(result.data);
+        return result.data;
+      }
+      final error = (result as InvFailure<StockMovement>).error;
+      state = AsyncError(error.message, StackTrace.current);
+      return null;
     }
-    final error = (result as InvFailure<StockMovement>).error;
-    state = AsyncError(error.message, StackTrace.current);
+    // D3: existing generic error channel carries the offline feedback —
+    // no new l10n keys.
+    final message = outcome is OutboxMutationQueued<InvResult<StockMovement>>
+        ? OutboxMutationQueue.offlineQueuedMessage
+        : (outcome as OutboxMutationRejected<InvResult<StockMovement>>).reason;
+    state = AsyncError(message, StackTrace.current);
     return null;
   }
 }
@@ -155,14 +178,32 @@ class TransferNotifier extends StateNotifier<AsyncValue<List<StockMovement>?>> {
 
   Future<List<StockMovement>?> transfer(TransferStockDto dto) async {
     state = const AsyncLoading();
+    // Phase F4-D: send-or-park (see [AdjustmentNotifier.adjust]).
+    final online = _ref.read(connectivityStatusProvider);
+    final queue = _ref.read(outboxMutationQueueProvider);
     final repo = _ref.read(inventoryRepositoryProvider);
-    final result = await repo.transferStock(dto);
-    if (result is InvSuccess<List<StockMovement>>) {
-      state = AsyncData(result.data);
-      return result.data;
+    final outcome = await queue.mutate<InvResult<List<StockMovement>>>(
+      kind: OutboxOperationKind.transferStock,
+      payload: dto.toJson(),
+      online: online,
+      sendOnline: (key) => repo.transferStock(dto, idempotencyKey: key),
+    );
+    if (outcome is OutboxMutationSent<InvResult<List<StockMovement>>>) {
+      final result = outcome.result;
+      if (result is InvSuccess<List<StockMovement>>) {
+        state = AsyncData(result.data);
+        return result.data;
+      }
+      final error = (result as InvFailure<List<StockMovement>>).error;
+      state = AsyncError(error.message, StackTrace.current);
+      return null;
     }
-    final error = (result as InvFailure<List<StockMovement>>).error;
-    state = AsyncError(error.message, StackTrace.current);
+    final message =
+        outcome is OutboxMutationQueued<InvResult<List<StockMovement>>>
+            ? OutboxMutationQueue.offlineQueuedMessage
+            : (outcome as OutboxMutationRejected<InvResult<List<StockMovement>>>)
+                .reason;
+    state = AsyncError(message, StackTrace.current);
     return null;
   }
 }

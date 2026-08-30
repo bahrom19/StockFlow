@@ -56,9 +56,12 @@ void main() {
     });
 
     test('unknown kind throws and is NEVER coerced into createSale', () {
+      // A name that is not (and must never become) an OutboxOperationKind.
+      // The formerly-unknown 'adjustStock' became a declared kind in F4-A,
+      // so the poisoned-entry guard needs a genuinely unknown name here.
       const poisoned = <String, dynamic>{
         'clientOperationId': 'ghost-1',
-        'kind': 'adjustStock',
+        'kind': 'teleportStock',
         'companyId': 'company-1',
         'userId': 'user-1',
         'payload': {'warehouseId': 'w-1', 'quantity': 999},
@@ -142,6 +145,80 @@ void main() {
       expect(mutated.idempotencyKey, 'idem-key-2');
       expect(mutated.schemaVersion, 1);
       expect(mutated.attempts, 5);
+    });
+  });
+
+  group('OutboxOperation kinds (Phase F4-A: keyed mutation kinds)', () {
+    test('the enum declares exactly the six expected kinds', () {
+      expect(
+        OutboxOperationKind.values.map((k) => k.name),
+        <String>[
+          'createSale',
+          'cashIn',
+          'cashOut',
+          'adjustStock',
+          'transferStock',
+          'goodsReceipt',
+        ],
+      );
+    });
+
+    test('round-trip preserves the kind of every operation', () {
+      for (final kind in OutboxOperationKind.values) {
+        final op = OutboxOperation(
+          clientOperationId: 'rt-${kind.name}',
+          kind: kind,
+          companyId: 'company-1',
+          userId: 'user-1',
+          payload: {'kindProbe': kind.name},
+          createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+        );
+
+        final restored = OutboxOperation.fromJson(
+          (jsonDecode(jsonEncode(op.toJson())) as Map).cast<String, dynamic>(),
+        );
+
+        expect(restored.kind, kind, reason: kind.name);
+        expect(restored.payload, {'kindProbe': kind.name}, reason: kind.name);
+      }
+    });
+
+    test('keyed F4 kinds round-trip their idempotencyKey verbatim', () {
+      for (final kind in OutboxOperationKind.values) {
+        if (kind == OutboxOperationKind.createSale) continue;
+        final op = OutboxOperation(
+          clientOperationId: 'keyed-${kind.name}',
+          kind: kind,
+          companyId: 'company-1',
+          userId: 'user-1',
+          payload: const <String, dynamic>{},
+          idempotencyKey: 'idem-${kind.name}',
+        );
+
+        final json = jsonDecode(jsonEncode(op.toJson())) as Map;
+        final restored =
+            OutboxOperation.fromJson(json.cast<String, dynamic>());
+
+        // Persisted verbatim: F4-C transport will send exactly this value as
+        // the Idempotency-Key header, unchanged on every retry.
+        expect(json['idempotencyKey'], 'idem-${kind.name}', reason: kind.name);
+        expect(restored.idempotencyKey, 'idem-${kind.name}', reason: kind.name);
+        expect(restored.schemaVersion, 1, reason: kind.name);
+      }
+    });
+
+    test('CREATE_SALE stays key-less — only the F4 kinds are keyed', () {
+      const op = OutboxOperation(
+        clientOperationId: 'sale-plain',
+        kind: OutboxOperationKind.createSale,
+        companyId: 'company-1',
+        userId: 'user-1',
+        payload: {'saleNumber': 'OFF-sale-plain'},
+      );
+
+      expect(op.idempotencyKey, isNull);
+      // No key field may leak into the CREATE_SALE persistence layout.
+      expect(op.toJson().containsKey('idempotencyKey'), isFalse);
     });
   });
 }

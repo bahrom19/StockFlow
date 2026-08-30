@@ -3,6 +3,8 @@ import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
+import 'package:stockflow/core/outbox/outbox_mutation_queue.dart';
+import 'package:stockflow/core/outbox/outbox_operation.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
 
 sealed class PurchasingResult<T> {
@@ -133,12 +135,40 @@ class PurchasingRepository {
 
   // ── Goods Receipts ──
 
+  /// Phase F4-D: keyed mutation.
+  ///
+  /// * Online → direct POST; [idempotencyKey] (when given) is transported as
+  ///   the `Idempotency-Key` header.
+  /// * Offline (when [offlineQueue] is supplied and [online] is false) → the
+  ///   verbatim [CreateGoodsReceiptRequest.toJson] payload is parked in the
+  ///   outbox under kind [OutboxOperationKind.goodsReceipt] with
+  ///   `idempotencyKey == clientOperationId`, minted once and never
+  ///   regenerated on retry. The caller keeps its existing generic
+  ///   failure-shaped result (decision D3: no new l10n keys).
   Future<PurchasingResult<GoodsReceipt>> createGoodsReceipt(
-      CreateGoodsReceiptRequest request) async {
+    CreateGoodsReceiptRequest request, {
+    String? idempotencyKey,
+    OutboxMutationQueue? offlineQueue,
+    bool online = true,
+  }) async {
+    if (offlineQueue != null && !online) {
+      try {
+        await offlineQueue.enqueueOffline(
+          kind: OutboxOperationKind.goodsReceipt,
+          payload: request.toJson(),
+        );
+      } on StateError catch (e) {
+        return PurchasingFailure(NetworkFailure(message: e.message));
+      }
+      return const PurchasingFailure(
+        NetworkFailure(message: OutboxMutationQueue.offlineQueuedMessage),
+      );
+    }
     try {
       final response = await _api.post<Map<String, dynamic>>(
         '/purchasing/goods-receipts',
         data: request.toJson(),
+        options: idempotencyHeader(idempotencyKey),
       );
       return PurchasingSuccess(GoodsReceipt.fromJson(response.data!));
     } catch (e) {

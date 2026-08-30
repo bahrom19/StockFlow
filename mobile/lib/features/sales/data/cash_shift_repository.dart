@@ -4,6 +4,7 @@ import 'package:stockflow/core/api/api_endpoints.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
+import 'package:stockflow/core/outbox/outbox_mutation_queue.dart';
 import 'package:stockflow/features/sales/domain/cash_shift_models.dart';
 
 sealed class ShiftResult<T> {
@@ -60,9 +61,13 @@ class CashShiftRepository {
     }
   }
 
+  /// [idempotencyKey] (Phase F4-C): when non-null it is transported as the
+  /// `Idempotency-Key` header — the outbox worker always replays the SAME
+  /// key for a given operation, so the backend can dedupe safely.
   Future<ShiftResult<CashShift>> cashIn({
     required String warehouseId,
     required CashInOutRequest request,
+    String? idempotencyKey,
   }) async {
     try {
       final client = _ref.read(apiClientProvider);
@@ -70,6 +75,7 @@ class CashShiftRepository {
         ApiEndpoints.cashShiftCashIn,
         queryParameters: {'warehouseId': warehouseId},
         data: request.toJson(),
+        options: idempotencyHeader(idempotencyKey),
       );
       return ShiftSuccess(CashShift.fromJson(response.data!));
     } catch (e) {
@@ -78,9 +84,11 @@ class CashShiftRepository {
     }
   }
 
+  /// [idempotencyKey] — same Phase F4-C transport contract as [cashIn].
   Future<ShiftResult<CashShift>> cashOut({
     required String warehouseId,
     required CashInOutRequest request,
+    String? idempotencyKey,
   }) async {
     try {
       final client = _ref.read(apiClientProvider);
@@ -88,6 +96,7 @@ class CashShiftRepository {
         ApiEndpoints.cashShiftCashOut,
         queryParameters: {'warehouseId': warehouseId},
         data: request.toJson(),
+        options: idempotencyHeader(idempotencyKey),
       );
       return ShiftSuccess(CashShift.fromJson(response.data!));
     } catch (e) {

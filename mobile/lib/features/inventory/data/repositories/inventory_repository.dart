@@ -4,6 +4,7 @@ import 'package:stockflow/core/api/api_endpoints.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
+import 'package:stockflow/core/outbox/outbox_mutation_queue.dart';
 import 'package:stockflow/features/inventory/domain/inventory_models.dart';
 
 sealed class InvResult<T> {
@@ -105,12 +106,18 @@ class InventoryRepository {
 
   // ── Adjustment ──────────────────────────────────
 
-  Future<InvResult<StockMovement>> adjustStock(AdjustStockDto dto) async {
+  /// [idempotencyKey] (Phase F4-C): transported as the `Idempotency-Key`
+  /// header when non-null; the outbox worker replays the SAME key on retry.
+  Future<InvResult<StockMovement>> adjustStock(
+    AdjustStockDto dto, {
+    String? idempotencyKey,
+  }) async {
     try {
       final client = _ref.read(apiClientProvider);
       final response = await client.post(
         '${ApiEndpoints.inventory}/stock/adjust',
         data: dto.toJson(),
+        options: idempotencyHeader(idempotencyKey),
       );
       final data = response.data as Map<String, dynamic>;
       return InvSuccess(StockMovement.fromJson(data));
@@ -122,14 +129,17 @@ class InventoryRepository {
 
   // ── Transfer ────────────────────────────────────
 
+  /// [idempotencyKey] — same Phase F4-C transport contract as [adjustStock].
   Future<InvResult<List<StockMovement>>> transferStock(
-    TransferStockDto dto,
-  ) async {
+    TransferStockDto dto, {
+    String? idempotencyKey,
+  }) async {
     try {
       final client = _ref.read(apiClientProvider);
       final response = await client.post(
         '${ApiEndpoints.inventory}/stock/transfer',
         data: dto.toJson(),
+        options: idempotencyHeader(idempotencyKey),
       );
       final data = response.data as List<dynamic>;
       final items = data.map((e) => StockMovement.fromJson(e as Map<String, dynamic>)).toList();

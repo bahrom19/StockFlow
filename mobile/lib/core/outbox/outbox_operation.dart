@@ -8,12 +8,30 @@ import 'package:uuid/uuid.dart';
 /// user can Retry or Discard it explicitly.
 enum OutboxStatus { pending, sending, failedPermanent }
 
-/// Discriminator of the queued operation. 1B-min ships a single kind; the
-/// enum keeps the storage schema forward-compatible. Phase F3 generalizes
-/// the per-kind dispatch into a spec registry without adding new kinds —
-/// the follow-up kinds (cash-in/out, adjust, transfer, goods-receipt)
-/// belong to F4.
-enum OutboxOperationKind { createSale }
+/// Discriminator of the queued operation. 1B-min shipped a single kind
+/// (createSale); Phase F3 generalized the per-kind dispatch into a spec
+/// registry, and Phase F4 declares the real keyed mutation kinds. Each new
+/// kind receives its routing spec in F4-B — until then the worker's
+/// `spec == null → skip` guard keeps them inert: persisted, retriable
+/// metadata intact, but NEVER dispatched to any endpoint.
+enum OutboxOperationKind {
+  createSale,
+
+  /// `POST /sales/cash-shifts/cash-in` (keyed).
+  cashIn,
+
+  /// `POST /sales/cash-shifts/cash-out` (keyed).
+  cashOut,
+
+  /// `POST /inventory/stock/adjust` (keyed).
+  adjustStock,
+
+  /// `POST /inventory/stock/transfer` (keyed).
+  transferStock,
+
+  /// `POST /purchasing/goods-receipts` (keyed).
+  goodsReceipt,
+}
 
 /// One durable offline mutation.
 ///

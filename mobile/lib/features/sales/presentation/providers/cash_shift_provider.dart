@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/errors/failures.dart';
+import 'package:stockflow/core/outbox/outbox_mutation_queue.dart';
+import 'package:stockflow/core/outbox/outbox_operation.dart';
+import 'package:stockflow/core/services/connectivity_service.dart';
 import 'package:stockflow/features/sales/data/cash_shift_repository.dart';
 import 'package:stockflow/features/sales/domain/cash_shift_models.dart';
 
@@ -144,22 +147,52 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
     state = current is ShiftLoaded
         ? current.copyWith(isOperating: true)
         : const ShiftLoaded(isOperating: true);
+
+    // Phase F4-D: send-or-park. ONLINE → direct repository call carrying the
+    // freshly minted Idempotency-Key header; OFFLINE → the payload is parked
+    // in the outbox with idempotencyKey == clientOperationId. The offline
+    // payload carries warehouseId INSIDE (the cashIn/cashOut outbox specs
+    // build the required query from it), while the online repository call
+    // keeps its explicit queryParameters contract.
+    final online = _ref.read(connectivityStatusProvider);
+    final queue = _ref.read(outboxMutationQueueProvider);
     final repo = _ref.read(cashShiftRepositoryProvider);
-    final result = isIn
-        ? await repo.cashIn(
-            warehouseId: warehouseId,
-            request: CashInOutRequest(amount: amount, reason: reason),
-          )
-        : await repo.cashOut(
-            warehouseId: warehouseId,
-            request: CashInOutRequest(amount: amount, reason: reason),
-          );
-    if (result is ShiftSuccess<CashShift>) {
-      state = ShiftLoaded(current: result.data);
-      return result.data;
+    final request = CashInOutRequest(amount: amount, reason: reason);
+    final payload = request.toJson()..['warehouseId'] = warehouseId;
+
+    final outcome = await queue.mutate<ShiftResult<CashShift>>(
+      kind: isIn ? OutboxOperationKind.cashIn : OutboxOperationKind.cashOut,
+      payload: payload,
+      online: online,
+      sendOnline: (key) => isIn
+          ? repo.cashIn(
+              warehouseId: warehouseId,
+              request: request,
+              idempotencyKey: key,
+            )
+          : repo.cashOut(
+              warehouseId: warehouseId,
+              request: request,
+              idempotencyKey: key,
+            ),
+    );
+
+    if (outcome is OutboxMutationSent<ShiftResult<CashShift>>) {
+      final result = outcome.result;
+      if (result is ShiftSuccess<CashShift>) {
+        state = ShiftLoaded(current: result.data);
+        return result.data;
+      }
+      state = ShiftError((result as ShiftFailure<CashShift>).error.message);
+      return null;
     }
-    final failure = result as ShiftFailure<CashShift>;
-    state = ShiftError(failure.error.message);
+    // D3: the existing generic error channel carries the offline feedback —
+    // no new l10n keys. The operation is durably parked in the outbox and
+    // will sync automatically with the SAME idempotency key.
+    final message = outcome is OutboxMutationQueued<ShiftResult<CashShift>>
+        ? OutboxMutationQueue.offlineQueuedMessage
+        : (outcome as OutboxMutationRejected<ShiftResult<CashShift>>).reason;
+    state = ShiftError(message);
     return null;
   }
 

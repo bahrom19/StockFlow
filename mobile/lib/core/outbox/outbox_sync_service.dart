@@ -44,14 +44,13 @@ class OutboxSyncResult {
 }
 
 
-/// FIFO sync worker for the offline outbox (Offline 1B-min: CREATE_SALE is
-/// the only registered kind).
+/// FIFO sync worker for the offline outbox.
 ///
-/// Dispatch is spec-driven (Phase F3): every due op is routed through the
-/// [OutboxOperationSpec] registered for its kind by
-/// [OutboxOperationRegistry.specFor] — the worker itself never hardcodes an
-/// endpoint. A kind without a registered spec is NOT dispatchable and is
-/// skipped untouched.
+/// Dispatch is spec-driven (Phase F3/F4-B): every due op is routed through
+/// the [OutboxOperationSpec] found for its kind in the injected dispatch
+/// table (defaults to [OutboxOperationRegistry.specs]) — the worker itself
+/// never hardcodes an endpoint. A kind without a registered spec is NOT
+/// dispatchable and is skipped untouched.
 ///
 /// Safety contract:
 /// * An entry is removed ONLY after server confirmation (2xx) or a
@@ -71,21 +70,40 @@ class OutboxSyncResult {
 class OutboxSyncService {
   OutboxSyncService({
     required OutboxController controller,
-    required Future<dynamic> Function(String path, {Object? data}) post,
+    required Future<dynamic> Function(
+      String path, {
+      Object? data,
+      Map<String, dynamic>? query,
+      Map<String, String>? headers,
+    }) post,
     required CurrentUser? Function() currentUser,
     required bool Function() isOnline,
+    Map<OutboxOperationKind, OutboxOperationSpec> specs =
+        OutboxOperationRegistry.specs,
     AppLogger? logger,
   })  : _controller = controller,
         _post = post,
         _currentUser = currentUser,
         _isOnline = isOnline,
+        _specs = specs,
         _logger = logger ?? AppLogger('OutboxSync');
 
   final OutboxController _controller;
-  final Future<dynamic> Function(String path, {Object? data}) _post;
+  final Future<dynamic> Function(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? query,
+    Map<String, String>? headers,
+  }) _post;
   final CurrentUser? Function() _currentUser;
   final bool Function() _isOnline;
   final AppLogger _logger;
+
+  /// Dispatch table for this worker. Defaults to the production
+  /// [OutboxOperationRegistry.specs]; tests inject partial maps so the
+  /// spec-less guard below stays deterministically reachable even though
+  /// the production registry covers every kind.
+  final Map<OutboxOperationKind, OutboxOperationSpec> _specs;
 
   bool _inFlight = false;
 
@@ -130,7 +148,7 @@ class OutboxSyncService {
       // NOT dispatchable: it is skipped untouched instead of being sent to
       // a guessed endpoint. (A persisted unknown kind never even reaches
       // this loop — OutboxStorage drops it at load time.)
-      final spec = OutboxOperationRegistry.specFor(op.kind);
+      final spec = _specs[op.kind];
       if (spec == null) {
         _logger.warning(
           'No outbox spec for kind ${op.kind.name} — op '
@@ -145,7 +163,23 @@ class OutboxSyncService {
       await _controller.markSending(op.clientOperationId);
 
       try {
-        final response = await _post(spec.endpoint, data: op.payload);
+        // Query parameters (F4-B: the cash kinds' query-only `warehouseId`)
+        // ride in the query string exactly like the online repositories send
+        // them; the body drops the envelope-only fields via [spec.bodyFor]
+        // so the backend's forbidNonWhitelisted ValidationPipe accepts it.
+        final response = await _post(
+          spec.endpoint,
+          data: spec.bodyFor(op.payload),
+          query: spec.buildQuery?.call(op.payload),
+          // F4-C transport: a keyed op carries its immutable idempotencyKey
+          // as the backend's Idempotency-Key header on EVERY attempt — the
+          // same value minted once at enqueue time, which retries can never
+          // change (copyWith does not expose the key). CREATE_SALE has no
+          // key and must never send the header.
+          headers: op.idempotencyKey == null
+              ? null
+              : {'Idempotency-Key': op.idempotencyKey!},
+        );
         final followUp = spec.chainedFollowUp;
         if (followUp != null) {
           await followUp(
@@ -260,8 +294,16 @@ class OutboxSyncService {
 final outboxSyncProvider = Provider<OutboxSyncService>((ref) {
   return OutboxSyncService(
     controller: ref.watch(outboxControllerProvider.notifier),
-    post: (path, {data}) =>
-        ref.watch(apiClientProvider).post<dynamic>(path, data: data),
+    post: (path, {data, query, headers}) => ref
+        .watch(apiClientProvider)
+        .post<dynamic>(
+          path,
+          data: data,
+          queryParameters: query,
+          // Per-request headers merge over the Dio BaseOptions headers, so
+          // Authorization/Content-Type stamped elsewhere stay intact.
+          options: headers == null ? null : Options(headers: headers),
+        ),
     currentUser: () => ref.read(currentUserProvider),
     isOnline: () => ref.read(connectivityStatusProvider),
   );
