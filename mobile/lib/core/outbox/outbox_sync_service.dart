@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/api/api_client.dart';
-import 'package:stockflow/core/api/api_endpoints.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
@@ -9,6 +8,7 @@ import 'package:stockflow/core/services/connectivity_service.dart';
 
 import 'outbox_controller.dart';
 import 'outbox_operation.dart';
+import 'outbox_operation_spec.dart';
 
 /// What a single [OutboxSyncService.syncAll] pass accomplished.
 class OutboxSyncResult {
@@ -35,7 +35,8 @@ class OutboxSyncResult {
   /// 408, 429, 401) with exponential backoff.
   final int retried;
 
-  /// Ops left untouched (offline, no user, foreign scope, not due yet).
+  /// Ops left untouched (offline, no user, foreign scope, not due yet, or a
+  /// kind with no registered dispatch spec).
   final int skipped;
 
   /// Ops whose state changed during the pass.
@@ -43,7 +44,14 @@ class OutboxSyncResult {
 }
 
 
-/// FIFO sync worker for the offline outbox (Offline 1B-min: CREATE_SALE only).
+/// FIFO sync worker for the offline outbox (Offline 1B-min: CREATE_SALE is
+/// the only registered kind).
+///
+/// Dispatch is spec-driven (Phase F3): every due op is routed through the
+/// [OutboxOperationSpec] registered for its kind by
+/// [OutboxOperationRegistry.specFor] — the worker itself never hardcodes an
+/// endpoint. A kind without a registered spec is NOT dispatchable and is
+/// skipped untouched.
 ///
 /// Safety contract:
 /// * An entry is removed ONLY after server confirmation (2xx) or a
@@ -51,8 +59,10 @@ class OutboxSyncResult {
 ///   replay detectable server-side (unique constraint → 409 P2002), so a
 ///   crash between "request sent" and "entry removed" can never double-create
 ///   a sale — the retry resolves as a duplicate and the entry is confirmed.
-/// * Retryable failures (network, timeout, 5xx, 408, 429, 401) keep the op
-///   PENDING; [OutboxController] applies the exponential backoff.
+/// * Retryable failures (network, timeout, 5xx, 408, 429, 401 — and any
+///   non-duplicate 409 for an op carrying an idempotencyKey, i.e. an
+///   in-flight idempotency conflict) keep the op PENDING;
+///   [OutboxController] applies the exponential backoff.
 /// * Any other 4xx → FAILED_PERMANENT, surfaced with Retry / Discard.
 /// * Scope guard: an op is flushed only while the SAME user (company + user)
 ///   is authenticated — user A's offline sale can never be sent under user B.
@@ -116,18 +126,41 @@ class OutboxSyncService {
         continue;
       }
 
+      // Dispatch plan for this kind. A kind without a registered spec is
+      // NOT dispatchable: it is skipped untouched instead of being sent to
+      // a guessed endpoint. (A persisted unknown kind never even reaches
+      // this loop — OutboxStorage drops it at load time.)
+      final spec = OutboxOperationRegistry.specFor(op.kind);
+      if (spec == null) {
+        _logger.warning(
+          'No outbox spec for kind ${op.kind.name} — op '
+          '${op.clientOperationId} skipped, never dispatched',
+        );
+        skipped++;
+        continue;
+      }
+
       // PENDING → sending (persisted; a crash here recovers as
       // sending → PENDING on the next hydrate).
       await _controller.markSending(op.clientOperationId);
 
       try {
-        final response = await _post(ApiEndpoints.sales, data: op.payload);
-        await _completeChainedIfDraft(response);
+        final response = await _post(spec.endpoint, data: op.payload);
+        final followUp = spec.chainedFollowUp;
+        if (followUp != null) {
+          await followUp(
+            OutboxFollowUpContext(
+              responseData: response,
+              post: _post,
+              warn: _logger.warning,
+            ),
+          );
+        }
         await _controller.confirmSent(op.clientOperationId);
         sent++;
       } on DioException catch (e) {
         final message = _responseMessage(e.response);
-        switch (_classify(e)) {
+        switch (_classify(e, op)) {
           case _Outcome.confirm:
             await _controller.confirmSent(op.clientOperationId);
             duplicates++;
@@ -172,7 +205,16 @@ class OutboxSyncService {
   }
 
   /// Maps a failed send to the queue outcome.
-  _Outcome _classify(DioException e) {
+  ///
+  /// Key-aware (Phase F3): an op carrying [OutboxOperation.idempotencyKey]
+  /// can always be replayed safely — the backend guarantees at-most-once
+  /// application per key — so a 409 that is NOT a recognized duplicate is
+  /// treated as an in-flight idempotency conflict (the backend answers 409
+  /// "Request with idempotency key '…' is already being processed" while
+  /// another request still holds the reservation) and stays PENDING with
+  /// its key untouched. CREATE_SALE (no key) keeps the exact 1B-min
+  /// classification below.
+  _Outcome _classify(DioException e, OutboxOperation op) {
     final code = e.response?.statusCode;
     if (code == 409) {
       // Prisma P2002 reaches the client through the backend global exception
@@ -182,6 +224,8 @@ class OutboxSyncService {
       if (message.contains('unique') || message.contains('p2002')) {
         return _Outcome.confirm;
       }
+      // Keyed op: replay is safe → wait and retry with the SAME key.
+      if (op.idempotencyKey != null) return _Outcome.retryable;
       // Any other conflict is not interpretable offline → user decides.
       return _Outcome.permanent;
     }
@@ -207,27 +251,6 @@ class OutboxSyncService {
     if (data is Map) return '${data['message'] ?? ''}';
     if (data is String) return data;
     return '';
-  }
-
-  /// The backend creates sales as DRAFT; the online POS flow immediately
-  /// completes them with a second request. The queue carries only the create,
-  /// so once the create is confirmed we best-effort complete the sale within
-  /// the same burst. If the complete fails (network drops again), the sale
-  /// stays DRAFT — visible in the Sales list and completable manually. It
-  /// must NEVER block removing the create from the queue: the sale id needed
-  /// for the complete call exists only in this response and is not persisted.
-  Future<void> _completeChainedIfDraft(dynamic data) async {
-    if (data is! Map) return;
-    final id = data['id'];
-    if (id is! String || id.isEmpty) return;
-    if (data['status'] != 'DRAFT') return;
-    try {
-      await _post('/sales/$id/complete');
-    } catch (e) {
-      _logger.warning(
-        'Chained complete failed for sale $id — sale stays DRAFT: $e',
-      );
-    }
   }
 }
 

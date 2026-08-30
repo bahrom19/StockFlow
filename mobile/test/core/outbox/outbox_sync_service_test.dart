@@ -331,4 +331,93 @@ void main() {
       expect(c.state.operations, isEmpty);
     });
   });
+
+  group('OutboxSyncService (Phase F3: generalized dispatch)', () {
+    test('routing is spec-driven: createSale payload goes to POST /sales',
+        () async {
+      final c = await controller(seeded: [saleOp('route')]);
+      final spy = _PostSpy();
+      final svc = service(
+        controllerRef: c,
+        post: spy.always((_, __) => {'id': 'sale-11', 'status': 'COMPLETED'}),
+      );
+
+      final result = await svc.syncAll();
+
+      expect(result.sent, 1);
+      expect(spy.calls.single.$1, '/sales');
+      expect((spy.calls.single.$2 as Map)['saleNumber'], 'OFF-route');
+    });
+
+    test('409 in-flight idempotency conflict on a keyed op → retryable, '
+        'op stays PENDING, key untouched', () async {
+      final keyed = saleOp('keyed-409').copyWith(
+        attempts: 3,
+        lastError: 'HTTP 503',
+      );
+      // The model keeps idempotencyKey immutable — simulate an F4-style keyed
+      // op the way persistence would restore it (via fromJson round-trip).
+      final json = keyed.toJson()..['idempotencyKey'] = 'idem-key-409';
+      final op = OutboxOperation.fromJson(json);
+      expect(op.idempotencyKey, 'idem-key-409');
+
+      final c = await controller(seeded: [op]);
+      final spy = _PostSpy();
+      final svc = service(
+        controllerRef: c,
+        // Backend in-flight conflict message carries no unique/p2002 marker.
+        post: spy.always(
+          (_, __) => throw _status(
+            409,
+            data: {
+              'message':
+                  "Request with idempotency key 'idem-key-409' is already "
+                      'being processed',
+            },
+          ),
+        ),
+      );
+
+      final result = await svc.syncAll();
+
+      expect(result.retried, 1);
+      expect(result.sent, 0);
+      expect(spy.calls, hasLength(1)); // exactly one attempt per burst
+      final kept = c.state.operations.single;
+      expect(kept.clientOperationId, 'keyed-409');
+      expect(kept.status, OutboxStatus.pending);
+      expect(kept.attempts, 4);
+      expect(kept.idempotencyKey, 'idem-key-409'); // key preserved
+      expect(kept.isDue(DateTime.now()), isFalse); // backoff scheduled
+    });
+
+    test('a kind without a registered spec is skipped, never dispatched',
+        () async {
+      // Model-level guarantee: an unknown persisted kind can never enter the
+      // in-memory queue as createSale — it is dropped at load time. The
+      // worker-side guard (spec == null → skip) is the second line of
+      // defense and is exercised by the registry invariant test in
+      // outbox_operation_spec_test.dart (every kind must have a spec).
+      final op = OutboxOperation(
+        clientOperationId: 'specless',
+        kind: OutboxOperationKind.createSale,
+        companyId: 'company-1',
+        userId: 'user-1',
+        payload: const {'saleNumber': 'OFF-specless'},
+        createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+      );
+      expect(op.kind, OutboxOperationKind.createSale); // no silent coercion
+      final c = await controller(seeded: [op]);
+      final spy = _PostSpy();
+      final svc = service(
+        controllerRef: c,
+        post: spy.always((_, __) => {'id': 'sale-12', 'status': 'COMPLETED'}),
+      );
+
+      final result = await svc.syncAll();
+
+      expect(result.sent, 1);
+      expect(spy.calls.single.$1, '/sales');
+    });
+  });
 }

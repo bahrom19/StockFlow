@@ -24,6 +24,10 @@ class OutboxStorage {
   /// restart are reset to PENDING: the app may have died between "request
   /// sent" and "record removed". Re-sending is safe — CREATE_SALE carries a
   /// client-generated unique saleNumber, a duplicate is recognised server-side.
+  ///
+  /// Entries that cannot be parsed — corrupted JSON, or a kind unknown to
+  /// this build (never coerced into createSale) — are dropped here and are
+  /// therefore never dispatched anywhere.
   Future<List<OutboxOperation>> load() async {
     final raw = _prefs.getStringList(_key) ?? const <String>[];
     final ops = <OutboxOperation>[];

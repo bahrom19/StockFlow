@@ -100,4 +100,76 @@ void main() {
       expect(await storage.load(), isEmpty);
     });
   });
+
+  group('OutboxStorage (Phase F3: v1 backward compatibility)', () {
+    test('legacy v1 JSON without new fields loads with safe defaults',
+        () async {
+      final prefs = await warmedPrefs();
+      // Raw v1 entry, exactly as the 1B-min build persisted it: no
+      // schemaVersion, no idempotencyKey.
+      await prefs.setStringList('outbox_ops_v1', [
+        jsonEncode(<String, dynamic>{
+          'clientOperationId': 'legacy-1',
+          'kind': 'createSale',
+          'companyId': 'company-1',
+          'userId': 'user-1',
+          'payload': <String, dynamic>{'saleNumber': 'OFF-legacy-1'},
+          'status': 'pending',
+          'attempts': 1,
+          'nextAttemptAt': null,
+          'createdAt': 1000,
+          'lastError': null,
+        }),
+      ]);
+      final storage = OutboxStorage(prefs);
+
+      final loaded = await storage.load();
+
+      expect(loaded, hasLength(1));
+      final legacy = loaded.single;
+      expect(legacy.kind, OutboxOperationKind.createSale);
+      expect(legacy.idempotencyKey, isNull); // safe default
+      expect(legacy.schemaVersion, 1); // safe default
+      expect(legacy.payload, {'saleNumber': 'OFF-legacy-1'});
+    });
+
+    test('entries with an unknown kind are dropped and never dispatched',
+        () async {
+      final prefs = await warmedPrefs();
+      await prefs.setStringList('outbox_ops_v1', [
+        jsonEncode(op(id: 'keeper').toJson()),
+        jsonEncode(<String, dynamic>{
+          'clientOperationId': 'ghost',
+          'kind': 'mysteryKind',
+          'companyId': 'company-1',
+          'userId': 'user-1',
+          'payload': <String, dynamic>{'warehouseId': 'w-1'},
+          'status': 'pending',
+        }),
+      ]);
+      final storage = OutboxStorage(prefs);
+
+      final loaded = await storage.load();
+
+      expect(loaded.map((o) => o.clientOperationId), ['keeper']);
+    });
+
+    test('idempotencyKey round-trips through save/load unchanged', () async {
+      final prefs = await warmedPrefs();
+      final storage = OutboxStorage(prefs);
+      final keyed = op(id: 'keyed-1');
+      // The model keeps the key immutable — an F4-style keyed op reaches
+      // storage exactly the way persistence restores it (v1 JSON + key).
+      final json = keyed.toJson()..['idempotencyKey'] = 'idem-key-1';
+      await prefs.setStringList(
+        'outbox_ops_v1',
+        [jsonEncode(json)],
+      );
+
+      final loaded = await storage.load();
+
+      expect(loaded.single.idempotencyKey, 'idem-key-1');
+      expect(loaded.single.schemaVersion, 1);
+    });
+  });
 }
