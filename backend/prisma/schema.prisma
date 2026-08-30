@@ -2115,3 +2115,29 @@ model WebhookEvent {
   @@index([idempotencyKey])
   @@index([processedAt])
 }
+
+/// Generic DB-backed idempotency layer (infrastructure, Phase F1).
+///
+/// Scope: (companyId, idempotencyKey). `requestHash` is the SHA-256 of the
+/// normalized request body — the same key with a different payload is
+/// rejected. Records act as an in-transaction reservation: the INSERT is
+/// the FIRST write of the business transaction (the unique index acts as
+/// a database mutex), so a rollback/crash removes the record together with
+/// the business effect. `responseStatus = 0` is a PENDING sentinel — a
+/// committed row with status 0 means the caller committed a reservation
+/// without saving a response (retry with the same key returns 409).
+/// Expired records (TTL 24h) are treated as absent.
+model IdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @db.Uuid
+  idempotencyKey String   @db.VarChar(255)
+  endpoint       String   @db.VarChar(200)
+  requestHash    String   @db.VarChar(64)
+  responseStatus Int
+  responseBody   Json?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  @@unique([companyId, idempotencyKey])
+  @@index([expiresAt])
+}

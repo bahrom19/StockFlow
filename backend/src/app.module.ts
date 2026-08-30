@@ -7,6 +7,7 @@ import { ObservabilityModule } from './common/observability/observability.module
 import { MetricsInterceptor } from './common/observability/metrics.interceptor';
 import { PrismaModule } from './common/prisma';
 import { CacheModule } from './infrastructure/cache/cache.module';
+import { IdempotencyModule } from './infrastructure/idempotency';
 import { EventBusModule } from './common/events';
 import { HealthModule } from './modules/health/health.module';
 import { SharedModule } from './modules/shared/shared.module';
@@ -31,6 +32,7 @@ import { BillingModule } from './modules/billing/billing.module';
     SharedModule,
     ObservabilityModule,
     CacheModule,
+    IdempotencyModule,
     EventBusModule,
     HealthModule,
     UsersModule,
