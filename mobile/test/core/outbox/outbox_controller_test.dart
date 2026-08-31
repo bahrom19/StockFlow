@@ -170,5 +170,146 @@ void main() {
       final fresh = await controller();
       expect(fresh.state.operations, isEmpty);
     });
+
+    group('F5-B: finite retry budget (maxRetryAttempts)', () {
+      // The exact wall-clock waits of the UNCHANGED backoff formula
+      // (30s * 2^(n-1), capped at 15 min) for attempts 1..11 — pinned as
+      // literals so any accidental formula change breaks this test.
+      const expectedWait = <int, int>{
+        1: 30,
+        2: 60,
+        3: 120,
+        4: 240,
+        5: 480,
+        6: 900,
+        7: 900,
+        8: 900,
+        9: 900,
+        10: 900,
+        11: 900,
+      };
+
+      test('retryable failures 1..11 stay PENDING with the unchanged backoff',
+          () async {
+        final base = DateTime(2026, 1, 1, 12);
+        final c = await controller(now: () => base);
+        await c.enqueue(op('chain'));
+
+        for (final entry in expectedWait.entries) {
+          await c.markRetryableFailure('chain', 'HTTP 503 #${entry.key}');
+          final stored = c.state.operations.single;
+          expect(stored.status, OutboxStatus.pending,
+              reason: 'attempt ${entry.key} must stay PENDING');
+          expect(stored.attempts, entry.key,
+              reason: 'attempt counter after ${entry.key} failures');
+          expect(
+            stored.nextAttemptAt,
+            base.add(Duration(seconds: entry.value)),
+            reason: 'backoff after attempt ${entry.key}',
+          );
+          expect(c.state.failedCount, 0, reason: 'no demotion below the cap');
+        }
+        expect(c.state.pendingCount, 1);
+      });
+
+      test('the 12th retryable failure ends the chain: FAILED_PERMANENT',
+          () async {
+        final base = DateTime(2026, 1, 1, 12);
+        final c = await controller(now: () => base);
+        await c.enqueue(op('cap'));
+
+        // Eleven automatic retries keep the op alive…
+        for (var i = 1; i < OutboxController.maxRetryAttempts; i++) {
+          await c.markRetryableFailure('cap', 'HTTP 503');
+        }
+        expect(c.state.operations.single.status, OutboxStatus.pending);
+
+        // …the 12th retryable failure exhausts the budget.
+        expect(OutboxController.maxRetryAttempts, 12); // policy pinned
+        await c.markRetryableFailure('cap', 'server never recovered');
+
+        final stored = c.state.operations.single;
+        expect(stored.status, OutboxStatus.failedPermanent);
+        expect(stored.attempts, 12);
+        expect(stored.lastError, 'server never recovered');
+        expect(stored.nextAttemptAt, isNull);
+        expect(c.state.failedCount, 1);
+        expect(c.state.pendingCount, 0);
+      });
+
+      test('retryFailed after the cap resets attempts and restarts backoff',
+          () async {
+        final base = DateTime(2026, 1, 1, 12);
+        // A capped op as persistence would restore it: FAILED_PERMANENT with
+        // the budget spent and a stale (already elapsed) backoff deadline —
+        // exactly what pre-F5-B permanent failures look like. The reset must
+        // actually CLEAR that deadline, not keep it.
+        final capped = op('capped').copyWith(
+          status: OutboxStatus.failedPermanent,
+          attempts: OutboxController.maxRetryAttempts,
+          lastError: 'server never recovered',
+          nextAttemptAt: base.subtract(const Duration(minutes: 30)),
+        );
+        final c = await controller(seeded: [capped], now: () => base);
+
+        await c.retryFailed('capped');
+
+        final reset = c.state.operations.single;
+        expect(reset.status, OutboxStatus.pending);
+        expect(reset.attempts, 0);
+        expect(reset.nextAttemptAt, isNull);
+        expect(reset.lastError, isNull);
+        expect(reset.isDue(base), isTrue);
+
+        // The next retryable failure starts the backoff from the FIRST step
+        // (30s), not from the exhausted chain's position.
+        await c.markRetryableFailure('capped', 'HTTP 503');
+        final first = c.state.operations.single;
+        expect(first.status, OutboxStatus.pending);
+        expect(first.attempts, 1);
+        expect(first.nextAttemptAt, base.add(const Duration(seconds: 30)));
+      });
+
+      test('restart: persisted attempts survive; the cap still demotes after '
+          'a restart', () async {
+        final base = DateTime(2026, 1, 1, 12);
+        // Run 1: three retryable failures are persisted with their backoff.
+        final run1 = await controller(now: () => base);
+        await run1.enqueue(op('survivor'));
+        for (var i = 1; i <= 3; i++) {
+          await run1.markRetryableFailure('survivor', 'HTTP 503');
+        }
+        expect(run1.state.operations.single.attempts, 3);
+
+        // Run 2: a fresh controller over the same storage restores the
+        // attempt counter and the pending backoff deadline verbatim.
+        final run2 = await controller(now: () => base);
+        final restored = run2.state.operations.single;
+        expect(restored.attempts, 3);
+        expect(restored.status, OutboxStatus.pending);
+        expect(restored.nextAttemptAt, base.add(const Duration(seconds: 120)));
+
+        // An op restored exactly at the budget boundary (11 prior attempts,
+        // e.g. written by a pre-F5-B build) demotes on its NEXT failure…
+        final boundary = op('boundary').copyWith(
+          attempts: OutboxController.maxRetryAttempts - 1,
+          lastError: 'HTTP 503',
+        );
+        final run2b = await controller(seeded: [boundary], now: () => base);
+        expect(run2b.state.operations.single.attempts, 11);
+        await run2b.markRetryableFailure('boundary', 'HTTP 503');
+        final demoted = run2b.state.operations.single;
+        expect(demoted.status, OutboxStatus.failedPermanent);
+        expect(demoted.attempts, OutboxController.maxRetryAttempts);
+        expect(demoted.nextAttemptAt, isNull);
+
+        // …and the demotion itself is persisted across yet another restart.
+        final run3 = await controller(now: () => base);
+        final persisted = run3.state.operations.single;
+        expect(persisted.status, OutboxStatus.failedPermanent);
+        expect(persisted.attempts, OutboxController.maxRetryAttempts);
+        expect(run3.state.failedCount, 1);
+      });
+    });
   });
 }

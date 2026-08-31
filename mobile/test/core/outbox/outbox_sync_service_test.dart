@@ -570,4 +570,114 @@ void main() {
       expect(c2.state.operations, isEmpty);
     });
   });
+
+  group('OutboxSyncService (Phase F5-B: finite retry budget)', () {
+    OutboxOperation keyedAtBudgetEdge(String id, String key) {
+      // Simulate an F4-style keyed op the way persistence restores it (the
+      // key is immutable and copyWith never exposes it) with the budget
+      // almost spent: maxRetryAttempts - 1 prior failures, still PENDING.
+      final edge = saleOp(id).copyWith(
+        attempts: OutboxController.maxRetryAttempts - 1,
+        lastError: 'HTTP 503',
+      );
+      final json = edge.toJson()..['idempotencyKey'] = key;
+      return OutboxOperation.fromJson(json);
+    }
+
+    test('keyed in-flight 409 on the last budgeted attempt → exactly one more '
+        'attempt, then FAILED_PERMANENT', () async {
+      final c = await controller(seeded: [keyedAtBudgetEdge('keyed-cap', 'idem-key-cap')]);
+      final spy = _PostSpy();
+      final svc = service(
+        controllerRef: c,
+        // Backend in-flight conflict message carries no unique/p2002 marker —
+        // the same retryable classification as ever (F5-B does not reclassify).
+        post: spy.always(
+          (_, __) => throw _status(
+            409,
+            data: {
+              'message':
+                  "Request with idempotency key 'idem-key-cap' is already "
+                      'being processed',
+            },
+          ),
+        ),
+      );
+
+      final result = await svc.syncAll();
+
+      // Classification unchanged: the worker still reports this as a
+      // retryable outcome — the CAP itself (controller-side) ends the chain.
+      expect(result.retried, 1);
+      expect(result.failedPermanent, 0);
+      expect(spy.calls, hasLength(1)); // exactly one next attempt
+      final demoted = c.state.operations.single;
+      expect(demoted.status, OutboxStatus.failedPermanent);
+      expect(demoted.attempts, OutboxController.maxRetryAttempts);
+      expect(demoted.lastError, isNotNull);
+      expect(demoted.nextAttemptAt, isNull);
+      expect(demoted.idempotencyKey, 'idem-key-cap'); // key preserved
+      expect(c.state.failedCount, 1);
+
+      // A follow-up flush sends NOTHING — the op is out of the retry loop.
+      final again = await svc.syncAll();
+      expect(again.retried, 0);
+      expect(again.skipped, 1);
+      expect(spy.calls, hasLength(1));
+    });
+
+    test('manual Retry after the cap re-sends with the SAME idempotencyKey, '
+        'removes the op on 2xx and a repeated flush creates no duplicate',
+        () async {
+      final c = await controller(
+        seeded: [keyedAtBudgetEdge('keyed-manual', 'idem-key-manual')],
+      );
+      final seenKeys = <String?>[];
+      var responses = 0;
+      Future<dynamic> post(
+        String path, {
+        Object? data,
+        Map<String, dynamic>? query,
+        Map<String, String>? headers,
+      }) async {
+        seenKeys.add(headers?['Idempotency-Key']);
+        responses++;
+        if (responses == 1) {
+          throw _status(503, data: {'message': 'down'});
+        }
+        return {'id': 'shift-9', 'status': 'OPEN'};
+      }
+
+      final svc = service(controllerRef: c, post: post);
+
+      // Attempt #12 (the last budgeted one) fails retryably → cap demotion.
+      final capBurst = await svc.syncAll();
+      expect(capBurst.retried, 1);
+      final capped = c.state.operations.single;
+      expect(capped.status, OutboxStatus.failedPermanent);
+      expect(capped.attempts, OutboxController.maxRetryAttempts);
+      expect(capped.idempotencyKey, 'idem-key-manual');
+
+      // The user taps Retry in the failed UI — exactly what outbox_indicator
+      // does: retryFailed, then a fresh syncAll.
+      await c.retryFailed('keyed-manual');
+      final reset = c.state.operations.single;
+      expect(reset.status, OutboxStatus.pending);
+      expect(reset.attempts, 0);
+      expect(reset.nextAttemptAt, isNull);
+
+      final manualBurst = await svc.syncAll();
+      expect(manualBurst.sent, 1);
+      // Exactly two attempts in total, BOTH carrying the identical key
+      // minted once at enqueue time.
+      expect(seenKeys, ['idem-key-manual', 'idem-key-manual']);
+      // Success confirmed → the op is removed from the queue.
+      expect(c.state.operations, isEmpty);
+
+      // A repeated flush creates no duplicate: nothing is left to send.
+      final again = await svc.syncAll();
+      expect(again.processed, 0);
+      expect(seenKeys, hasLength(2));
+    });
+  });
 }
