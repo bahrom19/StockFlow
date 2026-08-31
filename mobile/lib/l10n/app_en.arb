@@ -829,18 +829,24 @@
   "noData": "No data",
   "comingSoonMessage": "This module is coming soon in the web client.\nThe backend API is ready — the UI is being prepared.",
   "goBack": "Go Back",
-  "outboxPendingSales": "{count, plural, =1{1 pending sale} other{{count} pending sales}}",
-  "outboxFailedSales": "{count, plural, =1{1 sale failed to sync} other{{count} sales failed to sync}}",
+  "outboxPendingItems": "{count, plural, =1{1 pending change} other{{count} pending changes}}",
+  "outboxFailedItems": "{count, plural, =1{1 change failed to sync} other{{count} changes failed to sync}}",
   "outboxSyncNow": "Send now",
-  "outboxFailedTitle": "Offline sales with errors",
+  "outboxFailedTitle": "Offline changes with errors",
   "outboxDiscard": "Discard",
+  "outboxKindCreateSale": "Sale",
+  "outboxKindCashIn": "Cash in",
+  "outboxKindCashOut": "Cash out",
+  "outboxKindAdjustStock": "Stock adjustment",
+  "outboxKindTransferStock": "Stock transfer",
+  "outboxKindGoodsReceipt": "Goods receipt",
   "outboxOfflineSaleQueued": "Sale saved offline. Number: {number}. It will be sent automatically.",
-  "@outboxPendingSales": {
+  "@outboxPendingItems": {
     "placeholders": {
       "count": { "type": "int" }
     }
   },
-  "@outboxFailedSales": {
+  "@outboxFailedItems": {
     "placeholders": {
       "count": { "type": "int" }
     }

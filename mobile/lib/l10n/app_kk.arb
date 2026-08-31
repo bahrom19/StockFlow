@@ -829,18 +829,24 @@
   "noData": "Деректер жоқ",
   "comingSoonMessage": "Бұл модуль веб-клиентте жақында қолжетімді болады.\nBackend API дайын — интерфейс әзірленіп жатыр.",
   "goBack": "Артқа",
-  "outboxPendingSales": "{count, plural, =1{1 күтетін сату} other{{count} күтетін сатылым}}",
-  "outboxFailedSales": "{count, plural, =1{1 сату жіберілмеген} other{{count} сату жіберілмеген}}",
+  "outboxPendingItems": "{count, plural, =1{1 күтетін өзгеріс} other{{count} күтетін өзгеріс}}",
+  "outboxFailedItems": "{count, plural, =1{1 жіберілмеген өзгеріс} other{{count} жіберілмеген өзгеріс}}",
   "outboxSyncNow": "Жіберу",
-  "outboxFailedTitle": "Қателері бар күтетін сатылымдар",
+  "outboxFailedTitle": "Қателері бар күтетін өзгерістер",
   "outboxDiscard": "Өшіру",
+  "outboxKindCreateSale": "Сату",
+  "outboxKindCashIn": "Кассаға ақша салу",
+  "outboxKindCashOut": "Кассадан ақша алу",
+  "outboxKindAdjustStock": "Қалдықты түзету",
+  "outboxKindTransferStock": "Қалдықты ауыстыру",
+  "outboxKindGoodsReceipt": "Тауар қабылдау",
   "outboxOfflineSaleQueued": "Сату офлайн сақталды. Нөмір: {number}. Автоматты жіберілед.",
-  "@outboxPendingSales": {
+  "@outboxPendingItems": {
     "placeholders": {
       "count": { "type": "int" }
     }
   },
-  "@outboxFailedSales": {
+  "@outboxFailedItems": {
     "placeholders": {
       "count": { "type": "int" }
     }

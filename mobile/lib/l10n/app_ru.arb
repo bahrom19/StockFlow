@@ -829,18 +829,24 @@
   "noData": "Нет данных",
   "comingSoonMessage": "Этот модуль скоро будет доступен в веб-клиенте.\nBackend API уже готов — интерфейс готовится.",
   "goBack": "Назад",
-  "outboxPendingSales": "{count, plural, =1{1 отложенная продажа} one{{count} отложенная продажа} few{{count} отложенные продажи} many{{count} отложенных продаж} other{{count} отложенных продаж}}",
-  "outboxFailedSales": "{count, plural, =1{1 продажа не отправлена} one{{count} продажа не отправлена} few{{count} продажи не отправлены} many{{count} продаж не отправлено} other{{count} продаж не отправлено}}",
+  "outboxPendingItems": "{count, plural, one{{count} отложенное изменение} few{{count} отложенных изменения} many{{count} отложенных изменений} other{{count} отложенных изменений}}",
+  "outboxFailedItems": "{count, plural, one{{count} изменение с ошибкой отправки} few{{count} изменения с ошибкой отправки} many{{count} изменений с ошибкой отправки} other{{count} изменений с ошибкой отправки}}",
   "outboxSyncNow": "Отправить",
-  "outboxFailedTitle": "Отложенные продажи с ошибками",
+  "outboxFailedTitle": "Отложенные изменения с ошибками",
   "outboxDiscard": "Отклонить",
+  "outboxKindCreateSale": "Продажа",
+  "outboxKindCashIn": "Внесение кассы",
+  "outboxKindCashOut": "Списание кассы",
+  "outboxKindAdjustStock": "Корректировка остатков",
+  "outboxKindTransferStock": "Перемещение остатков",
+  "outboxKindGoodsReceipt": "Приёмка товара",
   "outboxOfflineSaleQueued": "Продажа сохранена офлайн. Номер: {number}. Отправится автоматически.",
-  "@outboxPendingSales": {
+  "@outboxPendingItems": {
     "placeholders": {
       "count": { "type": "int" }
     }
   },
-  "@outboxFailedSales": {
+  "@outboxFailedItems": {
     "placeholders": {
       "count": { "type": "int" }
     }

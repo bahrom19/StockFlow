@@ -8,8 +8,9 @@ import 'package:stockflow/core/outbox/outbox_sync_service.dart';
 
 /// Compact outbox bar above the routed content (Offline 1B-min).
 ///
-/// Visible whenever offline sales are queued: "N pending sales" plus, for
-/// FAILED_PERMANENT entries, an error entry point with per-sale Retry /
+/// Visible whenever offline operations are queued — sales as well as cash,
+/// inventory and purchasing mutations — as "N pending changes" plus, for
+/// FAILED_PERMANENT entries, an error entry point with per-entry Retry /
 /// Discard. "Send now" runs one worker burst immediately. Watching
 /// [outboxInitProvider] also hydrates the persisted queue once on cold start.
 class OutboxIndicatorScope extends ConsumerWidget {
@@ -33,8 +34,8 @@ class OutboxIndicatorScope extends ConsumerWidget {
     final pending = state.pendingCount + state.sendingCount;
     final failed = state.failedCount;
     final label = failed > 0
-        ? '${l10n.outboxPendingSales(pending)}  •  ${l10n.outboxFailedSales(failed)}'
-        : l10n.outboxPendingSales(pending);
+        ? '${l10n.outboxPendingItems(pending)}  •  ${l10n.outboxFailedItems(failed)}'
+        : l10n.outboxPendingItems(pending);
 
     return Column(
       children: [
@@ -82,80 +83,111 @@ class OutboxIndicatorScope extends ConsumerWidget {
     );
   }
 
+  /// User-facing title of a failed entry: the sale number for sales, a
+  /// localized kind label for every other kind. The raw clientOperationId
+  /// (UUID) stays only as a last-resort technical fallback for a sale whose
+  /// payload has no saleNumber.
+  static String _failedItemTitle(OutboxOperation op, AppLocalizations l10n) {
+    switch (op.kind) {
+      case OutboxOperationKind.createSale:
+        return '${op.payload['saleNumber'] ?? op.clientOperationId}';
+      case OutboxOperationKind.cashIn:
+        return l10n.outboxKindCashIn;
+      case OutboxOperationKind.cashOut:
+        return l10n.outboxKindCashOut;
+      case OutboxOperationKind.adjustStock:
+        return l10n.outboxKindAdjustStock;
+      case OutboxOperationKind.transferStock:
+        return l10n.outboxKindTransferStock;
+      case OutboxOperationKind.goodsReceipt:
+        return l10n.outboxKindGoodsReceipt;
+    }
+  }
+
   void _showFailedDialog(
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l10n,
   ) {
-    final ops = ref
-        .read(outboxControllerProvider)
-        .operations
-        .where((o) => o.status == OutboxStatus.failedPermanent)
-        .toList(growable: false);
     showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(l10n.outboxFailedTitle),
-          content: SizedBox(
-            width: 460,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: ops.length,
-              itemBuilder: (_, index) {
-                final op = ops[index];
-                final number =
-                    '${op.payload['saleNumber'] ?? op.clientOperationId}';
-                return ListTile(
-                  dense: true,
-                  title: Text(
-                    number,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: op.lastError == null
-                      ? null
-                      : Text(
-                          op.lastError!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: l10n.retry,
-                        icon: const Icon(Icons.refresh),
-                        onPressed: () async {
-                          final controller = ref.read(
-                            outboxControllerProvider.notifier,
-                          );
-                          await controller.retryFailed(op.clientOperationId);
-                          await ref.read(outboxSyncProvider).syncAll();
-                        },
+        // Reactive: the open dialog follows the live queue, so a Retry or
+        // Discard performed inside it removes the entry immediately (no
+        // reopen needed). A repeated tap on an already-resolved entry is a
+        // safe controller no-op.
+        return Consumer(
+          builder: (context, dialogRef, _) {
+            final ops = dialogRef
+                .watch(outboxControllerProvider)
+                .operations
+                .where((o) => o.status == OutboxStatus.failedPermanent)
+                .toList(growable: false);
+            return AlertDialog(
+              title: Text(l10n.outboxFailedTitle),
+              content: SizedBox(
+                width: 460,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: ops.length,
+                  itemBuilder: (_, index) {
+                    final op = ops[index];
+                    return ListTile(
+                      dense: true,
+                      title: Text(
+                        _failedItemTitle(op, l10n),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      IconButton(
-                        tooltip: l10n.outboxDiscard,
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () async {
-                          final controller = ref.read(
-                            outboxControllerProvider.notifier,
-                          );
-                          await controller.discard(op.clientOperationId);
-                        },
+                      subtitle: op.lastError == null
+                          ? null
+                          : Text(
+                              op.lastError!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: l10n.retry,
+                            icon: const Icon(Icons.refresh),
+                            onPressed: () async {
+                              final controller = dialogRef.read(
+                                outboxControllerProvider.notifier,
+                              );
+                              await controller.retryFailed(
+                                op.clientOperationId,
+                              );
+                              await dialogRef
+                                  .read(outboxSyncProvider)
+                                  .syncAll();
+                            },
+                          ),
+                          IconButton(
+                            tooltip: l10n.outboxDiscard,
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () async {
+                              final controller = dialogRef.read(
+                                outboxControllerProvider.notifier,
+                              );
+                              await controller.discard(op.clientOperationId);
+                            },
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(l10n.goBack),
-            ),
-          ],
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(l10n.goBack),
+                ),
+              ],
+            );
+          },
         );
       },
     );
