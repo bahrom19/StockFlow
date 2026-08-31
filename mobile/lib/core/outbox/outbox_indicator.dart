@@ -33,47 +33,72 @@ class OutboxIndicatorScope extends ConsumerWidget {
     final theme = Theme.of(context);
     final pending = state.pendingCount + state.sendingCount;
     final failed = state.failedCount;
+    // True while the worker is actively flushing entries (F5-C wiring drives
+    // the same controller state). The UI disables the manual "Send now" tap
+    // during that window so repeated taps cannot stack burst attempts.
+    final isSending = state.sendingCount > 0;
     final label = failed > 0
         ? '${l10n.outboxPendingItems(pending)}  •  ${l10n.outboxFailedItems(failed)}'
+        : l10n.outboxPendingItems(pending);
+    // Screen-reader label for the whole compact bar: the same localized,
+    // generic wording the visible text shows. No new ARB keys.
+    final barLabel = failed > 0
+        ? '${l10n.outboxPendingItems(pending)}. ${l10n.outboxFailedItems(failed)}.'
         : l10n.outboxPendingItems(pending);
 
     return Column(
       children: [
-        Material(
-          color: theme.colorScheme.secondaryContainer,
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.cloud_upload_outlined,
-                    size: 18,
-                    color: theme.colorScheme.onSecondaryContainer,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSecondaryContainer,
+        Semantics(
+          container: true,
+          label: barLabel,
+          child: Material(
+            color: theme.colorScheme.secondaryContainer,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.cloud_upload_outlined,
+                      size: 18,
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSecondaryContainer,
+                        ),
                       ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () => ref.read(outboxSyncProvider).syncAll(),
-                    child: Text(l10n.outboxSyncNow),
-                  ),
-                  if (failed > 0)
-                    IconButton(
-                      tooltip: l10n.outboxFailedTitle,
-                      icon: const Icon(Icons.error_outline, size: 20),
-                      onPressed: () => _showFailedDialog(context, ref, l10n),
-                    ),
-                ],
+                    if (isSending)
+                      const Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else
+                      TextButton(
+                        onPressed: () => ref.read(outboxSyncProvider).syncAll(),
+                        child: Text(l10n.outboxSyncNow),
+                      ),
+                    if (failed > 0)
+                      IconButton(
+                        tooltip: l10n.outboxFailedTitle,
+                        icon: const Icon(Icons.error_outline, size: 20),
+                        onPressed: () => _showFailedDialog(context, ref, l10n),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

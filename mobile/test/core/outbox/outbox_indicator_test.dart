@@ -180,8 +180,7 @@ void main() {
   }) async {
     base = DateTime(2026, 1, 1, 12);
     offset = Duration.zero;
-    api = _SpyApi()
-      ..responder = (_, __) => <String, dynamic>{'ok': true};
+    api = _SpyApi()..responder = (_, __) => <String, dynamic>{'ok': true};
     schedule = <_FakeTimer>[];
     connectivity = _FakeConnectivity(initialOnline: online);
     final prefs = PreferencesStorage();
@@ -195,7 +194,8 @@ void main() {
         currentUserProvider.overrideWithValue(_user),
         connectivityServiceProvider.overrideWithValue(connectivity),
         outboxControllerProvider.overrideWith(
-          (ref) => OutboxController(ref.watch(outboxStorageProvider), now: clock),
+          (ref) =>
+              OutboxController(ref.watch(outboxStorageProvider), now: clock),
         ),
         outboxSchedulerClockProvider.overrideWithValue(clock),
         outboxSchedulerTimerFactoryProvider.overrideWithValue(
@@ -352,7 +352,8 @@ void main() {
       (tester) async {
         await buildHarness(
           seeded: [
-            mkOp('retry-1', status: OutboxStatus.failedPermanent, lastError: 'boom'),
+            mkOp('retry-1',
+                status: OutboxStatus.failedPermanent, lastError: 'boom'),
           ],
         );
         // The auto cold-start flush would hit 2xx and REMOVE the op before we
@@ -388,7 +389,8 @@ void main() {
       (tester) async {
         await buildHarness(
           seeded: [
-            mkOp('disc-1', status: OutboxStatus.failedPermanent, lastError: 'boom'),
+            mkOp('disc-1',
+                status: OutboxStatus.failedPermanent, lastError: 'boom'),
           ],
         );
         await pumpApp(tester);
@@ -442,7 +444,8 @@ void main() {
 
         expect(find.text('Cash in'), findsNothing);
         expect(find.text('Goods receipt'), findsOneWidget);
-        expect(container.read(outboxControllerProvider).operations, hasLength(1));
+        expect(
+            container.read(outboxControllerProvider).operations, hasLength(1));
       },
     );
 
@@ -489,7 +492,8 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        expect(find.textContaining('изменение с ошибкой отправки'), findsOneWidget);
+        expect(find.textContaining('изменение с ошибкой отправки'),
+            findsOneWidget);
         await openFailedDialog(tester);
         expect(find.text('Отложенные изменения с ошибками'), findsOneWidget);
         expect(find.text('Внесение кассы'), findsOneWidget);
@@ -516,6 +520,95 @@ void main() {
         await openFailedDialog(tester);
         expect(find.text('Қателері бар күтетін өзгерістер'), findsOneWidget);
         expect(find.text('Кассаға ақша салу'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'sendingCount > 0 → Send now is replaced by a progress indicator, '
+      'not tappable',
+      (tester) async {
+        // Seed a future-due op so the scheduler's cold-start flush does NOT
+        // auto-send it. The bar is visible (queue non-empty) but idle.
+        await buildHarness(
+          seeded: [
+            mkOp('send-1', nextAttemptAt: DateTime(2026, 1, 1, 13)),
+          ],
+        );
+        await pumpApp(tester);
+        await tester.pump();
+        await tester.pump();
+
+        // Initially: "Send now" is visible, no progress indicator.
+        expect(find.text('Send now'), findsOneWidget);
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+
+        // Directly transition the op to `sending` — this is a pure UI test,
+        // so we bypass the real sync pipeline and drive the controller
+        // state directly. The scheduler's ref.listen re-evaluates and
+        // disarms its timer (no pending ops left), but the UI sees the
+        // sending state and swaps the button for the spinner.
+        await tester.runAsync(
+          () => container
+              .read(outboxControllerProvider.notifier)
+              .markSending('send-1'),
+        );
+        // Replay the controller mutation so the ConsumerWidget rebuilds.
+        await tester.pump();
+        await tester.pump();
+
+        expect(
+          container.read(outboxControllerProvider).sendingCount,
+          1,
+        );
+        // The button is replaced by the progress indicator (nothing to tap —
+        // repeated taps are impossible).
+        expect(find.text('Send now'), findsNothing);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        expect(find.textContaining('1 pending change'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'sendingCount == 0 → Send now is back and tappable',
+      (tester) async {
+        await buildHarness(
+          seeded: [
+            mkOp('idle-1', nextAttemptAt: DateTime(2026, 1, 1, 13)),
+          ],
+        );
+        await pumpApp(tester);
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text('Send now'), findsOneWidget);
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+        // Tapping it triggers exactly one worker flush.
+        await tester.tap(find.text('Send now'));
+        await tester.pump();
+        await tester.pump();
+        expect(api.posts, hasLength(1));
+      },
+    );
+
+    testWidgets(
+      'indicator bar exposes a semantic label with generic wording',
+      (tester) async {
+        await buildHarness(
+          seeded: [
+            mkOp('sem-1', status: OutboxStatus.failedPermanent, lastError: 'e'),
+          ],
+        );
+        await pumpApp(tester);
+        await tester.pump();
+        await tester.pump();
+
+        // The visible bar exposes a semantic label built from the generic
+        // localized wording (pending + failed), so a screen reader announces
+        // the queue state without technical terms.
+        expect(
+          find.bySemanticsLabel(RegExp('pending change.*failed to sync')),
+          findsOneWidget,
+        );
       },
     );
   });
