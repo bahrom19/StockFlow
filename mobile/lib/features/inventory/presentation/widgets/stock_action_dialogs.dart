@@ -111,7 +111,10 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
       quantity: qty,
       comment: _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
     );
-    final result = await ref.read(adjustmentProvider.notifier).adjust(dto);
+    final result = await ref.read(adjustmentProvider.notifier).adjust(
+          dto,
+          offlineMessage: context.l10n.outboxOfflineQueuedMessage,
+        );
     if (!mounted) return;
     setState(() => _isSubmitting = false);
 
@@ -232,9 +235,8 @@ class _AdjustmentDialogState extends ConsumerState<_AdjustmentDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isSubmitting
-              ? null
-              : () => Navigator.of(context).pop(false),
+          onPressed:
+              _isSubmitting ? null : () => Navigator.of(context).pop(false),
           child: Text(l10n.cancel),
         ),
         FilledButton(
@@ -326,11 +328,13 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
       fromWarehouseId: _from!.id,
       toWarehouseId: _to!.id,
       quantity: qty,
-      comment: _commentCtrl.text.trim().isEmpty
-          ? null
-          : _commentCtrl.text.trim(),
+      comment:
+          _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim(),
     );
-    final result = await ref.read(transferProvider.notifier).transfer(dto);
+    final result = await ref.read(transferProvider.notifier).transfer(
+          dto,
+          offlineMessage: context.l10n.outboxOfflineQueuedMessage,
+        );
     if (!mounted) return;
     setState(() => _isSubmitting = false);
 
@@ -457,9 +461,8 @@ class _TransferDialogState extends ConsumerState<_TransferDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isSubmitting
-              ? null
-              : () => Navigator.of(context).pop(false),
+          onPressed:
+              _isSubmitting ? null : () => Navigator.of(context).pop(false),
           child: Text(l10n.cancel),
         ),
         FilledButton(

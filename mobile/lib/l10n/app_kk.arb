@@ -841,6 +841,7 @@
   "outboxKindTransferStock": "Қалдықты ауыстыру",
   "outboxKindGoodsReceipt": "Тауар қабылдау",
   "outboxOfflineSaleQueued": "Сату офлайн сақталды. Нөмір: {number}. Автоматты жіберілед.",
+  "outboxOfflineQueuedMessage": "Интернетке қосылу жоқ. Өзгерістер offline сақталды және автоматты түрде жіберіледі.",
   "@outboxPendingItems": {
     "placeholders": {
       "count": { "type": "int" }

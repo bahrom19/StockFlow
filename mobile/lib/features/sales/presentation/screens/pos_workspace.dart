@@ -235,8 +235,14 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     );
     if (amount == null || !mounted) return;
     final shift = isIn
-        ? await ref.read(cashShiftProvider.notifier).cashIn(amount)
-        : await ref.read(cashShiftProvider.notifier).cashOut(amount);
+        ? await ref.read(cashShiftProvider.notifier).cashIn(
+              amount,
+              offlineMessage: l10n.outboxOfflineQueuedMessage,
+            )
+        : await ref.read(cashShiftProvider.notifier).cashOut(
+              amount,
+              offlineMessage: l10n.outboxOfflineQueuedMessage,
+            );
     if (shift != null && mounted) {
       _showSnack(isIn ? l10n.posCashInRecorded : l10n.posCashOutRecorded,
           isError: false);
@@ -702,8 +708,7 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
                               ),
                               // Mirrors the printed receipt: NTIN only when
                               // the product carries one.
-                              if (_receiptItemNtin(item, productNtins) !=
-                                  null)
+                              if (_receiptItemNtin(item, productNtins) != null)
                                 Text(
                                   'NTIN: '
                                   '${_receiptItemNtin(item, productNtins)}',

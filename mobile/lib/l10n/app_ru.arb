@@ -841,6 +841,7 @@
   "outboxKindTransferStock": "Перемещение остатков",
   "outboxKindGoodsReceipt": "Приёмка товара",
   "outboxOfflineSaleQueued": "Продажа сохранена офлайн. Номер: {number}. Отправится автоматически.",
+  "outboxOfflineQueuedMessage": "Нет подключения к интернету. Изменения сохранены offline и будут отправлены автоматически.",
   "@outboxPendingItems": {
     "placeholders": {
       "count": { "type": "int" }

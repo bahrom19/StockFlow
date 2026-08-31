@@ -841,6 +841,7 @@
   "outboxKindTransferStock": "Stock transfer",
   "outboxKindGoodsReceipt": "Goods receipt",
   "outboxOfflineSaleQueued": "Sale saved offline. Number: {number}. It will be sent automatically.",
+  "outboxOfflineQueuedMessage": "No internet connection. Your changes were saved offline and will sync automatically.",
   "@outboxPendingItems": {
     "placeholders": {
       "count": { "type": "int" }

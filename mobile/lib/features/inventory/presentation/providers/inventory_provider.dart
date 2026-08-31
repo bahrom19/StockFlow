@@ -45,7 +45,8 @@ class InventoryListNotifier extends StateNotifier<InventoryState> {
   void filterByWarehouse(String? warehouseId) {
     final current = state;
     if (current is InventoryLoaded) {
-      state = current.copyWith(warehouseFilter: warehouseId, isRefreshing: true);
+      state =
+          current.copyWith(warehouseFilter: warehouseId, isRefreshing: true);
     } else {
       state = const InventoryLoading();
     }
@@ -125,9 +126,8 @@ class MovementsNotifier extends StateNotifier<MovementsState> {
     }
 
     final movements = (result as InvSuccess<List<StockMovement>>).data;
-    state = movements.isEmpty
-        ? const MovementsEmpty()
-        : MovementsLoaded(movements);
+    state =
+        movements.isEmpty ? const MovementsEmpty() : MovementsLoaded(movements);
   }
 }
 
@@ -137,7 +137,7 @@ class AdjustmentNotifier extends StateNotifier<AsyncValue<StockMovement?>> {
 
   AdjustmentNotifier(this._ref) : super(const AsyncData(null));
 
-  Future<StockMovement?> adjust(AdjustStockDto dto) async {
+  Future<StockMovement?> adjust(AdjustStockDto dto, {String? offlineMessage}) async {
     state = const AsyncLoading();
     // Phase F4-D: send-or-park (see OutboxMutationQueue). The payload is the
     // DTO verbatim — warehouseId is already part of AdjustStockDto, no query
@@ -155,8 +155,7 @@ class AdjustmentNotifier extends StateNotifier<AsyncValue<StockMovement?>> {
       // → park in the outbox under the SAME key. Business errors are not
       // parked.
       isNetworkFailure: (result) =>
-          result is InvFailure<StockMovement> &&
-          result.error is NetworkFailure,
+          result is InvFailure<StockMovement> && result.error is NetworkFailure,
     );
     if (outcome is OutboxMutationSent<InvResult<StockMovement>>) {
       final result = outcome.result;
@@ -168,10 +167,12 @@ class AdjustmentNotifier extends StateNotifier<AsyncValue<StockMovement?>> {
       state = AsyncError(error.message, StackTrace.current);
       return null;
     }
-    // D3: existing generic error channel carries the offline feedback —
-    // no new l10n keys.
+    // Localized offline feedback: the operation is durably parked in the
+    // outbox and will sync automatically with the SAME idempotency key.
+    // The widget caller passes the localized message via [offlineMessage];
+    // tests that don't pass it get the English fallback.
     final message = outcome is OutboxMutationQueued<InvResult<StockMovement>>
-        ? OutboxMutationQueue.offlineQueuedMessage
+        ? (offlineMessage ?? OutboxMutationQueue.offlineQueuedMessage)
         : (outcome as OutboxMutationRejected<InvResult<StockMovement>>).reason;
     state = AsyncError(message, StackTrace.current);
     return null;
@@ -184,7 +185,7 @@ class TransferNotifier extends StateNotifier<AsyncValue<List<StockMovement>?>> {
 
   TransferNotifier(this._ref) : super(const AsyncData(null));
 
-  Future<List<StockMovement>?> transfer(TransferStockDto dto) async {
+  Future<List<StockMovement>?> transfer(TransferStockDto dto, {String? offlineMessage}) async {
     state = const AsyncLoading();
     // Phase F4-D: send-or-park (see [AdjustmentNotifier.adjust]).
     final online = _ref.read(connectivityStatusProvider);
@@ -209,10 +210,9 @@ class TransferNotifier extends StateNotifier<AsyncValue<List<StockMovement>?>> {
       final error = (result as InvFailure<List<StockMovement>>).error;
       state = AsyncError(error.message, StackTrace.current);
       return null;
-    }
-    final message =
+    }    final message =
         outcome is OutboxMutationQueued<InvResult<List<StockMovement>>>
-            ? OutboxMutationQueue.offlineQueuedMessage
+            ? (offlineMessage ?? OutboxMutationQueue.offlineQueuedMessage)
             : (outcome as OutboxMutationRejected<InvResult<List<StockMovement>>>)
                 .reason;
     state = AsyncError(message, StackTrace.current);

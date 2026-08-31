@@ -612,4 +612,48 @@ void main() {
       },
     );
   });
+
+  group('outboxOfflineQueuedMessage l10n (F5-D-C)', () {
+    testWidgets('EN locale returns the English message', (tester) async {
+      await buildHarness();
+      await pumpApp(tester, locale: const Locale('en'));
+      await tester.pump();
+
+      final l10n = AppLocalizations.of(
+        tester.element(find.text('content')),
+      )!;
+      expect(
+        l10n.outboxOfflineQueuedMessage,
+        contains('No internet connection'),
+      );
+    });
+
+    testWidgets('RU locale returns the Russian message', (tester) async {
+      await buildHarness();
+      await pumpApp(tester, locale: const Locale('ru'));
+      await tester.pump();
+
+      final l10n = AppLocalizations.of(
+        tester.element(find.text('content')),
+      )!;
+      expect(
+        l10n.outboxOfflineQueuedMessage,
+        contains('Нет подключения'),
+      );
+    });
+
+    testWidgets('KK locale returns the Kazakh message', (tester) async {
+      await buildHarness();
+      await pumpApp(tester, locale: const Locale('kk'));
+      await tester.pump();
+
+      final l10n = AppLocalizations.of(
+        tester.element(find.text('content')),
+      )!;
+      expect(
+        l10n.outboxOfflineQueuedMessage,
+        contains('Интернетке қосылу жоқ'),
+      );
+    });
+  });
 }

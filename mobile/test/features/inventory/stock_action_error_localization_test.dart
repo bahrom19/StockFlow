@@ -46,7 +46,8 @@ class _FakeAdjustmentNotifier extends AdjustmentNotifier {
   final String message;
 
   @override
-  Future<StockMovement?> adjust(AdjustStockDto dto) async {
+  Future<StockMovement?> adjust(AdjustStockDto dto,
+      {String? offlineMessage}) async {
     state = AsyncError(message, StackTrace.current);
     return null;
   }
@@ -57,7 +58,8 @@ class _FakeTransferNotifier extends TransferNotifier {
   final String message;
 
   @override
-  Future<List<StockMovement>?> transfer(TransferStockDto dto) async {
+  Future<List<StockMovement>?> transfer(TransferStockDto dto,
+      {String? offlineMessage}) async {
     state = AsyncError(message, StackTrace.current);
     return null;
   }

@@ -118,19 +118,29 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
     return null;
   }
 
-  Future<CashShift?> cashIn(double amount, {String? reason}) async {
+  Future<CashShift?> cashIn(
+    double amount, {
+    String? reason,
+    String? offlineMessage,
+  }) async {
     return _cashOperation(
       amount: amount,
       reason: reason,
       isIn: true,
+      offlineMessage: offlineMessage,
     );
   }
 
-  Future<CashShift?> cashOut(double amount, {String? reason}) async {
+  Future<CashShift?> cashOut(
+    double amount, {
+    String? reason,
+    String? offlineMessage,
+  }) async {
     return _cashOperation(
       amount: amount,
       reason: reason,
       isIn: false,
+      offlineMessage: offlineMessage,
     );
   }
 
@@ -138,6 +148,7 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
     required double amount,
     String? reason,
     required bool isIn,
+    String? offlineMessage,
   }) async {
     final warehouseId = _warehouseId;
     if (warehouseId == null) return null;
@@ -193,11 +204,12 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
       state = ShiftError((result as ShiftFailure<CashShift>).error.message);
       return null;
     }
-    // D3: the existing generic error channel carries the offline feedback —
-    // no new l10n keys. The operation is durably parked in the outbox and
-    // will sync automatically with the SAME idempotency key.
+    // Localized offline feedback: the operation is durably parked in the
+    // outbox and will sync automatically with the SAME idempotency key.
+    // The widget caller passes the localized message via [offlineMessage];
+    // tests that don't pass it get the English fallback.
     final message = outcome is OutboxMutationQueued<ShiftResult<CashShift>>
-        ? OutboxMutationQueue.offlineQueuedMessage
+        ? (offlineMessage ?? OutboxMutationQueue.offlineQueuedMessage)
         : (outcome as OutboxMutationRejected<ShiftResult<CashShift>>).reason;
     state = ShiftError(message);
     return null;

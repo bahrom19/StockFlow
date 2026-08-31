@@ -79,8 +79,8 @@ class PurchasingRepository {
 
   Future<PurchasingResult<PurchaseOrder>> getOrderById(String id) async {
     try {
-      final response = await _api.get<Map<String, dynamic>>(
-          '/purchasing/purchase-orders/$id');
+      final response = await _api
+          .get<Map<String, dynamic>>('/purchasing/purchase-orders/$id');
       return PurchasingSuccess(PurchaseOrder.fromJson(response.data!));
     } catch (e) {
       return PurchasingFailure(_errorHandler.handle(e));
@@ -124,10 +124,9 @@ class PurchasingRepository {
 
   Future<PurchasingResult<String>> getNextOrderNumber() async {
     try {
-      final response = await _api.get<Map<String, dynamic>>(
-          '/purchasing/purchase-orders/next-number');
-      return PurchasingSuccess(
-          response.data!['orderNumber']?.toString() ?? '');
+      final response = await _api
+          .get<Map<String, dynamic>>('/purchasing/purchase-orders/next-number');
+      return PurchasingSuccess(response.data!['orderNumber']?.toString() ?? '');
     } catch (e) {
       return PurchasingFailure(_errorHandler.handle(e));
     }
@@ -144,12 +143,17 @@ class PurchasingRepository {
   ///   outbox under kind [OutboxOperationKind.goodsReceipt] with
   ///   `idempotencyKey == clientOperationId`, minted once and never
   ///   regenerated on retry. The caller keeps its existing generic
-  ///   failure-shaped result (decision D3: no new l10n keys).
+  ///   failure-shaped result. The caller may pass [offlineMessage] to
+  ///   provide a localized version of the offline feedback text.
   Future<PurchasingResult<GoodsReceipt>> createGoodsReceipt(
     CreateGoodsReceiptRequest request, {
     String? idempotencyKey,
     OutboxMutationQueue? offlineQueue,
     bool online = true,
+
+    /// Localized offline feedback message. When null, the English fallback
+    /// from [OutboxMutationQueue.offlineQueuedMessage] is used (test-only).
+    String? offlineMessage,
   }) async {
     if (offlineQueue != null && !online) {
       try {
@@ -160,8 +164,10 @@ class PurchasingRepository {
       } on StateError catch (e) {
         return PurchasingFailure(NetworkFailure(message: e.message));
       }
-      return const PurchasingFailure(
-        NetworkFailure(message: OutboxMutationQueue.offlineQueuedMessage),
+      return PurchasingFailure(
+        NetworkFailure(
+          message: offlineMessage ?? OutboxMutationQueue.offlineQueuedMessage,
+        ),
       );
     }
     try {
@@ -196,8 +202,10 @@ class PurchasingRepository {
             NetworkFailure(message: queueError.message),
           );
         }
-        return const PurchasingFailure(
-          NetworkFailure(message: OutboxMutationQueue.offlineQueuedMessage),
+        return PurchasingFailure(
+          NetworkFailure(
+            message: offlineMessage ?? OutboxMutationQueue.offlineQueuedMessage,
+          ),
         );
       }
       return PurchasingFailure(failure);
