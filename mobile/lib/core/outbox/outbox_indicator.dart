@@ -3,6 +3,7 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/outbox/outbox_controller.dart';
 import 'package:stockflow/core/outbox/outbox_operation.dart';
+import 'package:stockflow/core/outbox/outbox_scheduler.dart';
 import 'package:stockflow/core/outbox/outbox_sync_service.dart';
 
 /// Compact outbox bar above the routed content (Offline 1B-min).
@@ -20,6 +21,10 @@ class OutboxIndicatorScope extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Fire-and-forget hydrate of the persisted queue (restart survival).
     ref.watch(outboxInitProvider);
+    // Arms the F5-C retry scheduler for the whole app: one initial flush of
+    // the hydrated backlog plus automatic backoff retries (fire-and-forget,
+    // no UI impact).
+    ref.watch(outboxSchedulerProvider);
     final state = ref.watch(outboxControllerProvider);
     if (state.isEmpty) return child;
 

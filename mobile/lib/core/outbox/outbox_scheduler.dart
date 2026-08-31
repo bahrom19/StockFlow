@@ -184,6 +184,22 @@ class OutboxRetryScheduler {
       .join(';');
 }
 
+/// Injectable clock for the scheduler wiring (F5-C-B): production uses the
+/// wall clock; wiring tests override it to drive retry timing
+/// deterministically. It MUST agree with the controller's clock (tests
+/// override both with the same value) — the worker's due-filter and the
+/// scheduler compute against one notion of "now".
+final outboxSchedulerClockProvider =
+    Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// Injectable timer factory for the scheduler wiring (F5-C-B): production
+/// arms real [Timer]s; wiring tests override it with a manually advanced
+/// fake schedule.
+final outboxSchedulerTimerFactoryProvider =
+    Provider<OutboxRetryTimerFactory>(
+  (ref) => (delay, onFire) => Timer(delay, onFire),
+);
+
 /// Wiring: the scheduler observes THE outbox controller queue and THE single
 /// connectivity signal, and drives THE sync worker — the same instances the
 /// manual triggers use. No second worker, no second queue, no duplicated
@@ -200,6 +216,8 @@ final outboxSchedulerProvider = Provider<OutboxRetryScheduler>((ref) {
     sync: () async {
       await ref.read(outboxSyncProvider).syncAll();
     },
+    now: ref.watch(outboxSchedulerClockProvider),
+    timerFactory: ref.watch(outboxSchedulerTimerFactoryProvider),
   );
   ref.onDispose(scheduler.dispose);
 
