@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/outbox/outbox_mutation_queue.dart';
 import 'package:stockflow/core/outbox/outbox_operation.dart';
 import 'package:stockflow/core/services/connectivity_service.dart';
@@ -149,6 +150,13 @@ class AdjustmentNotifier extends StateNotifier<AsyncValue<StockMovement?>> {
       payload: dto.toJson(),
       online: online,
       sendOnline: (key) => repo.adjustStock(dto, idempotencyKey: key),
+      // Phase F5-A: transport-level failure of the ONLINE attempt (timeout /
+      // network / connection error per the existing ErrorHandler mapping)
+      // → park in the outbox under the SAME key. Business errors are not
+      // parked.
+      isNetworkFailure: (result) =>
+          result is InvFailure<StockMovement> &&
+          result.error is NetworkFailure,
     );
     if (outcome is OutboxMutationSent<InvResult<StockMovement>>) {
       final result = outcome.result;
@@ -187,6 +195,10 @@ class TransferNotifier extends StateNotifier<AsyncValue<List<StockMovement>?>> {
       payload: dto.toJson(),
       online: online,
       sendOnline: (key) => repo.transferStock(dto, idempotencyKey: key),
+      // Phase F5-A: same fallback contract as [AdjustmentNotifier.adjust].
+      isNetworkFailure: (result) =>
+          result is InvFailure<List<StockMovement>> &&
+          result.error is NetworkFailure,
     );
     if (outcome is OutboxMutationSent<InvResult<List<StockMovement>>>) {
       final result = outcome.result;

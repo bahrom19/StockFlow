@@ -172,7 +172,35 @@ class PurchasingRepository {
       );
       return PurchasingSuccess(GoodsReceipt.fromJson(response.data!));
     } catch (e) {
-      return PurchasingFailure(_errorHandler.handle(e));
+      final failure = _errorHandler.handle(e);
+      // Phase F5-A: an ONLINE attempt that failed with a transport-level
+      // error (timeout / network / connection error — the existing
+      // ErrorHandler maps exactly those to NetworkFailure) falls back to the
+      // outbox under the SAME idempotency key the failed attempt carried, so
+      // the next flush replays `Idempotency-Key: <original key>` and the
+      // backend guarantees at-most-once. Business errors (400/404/409/422,
+      // auth, 5xx …) are NEVER parked — they surface inline as before.
+      if (failure is NetworkFailure && offlineQueue != null) {
+        try {
+          await offlineQueue.enqueueOffline(
+            kind: OutboxOperationKind.goodsReceipt,
+            payload: request.toJson(),
+            // The key of the failed attempt. Null only when the caller made
+            // a keyless online call — then enqueueOffline mints the key
+            // once, exactly like the offline branch, and it becomes both
+            // clientOperationId and idempotencyKey.
+            clientOperationId: idempotencyKey,
+          );
+        } on StateError catch (queueError) {
+          return PurchasingFailure(
+            NetworkFailure(message: queueError.message),
+          );
+        }
+        return const PurchasingFailure(
+          NetworkFailure(message: OutboxMutationQueue.offlineQueuedMessage),
+        );
+      }
+      return PurchasingFailure(failure);
     }
   }
 }

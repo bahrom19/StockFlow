@@ -175,6 +175,13 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
               request: request,
               idempotencyKey: key,
             ),
+      // Phase F5-A: an ONLINE attempt that failed with a transport-level
+      // error (timeout / network / connection error — the existing
+      // ErrorHandler already maps those to NetworkFailure) is parked in the
+      // outbox under the SAME idempotency key the failed attempt carried.
+      // Business failures (400/404/409/422 …) keep surfacing inline.
+      isNetworkFailure: (result) =>
+          result is ShiftFailure<CashShift> && result.error is NetworkFailure,
     );
 
     if (outcome is OutboxMutationSent<ShiftResult<CashShift>>) {

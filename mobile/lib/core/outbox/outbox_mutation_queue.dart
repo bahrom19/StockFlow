@@ -25,9 +25,13 @@ final class OutboxMutationSent<T> extends OutboxMutationOutcome<T> {
   final T result;
 }
 
-/// The device was offline: the payload was parked in the outbox under
-/// [clientOperationId], which IS the persisted Idempotency-Key — every retry
-/// replays the exact same key, so the backend guarantees at-most-once.
+/// The payload was parked in the outbox under [clientOperationId], which IS
+/// the persisted Idempotency-Key — every retry replays the exact same key, so
+/// the backend guarantees at-most-once. Happens when the device was OFFLINE
+/// (F4-D) and, since Phase F5-A, when an ONLINE attempt failed with a
+/// transport-level failure (timeout / network / connection error) as
+/// classified by the caller-supplied predicate of
+/// [OutboxMutationQueue.mutate].
 final class OutboxMutationQueued<T> extends OutboxMutationOutcome<T> {
   const OutboxMutationQueued(this.clientOperationId);
 
@@ -48,8 +52,8 @@ final class OutboxMutationRejected<T> extends OutboxMutationOutcome<T> {
 ///
 /// * ONLINE → the repository closure is invoked with a freshly minted
 ///   idempotency key (transported as the `Idempotency-Key` header); the
-///   outbox stays untouched (R4 auto-fallback is deliberately NOT part of
-///   F4-D).
+///   outbox stays untouched unless the attempt fails with a transport-level
+///   failure — see [mutate] (Phase F5-A fallback).
 /// * OFFLINE → the payload is persisted in the outbox with
 ///   `idempotencyKey == clientOperationId`, generated exactly once here and
 ///   never re-minted by the sync worker (F3 copyWith contract).
@@ -74,12 +78,30 @@ class OutboxMutationQueue {
       'automatically.';
 
   /// Online → [sendOnline]; offline → enqueue. See the class docs.
+  ///
+  /// Phase F5-A fallback: when [online] is true and the attempt made through
+  /// [sendOnline] comes back classified as a transport-level failure by
+  /// [isNetworkFailure] (timeout / network / connection error — the caller
+  /// reuses the existing `ErrorHandler` → `NetworkFailure` mapping, so no
+  /// parallel classification lives here), the SAME payload is parked in the
+  /// outbox under the SAME key the failed attempt already transported — never
+  /// a freshly minted UUID. The next outbox flush therefore replays
+  /// `Idempotency-Key: <original key>` and the backend idempotency guard
+  /// makes the replay at-most-once. Business failures (400/404/409/422 …)
+  /// are NOT parked: they surface through [OutboxMutationSent] exactly as
+  /// before and stay the caller's concern.
   Future<OutboxMutationOutcome<T>> mutate<T>({
     required OutboxOperationKind kind,
     required Map<String, dynamic> payload,
     required bool online,
     Future<T> Function(String idempotencyKey)? sendOnline,
     String? clientOperationId,
+
+    /// F5-A: true when [sendOnline]'s result represents a transport-level
+    /// failure (timeout / network / connection error). Null (the default)
+    /// disables the fallback — an online failure keeps surfacing through
+    /// [OutboxMutationSent] as it did in F4-D.
+    bool Function(T result)? isNetworkFailure,
   }) async {
     if (online) {
       if (sendOnline == null) {
@@ -87,13 +109,45 @@ class OutboxMutationQueue {
             'required when mutate() is called online');
       }
       final key = clientOperationId ?? OutboxOperation.idGenerator();
-      return OutboxMutationSent<T>(await sendOnline(key));
+      final result = await sendOnline(key);
+      if (isNetworkFailure != null && isNetworkFailure(result)) {
+        return _fallbackToOutbox<T>(kind: kind, payload: payload, key: key);
+      }
+      return OutboxMutationSent<T>(result);
     }
     try {
       final id = await enqueueOffline(
         kind: kind,
         payload: payload,
         clientOperationId: clientOperationId,
+      );
+      return OutboxMutationQueued<T>(id);
+    } on StateError catch (e) {
+      return OutboxMutationRejected<T>(e.message);
+    }
+  }
+
+  /// F5-A: parks an ONLINE attempt that failed with a transport-level
+  /// failure. [key] is the EXACT idempotency key the failed attempt already
+  /// carried: [enqueueOffline] persists it verbatim as both
+  /// clientOperationId and idempotencyKey (`idempotencyKey ==
+  /// clientOperationId`), so no new UUID is minted on the fallback path and
+  /// the controller-level dedupe keeps a repeated fallback for the same key
+  /// a no-op. A [StateError] (no authenticated user) degrades to
+  /// [OutboxMutationRejected] — the same generic channel the offline path
+  /// uses (decision D3).
+  Future<OutboxMutationOutcome<T>> _fallbackToOutbox<T>({
+    required OutboxOperationKind kind,
+    required Map<String, dynamic> payload,
+    required String key,
+  }) async {
+    try {
+      final id = await enqueueOffline(
+        kind: kind,
+        payload: payload,
+        // F5-A invariant: EXACTLY the key of the failed online attempt —
+        // never a freshly generated one.
+        clientOperationId: key,
       );
       return OutboxMutationQueued<T>(id);
     } on StateError catch (e) {
