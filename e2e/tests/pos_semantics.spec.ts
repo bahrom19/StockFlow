@@ -31,7 +31,7 @@ import {
  * must NOT poll X-report.
  */
 const PASSWORD = 'E2eStrong123!';
-const API_FALLBACK = 'https://stockflow-production-04c7.up.railway.app/api';
+const API_FALLBACK = 'http://localhost:3000/api';
 
 /** Identity registered + seeded in beforeAll; login-dependent tests share it. */
 let identity: { email: string; companyName: string } | undefined;
@@ -39,13 +39,17 @@ let identity: { email: string; companyName: string } | undefined;
 /** X-report request URLs observed during the current test. */
 const xReportRequests: string[] = [];
 
+/**
+ * Resolve the API base URL by reading the bundled .env.prod asset.
+ * Works for both production (Railway) and local (localhost) builds.
+ */
 async function resolveApiBase(request: APIRequestContext): Promise<string> {
   try {
-    const res = await request.get('http://127.0.0.1:8081/main.dart.js');
+    const res = await request.get('http://127.0.0.1:8081/assets/env/.env.prod');
     if (res.ok()) {
-      const js = await res.text();
-      const m = js.match(/https:\/\/[a-z0-9.-]+railway\.app\/api/);
-      if (m) return m[0];
+      const text = await res.text();
+      const m = text.match(/API_BASE_URL=(.+)/);
+      if (m) return m[1].trim();
     }
   } catch {
     /* fall through to fallback */
@@ -104,6 +108,8 @@ test.beforeAll(async ({ request }) => {
 
   let seeded = 0;
   for (let i = 0; i < 35; i++) {
+    // Small delay to avoid hitting the global rate limiter (10 req/s).
+    if (i > 0) await new Promise((r) => setTimeout(r, 150));
     const r = await request.post(`${apiBase}/products`, {
       headers: authHeaders,
       data: {

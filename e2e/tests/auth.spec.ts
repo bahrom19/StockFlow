@@ -13,8 +13,8 @@ import {
  * StockFlow v1.2.1 — First-user authentication flow.
  *
  * Runs against the locally-served Flutter Web release build which talks to
- * the PRODUCTION Railway API (embedded in env/.env.prod) — the same binary
- * that is deployed to stockflow-web.
+ * the API embedded in env/.env.prod — the same binary that is deployed to
+ * stockflow-web.
  *
  * ── IDENTITY LIFECYCLE (critical) ─────────────────────────────────────────
  * The test identity (email / company) is created AND registered via the API
@@ -32,20 +32,23 @@ import {
 const PASSWORD = 'E2eStrong123!';
 const FULL_NAME = 'E2E Tester';
 
-// Production API base, resolved from the built binary (same URL the app
-// itself uses). Fallback kept for resilience if extraction ever fails.
-const API_FALLBACK = 'https://stockflow-production-04c7.up.railway.app/api';
+// Fallback API base — used only when URL extraction from the built binary fails.
+const API_FALLBACK = 'http://localhost:3000/api';
 
 /** Identity registered in beforeAll; all login-dependent tests share it. */
 let identity: { email: string; companyName: string } | undefined;
 
+/**
+ * Resolve the API base URL by reading the bundled .env.prod asset.
+ * Works for both production (Railway) and local (localhost) builds.
+ */
 async function resolveApiBase(request: APIRequestContext): Promise<string> {
   try {
-    const res = await request.get('http://127.0.0.1:8081/main.dart.js');
+    const res = await request.get('http://127.0.0.1:8081/assets/env/.env.prod');
     if (res.ok()) {
-      const js = await res.text();
-      const m = js.match(/https:\/\/[a-z0-9.-]+railway\.app\/api/);
-      if (m) return m[0];
+      const text = await res.text();
+      const m = text.match(/API_BASE_URL=(.+)/);
+      if (m) return m[1].trim();
     }
   } catch {
     /* fall through to fallback */

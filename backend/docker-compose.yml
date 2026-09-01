@@ -24,6 +24,9 @@ services:
     container_name: stockflow-app
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql://stockflow:stockflow@stockflow-postgres:5432/stockflow?schema=public
+      - REDIS_URL=redis://stockflow-redis:6379
     depends_on:
       - postgres
       - redis
