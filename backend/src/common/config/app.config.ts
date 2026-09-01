@@ -18,7 +18,7 @@ export const appConfig = registerAs('app', (): AppConfig => {
     port: Number.isNaN(port) ? 3000 : port,
     swaggerEnabled:
       swaggerEnabled === undefined
-        ? true
+        ? false
         : swaggerEnabled === 'true' || swaggerEnabled === '1',
   };
 });

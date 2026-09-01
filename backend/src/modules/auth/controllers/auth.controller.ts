@@ -22,6 +22,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({ summary: 'Register a new user and company' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   async register(@Body() registerDto: RegisterDto) {

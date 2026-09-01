@@ -10,7 +10,7 @@ export const swaggerConfig = registerAs('swagger', (): SwaggerConfig => {
   return {
     enabled:
       swaggerEnabled === undefined
-        ? true
+        ? false
         : swaggerEnabled === 'true' || swaggerEnabled === '1',
   };
 });
