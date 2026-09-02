@@ -1,4 +1,7 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { ForgotPasswordDto } from '../dto/forgot-password.dto';
+import { ResetPasswordDto } from '../dto/reset-password.dto';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -19,7 +22,10 @@ import { JwtPayload } from '../interfaces/jwt-payload.interface';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Post('register')
   @Throttle({ default: { limit: 3, ttl: 60000 } })
@@ -35,6 +41,37 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User logged in successfully' })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('forgot-password')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @ApiOperation({ summary: 'Request a password reset link' })
+  @ApiResponse({ status: 200, description: 'Generic success message' })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto.email);
+  }
+
+  @Post('reset-password')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: 'Reset password using a valid token' })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired token' })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.password,
+   );
+  }
+
+  @Post('dev-reset-token')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'DEV ONLY — get raw reset token for testing' })
+  @ApiResponse({ status: 200, description: 'Raw reset token (dev only)' })
+  async devGetResetToken(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    if (this.configService.get<string>('app.nodeEnv') === 'production') {
+      throw new Error('Not available in production');
+    }
+    return this.authService.devGetResetToken(forgotPasswordDto.email);
   }
 
   @Post('refresh')

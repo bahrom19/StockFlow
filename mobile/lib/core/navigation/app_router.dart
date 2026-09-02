@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/reset_password_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/customers/presentation/screens/customer_form_screen.dart';
 import '../../features/customers/presentation/screens/customers_list_screen.dart';
@@ -55,7 +57,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authStateProvider);
       final location = state.matchedLocation;
       final isAuthRoute =
-          location == RouteNames.login || location == RouteNames.register;
+          location == RouteNames.login ||
+          location == RouteNames.register ||
+          location == RouteNames.forgotPassword ||
+          location == RouteNames.resetPassword;
 
       // Cold start: nothing is known yet — always land on Splash, which owns
       // the session-restore decision (checkAuthStatus → refresh → navigate).
@@ -95,6 +100,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.register,
         name: 'register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.forgotPassword,
+        name: 'forgotPassword',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.resetPassword,
+        name: 'resetPassword',
+        builder: (context, state) {
+          final token = state.uri.queryParameters['token'] ?? '';
+          return ResetPasswordScreen(token: token);
+        },
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),

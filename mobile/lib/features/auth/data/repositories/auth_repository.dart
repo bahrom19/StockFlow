@@ -98,6 +98,37 @@ class AuthRepository {
   // Session restore is handled by AuthStateNotifier.checkAuthStatus, which
   // calls refreshToken() and uses the user returned in the refresh response.
 
+  Future<ApiResult<void>> forgotPassword({required String email}) async {
+    try {
+      final client = _ref.read(apiClientProvider);
+      await client.post(
+        ApiEndpoints.forgotPassword,
+        data: {'email': email},
+      );
+      return const ApiSuccess(null);
+    } catch (e) {
+      _logger.error('Forgot password failed', e);
+      return ApiFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<ApiResult<void>> resetPassword({
+    required String token,
+    required String password,
+  }) async {
+    try {
+      final client = _ref.read(apiClientProvider);
+      await client.post(
+        ApiEndpoints.resetPassword,
+        data: {'token': token, 'password': password},
+      );
+      return const ApiSuccess(null);
+    } catch (e) {
+      _logger.error('Reset password failed', e);
+      return ApiFailure(_errorHandler.handle(e));
+    }
+  }
+
   Future<ApiResult<void>> logout({String? refreshTokenValue}) async {
     try {
       final client = _ref.read(apiClientProvider);

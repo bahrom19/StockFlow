@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from '../auth.service';
 import { AuthRepository } from '../../repositories/auth.repository';
 import { RolesRepository } from '../../../rbac/repositories/roles.repository';
+import { EmailService } from '../email.service';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 
 jest.mock('bcrypt', () => ({
@@ -62,6 +63,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: EmailService, useValue: { sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

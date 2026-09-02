@@ -1,10 +1,13 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { randomBytes } from 'crypto';
 import {
   AccountType,
   FinancialPeriodStatus,
@@ -22,14 +25,17 @@ import { AuthResponse, AuthUser } from '../interfaces/auth-response.interface';
 import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { AuthRepository } from '../repositories/auth.repository';
 import { RolesRepository } from '../../rbac/repositories/roles.repository';
+import { EmailService } from './email.service';
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const MAX_FAILED_ATTEMPTS_DEFAULT = 5;
 const LOCK_DURATION_MS_DEFAULT = FIFTEEN_MINUTES_MS;
 const BCRYPT_ROUNDS_DEFAULT = 12;
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly maxFailedAttempts: number;
   private readonly lockDurationMs: number;
   private readonly bcryptRounds: number;
@@ -40,6 +46,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly prismaService: PrismaService,
     private readonly rolesRepository: RolesRepository,
+    private readonly emailService: EmailService,
   ) {
     this.maxFailedAttempts =
       this.configService.get<number>('auth.maxFailedAttempts') ??
@@ -502,6 +509,125 @@ export class AuthService {
       roles,
       permissions,
     });
+  }
+
+  // ── Password Reset ──────────────────────────────────────────────
+
+  /**
+   * DEV ONLY: directly create and return a reset token for a user.
+   * Used by E2E tests that cannot access a real email inbox.
+   * Must NOT be exposed in production.
+   */
+  async devGetResetToken(
+    email: string,
+  ): Promise<{ token: string }> {
+    const user = await this.authRepository.findUserByEmail(email);
+    if (!user || !user.isActive || user.deletedAt) {
+      throw new BadRequestException('User not found');
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = await bcrypt.hash(rawToken, this.bcryptRounds);
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
+
+    await this.authRepository.createPasswordResetToken(
+      user.id,
+      tokenHash,
+      expiresAt,
+    );
+
+    return { token: rawToken };
+  }
+
+  /**
+   * Request a password reset link.
+   * Always returns the same generic response regardless of whether
+   * the email exists — prevents email enumeration.
+   */
+  async forgotPassword(
+    email: string,
+  ): Promise<{ message: string }> {
+    const user = await this.authRepository.findUserByEmail(email);
+
+    if (user && user.isActive && !user.deletedAt) {
+      // Generate a cryptographically secure random token
+      const rawToken = randomBytes(32).toString('hex');
+      const tokenHash = await bcrypt.hash(rawToken, this.bcryptRounds);
+      const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
+
+      await this.authRepository.createPasswordResetToken(
+        user.id,
+        tokenHash,
+        expiresAt,
+      );
+
+      // Send email (dev: logs to console; prod: requires SMTP provider)
+      await this.emailService.sendPasswordResetEmail(email, rawToken);
+    }
+
+    // Always return the same message — never reveal email existence
+    return {
+      message:
+        'If an account with that email exists, a password reset link has been sent.',
+    };
+  }
+
+  /**
+   * Complete a password reset using a valid token.
+   * - Validates token exists, is not expired, and has not been used.
+   * - Updates password hash.
+   * - Marks token as used (single-use).
+   * - Revokes all refresh tokens (forces re-login).
+   */
+  async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    // Bcrypt is non-deterministic — same input produces different hashes.
+    // We cannot hash the token and look up by hash. Instead, fetch all valid
+    // (unused, not expired) tokens and verify via bcrypt.compare().
+    const candidates =
+      await this.authRepository.findValidPasswordResetTokens();
+
+    let resetRecord: { id: string; userId: string } | null = null;
+    for (const candidate of candidates) {
+      const match = await bcrypt.compare(token, candidate.tokenHash);
+      if (match) {
+        resetRecord = { id: candidate.id, userId: candidate.userId };
+        break;
+      }
+    }
+
+    if (!resetRecord) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    // Update password and invalidate old sessions in a transaction
+    await this.prismaService.$transaction(async (tx) => {
+      const newHash = await bcrypt.hash(newPassword, this.bcryptRounds);
+
+      await this.authRepository.updateUserPasswordHash(
+        resetRecord.userId,
+        newHash,
+        tx,
+      );
+
+      await this.authRepository.markPasswordResetTokenUsed(
+        resetRecord.id,
+        tx,
+      );
+
+      // Revoke all refresh tokens — user must re-login with new password
+      await this.authRepository.revokeRefreshTokens(
+        resetRecord.userId,
+        tx,
+      );
+    });
+
+    return {
+      message:
+        'Password reset successful. Please log in with your new password.',
+    };
   }
 
   /**

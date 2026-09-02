@@ -10,6 +10,9 @@ class ApiEndpoints {
   static const String register = '/auth/register';
   static const String refreshToken = '/auth/refresh';
   static const String logout = '/auth/logout';
+  static const String forgotPassword = '/auth/forgot-password';
+  static const String resetPassword = '/auth/reset-password';
+  static const String devResetToken = '/auth/dev-reset-token';
   // NOTE: Deployed backend (Railway) has NO GET /auth/me endpoint.
   // Session restore uses POST /auth/refresh, which returns the user profile.
   // See AuthStateNotifier.checkAuthStatus().

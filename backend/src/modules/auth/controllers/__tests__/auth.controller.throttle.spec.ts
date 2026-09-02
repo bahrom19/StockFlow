@@ -31,6 +31,36 @@ describe('AuthController throttle', () => {
   });
 });
 
+describe('Password reset throttle', () => {
+  it('forgot-password has explicit @Throttle decorator (3 / 60s)', () => {
+    const fn = AuthController.prototype.forgotPassword;
+    const ttl = Reflect.getMetadata('THROTTLER:TTLdefault', fn);
+    const limit = Reflect.getMetadata('THROTTLER:LIMITdefault', fn);
+    expect(limit).toBe(3);
+    expect(ttl).toBe(60000);
+  });
+
+  it('reset-password has explicit @Throttle decorator (5 / 60s)', () => {
+    const fn = AuthController.prototype.resetPassword;
+    const ttl = Reflect.getMetadata('THROTTLER:TTLdefault', fn);
+    const limit = Reflect.getMetadata('THROTTLER:LIMITdefault', fn);
+    expect(limit).toBe(5);
+    expect(ttl).toBe(60000);
+  });
+
+  it('forgot-password throttle is stricter than reset-password (3 vs 5)', () => {
+    const forgotLimit = Reflect.getMetadata(
+      'THROTTLER:LIMITdefault',
+      AuthController.prototype.forgotPassword,
+    );
+    const resetLimit = Reflect.getMetadata(
+      'THROTTLER:LIMITdefault',
+      AuthController.prototype.resetPassword,
+    );
+    expect(forgotLimit).toBeLessThan(resetLimit);
+  });
+});
+
 describe('Swagger secure default (F-04)', () => {
   const originalEnv = process.env;
 

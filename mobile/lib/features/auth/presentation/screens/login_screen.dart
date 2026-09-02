@@ -138,7 +138,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         validator: (v) => Validators.requiredL10n(context.l10n, v),
                         onFieldSubmitted: (_) => _handleLogin(),
                       ),
-                      const SizedBox(height: AppSpacing.lg),
+                      const SizedBox(height: AppSpacing.xs),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () => context.go(RouteNames.forgotPassword),
+                          child: Text(context.l10n.forgotPassword),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                       FilledButton(
                         onPressed: _isLoading ? null : _handleLogin,
                         child: _isLoading

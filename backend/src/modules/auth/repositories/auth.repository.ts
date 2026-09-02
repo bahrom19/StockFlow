@@ -151,4 +151,56 @@ export class AuthRepository {
 
     return member.userRoles.map((ur) => ur.role.name);
   }
+
+  // ── Password Reset Tokens ──────────────────────────────────────
+
+  async createPasswordResetToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    await this.getClient(tx).passwordResetToken.create({
+      data: {
+        userId,
+        tokenHash,
+        expiresAt,
+      },
+    });
+  }
+
+  async findValidPasswordResetTokens(
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ id: string; userId: string; tokenHash: string; expiresAt: Date }[]> {
+    return this.getClient(tx).passwordResetToken.findMany({
+      where: {
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true, userId: true, tokenHash: true, expiresAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50, // limit to avoid scanning the entire table
+    });
+  }
+
+  async markPasswordResetTokenUsed(
+    tokenId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    await this.getClient(tx).passwordResetToken.update({
+      where: { id: tokenId },
+      data: { usedAt: new Date() },
+    });
+  }
+
+  async updateUserPasswordHash(
+    userId: string,
+    passwordHash: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    await this.getClient(tx).user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+  }
 }

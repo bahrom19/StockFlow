@@ -7,6 +7,7 @@ import { AuthRepository } from '../../repositories/auth.repository';
 import { RolesRepository } from '../../../rbac/repositories/roles.repository';
 import { LoginDto } from '../../dto/login.dto';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
+import { EmailService } from '../email.service';
 
 const mockBcryptCompare = jest.fn();
 
@@ -101,6 +102,10 @@ describe('AuthService — Account Lockout', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: EmailService,
+          useValue: { sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();
