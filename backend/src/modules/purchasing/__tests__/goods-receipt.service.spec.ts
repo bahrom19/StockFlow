@@ -226,6 +226,41 @@ describe('GoodsReceiptService', () => {
       expect(mockEventBus.publish).toHaveBeenCalled();
     });
 
+    it('should propagate finance journal failure (STEP F — accounting integrity)', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: warehouseId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          }),
+        },
+        purchaseOrderItem: {
+          findFirst: jest.fn().mockResolvedValue(basePo.items[0]),
+          findUnique: jest.fn().mockResolvedValue(basePo.items[0]),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        goodsReceiptItem: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockGrRepo.create.mockResolvedValue(baseReceipt as any);
+      mockGrRepo.updateStatus.mockResolvedValue({} as any);
+      mockGrRepo.findById.mockResolvedValue(baseReceipt as any);
+      // Finance journal throws → the goods-receipt transaction must fail
+      // (roll back), NOT commit a receipt without its journal entry.
+      mockFinanceService.createGoodsReceiptJournal.mockRejectedValue(
+        new Error('no open financial period'),
+      );
+
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        'no open financial period',
+      );
+      // Finance journal must have been attempted
+      expect(mockFinanceService.createGoodsReceiptJournal).toHaveBeenCalled();
+    });
+
     it('should publish purchase.received with the received items payload (B7 single source)', async () => {
       const mockTx = {
         warehouse: {

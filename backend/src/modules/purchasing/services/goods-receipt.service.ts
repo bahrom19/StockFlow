@@ -277,24 +277,22 @@ export class GoodsReceiptService {
       { context: { transactionClient: tx } },
     );
 
-    // Create finance journal entries
-    try {
-      await this.financeService.createGoodsReceiptJournal(
-        {
-          companyId,
-          warehouseId: dto.warehouseId,
-          receiptNumber,
-          receiptDate: new Date(),
-          items,
-          createdBy: userId,
-        },
-        tx,
-      );
-    } catch (err) {
-      this.logger.warn(
-        `Failed to create finance journal: ${(err as Error).message}`,
-      );
-    }
+    // NOTE: no try/catch here on purpose (STEP F finance integrity fix).
+    // If the finance journal fails, the whole goods-receipt transaction must
+    // roll back — matching the behavior of sales/refunds. A receipt committed
+    // without its journal entry breaks accounting integrity (Inventory +
+    // Accounts Payable understated on the balance sheet).
+    await this.financeService.createGoodsReceiptJournal(
+      {
+        companyId,
+        warehouseId: dto.warehouseId,
+        receiptNumber,
+        receiptDate: new Date(),
+        items,
+        createdBy: userId,
+      },
+      tx,
+    );
 
     // Fetch the final receipt with items
     const finalReceipt = await this.goodsReceiptRepository.findById(
