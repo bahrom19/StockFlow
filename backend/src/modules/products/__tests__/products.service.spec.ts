@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
+  ConflictException,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -55,6 +56,8 @@ describe('ProductsService', () => {
       findOrCreateUnitByName: jest.fn(),
       findDefaultWarehouse: jest.fn(),
       createInitialStock: jest.fn(),
+      findActiveBySkuAndCompany: jest.fn(),
+      findActiveByBarcodeAndCompany: jest.fn(),
     } as unknown as jest.Mocked<ProductsRepository>;
 
     mockStockService = { adjustStock: jest.fn() };
@@ -458,5 +461,248 @@ describe('ProductsService', () => {
       }),
     ).rejects.toThrow(NotFoundException);
     expect(mockRepo.findById).toHaveBeenCalledWith('prod-1', 'other-company');
+  });
+
+  // ── SKU / Barcode duplicate validation ──────────────────────────────────
+
+  describe('SKU duplicate validation', () => {
+    it('rejects duplicate SKU in same company on create', async () => {
+      mockRepo.findActiveBySkuAndCompany.mockResolvedValue({
+        id: 'existing',
+        name: 'Existing Product',
+      });
+
+      await expect(
+        service.create(
+          { name: 'New', sku: 'SKU-001', price: 100 } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('allows same SKU in different company on create', async () => {
+      mockRepo.findActiveBySkuAndCompany.mockResolvedValue(null);
+      mockRepo.create.mockResolvedValue(baseProduct as any);
+
+      await service.create(
+        { name: 'New', sku: 'SKU-001', price: 100 } as any,
+        currentUser,
+      );
+      expect(mockRepo.create).toHaveBeenCalled();
+    });
+
+    it('allows NULL SKU on create', async () => {
+      mockRepo.create.mockResolvedValue({ ...baseProduct, sku: null } as any);
+
+      await service.create(
+        { name: 'No SKU', price: 100 } as any,
+        currentUser,
+      );
+      expect(mockRepo.findActiveBySkuAndCompany).not.toHaveBeenCalled();
+      expect(mockRepo.create).toHaveBeenCalled();
+    });
+
+    it('normalizes empty SKU to NULL on create', async () => {
+      mockRepo.create.mockResolvedValue({ ...baseProduct, sku: null } as any);
+
+      await service.create(
+        { name: 'Empty SKU', sku: '   ', price: 100 } as any,
+        currentUser,
+      );
+      // SKU trimmed to '' → normalized to null → no duplicate check needed
+      expect(mockRepo.findActiveBySkuAndCompany).not.toHaveBeenCalled();
+      expect(mockRepo.create).toHaveBeenCalled();
+    });
+
+    it('normalizes whitespace SKU on create', async () => {
+      mockRepo.create.mockResolvedValue({ ...baseProduct, sku: 'TRIMMED' } as any);
+
+      await service.create(
+        { name: 'Whitespace SKU', sku: '  TRIMMED  ', price: 100 } as any,
+        currentUser,
+      );
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ sku: 'TRIMMED' }),
+      );
+    });
+  });
+
+  describe('Barcode duplicate validation', () => {
+    it('rejects duplicate barcode in same company on create', async () => {
+      mockRepo.findActiveByBarcodeAndCompany.mockResolvedValue({
+        id: 'existing',
+        name: 'Existing Product',
+      });
+
+      await expect(
+        service.create(
+          { name: 'New', barcode: '123456789', price: 100 } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('allows same barcode in different company on create', async () => {
+      mockRepo.findActiveByBarcodeAndCompany.mockResolvedValue(null);
+      mockRepo.create.mockResolvedValue(baseProduct as any);
+
+      await service.create(
+        { name: 'New', barcode: '123456789', price: 100 } as any,
+        currentUser,
+      );
+      expect(mockRepo.create).toHaveBeenCalled();
+    });
+
+    it('allows NULL barcode on create', async () => {
+      mockRepo.create.mockResolvedValue({ ...baseProduct, barcode: null } as any);
+
+      await service.create(
+        { name: 'No Barcode', price: 100 } as any,
+        currentUser,
+      );
+      expect(mockRepo.findActiveByBarcodeAndCompany).not.toHaveBeenCalled();
+    });
+
+    it('normalizes empty barcode to NULL on create', async () => {
+      mockRepo.create.mockResolvedValue({ ...baseProduct, barcode: null } as any);
+
+      await service.create(
+        { name: 'Empty Barcode', barcode: '   ', price: 100 } as any,
+        currentUser,
+      );
+      expect(mockRepo.findActiveByBarcodeAndCompany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('SKU/barcode update validation', () => {
+    it('allows updating product with its own SKU', async () => {
+      mockRepo.findById.mockResolvedValue({
+        ...baseProduct,
+        sku: 'SKU-001',
+        barcode: null,
+      } as any);
+      mockRepo.update.mockResolvedValue({ ...baseProduct, name: 'Updated' } as any);
+
+      const result = await service.update(
+        'prod-1',
+        { sku: 'SKU-001' } as any,
+        currentUser,
+      );
+      expect(result.name).toBe('Updated');
+      expect(mockRepo.findActiveBySkuAndCompany).not.toHaveBeenCalled();
+    });
+
+    it('rejects update to another active product SKU', async () => {
+      mockRepo.findById.mockResolvedValue({
+        ...baseProduct,
+        sku: 'OLD-SKU',
+        barcode: null,
+      } as any);
+      mockRepo.findActiveBySkuAndCompany.mockResolvedValue({
+        id: 'other',
+        name: 'Other Product',
+      });
+
+      await expect(
+        service.update('prod-1', { sku: 'NEW-SKU' } as any, currentUser),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('rejects update to another active product barcode', async () => {
+      mockRepo.findById.mockResolvedValue({
+        ...baseProduct,
+        sku: null,
+        barcode: null,
+      } as any);
+      mockRepo.findActiveByBarcodeAndCompany.mockResolvedValue({
+        id: 'other',
+        name: 'Other Product',
+      });
+
+      await expect(
+        service.update(
+          'prod-1',
+          { barcode: '123456789' } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('allows using SKU of soft-deleted product on update', async () => {
+      mockRepo.findById.mockResolvedValue({
+        ...baseProduct,
+        sku: 'OLD-SKU',
+        barcode: null,
+      } as any);
+      // findActiveBySkuAndCompany returns null because the conflicting product is deleted
+      mockRepo.findActiveBySkuAndCompany.mockResolvedValue(null);
+      mockRepo.update.mockResolvedValue({ ...baseProduct, sku: 'DELETED-SKU' } as any);
+
+      const result = await service.update(
+        'prod-1',
+        { sku: 'DELETED-SKU' } as any,
+        currentUser,
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('normalizes SKU on update', async () => {
+      mockRepo.findById.mockResolvedValue({
+        ...baseProduct,
+        sku: null,
+        barcode: null,
+      } as any);
+      mockRepo.update.mockResolvedValue({ ...baseProduct, sku: 'TRIMMED' } as any);
+
+      await service.update(
+        'prod-1',
+        { sku: '  TRIMMED  ' } as any,
+        currentUser,
+      );
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'prod-1',
+        expect.objectContaining({ sku: 'TRIMMED' }),
+        'comp-1',
+        expect.any(Number),
+      );
+    });
+  });
+
+  describe('Regression: existing create/update without SKU/barcode', () => {
+    it('creates product without SKU or barcode', async () => {
+      mockRepo.create.mockResolvedValue({
+        ...baseProduct,
+        sku: null,
+        barcode: null,
+      } as any);
+
+      await service.create(
+        { name: 'Simple Product', price: 100 } as any,
+        currentUser,
+      );
+      expect(mockRepo.create).toHaveBeenCalled();
+    });
+
+    it('updates product without changing SKU or barcode', async () => {
+      mockRepo.findById.mockResolvedValue({
+        ...baseProduct,
+        sku: 'SKU-001',
+        barcode: '123',
+      } as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseProduct,
+        name: 'Updated',
+      } as any);
+
+      await service.update(
+        'prod-1',
+        { name: 'Updated' } as any,
+        currentUser,
+      );
+      expect(mockRepo.findActiveBySkuAndCompany).not.toHaveBeenCalled();
+      expect(mockRepo.findActiveByBarcodeAndCompany).not.toHaveBeenCalled();
+    });
   });
 });

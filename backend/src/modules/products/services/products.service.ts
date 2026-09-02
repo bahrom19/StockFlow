@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -17,6 +18,20 @@ import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 // parallel direct write to the Stock table.
 import { StockService } from '../../inventory/services';
 
+/**
+ * Normalize a product identifier (SKU / barcode):
+ *  - trim whitespace
+ *  - collapse empty/whitespace-only to null
+ *  - preserve original casing
+ */
+function normalizeProductIdentifier(
+  value: string | null | undefined,
+): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -29,6 +44,36 @@ export class ProductsService {
     currentUser: JwtPayload,
   ): Promise<ProductEntity> {
     this.assertCompanyId(createProductDto.companyId, currentUser.companyId);
+
+    // Normalize SKU and barcode: trim whitespace, collapse empty to null.
+    const sku = normalizeProductIdentifier(createProductDto.sku);
+    const barcode = normalizeProductIdentifier(createProductDto.barcode);
+
+    // Application-level duplicate pre-check (DB unique index is the safety net
+    // for race conditions, but this provides a user-friendly error message).
+    if (sku) {
+      const conflict = await this.productsRepository.findActiveBySkuAndCompany(
+        sku,
+        currentUser.companyId,
+      );
+      if (conflict) {
+        throw new ConflictException(
+          `A product with SKU "${sku}" already exists (${conflict.name}).`,
+        );
+      }
+    }
+    if (barcode) {
+      const conflict =
+        await this.productsRepository.findActiveByBarcodeAndCompany(
+          barcode,
+          currentUser.companyId,
+        );
+      if (conflict) {
+        throw new ConflictException(
+          `A product with barcode "${barcode}" already exists (${conflict.name}).`,
+        );
+      }
+    }
 
     // Resolve the unit of measure by name (find-or-create scoped to the
     // company) — the Product.unit field is a relation to UnitOfMeasure, so a
@@ -65,8 +110,8 @@ export class ProductsService {
     const product = await this.productsRepository.create({
       name: createProductDto.name,
       description: createProductDto.description,
-      sku: createProductDto.sku,
-      barcode: createProductDto.barcode,
+      sku,
+      barcode,
       ntin: createProductDto.ntin,
       price: createProductDto.price,
       costPrice: createProductDto.costPrice,
@@ -166,6 +211,44 @@ export class ProductsService {
       throw new NotFoundException(`Product with id ${id} not found`);
     }
 
+    // Normalize SKU and barcode if provided.
+    const sku = normalizeProductIdentifier(updateProductDto.sku);
+    const barcode = normalizeProductIdentifier(updateProductDto.barcode);
+
+    // Application-level duplicate pre-check for SKU (skip if unchanged or null).
+    if (sku !== undefined && sku !== existing.sku) {
+      if (sku) {
+        const conflict =
+          await this.productsRepository.findActiveBySkuAndCompany(
+            sku,
+            currentUser.companyId,
+            id, // exclude self
+          );
+        if (conflict) {
+          throw new ConflictException(
+            `A product with SKU "${sku}" already exists (${conflict.name}).`,
+          );
+        }
+      }
+    }
+
+    // Application-level duplicate pre-check for barcode (skip if unchanged or null).
+    if (barcode !== undefined && barcode !== existing.barcode) {
+      if (barcode) {
+        const conflict =
+          await this.productsRepository.findActiveByBarcodeAndCompany(
+            barcode,
+            currentUser.companyId,
+            id, // exclude self
+          );
+        if (conflict) {
+          throw new ConflictException(
+            `A product with barcode "${barcode}" already exists (${conflict.name}).`,
+          );
+        }
+      }
+    }
+
     // Build the update payload from only the fields the client actually sent.
     // class-transformer materializes unset DTO fields as `undefined`; passing
     // them through would turn `price: undefined` into `price: null` inside
@@ -180,6 +263,14 @@ export class ProductsService {
     // unit is managed via the inventory module's UoM endpoints, not through
     // product updates.
     delete updateData.unit;
+
+    // Apply normalized SKU/barcode to the update payload.
+    if ('sku' in updateData) {
+      updateData.sku = sku;
+    }
+    if ('barcode' in updateData) {
+      updateData.barcode = barcode;
+    }
 
     // stockQuantity is NOT a Product column — stock lives in the Stock table
     // (per warehouse) and every change must produce a StockMovement ledger

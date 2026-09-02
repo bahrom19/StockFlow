@@ -74,6 +74,58 @@ describe('GlobalExceptionFilter', () => {
     expect(statusMock).toHaveBeenCalledWith(409);
   });
 
+  it('P2002 with SKU target → field-specific message', () => {
+    const { host, jsonMock } = createHost();
+    filter.catch(
+      p2002({ target: ['companyId', 'sku'] }),
+      host,
+    );
+
+    const body = jsonMock.mock.calls[0][0];
+    expect(body.statusCode).toBe(409);
+    expect(body.message).toBe('A product with this SKU already exists');
+  });
+
+  it('P2002 with barcode target → field-specific message', () => {
+    const { host, jsonMock } = createHost();
+    filter.catch(
+      p2002({ target: ['companyId', 'barcode'] }),
+      host,
+    );
+
+    const body = jsonMock.mock.calls[0][0];
+    expect(body.statusCode).toBe(409);
+    expect(body.message).toBe('A product with this barcode already exists');
+  });
+
+  it('P2002 with unknown target → generic message', () => {
+    const { host, jsonMock } = createHost();
+    filter.catch(
+      p2002({ target: ['companyId', 'email'] }),
+      host,
+    );
+
+    const body = jsonMock.mock.calls[0][0];
+    expect(body.statusCode).toBe(409);
+    expect(body.message).toBe(
+      'A record with the same unique value already exists',
+    );
+  });
+
+  it('P2002 with non-array target → generic message', () => {
+    const { host, jsonMock } = createHost();
+    filter.catch(
+      p2002({ target: 'sku' }),
+      host,
+    );
+
+    const body = jsonMock.mock.calls[0][0];
+    expect(body.statusCode).toBe(409);
+    expect(body.message).toBe(
+      'A record with the same unique value already exists',
+    );
+  });
+
   it('keeps P2025 (record not found) at HTTP 400', () => {
     const { host, statusMock, jsonMock } = createHost();
     const err = new Prisma.PrismaClientKnownRequestError('not found', {

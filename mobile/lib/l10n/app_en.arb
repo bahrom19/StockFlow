@@ -835,6 +835,8 @@
   "errTooManyRequests": "Too many requests. Please wait and try again.",
   "errServerUnavailable": "Server error. Please try again later.",
   "errGenericServer": "Unable to complete the operation. Please try again.",
+  "errDuplicateSku": "A product with this SKU already exists",
+  "errDuplicateBarcode": "A product with this barcode already exists",
   "insufficientStock": "Insufficient stock",
   "aiInsightsNlp": "NLP",
   "noData": "No data",

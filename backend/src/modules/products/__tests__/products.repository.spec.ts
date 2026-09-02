@@ -205,3 +205,99 @@ describe('ProductsRepository — update persists changed fields', () => {
     ).rejects.toThrow(NotFoundException);
   });
 });
+
+// ── Duplicate check methods ──────────────────────────────────────────────────
+
+describe('ProductsRepository — findActiveBySkuAndCompany', () => {
+  let repository: ProductsRepository;
+  const findFirst = jest.fn();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    repository = new ProductsRepository({
+      product: { findFirst },
+    } as unknown as PrismaService);
+  });
+
+  it('queries with correct WHERE clause excluding deleted products', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await repository.findActiveBySkuAndCompany('SKU-001', 'comp-1');
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        sku: 'SKU-001',
+        companyId: 'comp-1',
+        deletedAt: null,
+      },
+      select: { id: true, name: true },
+    });
+  });
+
+  it('excludes a specific product ID when provided (self-update)', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await repository.findActiveBySkuAndCompany('SKU-001', 'comp-1', 'prod-1');
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        sku: 'SKU-001',
+        companyId: 'comp-1',
+        deletedAt: null,
+        id: { not: 'prod-1' },
+      },
+      select: { id: true, name: true },
+    });
+  });
+
+  it('returns conflicting product when found', async () => {
+    findFirst.mockResolvedValue({ id: 'other', name: 'Other' });
+
+    const result = await repository.findActiveBySkuAndCompany('SKU-001', 'comp-1');
+
+    expect(result).toEqual({ id: 'other', name: 'Other' });
+  });
+});
+
+describe('ProductsRepository — findActiveByBarcodeAndCompany', () => {
+  let repository: ProductsRepository;
+  const findFirst = jest.fn();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    repository = new ProductsRepository({
+      product: { findFirst },
+    } as unknown as PrismaService);
+  });
+
+  it('queries with correct WHERE clause excluding deleted products', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await repository.findActiveByBarcodeAndCompany('12345', 'comp-1');
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        barcode: '12345',
+        companyId: 'comp-1',
+        deletedAt: null,
+      },
+      select: { id: true, name: true },
+    });
+  });
+
+  it('excludes a specific product ID when provided', async () => {
+    findFirst.mockResolvedValue(null);
+
+    await repository.findActiveByBarcodeAndCompany('12345', 'comp-1', 'prod-1');
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        barcode: '12345',
+        companyId: 'comp-1',
+        deletedAt: null,
+        id: { not: 'prod-1' },
+      },
+      select: { id: true, name: true },
+    });
+  });
+});

@@ -119,7 +119,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       if (exception.code === 'P2002') {
-        return 'A record with the same unique value already exists';
+        return this.getP2002Message(exception);
       }
 
       if (exception.code === 'P2025') {
@@ -190,6 +190,28 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     return 'Internal Server Error';
+  }
+
+  /**
+   * Extract a field-specific message from a P2002 unique constraint violation.
+   * Inspects `meta.target` (an array of column names) to provide a more
+   * helpful error message than the generic fallback.
+   */
+  private getP2002Message(
+    exception: Prisma.PrismaClientKnownRequestError,
+  ): string {
+    const target = exception.meta?.target;
+
+    if (Array.isArray(target)) {
+      if (target.includes('sku')) {
+        return 'A product with this SKU already exists';
+      }
+      if (target.includes('barcode')) {
+        return 'A product with this barcode already exists';
+      }
+    }
+
+    return 'A record with the same unique value already exists';
   }
 
   private getRequestId(request: RequestWithId): string {

@@ -34,6 +34,11 @@ String localizedErrorLabel(AppLocalizations l10n, String message) {
       return l10n.errTooManyRequests;
     case ErrorMessages.serverUnavailable:
       return l10n.errServerUnavailable;
+    // Backend P2002 field-specific messages for Product SKU/barcode uniqueness.
+    case 'A product with this SKU already exists':
+      return l10n.errDuplicateSku;
+    case 'A product with this barcode already exists':
+      return l10n.errDuplicateBarcode;
     default:
       // Canonical client errors above have explicit translations. Unknown
       // backend text is still retained by the failure/logger, but must not

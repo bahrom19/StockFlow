@@ -55,6 +55,8 @@ describe('ProductsService — NTIN', () => {
       findOrCreateUnitByName: jest.fn(),
       findDefaultWarehouse: jest.fn(),
       createInitialStock: jest.fn(),
+      findActiveBySkuAndCompany: jest.fn(),
+      findActiveByBarcodeAndCompany: jest.fn(),
     } as unknown as jest.Mocked<ProductsRepository>;
 
     const module: TestingModule = await Test.createTestingModule({

@@ -835,6 +835,8 @@
   "errTooManyRequests": "Сұраулар тым көп. Күтіп, әрекетті қайталаңыз.",
   "errServerUnavailable": "Сервер қатесі. Кейінірек қайталап көріңіз.",
   "errGenericServer": "Операцияны орындау мүмкін болмады. Қайталап көріңіз.",
+  "errDuplicateSku": "Мұндай SKU бар тауар бұрыннан бар",
+  "errDuplicateBarcode": "Мұндай штрихкоды бар тауар бұрыннан бар",
   "insufficientStock": "Қоймадағы тауар жеткіліксіз",
   "aiInsightsNlp": "NLP",
   "noData": "Деректер жоқ",

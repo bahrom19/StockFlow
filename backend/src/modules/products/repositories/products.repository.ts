@@ -250,6 +250,55 @@ export class ProductsRepository {
   }
 
   /**
+   * Check if an active product with the given SKU already exists in the company.
+   * Returns the conflicting product (id + name) or null if no conflict.
+   * Excludes soft-deleted products and optionally excludes a specific product ID
+   * (for self-update scenarios).
+   */
+  async findActiveBySkuAndCompany(
+    sku: string,
+    companyId: string,
+    excludeProductId?: string,
+  ): Promise<{ id: string; name: string } | null> {
+    const where: Prisma.ProductWhereInput = {
+      sku,
+      companyId,
+      deletedAt: null,
+    };
+    if (excludeProductId) {
+      where.id = { not: excludeProductId };
+    }
+    return this.prismaService.product.findFirst({
+      where,
+      select: { id: true, name: true },
+    });
+  }
+
+  /**
+   * Check if an active product with the given barcode already exists in the
+   * company. Returns the conflicting product (id + name) or null if no conflict.
+   * Excludes soft-deleted products and optionally excludes a specific product ID.
+   */
+  async findActiveByBarcodeAndCompany(
+    barcode: string,
+    companyId: string,
+    excludeProductId?: string,
+  ): Promise<{ id: string; name: string } | null> {
+    const where: Prisma.ProductWhereInput = {
+      barcode,
+      companyId,
+      deletedAt: null,
+    };
+    if (excludeProductId) {
+      where.id = { not: excludeProductId };
+    }
+    return this.prismaService.product.findFirst({
+      where,
+      select: { id: true, name: true },
+    });
+  }
+
+  /**
    * Find the company's unit of measure by name or create it. UnitOfMeasure has
    * a unique constraint on [companyId, name], so this is idempotent.
    */

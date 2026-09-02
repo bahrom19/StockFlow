@@ -835,6 +835,8 @@
   "errTooManyRequests": "Слишком много запросов. Подождите и повторите попытку.",
   "errServerUnavailable": "Ошибка сервера. Повторите попытку позже.",
   "errGenericServer": "Не удалось выполнить операцию. Повторите попытку.",
+  "errDuplicateSku": "Товар с таким SKU уже существует",
+  "errDuplicateBarcode": "Товар с таким штрихкодом уже существует",
   "insufficientStock": "Недостаточно товара на складе",
   "aiInsightsNlp": "NLP",
   "noData": "Нет данных",
