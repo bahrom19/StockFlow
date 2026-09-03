@@ -27,6 +27,7 @@ import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/settings/presentation/screens/profile_screen.dart';
 import '../../features/suppliers/presentation/screens/suppliers_list_screen.dart';
 import '../../features/suppliers/presentation/screens/supplier_form_screen.dart';
+import '../../features/suppliers/presentation/screens/supplier_detail_screen.dart';
 import '../../features/warehouses/presentation/screens/warehouse_form_screen.dart';
 import '../../features/warehouses/presentation/screens/warehouses_list_screen.dart';
 import '../../features/payments/presentation/screens/payment_analytics_screen.dart';
@@ -205,9 +206,18 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: ':id',
                 name: 'supplierDetail',
-                builder: (context, state) => SupplierFormScreen(
-                  supplierId: state.pathParameters['id'],
+                builder: (context, state) => SupplierDetailScreen(
+                  supplierId: state.pathParameters['id'] ?? '',
                 ),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    name: 'supplierEdit',
+                    builder: (context, state) => SupplierFormScreen(
+                      supplierId: state.pathParameters['id'],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -122,7 +122,7 @@ class _SuppliersListScreenState extends ConsumerState<SuppliersListScreen> {
                       tooltip: context.l10n.edit,
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       onPressed: () =>
-                          context.push('${RouteNames.supplierDetail.replaceAll(':id', s.id)}'),
+                          context.push('/suppliers/${s.id}/edit'),
                     ),
                   ),
                 ],
