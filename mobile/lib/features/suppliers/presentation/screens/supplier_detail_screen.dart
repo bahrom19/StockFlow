@@ -10,6 +10,8 @@ import 'package:stockflow/features/suppliers/domain/supplier_contact_models.dart
 import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
+import 'package:stockflow/features/products/data/repositories/products_repository.dart';
+import 'package:stockflow/features/products/domain/product_models.dart';
 
 class SupplierDetailScreen extends ConsumerStatefulWidget {
   final String supplierId;
@@ -763,19 +765,343 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   }
 
   Future<void> _showAddProductDialog() async {
-    final repo = ref.read(suppliersRepositoryProvider);
-    // Simple dialog — in real implementation would have a product selector
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.addProduct)),
-    );
+    // State for the dialog
+    String? selectedProductId;
+    String selectedProductName = '';
+    String selectedProductSku = '';
+    final supplierSkuCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    bool isPreferred = false;
+    bool isLoadingProducts = true;
+    String? productsError;
+    List<Product> availableProducts = [];
+    String searchQuery = '';
+    bool showProductsList = false;
+    bool isSubmitting = false;
+
+    // Fetch available products
+    final productsRepo = ref.read(productsRepositoryProvider);
+    final productsResult = await productsRepo.list(limit: 50);
+    if (productsResult is ProductsSuccess<ProductListResponse>) {
+      availableProducts = productsResult.data.items;
+    } else if (productsResult is ProductsFail) {
+      productsError = (productsResult as ProductsFail).error.message;
+    }
+    isLoadingProducts = false;
+    if (!mounted) return;
+
+    final repo = ref.read(suppliersRepositoryProvider);
+    await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          // Filter products based on search
+          final filteredProducts = searchQuery.isEmpty
+              ? availableProducts
+              : availableProducts.where((p) {
+                  final nameMatch = p.name.toLowerCase().contains(searchQuery.toLowerCase());
+                  final skuMatch = p.sku?.toLowerCase().contains(searchQuery.toLowerCase()) ?? false;
+                  return nameMatch || skuMatch;
+                }).toList();
+
+          return AlertDialog(
+            title: Text(context.l10n.addProduct),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Product selector
+                  Text(context.l10n.selectProduct, style: Theme.of(ctx).textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  if (selectedProductId != null)
+                    Card(
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.inventory_2, size: 20),
+                        title: Text(selectedProductName),
+                        subtitle: selectedProductSku.isNotEmpty ? Text('SKU: $selectedProductSku') : null,
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () => setDialogState(() {
+                            selectedProductId = null;
+                            selectedProductName = '';
+                            selectedProductSku = '';
+                          }),
+                        ),
+                      ),
+                    )
+                  else ...[
+                    if (isLoadingProducts)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (productsError != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Column(
+                          children: [
+                            Text(productsError!, style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: Theme.of(ctx).colorScheme.error)),
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              onPressed: () async {
+                                setDialogState(() { isLoadingProducts = true; productsError = null; });
+                                final result = await ref.read(productsRepositoryProvider).list(limit: 50);
+                                if (result is ProductsSuccess<ProductListResponse>) {
+                                  setDialogState(() { availableProducts = result.data.items; });
+                                } else if (result is ProductsFail) {
+                                  final fail = result as ProductsFail;
+                                  setDialogState(() { productsError = fail.error.message; });
+                                }
+                                setDialogState(() => isLoadingProducts = false);
+                              },
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: Text(context.l10n.cancel),
+                            ),
+                          ],
+                        ),
+                      )
+                    else ...[
+                      TextField(
+                        decoration: InputDecoration(
+                          hintText: context.l10n.productSelectorHint,
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                        onChanged: (v) => setDialogState(() {
+                          searchQuery = v;
+                          showProductsList = v.isNotEmpty;
+                        }),
+                      ),
+                      if (showProductsList && filteredProducts.isNotEmpty)
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          margin: const EdgeInsets.only(top: 4),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Theme.of(ctx).colorScheme.outline),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: filteredProducts.length,
+                            itemBuilder: (context, index) {
+                              final product = filteredProducts[index];
+                              return ListTile(
+                                dense: true,
+                                title: Text(product.name),
+                                subtitle: product.sku != null ? Text('SKU: ${product.sku}') : null,
+                                onTap: () => setDialogState(() {
+                                  selectedProductId = product.id;
+                                  selectedProductName = product.name;
+                                  selectedProductSku = product.sku ?? '';
+                                  showProductsList = false;
+                                  searchQuery = '';
+                                }),
+                              );
+                            },
+                          ),
+                        ),
+                      if (showProductsList && filteredProducts.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(context.l10n.noData, style: Theme.of(ctx).textTheme.bodySmall),
+                        ),
+                    ],
+                  ],
+                  const SizedBox(height: 16),
+                  // Supplier SKU
+                  TextField(
+                    controller: supplierSkuCtrl,
+                    decoration: InputDecoration(labelText: context.l10n.supplierSku),
+                  ),
+                  const SizedBox(height: 12),
+                  // Supplier quoted price
+                  TextField(
+                    controller: priceCtrl,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.supplierQuotedPrice,
+                      suffixText: '₸',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  const SizedBox(height: 12),
+                  // Preferred supplier
+                  SwitchListTile(
+                    title: Text(context.l10n.preferredSupplier),
+                    value: isPreferred,
+                    onChanged: (v) => setDialogState(() => isPreferred = v),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  const SizedBox(height: 12),
+                  // Notes
+                  TextField(
+                    controller: notesCtrl,
+                    decoration: InputDecoration(labelText: context.l10n.notes),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(context.l10n.cancel),
+              ),
+              FilledButton(
+                onPressed: isSubmitting ? null : () async {
+                  if (selectedProductId == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text(context.l10n.selectProductRequired)),
+                    );
+                    return;
+                  }
+                  setDialogState(() => isSubmitting = true);
+                  final price = double.tryParse(priceCtrl.text);
+                  final createResult = await repo.createSupplierProduct(
+                    widget.supplierId,
+                    CreateSupplierProductRequest(
+                      productId: selectedProductId!,
+                      supplierSku: supplierSkuCtrl.text.isNotEmpty ? supplierSkuCtrl.text : null,
+                      purchasePrice: price,
+                      isPreferred: isPreferred,
+                      notes: notesCtrl.text.isNotEmpty ? notesCtrl.text : null,
+                    ),
+                  );
+                  if (!ctx.mounted) return;
+                  if (createResult is SuppliersSuccess) {
+                    Navigator.pop(ctx, true);
+                  } else if (createResult is SuppliersFailure) {
+                    setDialogState(() => isSubmitting = false);
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text((createResult as SuppliersFailure).error.message)),
+                    );
+                  }
+                },
+                child: isSubmitting
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(context.l10n.save),
+              ),
+            ],
+          );
+        },
+      ),
+    ).then((result) {
+      if (result == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.supplierProductSaved)),
+        );
+        _loadSupplierProducts();
+      }
+    });
   }
 
   Future<void> _showEditProductDialog(SupplierProduct sp) async {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.edit)),
-    );
+    final supplierSkuCtrl = TextEditingController(text: sp.supplierSku ?? '');
+    final priceCtrl = TextEditingController(text: sp.purchasePrice?.toString() ?? '');
+    final notesCtrl = TextEditingController(text: sp.notes ?? '');
+    bool isPreferred = sp.isPreferred;
+    bool isSubmitting = false;
+
+    final repo = ref.read(suppliersRepositoryProvider);
+    await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(context.l10n.edit),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Product name (read-only)
+                Text(context.l10n.product, style: Theme.of(ctx).textTheme.labelLarge),
+                const SizedBox(height: 4),
+                Text(sp.product.name, style: Theme.of(ctx).textTheme.bodyLarge),
+                if (sp.product.sku != null)
+                  Text('SKU: ${sp.product.sku}', style: Theme.of(ctx).textTheme.bodySmall),
+                const SizedBox(height: 16),
+                // Supplier SKU
+                TextField(
+                  controller: supplierSkuCtrl,
+                  decoration: InputDecoration(labelText: context.l10n.supplierSku),
+                ),
+                const SizedBox(height: 12),
+                // Supplier quoted price
+                TextField(
+                  controller: priceCtrl,
+                  decoration: InputDecoration(
+                    labelText: context.l10n.supplierQuotedPrice,
+                    suffixText: '₸',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 12),
+                // Preferred supplier
+                SwitchListTile(
+                  title: Text(context.l10n.preferredSupplier),
+                  value: isPreferred,
+                  onChanged: (v) => setDialogState(() => isPreferred = v),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 12),
+                // Notes
+                TextField(
+                  controller: notesCtrl,
+                  decoration: InputDecoration(labelText: context.l10n.notes),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx, false),
+              child: Text(context.l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: isSubmitting ? null : () async {
+                setDialogState(() => isSubmitting = true);
+                final price = double.tryParse(priceCtrl.text);
+                final updateResult = await repo.updateSupplierProduct(
+                  widget.supplierId,
+                  sp.id,
+                  {
+                    'supplierSku': supplierSkuCtrl.text.isNotEmpty ? supplierSkuCtrl.text : null,
+                    'purchasePrice': price,
+                    'isPreferred': isPreferred,
+                    'notes': notesCtrl.text.isNotEmpty ? notesCtrl.text : null,
+                  },
+                );
+                if (!ctx.mounted) return;
+                if (updateResult is SuppliersSuccess) {
+                  Navigator.pop(ctx, true);
+                } else if (updateResult is SuppliersFailure) {
+                  setDialogState(() => isSubmitting = false);
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text((updateResult as SuppliersFailure).error.message)),
+                  );
+                }
+              },
+              child: isSubmitting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(context.l10n.save),
+            ),
+          ],
+        ),
+      ),
+    ).then((result) {
+      if (result == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.supplierProductSaved)),
+        );
+        _loadSupplierProducts();
+      }
+    });
   }
 
   Future<void> _confirmDeleteProduct(SupplierProduct sp) async {
