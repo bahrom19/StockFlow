@@ -8,6 +8,7 @@ import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_contact_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
 
 sealed class SuppliersResult<T> {
   const SuppliersResult();
@@ -269,6 +270,65 @@ class SuppliersRepository {
       );
       return SuppliersSuccess(
           SupplierFinanceSummary.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  // ── Supplier Products ────────────────────────────────
+
+  Future<SuppliersResult<SupplierProductListResponse>> getSupplierProducts(
+      String supplierId, {int page = 1, int limit = 20, String? search, bool? isPreferred}) async {
+    try {
+      final params = <String, dynamic>{'page': page, 'limit': limit};
+      if (search != null && search.isNotEmpty) params['search'] = search;
+      if (isPreferred != null) params['isPreferred'] = isPreferred.toString();
+      final response = await _api.get<Map<String, dynamic>>(
+        '/suppliers/$supplierId/products',
+        queryParameters: params,
+      );
+      return SuppliersSuccess(
+          SupplierProductListResponse.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<SupplierProduct>> createSupplierProduct(
+      String supplierId, CreateSupplierProductRequest request) async {
+    try {
+      final response = await _api.post<Map<String, dynamic>>(
+        '/suppliers/$supplierId/products',
+        data: request.toJson(),
+      );
+      return SuppliersSuccess(
+          SupplierProduct.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<SupplierProduct>> updateSupplierProduct(
+      String supplierId, String spId, Map<String, dynamic> data) async {
+    try {
+      final response = await _api.patch<Map<String, dynamic>>(
+        '/suppliers/$supplierId/products/$spId',
+        data: data,
+      );
+      return SuppliersSuccess(
+          SupplierProduct.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<void>> deleteSupplierProduct(
+      String supplierId, String spId) async {
+    try {
+      await _api.delete<dynamic>(
+        '/suppliers/$supplierId/products/$spId',
+      );
+      return const SuppliersSuccess(null);
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }

@@ -9,6 +9,7 @@ import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_contact_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
 
 class SupplierDetailScreen extends ConsumerStatefulWidget {
   final String supplierId;
@@ -25,6 +26,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   List<SupplierAddress> _addresses = [];
   SupplierFinanceSummary? _financeSummary;
   List<SupplierPayment> _payments = [];
+  List<SupplierProduct> _supplierProducts = [];
   bool _isLoading = true;
   String? _error;
 
@@ -47,6 +49,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       repo.getAddresses(widget.supplierId),
       repo.getFinanceSummary(widget.supplierId),
       repo.getPayments(widget.supplierId),
+      repo.getSupplierProducts(widget.supplierId),
     ]);
 
     final supplierResult = results[0] as SuppliersResult<Supplier>;
@@ -54,6 +57,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     final addressesResult = results[2] as SuppliersResult<List<SupplierAddress>>;
     final financeResult = results[3] as SuppliersResult<SupplierFinanceSummary>;
     final paymentsResult = results[4] as SuppliersResult<SupplierPaymentListResponse>;
+    final productsResult = results[5] as SuppliersResult<SupplierProductListResponse>;
 
     if (!mounted) return;
 
@@ -81,6 +85,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
           : null;
       _payments = paymentsResult is SuppliersSuccess<SupplierPaymentListResponse>
           ? paymentsResult.data.items
+          : [];
+      _supplierProducts = productsResult is SuppliersSuccess<SupplierProductListResponse>
+          ? productsResult.data.items
           : [];
       _isLoading = false;
     });
@@ -160,6 +167,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
               // ── Finance Section ──────────────────────────────
               _buildFinanceSection(theme),
+              const SizedBox(height: 24),
+
+              // ── Products Section ─────────────────────────────
+              _buildProductsSection(theme),
 
               // ── Notes ─────────────────────────────────────────
               if (supplier.notes != null && supplier.notes!.isNotEmpty) ...[
@@ -681,6 +692,120 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.l10n.addPayment)),
     );
+  }
+
+  // ── Products Section ────────────────────────────────────
+
+  Widget _buildProductsSection(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.inventory_2, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(context.l10n.supplierProducts, style: theme.textTheme.titleSmall),
+                const Spacer(),
+                FilledButton.tonalIcon(
+                  onPressed: () => _showAddProductDialog(),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: Text(context.l10n.addProduct),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_supplierProducts.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(context.l10n.noProducts,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              )
+            else
+              ..._supplierProducts.map((sp) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: sp.isPreferred
+                        ? const Icon(Icons.star, size: 20, color: Colors.amber)
+                        : Icon(Icons.inventory_2, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                    title: Text(sp.product.name),
+                    subtitle: Text([
+                      if (sp.product.sku != null) 'SKU: ${sp.product.sku}',
+                      if (sp.supplierSku != null) 'Sup: ${sp.supplierSku}',
+                    ].join(' • ')),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (sp.purchasePrice != null)
+                          Text('₸${sp.purchasePrice}',
+                              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 8),
+                        PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'edit') _showEditProductDialog(sp);
+                            if (value == 'delete') _confirmDeleteProduct(sp);
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(value: 'edit', child: Text(context.l10n.edit)),
+                            PopupMenuItem(value: 'delete', child: Text(context.l10n.delete)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAddProductDialog() async {
+    final repo = ref.read(suppliersRepositoryProvider);
+    // Simple dialog — in real implementation would have a product selector
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.addProduct)),
+    );
+  }
+
+  Future<void> _showEditProductDialog(SupplierProduct sp) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.edit)),
+    );
+  }
+
+  Future<void> _confirmDeleteProduct(SupplierProduct sp) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.l10n.confirmRemoval),
+        content: Text('${context.l10n.remove} ${sp.product.name}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.cancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.delete)),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      final repo = ref.read(suppliersRepositoryProvider);
+      await repo.deleteSupplierProduct(widget.supplierId, sp.id);
+      _loadSupplierProducts();
+    }
+  }
+
+  Future<void> _loadSupplierProducts() async {
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getSupplierProducts(widget.supplierId);
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<SupplierProductListResponse>) {
+        _supplierProducts = result.data.items;
+      }
+    });
   }
 
   Future<void> _loadContactsAndAddresses() async {

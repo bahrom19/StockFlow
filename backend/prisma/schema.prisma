@@ -146,6 +146,7 @@ model Company {
   purchaseInvoices      PurchaseInvoice[]
   creditNotes           PurchaseCreditNote[]
   supplierPayments      SupplierPayment[]
+  supplierProducts      SupplierProduct[]
   rfqs                  RFQ[]
   quotations            SupplierQuotation[]
   sales                 Sale[]
@@ -483,6 +484,7 @@ model Supplier {
   purchaseInvoices   PurchaseInvoice[]
   quotations         SupplierQuotation[]
   payments           SupplierPayment[]
+  supplierProducts   SupplierProduct[]
 
   @@index([companyId])
   @@index([email])
@@ -663,6 +665,7 @@ model Product {
   stockMovements  StockMovement[]
   batches         Batch[]
   costLayers      CostLayer[]
+  supplierProducts SupplierProduct[]
 
   @@index([companyId])
   @@index([name])
@@ -1337,6 +1340,32 @@ model SupplierPayment {
   @@index([purchaseInvoiceId])
   @@index([paymentDate])
   @@index([companyId, deletedAt])
+}
+
+model SupplierProduct {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @db.Uuid
+  supplierId      String    @db.Uuid
+  productId       String    @db.Uuid
+  supplierSku     String?   @db.VarChar(100)
+  purchasePrice   Decimal?  @db.Decimal(18, 4)
+  currency        Currency  @default(KZT)
+  isPreferred     Boolean   @default(false)
+  notes           String?   @db.Text
+  lastPurchaseAt  DateTime?
+  rowVersion      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplier        Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([supplierId])
+  @@index([productId])
+  @@index([companyId, supplierId])
+  @@index([companyId, productId])
 }
 
 model RFQ {
