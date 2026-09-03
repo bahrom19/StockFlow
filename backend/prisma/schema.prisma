@@ -500,6 +500,9 @@ model SupplierContact {
   phone         String?   @db.VarChar(64)
   email         String?   @db.VarChar(255)
   position      String?   @db.VarChar(100)
+  isPrimary     Boolean   @default(false)
+  notes         String?   @db.Text
+  rowVersion    Int       @default(0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?

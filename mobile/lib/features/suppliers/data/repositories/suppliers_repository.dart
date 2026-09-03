@@ -5,6 +5,8 @@ import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_contact_models.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart';
 
 sealed class SuppliersResult<T> {
   const SuppliersResult();
@@ -99,6 +101,116 @@ class SuppliersRepository {
   Future<SuppliersResult<void>> delete(String id) async {
     try {
       await _api.delete<dynamic>('/suppliers/$id');
+      return const SuppliersSuccess(null);
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  // ── Contacts ──────────────────────────────────────────────
+
+  Future<SuppliersResult<List<SupplierContact>>> getContacts(
+      String supplierId) async {
+    try {
+      final response = await _api.get<List>(
+        '/suppliers/$supplierId/contacts',
+      );
+      final contacts = (response.data ?? [])
+          .map((e) => SupplierContact.fromJson(e as Map<String, dynamic>))
+          .toList();
+      return SuppliersSuccess(contacts);
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<SupplierContact>> createContact(
+      String supplierId, CreateSupplierContactRequest request) async {
+    try {
+      final response = await _api.post<Map<String, dynamic>>(
+        '/suppliers/$supplierId/contacts',
+        data: request.toJson(),
+      );
+      return SuppliersSuccess(SupplierContact.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<SupplierContact>> updateContact(
+      String supplierId, String contactId, Map<String, dynamic> data) async {
+    try {
+      final response = await _api.patch<Map<String, dynamic>>(
+        '/suppliers/$supplierId/contacts/$contactId',
+        data: data,
+      );
+      return SuppliersSuccess(SupplierContact.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<void>> deleteContact(
+      String supplierId, String contactId) async {
+    try {
+      await _api.delete<dynamic>(
+        '/suppliers/$supplierId/contacts/$contactId',
+      );
+      return const SuppliersSuccess(null);
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  // ── Addresses ─────────────────────────────────────────────
+
+  Future<SuppliersResult<List<SupplierAddress>>> getAddresses(
+      String supplierId) async {
+    try {
+      final response = await _api.get<List>(
+        '/suppliers/$supplierId/addresses',
+      );
+      final addresses = (response.data ?? [])
+          .map((e) => SupplierAddress.fromJson(e as Map<String, dynamic>))
+          .toList();
+      return SuppliersSuccess(addresses);
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<SupplierAddress>> createAddress(
+      String supplierId, CreateSupplierAddressRequest request) async {
+    try {
+      final response = await _api.post<Map<String, dynamic>>(
+        '/suppliers/$supplierId/addresses',
+        data: request.toJson(),
+      );
+      return SuppliersSuccess(SupplierAddress.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<SupplierAddress>> updateAddress(
+      String supplierId, String addressId, Map<String, dynamic> data) async {
+    try {
+      final response = await _api.patch<Map<String, dynamic>>(
+        '/suppliers/$supplierId/addresses/$addressId',
+        data: data,
+      );
+      return SuppliersSuccess(SupplierAddress.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<void>> deleteAddress(
+      String supplierId, String addressId) async {
+    try {
+      await _api.delete<dynamic>(
+        '/suppliers/$supplierId/addresses/$addressId',
+      );
       return const SuppliersSuccess(null);
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
