@@ -145,6 +145,7 @@ model Company {
   purchaseReturns       PurchaseReturn[]
   purchaseInvoices      PurchaseInvoice[]
   creditNotes           PurchaseCreditNote[]
+  supplierPayments      SupplierPayment[]
   rfqs                  RFQ[]
   quotations            SupplierQuotation[]
   sales                 Sale[]
@@ -481,6 +482,7 @@ model Supplier {
   purchaseReturns    PurchaseReturn[]
   purchaseInvoices   PurchaseInvoice[]
   quotations         SupplierQuotation[]
+  payments           SupplierPayment[]
 
   @@index([companyId])
   @@index([email])
@@ -562,6 +564,7 @@ model User {
   journalEntriesPosted     JournalEntry[]   @relation("PostedJournalEntries")
   journalEntriesCreated    JournalEntry[]   @relation("CreatedJournalEntries")
   financialTransactions    FinancialTransaction[]
+  supplierPaymentsCreated  SupplierPayment[]
 
 
   @@index([email])
@@ -1241,6 +1244,7 @@ model PurchaseInvoice {
   supplier        Supplier               @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   items           PurchaseInvoiceItem[]
   creditNotes     PurchaseCreditNote[]
+  payments        SupplierPayment[]
 
   @@index([companyId])
   @@index([purchaseOrderId])
@@ -1299,6 +1303,39 @@ model PurchaseCreditNote {
   @@index([companyId])
   @@index([purchaseInvoiceId])
   @@index([createdAt])
+  @@index([companyId, deletedAt])
+}
+
+model SupplierPayment {
+  id                String         @id @default(uuid()) @db.Uuid
+  companyId         String         @db.Uuid
+  supplierId        String         @db.Uuid
+  purchaseInvoiceId String         @db.Uuid
+  paymentNumber     String         @unique @db.VarChar(100)
+  paymentDate       DateTime       @default(now())
+  amount            Decimal        @db.Decimal(18, 4)
+  method            PaymentMethod
+  cashAccountId     String?        @db.Uuid
+  bankAccountId     String?        @db.Uuid
+  currency          Currency       @default(KZT)
+  reference         String?        @db.VarChar(255)
+  notes             String?        @db.Text
+  createdBy         String?        @db.Uuid
+  rowVersion        Int            @default(0)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+  company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplier          Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
+  cashAccount       CashAccount?   @relation(fields: [cashAccountId], references: [id], onDelete: SetNull)
+  bankAccount       BankAccount?   @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  createdByUser     User?          @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([supplierId])
+  @@index([purchaseInvoiceId])
+  @@index([paymentDate])
   @@index([companyId, deletedAt])
 }
 
@@ -1721,6 +1758,7 @@ model CashAccount {
   warehouse       Warehouse?       @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
   chartOfAccount  ChartOfAccount?  @relation(fields: [chartOfAccountId], references: [id], onDelete: SetNull)
   transactions    FinancialTransaction[] @relation("CashAccountTransactions")
+  supplierPayments SupplierPayment[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -1755,6 +1793,7 @@ model BankAccount {
   company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   chartOfAccount   ChartOfAccount? @relation(fields: [chartOfAccountId], references: [id], onDelete: SetNull)
   transactions     FinancialTransaction[] @relation("BankAccountTransactions")
+  supplierPayments SupplierPayment[]
 
   @@unique([companyId, accountNumber])
   @@index([companyId])

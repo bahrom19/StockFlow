@@ -8,6 +8,7 @@ import 'package:stockflow/features/suppliers/data/repositories/suppliers_reposit
 import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_contact_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
 
 class SupplierDetailScreen extends ConsumerStatefulWidget {
   final String supplierId;
@@ -22,6 +23,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   Supplier? _supplier;
   List<SupplierContact> _contacts = [];
   List<SupplierAddress> _addresses = [];
+  SupplierFinanceSummary? _financeSummary;
+  List<SupplierPayment> _payments = [];
   bool _isLoading = true;
   String? _error;
 
@@ -42,11 +45,15 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       repo.getById(widget.supplierId),
       repo.getContacts(widget.supplierId),
       repo.getAddresses(widget.supplierId),
+      repo.getFinanceSummary(widget.supplierId),
+      repo.getPayments(widget.supplierId),
     ]);
 
     final supplierResult = results[0] as SuppliersResult<Supplier>;
     final contactsResult = results[1] as SuppliersResult<List<SupplierContact>>;
     final addressesResult = results[2] as SuppliersResult<List<SupplierAddress>>;
+    final financeResult = results[3] as SuppliersResult<SupplierFinanceSummary>;
+    final paymentsResult = results[4] as SuppliersResult<SupplierPaymentListResponse>;
 
     if (!mounted) return;
 
@@ -68,6 +75,12 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
           : [];
       _addresses = addressesResult is SuppliersSuccess<List<SupplierAddress>>
           ? addressesResult.data
+          : [];
+      _financeSummary = financeResult is SuppliersSuccess<SupplierFinanceSummary>
+          ? financeResult.data
+          : null;
+      _payments = paymentsResult is SuppliersSuccess<SupplierPaymentListResponse>
+          ? paymentsResult.data.items
           : [];
       _isLoading = false;
     });
@@ -143,6 +156,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
               // ── Addresses Section ─────────────────────────────
               _buildAddressesSection(theme),
+              const SizedBox(height: 24),
+
+              // ── Finance Section ──────────────────────────────
+              _buildFinanceSection(theme),
 
               // ── Notes ─────────────────────────────────────────
               if (supplier.notes != null && supplier.notes!.isNotEmpty) ...[
@@ -566,6 +583,104 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     final repo = ref.read(suppliersRepositoryProvider);
     await repo.deleteAddress(widget.supplierId, address.id);
     _loadContactsAndAddresses();
+  }
+
+  // ── Finance Section ────────────────────────────────────────
+
+  Widget _buildFinanceSection(ThemeData theme) {
+    final summary = _financeSummary;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.account_balance_wallet,
+                    size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(context.l10n.financeSummary,
+                    style: theme.textTheme.titleSmall),
+                const Spacer(),
+                FilledButton.tonalIcon(
+                  onPressed: () => _showAddPaymentDialog(),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: Text(context.l10n.addPayment),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (summary != null) ...[
+              Row(
+                children: [
+                  _financeStat(context.l10n.totalInvoiced, summary.totalInvoiced,
+                      theme),
+                  const SizedBox(width: 16),
+                  _financeStat(context.l10n.totalPaid, summary.totalPaid, theme),
+                  const SizedBox(width: 16),
+                  _financeStat(context.l10n.outstanding, summary.outstanding,
+                      theme),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (_payments.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(context.l10n.noPayments,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              )
+            else
+              ..._payments.map((p) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      p.method == 'CASH'
+                          ? Icons.money
+                          : Icons.account_balance,
+                      size: 20,
+                    ),
+                    title: Text(p.paymentNumber),
+                    subtitle: Text(
+                      '${p.paymentDate.toString().substring(0, 10)} • ${p.method}',
+                    ),
+                    trailing: Text(
+                      '+₸${p.amount}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600),
+                    ),
+                  )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _financeStat(String label, String value, ThemeData theme) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 2),
+          Text('₸$value',
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddPaymentDialog() async {
+    // TODO: implement payment dialog in future iteration
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.addPayment)),
+    );
   }
 
   Future<void> _loadContactsAndAddresses() async {

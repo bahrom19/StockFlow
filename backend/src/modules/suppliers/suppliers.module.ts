@@ -2,18 +2,25 @@ import { Module } from '@nestjs/common';
 import { SuppliersController } from './controllers/suppliers.controller';
 import { SupplierContactsController } from './controllers/supplier-contacts.controller';
 import { SupplierAddressesController } from './controllers/supplier-addresses.controller';
+import { SupplierPaymentsController } from './controllers/supplier-payments.controller';
 import { SuppliersService } from './services/suppliers.service';
 import { SupplierContactsService } from './services/supplier-contacts.service';
 import { SupplierAddressesService } from './services/supplier-addresses.service';
+import { SupplierPaymentsService } from './services/supplier-payments.service';
 import { SuppliersRepository } from './repositories/suppliers.repository';
 import { SupplierContactsRepository } from './repositories/supplier-contacts.repository';
 import { SupplierAddressesRepository } from './repositories/supplier-addresses.repository';
+import { SupplierPaymentsRepository } from './repositories/supplier-payments.repository';
+import { FinanceModule } from '../finance/finance.module';
+import { SharedModule } from '../shared/shared.module';
 
 @Module({
+  imports: [FinanceModule, SharedModule],
   controllers: [
     SuppliersController,
     SupplierContactsController,
     SupplierAddressesController,
+    SupplierPaymentsController,
   ],
   providers: [
     SuppliersService,
@@ -22,6 +29,8 @@ import { SupplierAddressesRepository } from './repositories/supplier-addresses.r
     SupplierContactsRepository,
     SupplierAddressesService,
     SupplierAddressesRepository,
+    SupplierPaymentsService,
+    SupplierPaymentsRepository,
   ],
   exports: [SuppliersService],
 })
