@@ -1034,7 +1034,7 @@ model PurchaseOrder {
   updatedAt       DateTime            @updatedAt
   deletedAt       DateTime?
   company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  supplier        Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier        Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   items           PurchaseOrderItem[]
   goodsReceipts   GoodsReceipt[]
   invoices        PurchaseInvoice[]
@@ -1148,7 +1148,7 @@ model PurchaseReturn {
   updatedAt       DateTime            @updatedAt
   deletedAt       DateTime?
   company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  supplier        Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier        Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   warehouse       Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   items           PurchaseReturnItem[]
 
@@ -1235,7 +1235,7 @@ model PurchaseInvoice {
   deletedAt       DateTime?
   company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   purchaseOrder   PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  supplier        Supplier               @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier        Supplier               @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   items           PurchaseInvoiceItem[]
   creditNotes     PurchaseCreditNote[]
 
@@ -1364,7 +1364,7 @@ model SupplierQuotation {
   deletedAt       DateTime?
   company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   rfq             RFQ             @relation(fields: [rfqId], references: [id], onDelete: Cascade)
-  supplier        Supplier        @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier        Supplier        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   items           SupplierQuotationItem[]
 
   @@index([companyId])

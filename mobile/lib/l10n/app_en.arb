@@ -837,6 +837,7 @@
   "errGenericServer": "Unable to complete the operation. Please try again.",
   "errDuplicateSku": "A product with this SKU already exists",
   "errDuplicateBarcode": "A product with this barcode already exists",
+  "errDuplicateBin": "A supplier with this BIN already exists",
   "insufficientStock": "Insufficient stock",
   "aiInsightsNlp": "NLP",
   "noData": "No data",

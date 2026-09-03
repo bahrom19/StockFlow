@@ -209,6 +209,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       if (target.includes('barcode')) {
         return 'A product with this barcode already exists';
       }
+      if (target.includes('bin')) {
+        return 'A supplier with this BIN already exists';
+      }
     }
 
     return 'A record with the same unique value already exists';

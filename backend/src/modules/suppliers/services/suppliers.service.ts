@@ -35,18 +35,39 @@ export class SuppliersService {
       );
     }
 
-    const existingSupplier = await this.suppliersRepository.findAll({
-      companyId: currentUser.companyId,
-      search:
-        createSupplierDto.email ??
-        createSupplierDto.phone ??
-        createSupplierDto.bin,
-    });
-
-    if (existingSupplier.total > 0) {
-      throw new ConflictException(
-        'Supplier with similar identity already exists',
+    // G1: field-level duplicate checks (replaces broad search)
+    if (createSupplierDto.email) {
+      const dup = await this.suppliersRepository.findActiveByEmail(
+        createSupplierDto.email,
+        currentUser.companyId,
       );
+      if (dup) {
+        throw new ConflictException(
+          'A supplier with this email already exists',
+        );
+      }
+    }
+    if (createSupplierDto.phone) {
+      const dup = await this.suppliersRepository.findActiveByPhone(
+        createSupplierDto.phone,
+        currentUser.companyId,
+      );
+      if (dup) {
+        throw new ConflictException(
+          'A supplier with this phone already exists',
+        );
+      }
+    }
+    if (createSupplierDto.bin) {
+      const dup = await this.suppliersRepository.findActiveByBin(
+        createSupplierDto.bin,
+        currentUser.companyId,
+      );
+      if (dup) {
+        throw new ConflictException(
+          'A supplier with this BIN already exists',
+        );
+      }
     }
 
     const supplier = await this.prismaService.$transaction(async (tx) => {
@@ -120,7 +141,45 @@ export class SuppliersService {
     updateSupplierDto: UpdateSupplierDto,
     currentUser: JwtPayload,
   ): Promise<SupplierEntity> {
-    await this.findById(id, currentUser);
+    const current = await this.findById(id, currentUser);
+
+    // G1: field-level duplicate checks on update (exclude self)
+    if (updateSupplierDto.email && updateSupplierDto.email !== current.email) {
+      const dup = await this.suppliersRepository.findActiveByEmail(
+        updateSupplierDto.email,
+        currentUser.companyId,
+        id,
+      );
+      if (dup) {
+        throw new ConflictException(
+          'A supplier with this email already exists',
+        );
+      }
+    }
+    if (updateSupplierDto.phone && updateSupplierDto.phone !== current.phone) {
+      const dup = await this.suppliersRepository.findActiveByPhone(
+        updateSupplierDto.phone,
+        currentUser.companyId,
+        id,
+      );
+      if (dup) {
+        throw new ConflictException(
+          'A supplier with this phone already exists',
+        );
+      }
+    }
+    if (updateSupplierDto.bin && updateSupplierDto.bin !== current.bin) {
+      const dup = await this.suppliersRepository.findActiveByBin(
+        updateSupplierDto.bin,
+        currentUser.companyId,
+        id,
+      );
+      if (dup) {
+        throw new ConflictException(
+          'A supplier with this BIN already exists',
+        );
+      }
+    }
 
     const updatedSupplier = await this.prismaService.$transaction(
       async (tx) => {

@@ -837,6 +837,7 @@
   "errGenericServer": "Операцияны орындау мүмкін болмады. Қайталап көріңіз.",
   "errDuplicateSku": "Мұндай SKU бар тауар бұрыннан бар",
   "errDuplicateBarcode": "Мұндай штрихкоды бар тауар бұрыннан бар",
+  "errDuplicateBin": "Мұндай БИН бар жеткізуші бұрыннан бар",
   "insufficientStock": "Қоймадағы тауар жеткіліксіз",
   "aiInsightsNlp": "NLP",
   "noData": "Деректер жоқ",

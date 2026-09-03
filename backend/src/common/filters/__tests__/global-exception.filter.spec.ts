@@ -98,6 +98,18 @@ describe('GlobalExceptionFilter', () => {
     expect(body.message).toBe('A product with this barcode already exists');
   });
 
+  it('P2002 with bin target → field-specific message', () => {
+    const { host, jsonMock } = createHost();
+    filter.catch(
+      p2002({ target: ['companyId', 'bin'] }),
+      host,
+    );
+
+    const body = jsonMock.mock.calls[0][0];
+    expect(body.statusCode).toBe(409);
+    expect(body.message).toBe('A supplier with this BIN already exists');
+  });
+
   it('P2002 with unknown target → generic message', () => {
     const { host, jsonMock } = createHost();
     filter.catch(

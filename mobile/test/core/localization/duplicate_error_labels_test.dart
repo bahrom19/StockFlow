@@ -7,7 +7,7 @@ AppLocalizations en() => lookupAppLocalizations(const Locale('en'));
 AppLocalizations ru() => lookupAppLocalizations(const Locale('ru'));
 AppLocalizations kk() => lookupAppLocalizations(const Locale('kk'));
 
-/// Tests for Product SKU/barcode duplicate error localization (STEP E1).
+/// Tests for Product SKU/barcode + Supplier BIN duplicate error localization.
 ///
 /// Backend P2002 returns English messages that must be mapped to localized
 /// versions for RU/KK users.
@@ -59,6 +59,31 @@ void main() {
         'A product with this barcode already exists',
       );
       expect(result, 'Мұндай штрихкоды бар тауар бұрыннан бар');
+    });
+
+    // G1: Supplier BIN duplicate localization
+    test('EN: BIN duplicate message is preserved as-is', () {
+      final result = localizedErrorLabel(
+        en(),
+        'A supplier with this BIN already exists',
+      );
+      expect(result, 'A supplier with this BIN already exists');
+    });
+
+    test('RU: BIN duplicate message is localized', () {
+      final result = localizedErrorLabel(
+        ru(),
+        'A supplier with this BIN already exists',
+      );
+      expect(result, 'Поставщик с таким БИН уже существует');
+    });
+
+    test('KK: BIN duplicate message is localized', () {
+      final result = localizedErrorLabel(
+        kk(),
+        'A supplier with this BIN already exists',
+      );
+      expect(result, 'Мұндай БИН бар жеткізуші бұрыннан бар');
     });
 
     test('Unknown 409 message falls back to generic for RU/KK', () {

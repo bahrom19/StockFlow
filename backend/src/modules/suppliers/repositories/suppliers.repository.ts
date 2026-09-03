@@ -123,6 +123,59 @@ export class SuppliersRepository {
     return client.supplier.update({ where: { id }, data });
   }
 
+  // ── Duplicate checks (G1) ─────────────────────────────────────
+
+  async findActiveByEmail(
+    email: string,
+    companyId: string,
+    excludeId?: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Supplier | null> {
+    const client = this.getClient(tx);
+    return client.supplier.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        companyId,
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+    });
+  }
+
+  async findActiveByPhone(
+    phone: string,
+    companyId: string,
+    excludeId?: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Supplier | null> {
+    const client = this.getClient(tx);
+    return client.supplier.findFirst({
+      where: {
+        phone: { equals: phone, mode: 'insensitive' },
+        companyId,
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+    });
+  }
+
+  async findActiveByBin(
+    bin: string,
+    companyId: string,
+    excludeId?: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Supplier | null> {
+    const client = this.getClient(tx);
+    return client.supplier.findFirst({
+      where: {
+        bin: { equals: bin, mode: 'insensitive' },
+        companyId,
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+    });
+  }
+
   async softDelete(
     id: string,
     companyId: string,

@@ -40,6 +40,9 @@ describe('SuppliersService', () => {
       findById: jest.fn(),
       update: jest.fn(),
       softDelete: jest.fn(),
+      findActiveByEmail: jest.fn().mockResolvedValue(null),
+      findActiveByPhone: jest.fn().mockResolvedValue(null),
+      findActiveByBin: jest.fn().mockResolvedValue(null),
     } as unknown as jest.Mocked<SuppliersRepository>;
 
     mockTx = {};
@@ -62,7 +65,6 @@ describe('SuppliersService', () => {
   // CREATE
   // ─────────────────────────────────────────────
   it('should create a supplier', async () => {
-    mockRepo.findAll.mockResolvedValue({ items: [], total: 0 });
     mockRepo.create.mockResolvedValue(baseSupplier as any);
 
     const result = await service.create(
@@ -76,11 +78,35 @@ describe('SuppliersService', () => {
     expect(result.id).toBe('supp-1');
   });
 
-  it('should throw ConflictException when supplier already exists', async () => {
-    mockRepo.findAll.mockResolvedValue({ items: [baseSupplier], total: 1 });
+  // G1: field-level duplicate checks
+  it('should reject duplicate email on create', async () => {
+    mockRepo.findActiveByEmail.mockResolvedValue(baseSupplier as any);
     await expect(
-      service.create({ email: 'exists@test.com' } as any, currentUser),
+      service.create({ companyName: 'New', email: 'dup@test.com' } as any, currentUser),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('should reject duplicate phone on create', async () => {
+    mockRepo.findActiveByPhone.mockResolvedValue(baseSupplier as any);
+    await expect(
+      service.create({ companyName: 'New', phone: '+77001112233' } as any, currentUser),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('should reject duplicate BIN on create', async () => {
+    mockRepo.findActiveByBin.mockResolvedValue(baseSupplier as any);
+    await expect(
+      service.create({ companyName: 'New', bin: '123456789012' } as any, currentUser),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('should allow create when no duplicates', async () => {
+    mockRepo.create.mockResolvedValue(baseSupplier as any);
+    const result = await service.create(
+      { companyName: 'Supply Co', email: 'new@test.com', phone: '+77009998877', bin: '999999999999' } as any,
+      currentUser,
+    );
+    expect(result.id).toBe('supp-1');
   });
 
   // ─────────────────────────────────────────────
@@ -129,6 +155,43 @@ describe('SuppliersService', () => {
     expect(result.companyName).toBe('Updated Co');
   });
 
+  // G1: field-level duplicate checks on update
+  it('should reject duplicate email on update', async () => {
+    mockRepo.findById.mockResolvedValue(baseSupplier as any);
+    mockRepo.findActiveByEmail.mockResolvedValue({ ...baseSupplier, id: 'other' } as any);
+    await expect(
+      service.update('supp-1', { email: 'taken@test.com' } as any, currentUser),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('should reject duplicate phone on update', async () => {
+    mockRepo.findById.mockResolvedValue(baseSupplier as any);
+    mockRepo.findActiveByPhone.mockResolvedValue({ ...baseSupplier, id: 'other' } as any);
+    await expect(
+      service.update('supp-1', { phone: '+77009998877' } as any, currentUser),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('should reject duplicate BIN on update', async () => {
+    mockRepo.findById.mockResolvedValue(baseSupplier as any);
+    mockRepo.findActiveByBin.mockResolvedValue({ ...baseSupplier, id: 'other' } as any);
+    await expect(
+      service.update('supp-1', { bin: '999999999999' } as any, currentUser),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('should allow self-update with same email/phone/BIN', async () => {
+    mockRepo.findById.mockResolvedValue(baseSupplier as any);
+    mockRepo.update.mockResolvedValue({ ...baseSupplier, companyName: 'Updated' } as any);
+    // Same values as existing — should not trigger duplicate check
+    const result = await service.update(
+      'supp-1',
+      { email: 'supply@test.com', phone: '+77001112233', bin: '123456789012' } as any,
+      currentUser,
+    );
+    expect(result.companyName).toBe('Updated');
+  });
+
   // ─────────────────────────────────────────────
   // SOFT DELETE
   // ─────────────────────────────────────────────
@@ -140,6 +203,22 @@ describe('SuppliersService', () => {
     } as any);
     const result = await service.softDelete('supp-1', currentUser);
     expect(result.deletedAt).not.toBeNull();
+  });
+
+  // ─────────────────────────────────────────────
+  // G1: CROSS-COMPANY DUPLICATE ISOLATION
+  // ─────────────────────────────────────────────
+  it('should scope duplicate checks to company', async () => {
+    mockRepo.create.mockResolvedValue(baseSupplier as any);
+    await service.create(
+      { companyName: 'New', email: 'same@test.com' } as any,
+      currentUser,
+    );
+    // findActiveByEmail should be called with the correct companyId
+    expect(mockRepo.findActiveByEmail).toHaveBeenCalledWith(
+      'same@test.com',
+      'comp-1',
+    );
   });
 
   // ─────────────────────────────────────────────
