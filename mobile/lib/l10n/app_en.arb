@@ -989,5 +989,16 @@
   "invoiceCount": "Invoices",
   "onTimeRate": "On-time rate",
   "totalOutstanding": "Outstanding",
-  "overdueCount": "Overdue invoices"
+  "overdueCount": "Overdue invoices",
+  "orderPipeline": "Order Pipeline",
+  "totalOrders": "Total orders",
+  "totalOrderValue": "Order value",
+  "draft": "Draft",
+  "pending": "Pending",
+  "approved": "Approved",
+  "ordered": "Ordered",
+  "partiallyReceived": "Partial",
+  "received": "Received",
+  "recentOrders": "Recent orders",
+  "cancelled": "Cancelled"
 }

@@ -1291,3 +1291,135 @@ describe('SupplierAnalyticsService.getPerformance', () => {
     expect(result.financialRisk.overdue90plus).toBe('0');
   });
 });
+
+describe('SupplierAnalyticsService.getOrderPipeline', () => {
+  let service: SupplierAnalyticsService;
+  let mockPrisma: any;
+  let mockSuppliersRepo: any;
+  const companyId = 'company-1';
+  const supplierId = 'supplier-1';
+
+  beforeEach(() => {
+    mockPrisma = {
+      purchaseOrder: {
+        aggregate: jest.fn(),
+        groupBy: jest.fn(),
+        findMany: jest.fn(),
+      },
+    };
+    mockSuppliersRepo = {
+      findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+    };
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('should return 404 when supplier not found', async () => {
+    mockSuppliersRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.getOrderPipeline(supplierId, companyId),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should return pipeline with status counts', async () => {
+    mockPrisma.purchaseOrder.aggregate
+      .mockResolvedValueOnce({ _count: { id: 10 } }) // totalOrders
+      .mockResolvedValueOnce({ _sum: { grandTotal: '5000000' } }); // totalOrderValue
+    mockPrisma.purchaseOrder.groupBy.mockResolvedValue([
+      { status: 'DRAFT', _count: { id: 2 } },
+      { status: 'PENDING', _count: { id: 1 } },
+      { status: 'ORDERED', _count: { id: 4 } },
+      { status: 'RECEIVED', _count: { id: 2 } },
+      { status: 'CANCELLED', _count: { id: 1 } },
+    ]);
+    mockPrisma.purchaseOrder.findMany.mockResolvedValue([
+      { id: 'o1', orderNumber: 'PO-001', orderDate: new Date('2026-08-01'), expectedDate: new Date('2026-08-10'), status: 'ORDERED', grandTotal: '500000' },
+    ]);
+
+    const result = await service.getOrderPipeline(supplierId, companyId);
+
+    expect(result.summary.totalOrders).toBe(10);
+    expect(result.summary.totalOrderValue).toBe('5000000');
+    expect(result.summary.draftCount).toBe(2);
+    expect(result.summary.pendingCount).toBe(1);
+    expect(result.summary.orderedCount).toBe(4);
+    expect(result.summary.receivedCount).toBe(2);
+    expect(result.summary.cancelledCount).toBe(1);
+    expect(result.recentOrders).toHaveLength(1);
+    expect(result.recentOrders[0]!.orderNumber).toBe('PO-001');
+  });
+
+  it('should exclude CANCELLED from totalOrderValue', async () => {
+    // When no status filter: totalOrderValue excludes CANCELLED
+    mockPrisma.purchaseOrder.aggregate
+      .mockResolvedValueOnce({ _count: { id: 5 } })
+      .mockResolvedValueOnce({ _sum: { grandTotal: '3000000' } }); // non-CANCELLED only
+    mockPrisma.purchaseOrder.groupBy.mockResolvedValue([
+      { status: 'ORDERED', _count: { id: 3 } },
+      { status: 'CANCELLED', _count: { id: 2 } },
+    ]);
+    mockPrisma.purchaseOrder.findMany.mockResolvedValue([]);
+
+    const result = await service.getOrderPipeline(supplierId, companyId);
+
+    // totalOrderValue should be from the second aggregate call (non-CANCELLED)
+    expect(result.summary.totalOrderValue).toBe('3000000');
+    expect(result.summary.cancelledCount).toBe(2);
+  });
+
+  it('should apply status filter to both summary and recentOrders', async () => {
+    // When status filter is set: totalOrderValue uses the same filter
+    mockPrisma.purchaseOrder.aggregate
+      .mockResolvedValueOnce({ _count: { id: 4 } }) // totalOrders (filtered)
+      .mockResolvedValueOnce({ _sum: { grandTotal: '2000000' } }); // totalOrderValue (filtered)
+    // No groupBy when status is specified
+    mockPrisma.purchaseOrder.findMany.mockResolvedValue([
+      { id: 'o1', orderNumber: 'PO-001', orderDate: new Date('2026-08-01'), expectedDate: null, status: 'ORDERED', grandTotal: '500000' },
+      { id: 'o2', orderNumber: 'PO-002', orderDate: new Date('2026-07-01'), expectedDate: null, status: 'ORDERED', grandTotal: '600000' },
+    ]);
+
+    const result = await service.getOrderPipeline(supplierId, companyId, undefined, undefined, 'ORDERED');
+
+    expect(result.summary.totalOrders).toBe(4);
+    expect(result.summary.totalOrderValue).toBe('2000000');
+    // Status counts should be 0 (not computed when status filter is set)
+    expect(result.summary.draftCount).toBe(0);
+    expect(result.summary.orderedCount).toBe(0);
+    expect(result.recentOrders).toHaveLength(2);
+    // All recent orders should have the filtered status
+    expect(result.recentOrders.every(o => o.status === 'ORDERED')).toBe(true);
+  });
+
+  it('should return zero values for supplier with no orders', async () => {
+    mockPrisma.purchaseOrder.aggregate
+      .mockResolvedValueOnce({ _count: { id: 0 } })
+      .mockResolvedValueOnce({ _sum: { grandTotal: null } });
+    mockPrisma.purchaseOrder.groupBy.mockResolvedValue([]);
+    mockPrisma.purchaseOrder.findMany.mockResolvedValue([]);
+
+    const result = await service.getOrderPipeline(supplierId, companyId);
+
+    expect(result.summary.totalOrders).toBe(0);
+    expect(result.summary.totalOrderValue).toBe('0');
+    expect(result.recentOrders).toHaveLength(0);
+  });
+
+  it('should limit recent orders to 10', async () => {
+    mockPrisma.purchaseOrder.aggregate
+      .mockResolvedValueOnce({ _count: { id: 15 } })
+      .mockResolvedValueOnce({ _sum: { grandTotal: '7500000' } });
+    mockPrisma.purchaseOrder.groupBy.mockResolvedValue([]);
+    mockPrisma.purchaseOrder.findMany.mockResolvedValue(
+      Array.from({ length: 10 }, (_, i) => ({
+        id: `o${i}`, orderNumber: `PO-${i}`, orderDate: new Date(), expectedDate: null, status: 'ORDERED', grandTotal: '500000',
+      })),
+    );
+
+    const result = await service.getOrderPipeline(supplierId, companyId);
+
+    expect(result.recentOrders).toHaveLength(10);
+  });
+});

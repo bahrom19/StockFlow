@@ -989,5 +989,16 @@
   "invoiceCount": "Шоттар",
   "onTimeRate": "Уақытында",
   "totalOutstanding": "Қарыз",
-  "overdueCount": "Мерзімі өткен шоттар"
+  "overdueCount": "Мерзімі өткен шоттар",
+  "orderPipeline": "Тапсырыстар пайплайны",
+  "totalOrders": "Барлық тапсырыстар",
+  "totalOrderValue": "Тапсырыс сомасы",
+  "draft": "Бастапқы",
+  "pending": "Күтуде",
+  "approved": "Бекітілді",
+  "ordered": "Тапсырылды",
+  "partiallyReceived": "Ішінара",
+  "received": "Алынды",
+  "recentOrders": "Соңғы тапсырыстар",
+  "cancelled": "Бас тартылды"
 }

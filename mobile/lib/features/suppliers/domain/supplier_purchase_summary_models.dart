@@ -289,3 +289,51 @@ class SupplierPerformance with _$SupplierPerformance {
   factory SupplierPerformance.fromJson(Map<String, dynamic> json) =>
       _$SupplierPerformanceFromJson(json);
 }
+
+// ── G5-B8 Order Pipeline ────────────────────────────────────
+
+@freezed
+class OrderPipelineSummary with _$OrderPipelineSummary {
+  const factory OrderPipelineSummary({
+    required int totalOrders,
+    required String totalOrderValue,
+    required int draftCount,
+    required int pendingCount,
+    required int approvedCount,
+    required int orderedCount,
+    required int partiallyReceivedCount,
+    required int receivedCount,
+    required int cancelledCount,
+  }) = _OrderPipelineSummary;
+
+  factory OrderPipelineSummary.fromJson(Map<String, dynamic> json) =>
+      _$OrderPipelineSummaryFromJson(json);
+}
+
+@freezed
+class RecentOrder with _$RecentOrder {
+  const factory RecentOrder({
+    required String orderId,
+    required String orderNumber,
+    required String orderDate,
+    String? expectedDate,
+    required String status,
+    required String grandTotal,
+  }) = _RecentOrder;
+
+  factory RecentOrder.fromJson(Map<String, dynamic> json) =>
+      _$RecentOrderFromJson(json);
+}
+
+@freezed
+class SupplierOrderPipeline with _$SupplierOrderPipeline {
+  const factory SupplierOrderPipeline({
+    required String dateFrom,
+    required String dateTo,
+    required OrderPipelineSummary summary,
+    required List<RecentOrder> recentOrders,
+  }) = _SupplierOrderPipeline;
+
+  factory SupplierOrderPipeline.fromJson(Map<String, dynamic> json) =>
+      _$SupplierOrderPipelineFromJson(json);
+}

@@ -989,5 +989,16 @@
   "invoiceCount": "Счетов",
   "onTimeRate": "Вовремя",
   "totalOutstanding": "Задолженность",
-  "overdueCount": "Просроченных счетов"
+  "overdueCount": "Просроченных счетов",
+  "orderPipeline": "Пайплайн заказов",
+  "totalOrders": "Всего заказов",
+  "totalOrderValue": "Сумма заказов",
+  "draft": "Черновик",
+  "pending": "Ожидает",
+  "approved": "Утвержден",
+  "ordered": "Заказан",
+  "partiallyReceived": "Частично",
+  "received": "Получен",
+  "recentOrders": "Последние заказы",
+  "cancelled": "Отменён"
 }

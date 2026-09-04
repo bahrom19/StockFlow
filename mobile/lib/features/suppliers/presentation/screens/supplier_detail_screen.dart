@@ -51,6 +51,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   SupplierPerformance? _performance;
   bool _isLoadingPerformance = false;
   String? _performanceError;
+  SupplierOrderPipeline? _orderPipeline;
+  bool _isLoadingOrderPipeline = false;
+  String? _orderPipelineError;
   bool _isLoadingReliability = false;
   String? _reliabilityError;
   bool _isLoading = true;
@@ -149,6 +152,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     _loadPaymentAging();
     _loadReturnSummary();
     _loadPerformance();
+    _loadOrderPipeline();
   }
 
   Future<void> _loadProductPurchases() async {
@@ -265,6 +269,29 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     });
   }
 
+  Future<void> _loadOrderPipeline() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingOrderPipeline = true;
+      _orderPipelineError = null;
+    });
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getOrderPipeline(
+      widget.supplierId,
+      dateFrom: _purchaseDateFrom,
+      dateTo: _purchaseDateTo,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<SupplierOrderPipeline>) {
+        _orderPipeline = result.data;
+      } else if (result is SuppliersFailure<SupplierOrderPipeline>) {
+        _orderPipelineError = result.error.message;
+      }
+      _isLoadingOrderPipeline = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -347,6 +374,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
               // ── Purchase Analytics Section ───────────────────
               _buildPurchaseAnalyticsSection(theme),
+              const SizedBox(height: 24),
+
+              // ── Order Pipeline Section ──────────────────────
+              _buildOrderPipelineSection(theme),
               const SizedBox(height: 24),
 
               // ── Supplier Reliability Section ────────────────
@@ -937,6 +968,113 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
           )),
         ],
       ),
+    );
+  }
+
+  // ── Order Pipeline (G5-B8) ──────────────────────────────
+
+  Widget _buildOrderPipelineSection(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.reorder, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(context.l10n.orderPipeline, style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_isLoadingOrderPipeline)
+              const Center(child: CircularProgressIndicator())
+            else if (_orderPipelineError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    Text(_orderPipelineError!,
+                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+                      textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _loadOrderPipeline,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(context.l10n.retry),
+                    ),
+                  ],
+                ),
+              )
+            else if (_orderPipeline == null)
+              Text(context.l10n.noData, style: theme.textTheme.bodyMedium)
+            else ...[
+              // Summary
+              Text('${context.l10n.totalOrders}: ${_orderPipeline!.summary.totalOrders}',
+                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text('${context.l10n.totalOrderValue}: ₸${_orderPipeline!.summary.totalOrderValue}',
+                style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              // Status chips
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  if (_orderPipeline!.summary.draftCount > 0)
+                    _statusChip(context.l10n.draft, _orderPipeline!.summary.draftCount, Colors.grey, theme),
+                  if (_orderPipeline!.summary.pendingCount > 0)
+                    _statusChip(context.l10n.pending, _orderPipeline!.summary.pendingCount, Colors.orange, theme),
+                  if (_orderPipeline!.summary.approvedCount > 0)
+                    _statusChip(context.l10n.approved, _orderPipeline!.summary.approvedCount, Colors.blue, theme),
+                  if (_orderPipeline!.summary.orderedCount > 0)
+                    _statusChip(context.l10n.ordered, _orderPipeline!.summary.orderedCount, Colors.indigo, theme),
+                  if (_orderPipeline!.summary.partiallyReceivedCount > 0)
+                    _statusChip(context.l10n.partiallyReceived, _orderPipeline!.summary.partiallyReceivedCount, Colors.teal, theme),
+                  if (_orderPipeline!.summary.receivedCount > 0)
+                    _statusChip(context.l10n.received, _orderPipeline!.summary.receivedCount, Colors.green, theme),
+                  if (_orderPipeline!.summary.cancelledCount > 0)
+                    _statusChip(context.l10n.cancelled, _orderPipeline!.summary.cancelledCount, Colors.red, theme),
+                ],
+              ),
+              // Recent orders
+              if (_orderPipeline!.recentOrders.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Divider(color: theme.colorScheme.outlineVariant),
+                const SizedBox(height: 8),
+                Text(context.l10n.recentOrders, style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 4),
+                ..._orderPipeline!.recentOrders.map((order) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Expanded(flex: 3, child: Text(order.orderNumber, style: theme.textTheme.bodySmall)),
+                      Expanded(flex: 2, child: Text(order.orderDate.substring(0, 10), style: theme.textTheme.bodySmall)),
+                      Expanded(flex: 2, child: Text(order.expectedDate?.substring(0, 10) ?? '-', style: theme.textTheme.bodySmall)),
+                      Expanded(flex: 2, child: Text(order.status, style: theme.textTheme.bodySmall?.copyWith(
+                        color: order.status == 'CANCELLED' ? theme.colorScheme.error : null))),
+                      Expanded(flex: 2, child: Text('₸${order.grandTotal}', style: theme.textTheme.bodySmall, textAlign: TextAlign.end)),
+                    ],
+                  ),
+                )),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusChip(String label, int count, Color color, ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text('$label ($count)', style: theme.textTheme.bodySmall?.copyWith(color: color)),
     );
   }
 

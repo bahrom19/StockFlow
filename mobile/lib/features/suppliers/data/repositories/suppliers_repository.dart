@@ -412,6 +412,26 @@ class SuppliersRepository {
     }
   }
 
+  // ── G5-B8 Order Pipeline ─────────────────────────────
+
+  Future<SuppliersResult<SupplierOrderPipeline>> getOrderPipeline(
+      String supplierId, {String? dateFrom, String? dateTo, String? status}) async {
+    try {
+      final params = <String, dynamic>{};
+      if (dateFrom != null) params['dateFrom'] = dateFrom;
+      if (dateTo != null) params['dateTo'] = dateTo;
+      if (status != null) params['status'] = status;
+      final response = await _api.get<Map<String, dynamic>>(
+        '/suppliers/$supplierId/analytics/order-pipeline',
+        queryParameters: params,
+      );
+      return SuppliersSuccess(
+          SupplierOrderPipeline.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
   // ── Supplier Products ────────────────────────────────
 
   Future<SuppliersResult<SupplierProductListResponse>> getSupplierProducts(

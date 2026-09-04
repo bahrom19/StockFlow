@@ -10,6 +10,7 @@ import { SupplierPriceHistoryEntity, PricePointEntity } from '../entities/suppli
 import { SupplierPaymentAgingEntity, PaymentAgingBucketsEntity, OverdueInvoiceEntity } from '../entities/supplier-payment-aging.entity';
 import { SupplierReturnSummaryEntity, TopReturnedProductEntity } from '../entities/supplier-return-summary.entity';
 import { SupplierPerformanceEntity } from '../entities/supplier-performance.entity';
+import { SupplierOrderPipelineEntity, OrderPipelineSummaryEntity, RecentOrderEntity } from '../entities/supplier-order-pipeline.entity';
 
 const INVOICE_STATUSES = [
   PurchaseInvoiceStatus.APPROVED,
@@ -970,6 +971,141 @@ export class SupplierAnalyticsService {
         overdueCount: paymentAging.overdueCount,
         overdue90plus: paymentAging.aging.overdue90plus,
       },
+    };
+  }
+
+  // ── Supplier Order Pipeline ──────────────────────────────
+
+  async getOrderPipeline(
+    supplierId: string,
+    companyId: string,
+    dateFrom?: string,
+    dateTo?: string,
+    status?: string,
+  ): Promise<SupplierOrderPipelineEntity> {
+    // 1. Verify supplier
+    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    if (!supplier) {
+      throw new NotFoundException(`Supplier ${supplierId} not found`);
+    }
+
+    // 2. Date range — default to last 12 months
+    const now = new Date();
+    const effectiveDateTo = dateTo ? new Date(dateTo) : now;
+    const effectiveDateFrom = dateFrom
+      ? new Date(dateFrom)
+      : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+    // 3. Base where clause
+    const baseWhere: any = {
+      supplierId,
+      companyId,
+      deletedAt: null,
+      orderDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
+    };
+    if (status) {
+      baseWhere.status = status;
+    }
+
+    // 4. Total orders count
+    const orderAgg = await this.prismaService.purchaseOrder.aggregate({
+      where: baseWhere,
+      _count: { id: true },
+    });
+    const totalOrders = orderAgg._count.id;
+
+    // 5. Total order value — only non-CANCELLED
+    const valueWhere = { ...baseWhere };
+    if (!status) {
+      // When no status filter: exclude CANCELLED from value
+      valueWhere.status = { not: 'CANCELLED' as const };
+    } else if (status === 'CANCELLED') {
+      // If filtering for CANCELLED specifically: value is 0
+      // (cancelled orders have no financial value)
+    }
+    const valueAgg = status !== 'CANCELLED'
+      ? await this.prismaService.purchaseOrder.aggregate({
+          where: valueWhere,
+          _sum: { grandTotal: true },
+        })
+      : { _sum: { grandTotal: new Decimal(0) } };
+    const totalOrderValue = new Decimal(valueAgg._sum.grandTotal ?? 0);
+
+    // 6. Status counts — only when no status filter
+    let draftCount = 0;
+    let pendingCount = 0;
+    let approvedCount = 0;
+    let orderedCount = 0;
+    let partiallyReceivedCount = 0;
+    let receivedCount = 0;
+    let cancelledCount = 0;
+
+    if (!status) {
+      const statusRows = await this.prismaService.purchaseOrder.groupBy({
+        by: ['status'],
+        where: {
+          supplierId,
+          companyId,
+          deletedAt: null,
+          orderDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
+        },
+        _count: { id: true },
+      });
+      for (const row of statusRows) {
+        switch (row.status) {
+          case 'DRAFT': draftCount = row._count.id; break;
+          case 'PENDING': pendingCount = row._count.id; break;
+          case 'APPROVED': approvedCount = row._count.id; break;
+          case 'ORDERED': orderedCount = row._count.id; break;
+          case 'PARTIALLY_RECEIVED': partiallyReceivedCount = row._count.id; break;
+          case 'RECEIVED': receivedCount = row._count.id; break;
+          case 'CANCELLED': cancelledCount = row._count.id; break;
+        }
+      }
+    }
+
+    // 7. Recent orders — max 10, orderDate DESC, orderId ASC
+    const recentOrders = await this.prismaService.purchaseOrder.findMany({
+      where: baseWhere,
+      select: {
+        id: true,
+        orderNumber: true,
+        orderDate: true,
+        expectedDate: true,
+        status: true,
+        grandTotal: true,
+      },
+      orderBy: [
+        { orderDate: 'desc' },
+        { id: 'asc' },
+      ],
+      take: 10,
+    });
+
+    const recentOrderEntities: RecentOrderEntity[] = recentOrders.map((row) => ({
+      orderId: row.id,
+      orderNumber: row.orderNumber,
+      orderDate: row.orderDate.toISOString(),
+      expectedDate: row.expectedDate?.toISOString() ?? null,
+      status: row.status,
+      grandTotal: new Decimal(row.grandTotal?.toString() ?? '0').toString(),
+    }));
+
+    return {
+      dateFrom: effectiveDateFrom.toISOString(),
+      dateTo: effectiveDateTo.toISOString(),
+      summary: {
+        totalOrders,
+        totalOrderValue: totalOrderValue.toString(),
+        draftCount,
+        pendingCount,
+        approvedCount,
+        orderedCount,
+        partiallyReceivedCount,
+        receivedCount,
+        cancelledCount,
+      },
+      recentOrders: recentOrderEntities,
     };
   }
 

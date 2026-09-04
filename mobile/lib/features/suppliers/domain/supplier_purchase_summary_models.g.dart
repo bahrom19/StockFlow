@@ -448,3 +448,72 @@ Map<String, dynamic> _$$SupplierPerformanceImplToJson(
       'returns': instance.returns,
       'financialRisk': instance.financialRisk,
     };
+
+_$OrderPipelineSummaryImpl _$$OrderPipelineSummaryImplFromJson(
+        Map<String, dynamic> json) =>
+    _$OrderPipelineSummaryImpl(
+      totalOrders: (json['totalOrders'] as num).toInt(),
+      totalOrderValue: json['totalOrderValue'] as String,
+      draftCount: (json['draftCount'] as num).toInt(),
+      pendingCount: (json['pendingCount'] as num).toInt(),
+      approvedCount: (json['approvedCount'] as num).toInt(),
+      orderedCount: (json['orderedCount'] as num).toInt(),
+      partiallyReceivedCount: (json['partiallyReceivedCount'] as num).toInt(),
+      receivedCount: (json['receivedCount'] as num).toInt(),
+      cancelledCount: (json['cancelledCount'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$OrderPipelineSummaryImplToJson(
+        _$OrderPipelineSummaryImpl instance) =>
+    <String, dynamic>{
+      'totalOrders': instance.totalOrders,
+      'totalOrderValue': instance.totalOrderValue,
+      'draftCount': instance.draftCount,
+      'pendingCount': instance.pendingCount,
+      'approvedCount': instance.approvedCount,
+      'orderedCount': instance.orderedCount,
+      'partiallyReceivedCount': instance.partiallyReceivedCount,
+      'receivedCount': instance.receivedCount,
+      'cancelledCount': instance.cancelledCount,
+    };
+
+_$RecentOrderImpl _$$RecentOrderImplFromJson(Map<String, dynamic> json) =>
+    _$RecentOrderImpl(
+      orderId: json['orderId'] as String,
+      orderNumber: json['orderNumber'] as String,
+      orderDate: json['orderDate'] as String,
+      expectedDate: json['expectedDate'] as String?,
+      status: json['status'] as String,
+      grandTotal: json['grandTotal'] as String,
+    );
+
+Map<String, dynamic> _$$RecentOrderImplToJson(_$RecentOrderImpl instance) =>
+    <String, dynamic>{
+      'orderId': instance.orderId,
+      'orderNumber': instance.orderNumber,
+      'orderDate': instance.orderDate,
+      'expectedDate': instance.expectedDate,
+      'status': instance.status,
+      'grandTotal': instance.grandTotal,
+    };
+
+_$SupplierOrderPipelineImpl _$$SupplierOrderPipelineImplFromJson(
+        Map<String, dynamic> json) =>
+    _$SupplierOrderPipelineImpl(
+      dateFrom: json['dateFrom'] as String,
+      dateTo: json['dateTo'] as String,
+      summary: OrderPipelineSummary.fromJson(
+          json['summary'] as Map<String, dynamic>),
+      recentOrders: (json['recentOrders'] as List<dynamic>)
+          .map((e) => RecentOrder.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+
+Map<String, dynamic> _$$SupplierOrderPipelineImplToJson(
+        _$SupplierOrderPipelineImpl instance) =>
+    <String, dynamic>{
+      'dateFrom': instance.dateFrom,
+      'dateTo': instance.dateTo,
+      'summary': instance.summary,
+      'recentOrders': instance.recentOrders,
+    };

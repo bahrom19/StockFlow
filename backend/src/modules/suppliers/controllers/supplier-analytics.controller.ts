@@ -20,6 +20,7 @@ import { SupplierPriceHistoryEntity } from '../entities/supplier-price-history.e
 import { SupplierPaymentAgingEntity } from '../entities/supplier-payment-aging.entity';
 import { SupplierReturnSummaryEntity } from '../entities/supplier-return-summary.entity';
 import { SupplierPerformanceEntity } from '../entities/supplier-performance.entity';
+import { SupplierOrderPipelineEntity } from '../entities/supplier-order-pipeline.entity';
 
 @ApiTags('suppliers / analytics')
 @ApiBearerAuth()
@@ -184,6 +185,30 @@ export class SupplierAnalyticsController {
       user!.companyId,
       dateFrom,
       dateTo,
+    );
+  }
+
+  @Get('analytics/order-pipeline')
+  @RequirePermission('suppliers:read')
+  @ApiOperation({ summary: 'Get supplier order pipeline' })
+  @ApiParam({ name: 'supplierId', type: String })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
+  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
+  @ApiQuery({ name: 'status', required: false, type: String, description: 'Filter by PurchaseOrderStatus' })
+  @ApiResponse({ status: 200, type: SupplierOrderPipelineEntity })
+  async getOrderPipeline(
+    @Param('supplierId') supplierId: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('status') status?: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.analyticsService.getOrderPipeline(
+      supplierId,
+      user!.companyId,
+      dateFrom,
+      dateTo,
+      status,
     );
   }
 }

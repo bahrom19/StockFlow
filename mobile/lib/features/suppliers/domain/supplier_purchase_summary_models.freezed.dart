@@ -5197,3 +5197,839 @@ abstract class _SupplierPerformance implements SupplierPerformance {
   _$$SupplierPerformanceImplCopyWith<_$SupplierPerformanceImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
+
+OrderPipelineSummary _$OrderPipelineSummaryFromJson(Map<String, dynamic> json) {
+  return _OrderPipelineSummary.fromJson(json);
+}
+
+/// @nodoc
+mixin _$OrderPipelineSummary {
+  int get totalOrders => throw _privateConstructorUsedError;
+  String get totalOrderValue => throw _privateConstructorUsedError;
+  int get draftCount => throw _privateConstructorUsedError;
+  int get pendingCount => throw _privateConstructorUsedError;
+  int get approvedCount => throw _privateConstructorUsedError;
+  int get orderedCount => throw _privateConstructorUsedError;
+  int get partiallyReceivedCount => throw _privateConstructorUsedError;
+  int get receivedCount => throw _privateConstructorUsedError;
+  int get cancelledCount => throw _privateConstructorUsedError;
+
+  /// Serializes this OrderPipelineSummary to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of OrderPipelineSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $OrderPipelineSummaryCopyWith<OrderPipelineSummary> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $OrderPipelineSummaryCopyWith<$Res> {
+  factory $OrderPipelineSummaryCopyWith(OrderPipelineSummary value,
+          $Res Function(OrderPipelineSummary) then) =
+      _$OrderPipelineSummaryCopyWithImpl<$Res, OrderPipelineSummary>;
+  @useResult
+  $Res call(
+      {int totalOrders,
+      String totalOrderValue,
+      int draftCount,
+      int pendingCount,
+      int approvedCount,
+      int orderedCount,
+      int partiallyReceivedCount,
+      int receivedCount,
+      int cancelledCount});
+}
+
+/// @nodoc
+class _$OrderPipelineSummaryCopyWithImpl<$Res,
+        $Val extends OrderPipelineSummary>
+    implements $OrderPipelineSummaryCopyWith<$Res> {
+  _$OrderPipelineSummaryCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of OrderPipelineSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalOrders = null,
+    Object? totalOrderValue = null,
+    Object? draftCount = null,
+    Object? pendingCount = null,
+    Object? approvedCount = null,
+    Object? orderedCount = null,
+    Object? partiallyReceivedCount = null,
+    Object? receivedCount = null,
+    Object? cancelledCount = null,
+  }) {
+    return _then(_value.copyWith(
+      totalOrders: null == totalOrders
+          ? _value.totalOrders
+          : totalOrders // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalOrderValue: null == totalOrderValue
+          ? _value.totalOrderValue
+          : totalOrderValue // ignore: cast_nullable_to_non_nullable
+              as String,
+      draftCount: null == draftCount
+          ? _value.draftCount
+          : draftCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      pendingCount: null == pendingCount
+          ? _value.pendingCount
+          : pendingCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      approvedCount: null == approvedCount
+          ? _value.approvedCount
+          : approvedCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      orderedCount: null == orderedCount
+          ? _value.orderedCount
+          : orderedCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      partiallyReceivedCount: null == partiallyReceivedCount
+          ? _value.partiallyReceivedCount
+          : partiallyReceivedCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      receivedCount: null == receivedCount
+          ? _value.receivedCount
+          : receivedCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      cancelledCount: null == cancelledCount
+          ? _value.cancelledCount
+          : cancelledCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$OrderPipelineSummaryImplCopyWith<$Res>
+    implements $OrderPipelineSummaryCopyWith<$Res> {
+  factory _$$OrderPipelineSummaryImplCopyWith(_$OrderPipelineSummaryImpl value,
+          $Res Function(_$OrderPipelineSummaryImpl) then) =
+      __$$OrderPipelineSummaryImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {int totalOrders,
+      String totalOrderValue,
+      int draftCount,
+      int pendingCount,
+      int approvedCount,
+      int orderedCount,
+      int partiallyReceivedCount,
+      int receivedCount,
+      int cancelledCount});
+}
+
+/// @nodoc
+class __$$OrderPipelineSummaryImplCopyWithImpl<$Res>
+    extends _$OrderPipelineSummaryCopyWithImpl<$Res, _$OrderPipelineSummaryImpl>
+    implements _$$OrderPipelineSummaryImplCopyWith<$Res> {
+  __$$OrderPipelineSummaryImplCopyWithImpl(_$OrderPipelineSummaryImpl _value,
+      $Res Function(_$OrderPipelineSummaryImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OrderPipelineSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalOrders = null,
+    Object? totalOrderValue = null,
+    Object? draftCount = null,
+    Object? pendingCount = null,
+    Object? approvedCount = null,
+    Object? orderedCount = null,
+    Object? partiallyReceivedCount = null,
+    Object? receivedCount = null,
+    Object? cancelledCount = null,
+  }) {
+    return _then(_$OrderPipelineSummaryImpl(
+      totalOrders: null == totalOrders
+          ? _value.totalOrders
+          : totalOrders // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalOrderValue: null == totalOrderValue
+          ? _value.totalOrderValue
+          : totalOrderValue // ignore: cast_nullable_to_non_nullable
+              as String,
+      draftCount: null == draftCount
+          ? _value.draftCount
+          : draftCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      pendingCount: null == pendingCount
+          ? _value.pendingCount
+          : pendingCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      approvedCount: null == approvedCount
+          ? _value.approvedCount
+          : approvedCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      orderedCount: null == orderedCount
+          ? _value.orderedCount
+          : orderedCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      partiallyReceivedCount: null == partiallyReceivedCount
+          ? _value.partiallyReceivedCount
+          : partiallyReceivedCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      receivedCount: null == receivedCount
+          ? _value.receivedCount
+          : receivedCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      cancelledCount: null == cancelledCount
+          ? _value.cancelledCount
+          : cancelledCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$OrderPipelineSummaryImpl implements _OrderPipelineSummary {
+  const _$OrderPipelineSummaryImpl(
+      {required this.totalOrders,
+      required this.totalOrderValue,
+      required this.draftCount,
+      required this.pendingCount,
+      required this.approvedCount,
+      required this.orderedCount,
+      required this.partiallyReceivedCount,
+      required this.receivedCount,
+      required this.cancelledCount});
+
+  factory _$OrderPipelineSummaryImpl.fromJson(Map<String, dynamic> json) =>
+      _$$OrderPipelineSummaryImplFromJson(json);
+
+  @override
+  final int totalOrders;
+  @override
+  final String totalOrderValue;
+  @override
+  final int draftCount;
+  @override
+  final int pendingCount;
+  @override
+  final int approvedCount;
+  @override
+  final int orderedCount;
+  @override
+  final int partiallyReceivedCount;
+  @override
+  final int receivedCount;
+  @override
+  final int cancelledCount;
+
+  @override
+  String toString() {
+    return 'OrderPipelineSummary(totalOrders: $totalOrders, totalOrderValue: $totalOrderValue, draftCount: $draftCount, pendingCount: $pendingCount, approvedCount: $approvedCount, orderedCount: $orderedCount, partiallyReceivedCount: $partiallyReceivedCount, receivedCount: $receivedCount, cancelledCount: $cancelledCount)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$OrderPipelineSummaryImpl &&
+            (identical(other.totalOrders, totalOrders) ||
+                other.totalOrders == totalOrders) &&
+            (identical(other.totalOrderValue, totalOrderValue) ||
+                other.totalOrderValue == totalOrderValue) &&
+            (identical(other.draftCount, draftCount) ||
+                other.draftCount == draftCount) &&
+            (identical(other.pendingCount, pendingCount) ||
+                other.pendingCount == pendingCount) &&
+            (identical(other.approvedCount, approvedCount) ||
+                other.approvedCount == approvedCount) &&
+            (identical(other.orderedCount, orderedCount) ||
+                other.orderedCount == orderedCount) &&
+            (identical(other.partiallyReceivedCount, partiallyReceivedCount) ||
+                other.partiallyReceivedCount == partiallyReceivedCount) &&
+            (identical(other.receivedCount, receivedCount) ||
+                other.receivedCount == receivedCount) &&
+            (identical(other.cancelledCount, cancelledCount) ||
+                other.cancelledCount == cancelledCount));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType,
+      totalOrders,
+      totalOrderValue,
+      draftCount,
+      pendingCount,
+      approvedCount,
+      orderedCount,
+      partiallyReceivedCount,
+      receivedCount,
+      cancelledCount);
+
+  /// Create a copy of OrderPipelineSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$OrderPipelineSummaryImplCopyWith<_$OrderPipelineSummaryImpl>
+      get copyWith =>
+          __$$OrderPipelineSummaryImplCopyWithImpl<_$OrderPipelineSummaryImpl>(
+              this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$OrderPipelineSummaryImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _OrderPipelineSummary implements OrderPipelineSummary {
+  const factory _OrderPipelineSummary(
+      {required final int totalOrders,
+      required final String totalOrderValue,
+      required final int draftCount,
+      required final int pendingCount,
+      required final int approvedCount,
+      required final int orderedCount,
+      required final int partiallyReceivedCount,
+      required final int receivedCount,
+      required final int cancelledCount}) = _$OrderPipelineSummaryImpl;
+
+  factory _OrderPipelineSummary.fromJson(Map<String, dynamic> json) =
+      _$OrderPipelineSummaryImpl.fromJson;
+
+  @override
+  int get totalOrders;
+  @override
+  String get totalOrderValue;
+  @override
+  int get draftCount;
+  @override
+  int get pendingCount;
+  @override
+  int get approvedCount;
+  @override
+  int get orderedCount;
+  @override
+  int get partiallyReceivedCount;
+  @override
+  int get receivedCount;
+  @override
+  int get cancelledCount;
+
+  /// Create a copy of OrderPipelineSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$OrderPipelineSummaryImplCopyWith<_$OrderPipelineSummaryImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+RecentOrder _$RecentOrderFromJson(Map<String, dynamic> json) {
+  return _RecentOrder.fromJson(json);
+}
+
+/// @nodoc
+mixin _$RecentOrder {
+  String get orderId => throw _privateConstructorUsedError;
+  String get orderNumber => throw _privateConstructorUsedError;
+  String get orderDate => throw _privateConstructorUsedError;
+  String? get expectedDate => throw _privateConstructorUsedError;
+  String get status => throw _privateConstructorUsedError;
+  String get grandTotal => throw _privateConstructorUsedError;
+
+  /// Serializes this RecentOrder to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of RecentOrder
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $RecentOrderCopyWith<RecentOrder> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $RecentOrderCopyWith<$Res> {
+  factory $RecentOrderCopyWith(
+          RecentOrder value, $Res Function(RecentOrder) then) =
+      _$RecentOrderCopyWithImpl<$Res, RecentOrder>;
+  @useResult
+  $Res call(
+      {String orderId,
+      String orderNumber,
+      String orderDate,
+      String? expectedDate,
+      String status,
+      String grandTotal});
+}
+
+/// @nodoc
+class _$RecentOrderCopyWithImpl<$Res, $Val extends RecentOrder>
+    implements $RecentOrderCopyWith<$Res> {
+  _$RecentOrderCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of RecentOrder
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? orderId = null,
+    Object? orderNumber = null,
+    Object? orderDate = null,
+    Object? expectedDate = freezed,
+    Object? status = null,
+    Object? grandTotal = null,
+  }) {
+    return _then(_value.copyWith(
+      orderId: null == orderId
+          ? _value.orderId
+          : orderId // ignore: cast_nullable_to_non_nullable
+              as String,
+      orderNumber: null == orderNumber
+          ? _value.orderNumber
+          : orderNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      orderDate: null == orderDate
+          ? _value.orderDate
+          : orderDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      expectedDate: freezed == expectedDate
+          ? _value.expectedDate
+          : expectedDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$RecentOrderImplCopyWith<$Res>
+    implements $RecentOrderCopyWith<$Res> {
+  factory _$$RecentOrderImplCopyWith(
+          _$RecentOrderImpl value, $Res Function(_$RecentOrderImpl) then) =
+      __$$RecentOrderImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String orderId,
+      String orderNumber,
+      String orderDate,
+      String? expectedDate,
+      String status,
+      String grandTotal});
+}
+
+/// @nodoc
+class __$$RecentOrderImplCopyWithImpl<$Res>
+    extends _$RecentOrderCopyWithImpl<$Res, _$RecentOrderImpl>
+    implements _$$RecentOrderImplCopyWith<$Res> {
+  __$$RecentOrderImplCopyWithImpl(
+      _$RecentOrderImpl _value, $Res Function(_$RecentOrderImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of RecentOrder
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? orderId = null,
+    Object? orderNumber = null,
+    Object? orderDate = null,
+    Object? expectedDate = freezed,
+    Object? status = null,
+    Object? grandTotal = null,
+  }) {
+    return _then(_$RecentOrderImpl(
+      orderId: null == orderId
+          ? _value.orderId
+          : orderId // ignore: cast_nullable_to_non_nullable
+              as String,
+      orderNumber: null == orderNumber
+          ? _value.orderNumber
+          : orderNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      orderDate: null == orderDate
+          ? _value.orderDate
+          : orderDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      expectedDate: freezed == expectedDate
+          ? _value.expectedDate
+          : expectedDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$RecentOrderImpl implements _RecentOrder {
+  const _$RecentOrderImpl(
+      {required this.orderId,
+      required this.orderNumber,
+      required this.orderDate,
+      this.expectedDate,
+      required this.status,
+      required this.grandTotal});
+
+  factory _$RecentOrderImpl.fromJson(Map<String, dynamic> json) =>
+      _$$RecentOrderImplFromJson(json);
+
+  @override
+  final String orderId;
+  @override
+  final String orderNumber;
+  @override
+  final String orderDate;
+  @override
+  final String? expectedDate;
+  @override
+  final String status;
+  @override
+  final String grandTotal;
+
+  @override
+  String toString() {
+    return 'RecentOrder(orderId: $orderId, orderNumber: $orderNumber, orderDate: $orderDate, expectedDate: $expectedDate, status: $status, grandTotal: $grandTotal)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$RecentOrderImpl &&
+            (identical(other.orderId, orderId) || other.orderId == orderId) &&
+            (identical(other.orderNumber, orderNumber) ||
+                other.orderNumber == orderNumber) &&
+            (identical(other.orderDate, orderDate) ||
+                other.orderDate == orderDate) &&
+            (identical(other.expectedDate, expectedDate) ||
+                other.expectedDate == expectedDate) &&
+            (identical(other.status, status) || other.status == status) &&
+            (identical(other.grandTotal, grandTotal) ||
+                other.grandTotal == grandTotal));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, orderId, orderNumber, orderDate,
+      expectedDate, status, grandTotal);
+
+  /// Create a copy of RecentOrder
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$RecentOrderImplCopyWith<_$RecentOrderImpl> get copyWith =>
+      __$$RecentOrderImplCopyWithImpl<_$RecentOrderImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$RecentOrderImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _RecentOrder implements RecentOrder {
+  const factory _RecentOrder(
+      {required final String orderId,
+      required final String orderNumber,
+      required final String orderDate,
+      final String? expectedDate,
+      required final String status,
+      required final String grandTotal}) = _$RecentOrderImpl;
+
+  factory _RecentOrder.fromJson(Map<String, dynamic> json) =
+      _$RecentOrderImpl.fromJson;
+
+  @override
+  String get orderId;
+  @override
+  String get orderNumber;
+  @override
+  String get orderDate;
+  @override
+  String? get expectedDate;
+  @override
+  String get status;
+  @override
+  String get grandTotal;
+
+  /// Create a copy of RecentOrder
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$RecentOrderImplCopyWith<_$RecentOrderImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+SupplierOrderPipeline _$SupplierOrderPipelineFromJson(
+    Map<String, dynamic> json) {
+  return _SupplierOrderPipeline.fromJson(json);
+}
+
+/// @nodoc
+mixin _$SupplierOrderPipeline {
+  String get dateFrom => throw _privateConstructorUsedError;
+  String get dateTo => throw _privateConstructorUsedError;
+  OrderPipelineSummary get summary => throw _privateConstructorUsedError;
+  List<RecentOrder> get recentOrders => throw _privateConstructorUsedError;
+
+  /// Serializes this SupplierOrderPipeline to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of SupplierOrderPipeline
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $SupplierOrderPipelineCopyWith<SupplierOrderPipeline> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $SupplierOrderPipelineCopyWith<$Res> {
+  factory $SupplierOrderPipelineCopyWith(SupplierOrderPipeline value,
+          $Res Function(SupplierOrderPipeline) then) =
+      _$SupplierOrderPipelineCopyWithImpl<$Res, SupplierOrderPipeline>;
+  @useResult
+  $Res call(
+      {String dateFrom,
+      String dateTo,
+      OrderPipelineSummary summary,
+      List<RecentOrder> recentOrders});
+
+  $OrderPipelineSummaryCopyWith<$Res> get summary;
+}
+
+/// @nodoc
+class _$SupplierOrderPipelineCopyWithImpl<$Res,
+        $Val extends SupplierOrderPipeline>
+    implements $SupplierOrderPipelineCopyWith<$Res> {
+  _$SupplierOrderPipelineCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of SupplierOrderPipeline
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? summary = null,
+    Object? recentOrders = null,
+  }) {
+    return _then(_value.copyWith(
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      summary: null == summary
+          ? _value.summary
+          : summary // ignore: cast_nullable_to_non_nullable
+              as OrderPipelineSummary,
+      recentOrders: null == recentOrders
+          ? _value.recentOrders
+          : recentOrders // ignore: cast_nullable_to_non_nullable
+              as List<RecentOrder>,
+    ) as $Val);
+  }
+
+  /// Create a copy of SupplierOrderPipeline
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $OrderPipelineSummaryCopyWith<$Res> get summary {
+    return $OrderPipelineSummaryCopyWith<$Res>(_value.summary, (value) {
+      return _then(_value.copyWith(summary: value) as $Val);
+    });
+  }
+}
+
+/// @nodoc
+abstract class _$$SupplierOrderPipelineImplCopyWith<$Res>
+    implements $SupplierOrderPipelineCopyWith<$Res> {
+  factory _$$SupplierOrderPipelineImplCopyWith(
+          _$SupplierOrderPipelineImpl value,
+          $Res Function(_$SupplierOrderPipelineImpl) then) =
+      __$$SupplierOrderPipelineImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String dateFrom,
+      String dateTo,
+      OrderPipelineSummary summary,
+      List<RecentOrder> recentOrders});
+
+  @override
+  $OrderPipelineSummaryCopyWith<$Res> get summary;
+}
+
+/// @nodoc
+class __$$SupplierOrderPipelineImplCopyWithImpl<$Res>
+    extends _$SupplierOrderPipelineCopyWithImpl<$Res,
+        _$SupplierOrderPipelineImpl>
+    implements _$$SupplierOrderPipelineImplCopyWith<$Res> {
+  __$$SupplierOrderPipelineImplCopyWithImpl(_$SupplierOrderPipelineImpl _value,
+      $Res Function(_$SupplierOrderPipelineImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of SupplierOrderPipeline
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? summary = null,
+    Object? recentOrders = null,
+  }) {
+    return _then(_$SupplierOrderPipelineImpl(
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      summary: null == summary
+          ? _value.summary
+          : summary // ignore: cast_nullable_to_non_nullable
+              as OrderPipelineSummary,
+      recentOrders: null == recentOrders
+          ? _value._recentOrders
+          : recentOrders // ignore: cast_nullable_to_non_nullable
+              as List<RecentOrder>,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$SupplierOrderPipelineImpl implements _SupplierOrderPipeline {
+  const _$SupplierOrderPipelineImpl(
+      {required this.dateFrom,
+      required this.dateTo,
+      required this.summary,
+      required final List<RecentOrder> recentOrders})
+      : _recentOrders = recentOrders;
+
+  factory _$SupplierOrderPipelineImpl.fromJson(Map<String, dynamic> json) =>
+      _$$SupplierOrderPipelineImplFromJson(json);
+
+  @override
+  final String dateFrom;
+  @override
+  final String dateTo;
+  @override
+  final OrderPipelineSummary summary;
+  final List<RecentOrder> _recentOrders;
+  @override
+  List<RecentOrder> get recentOrders {
+    if (_recentOrders is EqualUnmodifiableListView) return _recentOrders;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_recentOrders);
+  }
+
+  @override
+  String toString() {
+    return 'SupplierOrderPipeline(dateFrom: $dateFrom, dateTo: $dateTo, summary: $summary, recentOrders: $recentOrders)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$SupplierOrderPipelineImpl &&
+            (identical(other.dateFrom, dateFrom) ||
+                other.dateFrom == dateFrom) &&
+            (identical(other.dateTo, dateTo) || other.dateTo == dateTo) &&
+            (identical(other.summary, summary) || other.summary == summary) &&
+            const DeepCollectionEquality()
+                .equals(other._recentOrders, _recentOrders));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, dateFrom, dateTo, summary,
+      const DeepCollectionEquality().hash(_recentOrders));
+
+  /// Create a copy of SupplierOrderPipeline
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$SupplierOrderPipelineImplCopyWith<_$SupplierOrderPipelineImpl>
+      get copyWith => __$$SupplierOrderPipelineImplCopyWithImpl<
+          _$SupplierOrderPipelineImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$SupplierOrderPipelineImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _SupplierOrderPipeline implements SupplierOrderPipeline {
+  const factory _SupplierOrderPipeline(
+          {required final String dateFrom,
+          required final String dateTo,
+          required final OrderPipelineSummary summary,
+          required final List<RecentOrder> recentOrders}) =
+      _$SupplierOrderPipelineImpl;
+
+  factory _SupplierOrderPipeline.fromJson(Map<String, dynamic> json) =
+      _$SupplierOrderPipelineImpl.fromJson;
+
+  @override
+  String get dateFrom;
+  @override
+  String get dateTo;
+  @override
+  OrderPipelineSummary get summary;
+  @override
+  List<RecentOrder> get recentOrders;
+
+  /// Create a copy of SupplierOrderPipeline
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$SupplierOrderPipelineImplCopyWith<_$SupplierOrderPipelineImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
