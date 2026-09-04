@@ -118,3 +118,67 @@ Map<String, dynamic> _$$ProductPurchaseListResponseImplToJson(
       'page': instance.page,
       'limit': instance.limit,
     };
+
+_$RecentDeliveryImpl _$$RecentDeliveryImplFromJson(Map<String, dynamic> json) =>
+    _$RecentDeliveryImpl(
+      orderNumber: json['orderNumber'] as String,
+      orderDate: json['orderDate'] as String,
+      expectedDate: json['expectedDate'] as String?,
+      receiptDate: json['receiptDate'] as String?,
+      leadTimeDays: (json['leadTimeDays'] as num?)?.toInt(),
+      onTime: json['onTime'] as bool?,
+      status: json['status'] as String,
+      grandTotal: json['grandTotal'] as String,
+    );
+
+Map<String, dynamic> _$$RecentDeliveryImplToJson(
+        _$RecentDeliveryImpl instance) =>
+    <String, dynamic>{
+      'orderNumber': instance.orderNumber,
+      'orderDate': instance.orderDate,
+      'expectedDate': instance.expectedDate,
+      'receiptDate': instance.receiptDate,
+      'leadTimeDays': instance.leadTimeDays,
+      'onTime': instance.onTime,
+      'status': instance.status,
+      'grandTotal': instance.grandTotal,
+    };
+
+_$SupplierReliabilityImpl _$$SupplierReliabilityImplFromJson(
+        Map<String, dynamic> json) =>
+    _$SupplierReliabilityImpl(
+      dateFrom: json['dateFrom'] as String,
+      dateTo: json['dateTo'] as String,
+      totalOrders: (json['totalOrders'] as num).toInt(),
+      totalReceipts: (json['totalReceipts'] as num).toInt(),
+      onTimeDeliveryRate: (json['onTimeDeliveryRate'] as num).toDouble(),
+      averageLeadTimeDays: (json['averageLeadTimeDays'] as num).toDouble(),
+      minLeadTimeDays: (json['minLeadTimeDays'] as num?)?.toInt(),
+      maxLeadTimeDays: (json['maxLeadTimeDays'] as num?)?.toInt(),
+      ordersReceived: (json['ordersReceived'] as num).toInt(),
+      ordersPartiallyReceived: (json['ordersPartiallyReceived'] as num).toInt(),
+      ordersCancelled: (json['ordersCancelled'] as num).toInt(),
+      cancellationRate: (json['cancellationRate'] as num).toDouble(),
+      recentDeliveries: (json['recentDeliveries'] as List<dynamic>?)
+              ?.map((e) => RecentDelivery.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+
+Map<String, dynamic> _$$SupplierReliabilityImplToJson(
+        _$SupplierReliabilityImpl instance) =>
+    <String, dynamic>{
+      'dateFrom': instance.dateFrom,
+      'dateTo': instance.dateTo,
+      'totalOrders': instance.totalOrders,
+      'totalReceipts': instance.totalReceipts,
+      'onTimeDeliveryRate': instance.onTimeDeliveryRate,
+      'averageLeadTimeDays': instance.averageLeadTimeDays,
+      'minLeadTimeDays': instance.minLeadTimeDays,
+      'maxLeadTimeDays': instance.maxLeadTimeDays,
+      'ordersReceived': instance.ordersReceived,
+      'ordersPartiallyReceived': instance.ordersPartiallyReceived,
+      'ordersCancelled': instance.ordersCancelled,
+      'cancellationRate': instance.cancellationRate,
+      'recentDeliveries': instance.recentDeliveries,
+    };

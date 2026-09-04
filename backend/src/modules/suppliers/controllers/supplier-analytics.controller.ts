@@ -15,6 +15,7 @@ import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { SupplierAnalyticsService } from '../services/supplier-analytics.service';
 import { SupplierPurchaseSummaryEntity } from '../entities/supplier-purchase-summary.entity';
 import { SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
+import { SupplierReliabilityEntity } from '../entities/supplier-reliability.entity';
 
 @ApiTags('suppliers / analytics')
 @ApiBearerAuth()
@@ -77,6 +78,27 @@ export class SupplierAnalyticsController {
       search,
       sortBy,
       sortOrder as 'asc' | 'desc' | undefined,
+    );
+  }
+
+  @Get('analytics/reliability')
+  @RequirePermission('suppliers:read')
+  @ApiOperation({ summary: 'Get supplier delivery reliability metrics' })
+  @ApiParam({ name: 'supplierId', type: String })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
+  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
+  @ApiResponse({ status: 200, type: SupplierReliabilityEntity })
+  async getReliability(
+    @Param('supplierId') supplierId: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.analyticsService.getReliability(
+      supplierId,
+      user!.companyId,
+      dateFrom,
+      dateTo,
     );
   }
 }

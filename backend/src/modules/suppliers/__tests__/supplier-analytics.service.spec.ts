@@ -468,3 +468,220 @@ describe('SupplierAnalyticsService.getProductPurchases', () => {
     expect(result.total).toBe(0);
   });
 });
+
+describe('SupplierAnalyticsService.getReliability', () => {
+  let service: SupplierAnalyticsService;
+  let mockPrisma: any;
+  let mockSuppliersRepo: any;
+  const supplierId = 'supplier-1';
+  const companyId = 'company-1';
+
+  beforeEach(() => {
+    mockPrisma = {
+      $queryRaw: jest.fn(),
+    };
+    mockSuppliersRepo = {
+      findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+    };
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+  });
+
+  it('should throw NotFoundException when supplier not found', async () => {
+    mockSuppliersRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.getReliability(supplierId, companyId),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should return zero metrics for supplier with no orders', async () => {
+    mockPrisma.purchaseOrder = {
+      aggregate: jest.fn().mockResolvedValue({ _count: { id: 0 } }),
+      groupBy: jest.fn().mockResolvedValue([]),
+    };
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+
+    const result = await service.getReliability(supplierId, companyId);
+
+    expect(result.totalOrders).toBe(0);
+    expect(result.totalReceipts).toBe(0);
+    expect(result.onTimeDeliveryRate).toBe(0);
+    expect(result.averageLeadTimeDays).toBe(0);
+    expect(result.ordersReceived).toBe(0);
+    expect(result.ordersCancelled).toBe(0);
+    expect(result.cancellationRate).toBe(0);
+    expect(result.recentDeliveries).toHaveLength(0);
+  });
+
+  it('should compute on-time delivery correctly', async () => {
+    mockPrisma.purchaseOrder = {
+      aggregate: jest.fn().mockResolvedValue({ _count: { id: 2 } }),
+      groupBy: jest.fn().mockResolvedValue([
+        { status: 'RECEIVED', _count: { id: 2 } },
+      ]),
+    };
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        orderId: 'po-1',
+        orderNumber: 'PO-001',
+        orderDate: new Date('2026-08-01'),
+        expectedDate: new Date('2026-08-10'),
+        receiptDate: new Date('2026-08-08'), // 7 days, on time
+        receiptStatus: 'COMPLETED',
+        grandTotal: '100000',
+      },
+      {
+        orderId: 'po-2',
+        orderNumber: 'PO-002',
+        orderDate: new Date('2026-08-05'),
+        expectedDate: new Date('2026-08-12'),
+        receiptDate: new Date('2026-08-15'), // 10 days, late
+        receiptStatus: 'COMPLETED',
+        grandTotal: '200000',
+      },
+    ]);
+
+    const result = await service.getReliability(supplierId, companyId);
+
+    // 1 on-time out of 2 with expectedDate + receipt = 50%
+    expect(result.onTimeDeliveryRate).toBe(50);
+    expect(result.ordersReceived).toBe(2);
+    expect(result.totalReceipts).toBe(2);
+  });
+
+  it('should compute average lead time correctly', async () => {
+    mockPrisma.purchaseOrder = {
+      aggregate: jest.fn().mockResolvedValue({ _count: { id: 2 } }),
+      groupBy: jest.fn().mockResolvedValue([
+        { status: 'RECEIVED', _count: { id: 2 } },
+      ]),
+    };
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        orderId: 'po-1',
+        orderNumber: 'PO-001',
+        orderDate: new Date('2026-08-01'),
+        expectedDate: null,
+        receiptDate: new Date('2026-08-06'), // 5 days
+        receiptStatus: 'COMPLETED',
+        grandTotal: '100000',
+      },
+      {
+        orderId: 'po-2',
+        orderNumber: 'PO-002',
+        orderDate: new Date('2026-08-05'),
+        expectedDate: null,
+        receiptDate: new Date('2026-08-15'), // 10 days
+        receiptStatus: 'COMPLETED',
+        grandTotal: '200000',
+      },
+    ]);
+
+    const result = await service.getReliability(supplierId, companyId);
+
+    // avg(5, 10) = 7.5
+    expect(result.averageLeadTimeDays).toBe(7.5);
+    expect(result.minLeadTimeDays).toBe(5);
+    expect(result.maxLeadTimeDays).toBe(10);
+  });
+
+  it('should compute cancellation rate correctly', async () => {
+    mockPrisma.purchaseOrder = {
+      aggregate: jest.fn().mockResolvedValue({ _count: { id: 4 } }),
+      groupBy: jest.fn().mockResolvedValue([
+        { status: 'RECEIVED', _count: { id: 2 } },
+        { status: 'CANCELLED', _count: { id: 1 } },
+        { status: 'APPROVED', _count: { id: 1 } },
+      ]),
+    };
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+
+    const result = await service.getReliability(supplierId, companyId);
+
+    // 1 cancelled / 4 total = 25%
+    expect(result.ordersCancelled).toBe(1);
+    expect(result.cancellationRate).toBe(25);
+    expect(result.totalOrders).toBe(4);
+  });
+
+  it('should use FIRST COMPLETED receipt when multiple GoodsReceipts exist', async () => {
+    mockPrisma.purchaseOrder = {
+      aggregate: jest.fn().mockResolvedValue({ _count: { id: 1 } }),
+      groupBy: jest.fn().mockResolvedValue([
+        { status: 'RECEIVED', _count: { id: 1 } },
+      ]),
+    };
+    // The SQL uses LEFT JOIN LATERAL with ORDER BY receiptDate ASC LIMIT 1
+    // So the mock returns the FIRST completed receipt
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        orderId: 'po-1',
+        orderNumber: 'PO-001',
+        orderDate: new Date('2026-08-01'),
+        expectedDate: new Date('2026-08-10'),
+        receiptDate: new Date('2026-08-06'), // First completed receipt: 5 days
+        receiptStatus: 'COMPLETED',
+        grandTotal: '100000',
+      },
+    ]);
+
+    const result = await service.getReliability(supplierId, companyId);
+
+    expect(result.averageLeadTimeDays).toBe(5);
+    expect(result.recentDeliveries).toHaveLength(1);
+    expect(result.recentDeliveries[0]!.leadTimeDays).toBe(5);
+    expect(result.recentDeliveries[0]!.onTime).toBe(true);
+  });
+
+  it('should exclude DRAFT/CANCELLED GoodsReceipts', async () => {
+    mockPrisma.purchaseOrder = {
+      aggregate: jest.fn().mockResolvedValue({ _count: { id: 1 } }),
+      groupBy: jest.fn().mockResolvedValue([
+        { status: 'PARTIALLY_RECEIVED', _count: { id: 1 } },
+      ]),
+    };
+    // SQL filters WHERE gr.status = 'COMPLETED'
+    // If no COMPLETED receipt exists, receiptDate is NULL
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        orderId: 'po-1',
+        orderNumber: 'PO-001',
+        orderDate: new Date('2026-08-01'),
+        expectedDate: new Date('2026-08-10'),
+        receiptDate: null, // No completed receipt
+        receiptStatus: null,
+        grandTotal: '100000',
+      },
+    ]);
+
+    const result = await service.getReliability(supplierId, companyId);
+
+    expect(result.totalReceipts).toBe(0);
+    expect(result.averageLeadTimeDays).toBe(0);
+    expect(result.onTimeDeliveryRate).toBe(0);
+    expect(result.recentDeliveries[0]!.receiptDate).toBeNull();
+  });
+
+  it('should return recentDeliveries sorted by orderDate DESC, max 10', async () => {
+    mockPrisma.purchaseOrder = {
+      aggregate: jest.fn().mockResolvedValue({ _count: { id: 12 } }),
+      groupBy: jest.fn().mockResolvedValue([
+        { status: 'RECEIVED', _count: { id: 12 } },
+      ]),
+    };
+    const rows = Array.from({ length: 12 }, (_, i) => ({
+      orderId: `po-${i}`,
+      orderNumber: `PO-${String(i).padStart(3, '0')}`,
+      orderDate: new Date(`2026-01-${String(i + 1).padStart(2, '0')}`),
+      expectedDate: null,
+      receiptDate: new Date(`2026-01-${String(i + 3).padStart(2, '0')}`),
+      receiptStatus: 'COMPLETED',
+      grandTotal: '10000',
+    }));
+    mockPrisma.$queryRaw.mockResolvedValue(rows);
+
+    const result = await service.getReliability(supplierId, companyId);
+
+    // SQL sorts by orderDate DESC, service caps at 10
+    expect(result.recentDeliveries.length).toBeLessThanOrEqual(10);
+  });
+});

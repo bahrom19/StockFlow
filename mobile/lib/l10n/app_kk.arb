@@ -945,5 +945,17 @@
   "avgCost": "Орташа баға",
   "minMaxCost": "Мин / Макс",
   "noProductPurchases": "Тауарларды сатып алу деректері жоқ",
-  "loadMore": "Көбірек көрсету"
+  "loadMore": "Көбірек көрсету",
+  "supplierReliability": "Жеткізушінің сенімділігі",
+  "onTimeDeliveryRate": "Уақытында жеткізу",
+  "avgLeadTime": "Орташа мерзім",
+  "minLeadTime": "Мин. мерзім",
+  "maxLeadTime": "Макс. мерзім",
+  "days": "күн",
+  "ordersReceived": "Алынды",
+  "ordersPartiallyReceived": "Ішінара",
+  "ordersCancelled": "Бас тартылды",
+  "cancellationRate": "% бас тарту",
+  "recentDeliveries": "Соңғы жеткізулер",
+  "noOrderData": "Тапсырыс деректері жоқ"
 }

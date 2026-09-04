@@ -945,5 +945,17 @@
   "avgCost": "Средняя цена",
   "minMaxCost": "Мин / Макс",
   "noProductPurchases": "Нет данных о закупках товаров",
-  "loadMore": "Показать ещё"
+  "loadMore": "Показать ещё",
+  "supplierReliability": "Надёжность поставщика",
+  "onTimeDeliveryRate": "Вовремя доставки",
+  "avgLeadTime": "Средний срок",
+  "minLeadTime": "Мин. срок",
+  "maxLeadTime": "Макс. срок",
+  "days": "дн.",
+  "ordersReceived": "Получено",
+  "ordersPartiallyReceived": "Частично",
+  "ordersCancelled": "Отменено",
+  "cancellationRate": "% отмен",
+  "recentDeliveries": "Последние поставки",
+  "noOrderData": "Нет данных о заказах"
 }

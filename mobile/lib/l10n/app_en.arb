@@ -945,5 +945,17 @@
   "avgCost": "Avg Cost",
   "minMaxCost": "Min / Max",
   "noProductPurchases": "No product purchase data",
-  "loadMore": "Load More"
+  "loadMore": "Load More",
+  "supplierReliability": "Supplier Reliability",
+  "onTimeDeliveryRate": "On-Time Delivery",
+  "avgLeadTime": "Avg Lead Time",
+  "minLeadTime": "Min Lead Time",
+  "maxLeadTime": "Max Lead Time",
+  "days": "days",
+  "ordersReceived": "Received",
+  "ordersPartiallyReceived": "Partial",
+  "ordersCancelled": "Cancelled",
+  "cancellationRate": "Cancel Rate",
+  "recentDeliveries": "Recent Deliveries",
+  "noOrderData": "No order data"
 }

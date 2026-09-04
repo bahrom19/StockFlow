@@ -41,6 +41,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   String? _productPurchaseSearch;
   String? _purchaseDateFrom;
   String? _purchaseDateTo;
+  SupplierReliability? _reliability;
+  bool _isLoadingReliability = false;
+  String? _reliabilityError;
   bool _isLoading = true;
   String? _error;
 
@@ -131,8 +134,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       }
       _isLoadingPurchaseSummary = false;
     });
-    // Also load product purchases
+    // Also load product purchases and reliability
     _loadProductPurchases();
+    _loadReliability();
   }
 
   Future<void> _loadProductPurchases() async {
@@ -158,6 +162,29 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
         _productPurchasesError = result.error.message;
       }
       _isLoadingProductPurchases = false;
+    });
+  }
+
+  Future<void> _loadReliability() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingReliability = true;
+      _reliabilityError = null;
+    });
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getReliability(
+      widget.supplierId,
+      dateFrom: _purchaseDateFrom,
+      dateTo: _purchaseDateTo,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<SupplierReliability>) {
+        _reliability = result.data;
+      } else if (result is SuppliersFailure<SupplierReliability>) {
+        _reliabilityError = result.error.message;
+      }
+      _isLoadingReliability = false;
     });
   }
 
@@ -239,6 +266,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
               // ── Purchase Analytics Section ───────────────────
               _buildPurchaseAnalyticsSection(theme),
+              const SizedBox(height: 24),
+
+              // ── Supplier Reliability Section ────────────────
+              _buildReliabilitySection(theme),
               const SizedBox(height: 24),
 
               // ── Products Section ─────────────────────────────
@@ -810,6 +841,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                     _productPurchasePage = 1;
                     _loadPurchaseSummary();
                     _loadProductPurchases();
+                    _loadReliability();
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem(value: null, child: Text(context.l10n.periodAllTime)),
@@ -1110,6 +1142,149 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
               color: highlighted ? theme.colorScheme.primary : null,
             )),
       ],
+    );
+  }
+
+  // ── Supplier Reliability Section ──────────────────────
+
+  Widget _buildReliabilitySection(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.local_shipping_outlined,
+                    size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(context.l10n.supplierReliability,
+                    style: theme.textTheme.titleSmall),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_isLoadingReliability)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else if (_reliabilityError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    Text(
+                      _reliabilityError!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.error),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _loadReliability,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(context.l10n.retry),
+                    ),
+                  ],
+                ),
+              )
+            else if (_reliability != null) ...[
+              // On-time delivery rate
+              Row(
+                children: [
+                  _analyticsStat(context.l10n.onTimeDeliveryRate, '${_reliability!.onTimeDeliveryRate}%', theme),
+                  const SizedBox(width: 16),
+                  _analyticsStat(context.l10n.avgLeadTime, '${_reliability!.averageLeadTimeDays} ${context.l10n.days}', theme),
+                ],
+              ),
+              if (_reliability!.minLeadTimeDays != null || _reliability!.maxLeadTimeDays != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (_reliability!.minLeadTimeDays != null)
+                      _analyticsStat(context.l10n.minLeadTime, '${_reliability!.minLeadTimeDays} ${context.l10n.days}', theme),
+                    if (_reliability!.minLeadTimeDays != null && _reliability!.maxLeadTimeDays != null)
+                      const SizedBox(width: 16),
+                    if (_reliability!.maxLeadTimeDays != null)
+                      _analyticsStat(context.l10n.maxLeadTime, '${_reliability!.maxLeadTimeDays} ${context.l10n.days}', theme),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              Divider(color: theme.colorScheme.outlineVariant),
+              const SizedBox(height: 12),
+              // Order status breakdown
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: [
+                  _analyticsStat(context.l10n.ordersReceived, '${_reliability!.ordersReceived}', theme),
+                  _analyticsStat(context.l10n.ordersPartiallyReceived, '${_reliability!.ordersPartiallyReceived}', theme),
+                  _analyticsStat(context.l10n.ordersCancelled, '${_reliability!.ordersCancelled}', theme),
+                  _analyticsStat(context.l10n.cancellationRate, '${_reliability!.cancellationRate}%', theme),
+                ],
+              ),
+              // Recent deliveries
+              if (_reliability!.recentDeliveries.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Divider(color: theme.colorScheme.outlineVariant),
+                const SizedBox(height: 12),
+                Text(context.l10n.recentDeliveries,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                ..._reliability!.recentDeliveries.map((d) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Text(d.orderNumber,
+                            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          d.receiptDate != null ? d.receiptDate!.substring(0, 10) : '—',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 50,
+                        child: d.leadTimeDays != null
+                            ? Text('${d.leadTimeDays}d', style: theme.textTheme.bodySmall)
+                            : Text('—', style: theme.textTheme.bodySmall),
+                      ),
+                      SizedBox(
+                        width: 24,
+                        child: d.onTime == true
+                            ? const Icon(Icons.check_circle, size: 16, color: Colors.green)
+                            : d.onTime == false
+                                ? const Icon(Icons.cancel, size: 16, color: Colors.red)
+                                : const Icon(Icons.help_outline, size: 16, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                )),
+              ],
+            ]
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(context.l10n.noOrderData,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
+          ],
+        ),
+      ),
     );
   }
 

@@ -5,6 +5,7 @@ import { PrismaService } from '../../../common/prisma';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierPurchaseSummaryEntity, MonthlySpendEntity } from '../entities/supplier-purchase-summary.entity';
 import { SupplierProductPurchaseEntity, SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
+import { SupplierReliabilityEntity, RecentDeliveryEntity } from '../entities/supplier-reliability.entity';
 
 const INVOICE_STATUSES = [
   PurchaseInvoiceStatus.APPROVED,
@@ -359,6 +360,182 @@ export class SupplierAnalyticsService {
     });
 
     return { items, total, page, limit: safeLimit };
+  }
+
+  // ── Supplier Reliability ──────────────────────────────────
+
+  async getReliability(
+    supplierId: string,
+    companyId: string,
+    dateFrom?: string,
+    dateTo?: string,
+  ): Promise<SupplierReliabilityEntity> {
+    // 1. Verify supplier
+    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    if (!supplier) {
+      throw new NotFoundException(`Supplier ${supplierId} not found`);
+    }
+
+    // 2. Date range — default to last 12 months
+    const now = new Date();
+    const effectiveDateTo = dateTo ? new Date(dateTo) : now;
+    const effectiveDateFrom = dateFrom
+      ? new Date(dateFrom)
+      : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+    // 3. Total orders in range (by orderDate), including CANCELLED
+    const orderAgg = await this.prismaService.purchaseOrder.aggregate({
+      where: {
+        supplierId,
+        companyId,
+        deletedAt: null,
+        orderDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
+      },
+      _count: { id: true },
+    });
+    const totalOrders = orderAgg._count.id;
+
+    // 4. Orders by status for delivery metrics
+    const statusRows = await this.prismaService.purchaseOrder.groupBy({
+      by: ['status'],
+      where: {
+        supplierId,
+        companyId,
+        deletedAt: null,
+        orderDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
+      },
+      _count: { id: true },
+    });
+
+    const statusCounts = new Map<string, number>();
+    for (const row of statusRows) {
+      statusCounts.set(row.status, row._count.id);
+    }
+
+    const ordersReceived = statusCounts.get('RECEIVED') ?? 0;
+    const ordersPartiallyReceived = statusCounts.get('PARTIALLY_RECEIVED') ?? 0;
+    const ordersCancelled = statusCounts.get('CANCELLED') ?? 0;
+
+    // 5. Canonical delivery data — first COMPLETED GoodsReceipt per PO
+    //    Join through PurchaseOrder to ensure supplier/company scoping
+    const deliveryRows = await this.prismaService.$queryRaw<
+      Array<{
+        orderId: string;
+        orderNumber: string;
+        orderDate: Date;
+        expectedDate: Date | null;
+        receiptDate: Date | null;
+        receiptStatus: string | null;
+        grandTotal: Decimal;
+      }>
+    >`
+      SELECT
+        po.id AS "orderId",
+        po."orderNumber",
+        po."orderDate",
+        po."expectedDate",
+        gr."receiptDate",
+        gr.status AS "receiptStatus",
+        po."grandTotal"
+      FROM "PurchaseOrder" po
+      LEFT JOIN LATERAL (
+        SELECT gr."receiptDate", gr.status
+        FROM "GoodsReceipt" gr
+        WHERE gr."purchaseOrderId" = po.id
+          AND gr.status = 'COMPLETED'
+          AND gr."deletedAt" IS NULL
+        ORDER BY gr."receiptDate" ASC
+        LIMIT 1
+      ) gr ON true
+      WHERE po."supplierId" = ${supplierId}
+        AND po."companyId" = ${companyId}
+        AND po."deletedAt" IS NULL
+        AND po."orderDate" >= ${effectiveDateFrom}
+        AND po."orderDate" <= ${effectiveDateTo}
+        AND po.status IN ('APPROVED', 'ORDERED', 'PARTIALLY_RECEIVED', 'RECEIVED')
+      ORDER BY po."orderDate" DESC
+    `;
+
+    // 6. Compute delivery metrics
+    let onTimeCount = 0;
+    let deliveryCount = 0;
+    let totalLeadTimeDays = 0;
+    let minLeadTime: number | null = null;
+    let maxLeadTime: number | null = null;
+    const recentDeliveries: RecentDeliveryEntity[] = [];
+
+    for (const row of deliveryRows) {
+      const receiptDate = row.receiptDate;
+      const orderDate = new Date(row.orderDate);
+      const expectedDate = row.expectedDate ? new Date(row.expectedDate) : null;
+
+      let leadTimeDays: number | null = null;
+      let onTime: boolean | null = null;
+
+      if (receiptDate) {
+        const receipt = new Date(receiptDate);
+        leadTimeDays = Math.round((receipt.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24));
+        deliveryCount++;
+        totalLeadTimeDays += leadTimeDays;
+
+        if (minLeadTime === null || leadTimeDays < minLeadTime) minLeadTime = leadTimeDays;
+        if (maxLeadTime === null || leadTimeDays > maxLeadTime) maxLeadTime = leadTimeDays;
+
+        if (expectedDate) {
+          onTime = receipt <= expectedDate;
+          if (onTime) onTimeCount++;
+        }
+      }
+
+      // Collect recent deliveries (up to 10, already sorted by orderDate DESC)
+      if (recentDeliveries.length < 10) {
+        recentDeliveries.push({
+          orderNumber: row.orderNumber,
+          orderDate: new Date(row.orderDate).toISOString(),
+          expectedDate: row.expectedDate ? new Date(row.expectedDate).toISOString() : null,
+          receiptDate: receiptDate ? new Date(receiptDate).toISOString() : null,
+          leadTimeDays,
+          onTime,
+          status: row.receiptStatus ?? 'PENDING',
+          grandTotal: new Decimal(row.grandTotal?.toString() ?? '0').toString(),
+        });
+      }
+    }
+
+    // On-time rate: onTimeCount / (orders with expectedDate AND receipt)
+    // We count orders where expectedDate exists AND receipt exists
+    const onTimeDenominator = deliveryRows.filter(
+      (r) => r.expectedDate != null && r.receiptDate != null,
+    ).length;
+    const onTimeDeliveryRate = onTimeDenominator > 0
+      ? Math.round((onTimeCount / onTimeDenominator) * 1000) / 10
+      : 0;
+
+    const averageLeadTimeDays = deliveryCount > 0
+      ? Math.round((totalLeadTimeDays / deliveryCount) * 10) / 10
+      : 0;
+
+    const totalReceipts = deliveryRows.filter((r) => r.receiptDate != null).length;
+
+    const cancellationRate = totalOrders > 0
+      ? Math.round((ordersCancelled / totalOrders) * 1000) / 10
+      : 0;
+
+    return {
+      dateFrom: effectiveDateFrom.toISOString(),
+      dateTo: effectiveDateTo.toISOString(),
+      totalOrders,
+      totalReceipts,
+      onTimeDeliveryRate,
+      averageLeadTimeDays,
+      minLeadTimeDays: minLeadTime,
+      maxLeadTimeDays: maxLeadTime,
+      ordersReceived,
+      ordersPartiallyReceived,
+      ordersCancelled,
+      cancellationRate,
+      recentDeliveries,
+    };
   }
 
   private rawSearchClause(search: string | undefined): string {

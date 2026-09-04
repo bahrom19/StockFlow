@@ -1332,3 +1332,734 @@ abstract class _ProductPurchaseListResponse
   _$$ProductPurchaseListResponseImplCopyWith<_$ProductPurchaseListResponseImpl>
       get copyWith => throw _privateConstructorUsedError;
 }
+
+RecentDelivery _$RecentDeliveryFromJson(Map<String, dynamic> json) {
+  return _RecentDelivery.fromJson(json);
+}
+
+/// @nodoc
+mixin _$RecentDelivery {
+  String get orderNumber => throw _privateConstructorUsedError;
+  String get orderDate => throw _privateConstructorUsedError;
+  String? get expectedDate => throw _privateConstructorUsedError;
+  String? get receiptDate => throw _privateConstructorUsedError;
+  int? get leadTimeDays => throw _privateConstructorUsedError;
+  bool? get onTime => throw _privateConstructorUsedError;
+  String get status => throw _privateConstructorUsedError;
+  String get grandTotal => throw _privateConstructorUsedError;
+
+  /// Serializes this RecentDelivery to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of RecentDelivery
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $RecentDeliveryCopyWith<RecentDelivery> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $RecentDeliveryCopyWith<$Res> {
+  factory $RecentDeliveryCopyWith(
+          RecentDelivery value, $Res Function(RecentDelivery) then) =
+      _$RecentDeliveryCopyWithImpl<$Res, RecentDelivery>;
+  @useResult
+  $Res call(
+      {String orderNumber,
+      String orderDate,
+      String? expectedDate,
+      String? receiptDate,
+      int? leadTimeDays,
+      bool? onTime,
+      String status,
+      String grandTotal});
+}
+
+/// @nodoc
+class _$RecentDeliveryCopyWithImpl<$Res, $Val extends RecentDelivery>
+    implements $RecentDeliveryCopyWith<$Res> {
+  _$RecentDeliveryCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of RecentDelivery
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? orderNumber = null,
+    Object? orderDate = null,
+    Object? expectedDate = freezed,
+    Object? receiptDate = freezed,
+    Object? leadTimeDays = freezed,
+    Object? onTime = freezed,
+    Object? status = null,
+    Object? grandTotal = null,
+  }) {
+    return _then(_value.copyWith(
+      orderNumber: null == orderNumber
+          ? _value.orderNumber
+          : orderNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      orderDate: null == orderDate
+          ? _value.orderDate
+          : orderDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      expectedDate: freezed == expectedDate
+          ? _value.expectedDate
+          : expectedDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      receiptDate: freezed == receiptDate
+          ? _value.receiptDate
+          : receiptDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      leadTimeDays: freezed == leadTimeDays
+          ? _value.leadTimeDays
+          : leadTimeDays // ignore: cast_nullable_to_non_nullable
+              as int?,
+      onTime: freezed == onTime
+          ? _value.onTime
+          : onTime // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$RecentDeliveryImplCopyWith<$Res>
+    implements $RecentDeliveryCopyWith<$Res> {
+  factory _$$RecentDeliveryImplCopyWith(_$RecentDeliveryImpl value,
+          $Res Function(_$RecentDeliveryImpl) then) =
+      __$$RecentDeliveryImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String orderNumber,
+      String orderDate,
+      String? expectedDate,
+      String? receiptDate,
+      int? leadTimeDays,
+      bool? onTime,
+      String status,
+      String grandTotal});
+}
+
+/// @nodoc
+class __$$RecentDeliveryImplCopyWithImpl<$Res>
+    extends _$RecentDeliveryCopyWithImpl<$Res, _$RecentDeliveryImpl>
+    implements _$$RecentDeliveryImplCopyWith<$Res> {
+  __$$RecentDeliveryImplCopyWithImpl(
+      _$RecentDeliveryImpl _value, $Res Function(_$RecentDeliveryImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of RecentDelivery
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? orderNumber = null,
+    Object? orderDate = null,
+    Object? expectedDate = freezed,
+    Object? receiptDate = freezed,
+    Object? leadTimeDays = freezed,
+    Object? onTime = freezed,
+    Object? status = null,
+    Object? grandTotal = null,
+  }) {
+    return _then(_$RecentDeliveryImpl(
+      orderNumber: null == orderNumber
+          ? _value.orderNumber
+          : orderNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      orderDate: null == orderDate
+          ? _value.orderDate
+          : orderDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      expectedDate: freezed == expectedDate
+          ? _value.expectedDate
+          : expectedDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      receiptDate: freezed == receiptDate
+          ? _value.receiptDate
+          : receiptDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      leadTimeDays: freezed == leadTimeDays
+          ? _value.leadTimeDays
+          : leadTimeDays // ignore: cast_nullable_to_non_nullable
+              as int?,
+      onTime: freezed == onTime
+          ? _value.onTime
+          : onTime // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$RecentDeliveryImpl implements _RecentDelivery {
+  const _$RecentDeliveryImpl(
+      {required this.orderNumber,
+      required this.orderDate,
+      this.expectedDate,
+      this.receiptDate,
+      this.leadTimeDays,
+      this.onTime,
+      required this.status,
+      required this.grandTotal});
+
+  factory _$RecentDeliveryImpl.fromJson(Map<String, dynamic> json) =>
+      _$$RecentDeliveryImplFromJson(json);
+
+  @override
+  final String orderNumber;
+  @override
+  final String orderDate;
+  @override
+  final String? expectedDate;
+  @override
+  final String? receiptDate;
+  @override
+  final int? leadTimeDays;
+  @override
+  final bool? onTime;
+  @override
+  final String status;
+  @override
+  final String grandTotal;
+
+  @override
+  String toString() {
+    return 'RecentDelivery(orderNumber: $orderNumber, orderDate: $orderDate, expectedDate: $expectedDate, receiptDate: $receiptDate, leadTimeDays: $leadTimeDays, onTime: $onTime, status: $status, grandTotal: $grandTotal)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$RecentDeliveryImpl &&
+            (identical(other.orderNumber, orderNumber) ||
+                other.orderNumber == orderNumber) &&
+            (identical(other.orderDate, orderDate) ||
+                other.orderDate == orderDate) &&
+            (identical(other.expectedDate, expectedDate) ||
+                other.expectedDate == expectedDate) &&
+            (identical(other.receiptDate, receiptDate) ||
+                other.receiptDate == receiptDate) &&
+            (identical(other.leadTimeDays, leadTimeDays) ||
+                other.leadTimeDays == leadTimeDays) &&
+            (identical(other.onTime, onTime) || other.onTime == onTime) &&
+            (identical(other.status, status) || other.status == status) &&
+            (identical(other.grandTotal, grandTotal) ||
+                other.grandTotal == grandTotal));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, orderNumber, orderDate,
+      expectedDate, receiptDate, leadTimeDays, onTime, status, grandTotal);
+
+  /// Create a copy of RecentDelivery
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$RecentDeliveryImplCopyWith<_$RecentDeliveryImpl> get copyWith =>
+      __$$RecentDeliveryImplCopyWithImpl<_$RecentDeliveryImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$RecentDeliveryImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _RecentDelivery implements RecentDelivery {
+  const factory _RecentDelivery(
+      {required final String orderNumber,
+      required final String orderDate,
+      final String? expectedDate,
+      final String? receiptDate,
+      final int? leadTimeDays,
+      final bool? onTime,
+      required final String status,
+      required final String grandTotal}) = _$RecentDeliveryImpl;
+
+  factory _RecentDelivery.fromJson(Map<String, dynamic> json) =
+      _$RecentDeliveryImpl.fromJson;
+
+  @override
+  String get orderNumber;
+  @override
+  String get orderDate;
+  @override
+  String? get expectedDate;
+  @override
+  String? get receiptDate;
+  @override
+  int? get leadTimeDays;
+  @override
+  bool? get onTime;
+  @override
+  String get status;
+  @override
+  String get grandTotal;
+
+  /// Create a copy of RecentDelivery
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$RecentDeliveryImplCopyWith<_$RecentDeliveryImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+SupplierReliability _$SupplierReliabilityFromJson(Map<String, dynamic> json) {
+  return _SupplierReliability.fromJson(json);
+}
+
+/// @nodoc
+mixin _$SupplierReliability {
+  String get dateFrom => throw _privateConstructorUsedError;
+  String get dateTo => throw _privateConstructorUsedError;
+  int get totalOrders => throw _privateConstructorUsedError;
+  int get totalReceipts => throw _privateConstructorUsedError;
+  double get onTimeDeliveryRate => throw _privateConstructorUsedError;
+  double get averageLeadTimeDays => throw _privateConstructorUsedError;
+  int? get minLeadTimeDays => throw _privateConstructorUsedError;
+  int? get maxLeadTimeDays => throw _privateConstructorUsedError;
+  int get ordersReceived => throw _privateConstructorUsedError;
+  int get ordersPartiallyReceived => throw _privateConstructorUsedError;
+  int get ordersCancelled => throw _privateConstructorUsedError;
+  double get cancellationRate => throw _privateConstructorUsedError;
+  List<RecentDelivery> get recentDeliveries =>
+      throw _privateConstructorUsedError;
+
+  /// Serializes this SupplierReliability to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of SupplierReliability
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $SupplierReliabilityCopyWith<SupplierReliability> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $SupplierReliabilityCopyWith<$Res> {
+  factory $SupplierReliabilityCopyWith(
+          SupplierReliability value, $Res Function(SupplierReliability) then) =
+      _$SupplierReliabilityCopyWithImpl<$Res, SupplierReliability>;
+  @useResult
+  $Res call(
+      {String dateFrom,
+      String dateTo,
+      int totalOrders,
+      int totalReceipts,
+      double onTimeDeliveryRate,
+      double averageLeadTimeDays,
+      int? minLeadTimeDays,
+      int? maxLeadTimeDays,
+      int ordersReceived,
+      int ordersPartiallyReceived,
+      int ordersCancelled,
+      double cancellationRate,
+      List<RecentDelivery> recentDeliveries});
+}
+
+/// @nodoc
+class _$SupplierReliabilityCopyWithImpl<$Res, $Val extends SupplierReliability>
+    implements $SupplierReliabilityCopyWith<$Res> {
+  _$SupplierReliabilityCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of SupplierReliability
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? totalOrders = null,
+    Object? totalReceipts = null,
+    Object? onTimeDeliveryRate = null,
+    Object? averageLeadTimeDays = null,
+    Object? minLeadTimeDays = freezed,
+    Object? maxLeadTimeDays = freezed,
+    Object? ordersReceived = null,
+    Object? ordersPartiallyReceived = null,
+    Object? ordersCancelled = null,
+    Object? cancellationRate = null,
+    Object? recentDeliveries = null,
+  }) {
+    return _then(_value.copyWith(
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalOrders: null == totalOrders
+          ? _value.totalOrders
+          : totalOrders // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalReceipts: null == totalReceipts
+          ? _value.totalReceipts
+          : totalReceipts // ignore: cast_nullable_to_non_nullable
+              as int,
+      onTimeDeliveryRate: null == onTimeDeliveryRate
+          ? _value.onTimeDeliveryRate
+          : onTimeDeliveryRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      averageLeadTimeDays: null == averageLeadTimeDays
+          ? _value.averageLeadTimeDays
+          : averageLeadTimeDays // ignore: cast_nullable_to_non_nullable
+              as double,
+      minLeadTimeDays: freezed == minLeadTimeDays
+          ? _value.minLeadTimeDays
+          : minLeadTimeDays // ignore: cast_nullable_to_non_nullable
+              as int?,
+      maxLeadTimeDays: freezed == maxLeadTimeDays
+          ? _value.maxLeadTimeDays
+          : maxLeadTimeDays // ignore: cast_nullable_to_non_nullable
+              as int?,
+      ordersReceived: null == ordersReceived
+          ? _value.ordersReceived
+          : ordersReceived // ignore: cast_nullable_to_non_nullable
+              as int,
+      ordersPartiallyReceived: null == ordersPartiallyReceived
+          ? _value.ordersPartiallyReceived
+          : ordersPartiallyReceived // ignore: cast_nullable_to_non_nullable
+              as int,
+      ordersCancelled: null == ordersCancelled
+          ? _value.ordersCancelled
+          : ordersCancelled // ignore: cast_nullable_to_non_nullable
+              as int,
+      cancellationRate: null == cancellationRate
+          ? _value.cancellationRate
+          : cancellationRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      recentDeliveries: null == recentDeliveries
+          ? _value.recentDeliveries
+          : recentDeliveries // ignore: cast_nullable_to_non_nullable
+              as List<RecentDelivery>,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$SupplierReliabilityImplCopyWith<$Res>
+    implements $SupplierReliabilityCopyWith<$Res> {
+  factory _$$SupplierReliabilityImplCopyWith(_$SupplierReliabilityImpl value,
+          $Res Function(_$SupplierReliabilityImpl) then) =
+      __$$SupplierReliabilityImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String dateFrom,
+      String dateTo,
+      int totalOrders,
+      int totalReceipts,
+      double onTimeDeliveryRate,
+      double averageLeadTimeDays,
+      int? minLeadTimeDays,
+      int? maxLeadTimeDays,
+      int ordersReceived,
+      int ordersPartiallyReceived,
+      int ordersCancelled,
+      double cancellationRate,
+      List<RecentDelivery> recentDeliveries});
+}
+
+/// @nodoc
+class __$$SupplierReliabilityImplCopyWithImpl<$Res>
+    extends _$SupplierReliabilityCopyWithImpl<$Res, _$SupplierReliabilityImpl>
+    implements _$$SupplierReliabilityImplCopyWith<$Res> {
+  __$$SupplierReliabilityImplCopyWithImpl(_$SupplierReliabilityImpl _value,
+      $Res Function(_$SupplierReliabilityImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of SupplierReliability
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? totalOrders = null,
+    Object? totalReceipts = null,
+    Object? onTimeDeliveryRate = null,
+    Object? averageLeadTimeDays = null,
+    Object? minLeadTimeDays = freezed,
+    Object? maxLeadTimeDays = freezed,
+    Object? ordersReceived = null,
+    Object? ordersPartiallyReceived = null,
+    Object? ordersCancelled = null,
+    Object? cancellationRate = null,
+    Object? recentDeliveries = null,
+  }) {
+    return _then(_$SupplierReliabilityImpl(
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalOrders: null == totalOrders
+          ? _value.totalOrders
+          : totalOrders // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalReceipts: null == totalReceipts
+          ? _value.totalReceipts
+          : totalReceipts // ignore: cast_nullable_to_non_nullable
+              as int,
+      onTimeDeliveryRate: null == onTimeDeliveryRate
+          ? _value.onTimeDeliveryRate
+          : onTimeDeliveryRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      averageLeadTimeDays: null == averageLeadTimeDays
+          ? _value.averageLeadTimeDays
+          : averageLeadTimeDays // ignore: cast_nullable_to_non_nullable
+              as double,
+      minLeadTimeDays: freezed == minLeadTimeDays
+          ? _value.minLeadTimeDays
+          : minLeadTimeDays // ignore: cast_nullable_to_non_nullable
+              as int?,
+      maxLeadTimeDays: freezed == maxLeadTimeDays
+          ? _value.maxLeadTimeDays
+          : maxLeadTimeDays // ignore: cast_nullable_to_non_nullable
+              as int?,
+      ordersReceived: null == ordersReceived
+          ? _value.ordersReceived
+          : ordersReceived // ignore: cast_nullable_to_non_nullable
+              as int,
+      ordersPartiallyReceived: null == ordersPartiallyReceived
+          ? _value.ordersPartiallyReceived
+          : ordersPartiallyReceived // ignore: cast_nullable_to_non_nullable
+              as int,
+      ordersCancelled: null == ordersCancelled
+          ? _value.ordersCancelled
+          : ordersCancelled // ignore: cast_nullable_to_non_nullable
+              as int,
+      cancellationRate: null == cancellationRate
+          ? _value.cancellationRate
+          : cancellationRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      recentDeliveries: null == recentDeliveries
+          ? _value._recentDeliveries
+          : recentDeliveries // ignore: cast_nullable_to_non_nullable
+              as List<RecentDelivery>,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$SupplierReliabilityImpl implements _SupplierReliability {
+  const _$SupplierReliabilityImpl(
+      {required this.dateFrom,
+      required this.dateTo,
+      required this.totalOrders,
+      required this.totalReceipts,
+      required this.onTimeDeliveryRate,
+      required this.averageLeadTimeDays,
+      this.minLeadTimeDays,
+      this.maxLeadTimeDays,
+      required this.ordersReceived,
+      required this.ordersPartiallyReceived,
+      required this.ordersCancelled,
+      required this.cancellationRate,
+      final List<RecentDelivery> recentDeliveries = const []})
+      : _recentDeliveries = recentDeliveries;
+
+  factory _$SupplierReliabilityImpl.fromJson(Map<String, dynamic> json) =>
+      _$$SupplierReliabilityImplFromJson(json);
+
+  @override
+  final String dateFrom;
+  @override
+  final String dateTo;
+  @override
+  final int totalOrders;
+  @override
+  final int totalReceipts;
+  @override
+  final double onTimeDeliveryRate;
+  @override
+  final double averageLeadTimeDays;
+  @override
+  final int? minLeadTimeDays;
+  @override
+  final int? maxLeadTimeDays;
+  @override
+  final int ordersReceived;
+  @override
+  final int ordersPartiallyReceived;
+  @override
+  final int ordersCancelled;
+  @override
+  final double cancellationRate;
+  final List<RecentDelivery> _recentDeliveries;
+  @override
+  @JsonKey()
+  List<RecentDelivery> get recentDeliveries {
+    if (_recentDeliveries is EqualUnmodifiableListView)
+      return _recentDeliveries;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_recentDeliveries);
+  }
+
+  @override
+  String toString() {
+    return 'SupplierReliability(dateFrom: $dateFrom, dateTo: $dateTo, totalOrders: $totalOrders, totalReceipts: $totalReceipts, onTimeDeliveryRate: $onTimeDeliveryRate, averageLeadTimeDays: $averageLeadTimeDays, minLeadTimeDays: $minLeadTimeDays, maxLeadTimeDays: $maxLeadTimeDays, ordersReceived: $ordersReceived, ordersPartiallyReceived: $ordersPartiallyReceived, ordersCancelled: $ordersCancelled, cancellationRate: $cancellationRate, recentDeliveries: $recentDeliveries)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$SupplierReliabilityImpl &&
+            (identical(other.dateFrom, dateFrom) ||
+                other.dateFrom == dateFrom) &&
+            (identical(other.dateTo, dateTo) || other.dateTo == dateTo) &&
+            (identical(other.totalOrders, totalOrders) ||
+                other.totalOrders == totalOrders) &&
+            (identical(other.totalReceipts, totalReceipts) ||
+                other.totalReceipts == totalReceipts) &&
+            (identical(other.onTimeDeliveryRate, onTimeDeliveryRate) ||
+                other.onTimeDeliveryRate == onTimeDeliveryRate) &&
+            (identical(other.averageLeadTimeDays, averageLeadTimeDays) ||
+                other.averageLeadTimeDays == averageLeadTimeDays) &&
+            (identical(other.minLeadTimeDays, minLeadTimeDays) ||
+                other.minLeadTimeDays == minLeadTimeDays) &&
+            (identical(other.maxLeadTimeDays, maxLeadTimeDays) ||
+                other.maxLeadTimeDays == maxLeadTimeDays) &&
+            (identical(other.ordersReceived, ordersReceived) ||
+                other.ordersReceived == ordersReceived) &&
+            (identical(
+                    other.ordersPartiallyReceived, ordersPartiallyReceived) ||
+                other.ordersPartiallyReceived == ordersPartiallyReceived) &&
+            (identical(other.ordersCancelled, ordersCancelled) ||
+                other.ordersCancelled == ordersCancelled) &&
+            (identical(other.cancellationRate, cancellationRate) ||
+                other.cancellationRate == cancellationRate) &&
+            const DeepCollectionEquality()
+                .equals(other._recentDeliveries, _recentDeliveries));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType,
+      dateFrom,
+      dateTo,
+      totalOrders,
+      totalReceipts,
+      onTimeDeliveryRate,
+      averageLeadTimeDays,
+      minLeadTimeDays,
+      maxLeadTimeDays,
+      ordersReceived,
+      ordersPartiallyReceived,
+      ordersCancelled,
+      cancellationRate,
+      const DeepCollectionEquality().hash(_recentDeliveries));
+
+  /// Create a copy of SupplierReliability
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$SupplierReliabilityImplCopyWith<_$SupplierReliabilityImpl> get copyWith =>
+      __$$SupplierReliabilityImplCopyWithImpl<_$SupplierReliabilityImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$SupplierReliabilityImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _SupplierReliability implements SupplierReliability {
+  const factory _SupplierReliability(
+      {required final String dateFrom,
+      required final String dateTo,
+      required final int totalOrders,
+      required final int totalReceipts,
+      required final double onTimeDeliveryRate,
+      required final double averageLeadTimeDays,
+      final int? minLeadTimeDays,
+      final int? maxLeadTimeDays,
+      required final int ordersReceived,
+      required final int ordersPartiallyReceived,
+      required final int ordersCancelled,
+      required final double cancellationRate,
+      final List<RecentDelivery> recentDeliveries}) = _$SupplierReliabilityImpl;
+
+  factory _SupplierReliability.fromJson(Map<String, dynamic> json) =
+      _$SupplierReliabilityImpl.fromJson;
+
+  @override
+  String get dateFrom;
+  @override
+  String get dateTo;
+  @override
+  int get totalOrders;
+  @override
+  int get totalReceipts;
+  @override
+  double get onTimeDeliveryRate;
+  @override
+  double get averageLeadTimeDays;
+  @override
+  int? get minLeadTimeDays;
+  @override
+  int? get maxLeadTimeDays;
+  @override
+  int get ordersReceived;
+  @override
+  int get ordersPartiallyReceived;
+  @override
+  int get ordersCancelled;
+  @override
+  double get cancellationRate;
+  @override
+  List<RecentDelivery> get recentDeliveries;
+
+  /// Create a copy of SupplierReliability
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$SupplierReliabilityImplCopyWith<_$SupplierReliabilityImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}

@@ -73,3 +73,42 @@ class ProductPurchaseListResponse with _$ProductPurchaseListResponse {
   factory ProductPurchaseListResponse.fromJson(Map<String, dynamic> json) =>
       _$ProductPurchaseListResponseFromJson(json);
 }
+
+@freezed
+class RecentDelivery with _$RecentDelivery {
+  const factory RecentDelivery({
+    required String orderNumber,
+    required String orderDate,
+    String? expectedDate,
+    String? receiptDate,
+    int? leadTimeDays,
+    bool? onTime,
+    required String status,
+    required String grandTotal,
+  }) = _RecentDelivery;
+
+  factory RecentDelivery.fromJson(Map<String, dynamic> json) =>
+      _$RecentDeliveryFromJson(json);
+}
+
+@freezed
+class SupplierReliability with _$SupplierReliability {
+  const factory SupplierReliability({
+    required String dateFrom,
+    required String dateTo,
+    required int totalOrders,
+    required int totalReceipts,
+    required double onTimeDeliveryRate,
+    required double averageLeadTimeDays,
+    int? minLeadTimeDays,
+    int? maxLeadTimeDays,
+    required int ordersReceived,
+    required int ordersPartiallyReceived,
+    required int ordersCancelled,
+    required double cancellationRate,
+    @Default([]) List<RecentDelivery> recentDeliveries,
+  }) = _SupplierReliability;
+
+  factory SupplierReliability.fromJson(Map<String, dynamic> json) =>
+      _$SupplierReliabilityFromJson(json);
+}
