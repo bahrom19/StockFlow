@@ -9,6 +9,7 @@ import { SupplierReliabilityEntity, RecentDeliveryEntity } from '../entities/sup
 import { SupplierPriceHistoryEntity, PricePointEntity } from '../entities/supplier-price-history.entity';
 import { SupplierPaymentAgingEntity, PaymentAgingBucketsEntity, OverdueInvoiceEntity } from '../entities/supplier-payment-aging.entity';
 import { SupplierReturnSummaryEntity, TopReturnedProductEntity } from '../entities/supplier-return-summary.entity';
+import { SupplierPerformanceEntity } from '../entities/supplier-performance.entity';
 
 const INVOICE_STATUSES = [
   PurchaseInvoiceStatus.APPROVED,
@@ -914,6 +915,61 @@ export class SupplierAnalyticsService {
       amountReturnRate,
       quantityReturnRate,
       topReturnedProducts,
+    };
+  }
+
+  // ── Supplier Performance Overview (facade) ──────────────────
+
+  async getPerformance(
+    supplierId: string,
+    companyId: string,
+    dateFrom?: string,
+    dateTo?: string,
+  ): Promise<SupplierPerformanceEntity> {
+    // 1. Verify supplier belongs to company
+    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    if (!supplier) {
+      throw new NotFoundException(`Supplier ${supplierId} not found`);
+    }
+
+    // 2. Call existing methods in parallel — no new SQL
+    const [summary, reliability, paymentAging, returnSummary] = await Promise.all([
+      this.getPurchaseSummary(supplierId, companyId, dateFrom, dateTo),
+      this.getReliability(supplierId, companyId, dateFrom, dateTo),
+      this.getPaymentAging(supplierId, companyId),
+      this.getReturnSummary(supplierId, companyId, dateFrom, dateTo),
+    ]);
+
+    // 3. Compute effective date range for display
+    const now = new Date();
+    const effectiveDateTo = dateTo ? new Date(dateTo) : now;
+    const effectiveDateFrom = dateFrom
+      ? new Date(dateFrom)
+      : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+    return {
+      dateFrom: effectiveDateFrom.toISOString(),
+      dateTo: effectiveDateTo.toISOString(),
+      purchase: {
+        netPurchaseSpend: summary.netPurchaseSpend,
+        totalPurchasedQuantity: summary.totalPurchasedQuantity,
+        invoiceCount: summary.invoiceCount,
+      },
+      delivery: {
+        onTimeDeliveryRate: reliability.onTimeDeliveryRate,
+        averageLeadTimeDays: reliability.averageLeadTimeDays,
+        cancellationRate: reliability.cancellationRate,
+      },
+      returns: {
+        amountReturnRate: returnSummary.amountReturnRate,
+        quantityReturnRate: returnSummary.quantityReturnRate,
+        returnCount: returnSummary.returnCount,
+      },
+      financialRisk: {
+        totalOutstanding: paymentAging.totalOutstanding,
+        overdueCount: paymentAging.overdueCount,
+        overdue90plus: paymentAging.aging.overdue90plus,
+      },
     };
   }
 

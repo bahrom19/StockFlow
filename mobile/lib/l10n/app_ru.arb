@@ -978,5 +978,16 @@
   "qtyReturnRate": "% возврата (кол-во)",
   "returnCount": "Кол-во возвратов",
   "topReturnedProducts": "Часто возвращаемые товары",
-  "noReturns": "Нет возвратов за этот период"
+  "noReturns": "Нет возвратов за этот период",
+  "performanceOverview": "Обзор показателей",
+  "periodBased": "За выбранный период",
+  "purchasePerformance": "Показатели закупок",
+  "deliveryPerformance": "Показатели доставки",
+  "returnPerformance": "Показатели возвратов",
+  "financialRisk": "Финансовый риск",
+  "netPurchase": "Чистые закупки",
+  "invoiceCount": "Счетов",
+  "onTimeRate": "Вовремя",
+  "totalOutstanding": "Задолженность",
+  "overdueCount": "Просроченных счетов"
 }

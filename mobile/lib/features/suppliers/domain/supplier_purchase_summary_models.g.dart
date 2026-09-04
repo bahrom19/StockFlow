@@ -360,3 +360,91 @@ Map<String, dynamic> _$$SupplierReturnSummaryImplToJson(
       'quantityReturnRate': instance.quantityReturnRate,
       'topReturnedProducts': instance.topReturnedProducts,
     };
+
+_$PurchasePerformanceImpl _$$PurchasePerformanceImplFromJson(
+        Map<String, dynamic> json) =>
+    _$PurchasePerformanceImpl(
+      netPurchaseSpend: json['netPurchaseSpend'] as String,
+      totalPurchasedQuantity: (json['totalPurchasedQuantity'] as num).toInt(),
+      invoiceCount: (json['invoiceCount'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$PurchasePerformanceImplToJson(
+        _$PurchasePerformanceImpl instance) =>
+    <String, dynamic>{
+      'netPurchaseSpend': instance.netPurchaseSpend,
+      'totalPurchasedQuantity': instance.totalPurchasedQuantity,
+      'invoiceCount': instance.invoiceCount,
+    };
+
+_$DeliveryPerformanceImpl _$$DeliveryPerformanceImplFromJson(
+        Map<String, dynamic> json) =>
+    _$DeliveryPerformanceImpl(
+      onTimeDeliveryRate: (json['onTimeDeliveryRate'] as num).toDouble(),
+      averageLeadTimeDays: (json['averageLeadTimeDays'] as num).toDouble(),
+      cancellationRate: (json['cancellationRate'] as num).toDouble(),
+    );
+
+Map<String, dynamic> _$$DeliveryPerformanceImplToJson(
+        _$DeliveryPerformanceImpl instance) =>
+    <String, dynamic>{
+      'onTimeDeliveryRate': instance.onTimeDeliveryRate,
+      'averageLeadTimeDays': instance.averageLeadTimeDays,
+      'cancellationRate': instance.cancellationRate,
+    };
+
+_$ReturnPerformanceImpl _$$ReturnPerformanceImplFromJson(
+        Map<String, dynamic> json) =>
+    _$ReturnPerformanceImpl(
+      amountReturnRate: (json['amountReturnRate'] as num).toDouble(),
+      quantityReturnRate: (json['quantityReturnRate'] as num).toDouble(),
+      returnCount: (json['returnCount'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$ReturnPerformanceImplToJson(
+        _$ReturnPerformanceImpl instance) =>
+    <String, dynamic>{
+      'amountReturnRate': instance.amountReturnRate,
+      'quantityReturnRate': instance.quantityReturnRate,
+      'returnCount': instance.returnCount,
+    };
+
+_$FinancialRiskImpl _$$FinancialRiskImplFromJson(Map<String, dynamic> json) =>
+    _$FinancialRiskImpl(
+      totalOutstanding: json['totalOutstanding'] as String,
+      overdueCount: (json['overdueCount'] as num).toInt(),
+      overdue90plus: json['overdue90plus'] as String,
+    );
+
+Map<String, dynamic> _$$FinancialRiskImplToJson(_$FinancialRiskImpl instance) =>
+    <String, dynamic>{
+      'totalOutstanding': instance.totalOutstanding,
+      'overdueCount': instance.overdueCount,
+      'overdue90plus': instance.overdue90plus,
+    };
+
+_$SupplierPerformanceImpl _$$SupplierPerformanceImplFromJson(
+        Map<String, dynamic> json) =>
+    _$SupplierPerformanceImpl(
+      dateFrom: json['dateFrom'] as String,
+      dateTo: json['dateTo'] as String,
+      purchase: PurchasePerformance.fromJson(
+          json['purchase'] as Map<String, dynamic>),
+      delivery: DeliveryPerformance.fromJson(
+          json['delivery'] as Map<String, dynamic>),
+      returns:
+          ReturnPerformance.fromJson(json['returns'] as Map<String, dynamic>),
+      financialRisk:
+          FinancialRisk.fromJson(json['financialRisk'] as Map<String, dynamic>),
+    );
+
+Map<String, dynamic> _$$SupplierPerformanceImplToJson(
+        _$SupplierPerformanceImpl instance) =>
+    <String, dynamic>{
+      'dateFrom': instance.dateFrom,
+      'dateTo': instance.dateTo,
+      'purchase': instance.purchase,
+      'delivery': instance.delivery,
+      'returns': instance.returns,
+      'financialRisk': instance.financialRisk,
+    };

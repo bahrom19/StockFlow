@@ -393,6 +393,25 @@ class SuppliersRepository {
     }
   }
 
+  // ── G5-B7 Performance Overview ──────────────────────────
+
+  Future<SuppliersResult<SupplierPerformance>> getPerformance(
+      String supplierId, {String? dateFrom, String? dateTo}) async {
+    try {
+      final params = <String, dynamic>{};
+      if (dateFrom != null) params['dateFrom'] = dateFrom;
+      if (dateTo != null) params['dateTo'] = dateTo;
+      final response = await _api.get<Map<String, dynamic>>(
+        '/suppliers/$supplierId/analytics/performance',
+        queryParameters: params,
+      );
+      return SuppliersSuccess(
+          SupplierPerformance.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
   // ── Supplier Products ────────────────────────────────
 
   Future<SuppliersResult<SupplierProductListResponse>> getSupplierProducts(

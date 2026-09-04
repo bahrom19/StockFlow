@@ -48,6 +48,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   SupplierReturnSummary? _returnSummary;
   bool _isLoadingReturnSummary = false;
   String? _returnSummaryError;
+  SupplierPerformance? _performance;
+  bool _isLoadingPerformance = false;
+  String? _performanceError;
   bool _isLoadingReliability = false;
   String? _reliabilityError;
   bool _isLoading = true;
@@ -140,11 +143,12 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       }
       _isLoadingPurchaseSummary = false;
     });
-    // Also load product purchases, reliability, and payment aging
+    // Also load product purchases, reliability, payment aging, and performance
     _loadProductPurchases();
     _loadReliability();
     _loadPaymentAging();
     _loadReturnSummary();
+    _loadPerformance();
   }
 
   Future<void> _loadProductPurchases() async {
@@ -238,6 +242,29 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     });
   }
 
+  Future<void> _loadPerformance() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingPerformance = true;
+      _performanceError = null;
+    });
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getPerformance(
+      widget.supplierId,
+      dateFrom: _purchaseDateFrom,
+      dateTo: _purchaseDateTo,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<SupplierPerformance>) {
+        _performance = result.data;
+      } else if (result is SuppliersFailure<SupplierPerformance>) {
+        _performanceError = result.error.message;
+      }
+      _isLoadingPerformance = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -308,6 +335,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
               // ── Addresses Section ─────────────────────────────
               _buildAddressesSection(theme),
+              const SizedBox(height: 24),
+
+              // ── Performance Overview ──────────────────────────
+              _buildPerformanceSection(theme),
               const SizedBox(height: 24),
 
               // ── Finance Section ──────────────────────────────
@@ -751,6 +782,162 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     final repo = ref.read(suppliersRepositoryProvider);
     await repo.deleteAddress(widget.supplierId, address.id);
     _loadContactsAndAddresses();
+  }
+
+  // ── Performance Overview (G5-B7) ───────────────────────
+
+  Widget _buildPerformanceSection(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.analytics_outlined, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(context.l10n.performanceOverview, style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(context.l10n.periodBased, style: theme.textTheme.bodySmall),
+            const SizedBox(height: 12),
+            if (_isLoadingPerformance)
+              const Center(child: CircularProgressIndicator())
+            else if (_performanceError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    Text(
+                      _performanceError!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.error),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _loadPerformance,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(context.l10n.retry),
+                    ),
+                  ],
+                ),
+              )
+            else if (_performance == null)
+              Text(context.l10n.noData, style: theme.textTheme.bodyMedium)
+            else ...[
+              // 2×2 KPI grid
+              Row(
+                children: [
+                  Expanded(child: _buildPerformanceCard(
+                    context.l10n.purchasePerformance,
+                    [
+                      '${context.l10n.netPurchase}: ₸${_performance!.purchase.netPurchaseSpend}',
+                      '${context.l10n.purchasedQuantity}: ${_performance!.purchase.totalPurchasedQuantity}',
+                      '${context.l10n.invoiceCount}: ${_performance!.purchase.invoiceCount}',
+                    ],
+                    theme,
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildPerformanceCard(
+                    context.l10n.deliveryPerformance,
+                    [
+                      '${context.l10n.onTimeRate}: ${_performance!.delivery.onTimeDeliveryRate}%',
+                      '${context.l10n.avgLeadTime}: ${_performance!.delivery.averageLeadTimeDays} ${context.l10n.days}',
+                      '${context.l10n.cancellationRate}: ${_performance!.delivery.cancellationRate}%',
+                    ],
+                    theme,
+                    deliveryRate: _performance!.delivery.onTimeDeliveryRate,
+                  )),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: _buildPerformanceCard(
+                    context.l10n.returnPerformance,
+                    [
+                      '${context.l10n.amountReturnRate}: ${_performance!.returns.amountReturnRate}%',
+                      '${context.l10n.qtyReturnRate}: ${_performance!.returns.quantityReturnRate}%',
+                      '${context.l10n.returnCount}: ${_performance!.returns.returnCount}',
+                    ],
+                    theme,
+                    returnRate: _performance!.returns.amountReturnRate,
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildPerformanceCard(
+                    context.l10n.financialRisk,
+                    [
+                      '${context.l10n.totalOutstanding}: ₸${_performance!.financialRisk.totalOutstanding}',
+                      '${context.l10n.overdueCount}: ${_performance!.financialRisk.overdueCount}',
+                      '${context.l10n.overdue90Plus}: ₸${_performance!.financialRisk.overdue90plus}',
+                    ],
+                    theme,
+                    financialRisk: _performance!.financialRisk.overdue90plus,
+                  )),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPerformanceCard(
+    String title,
+    List<String> lines,
+    ThemeData theme, {
+    double? deliveryRate,
+    double? returnRate,
+    String? financialRisk,
+  }) {
+    // Determine card color signal
+    Color? borderColor;
+    if (deliveryRate != null) {
+      if (deliveryRate >= 90) {
+        borderColor = Colors.green.shade300;
+      } else if (deliveryRate >= 70) {
+        borderColor = Colors.orange.shade300;
+      } else {
+        borderColor = Colors.red.shade300;
+      }
+    } else if (returnRate != null) {
+      if (returnRate < 5) {
+        borderColor = Colors.green.shade300;
+      } else if (returnRate < 15) {
+        borderColor = Colors.orange.shade300;
+      } else {
+        borderColor = Colors.red.shade300;
+      }
+    } else if (financialRisk != null) {
+      final riskVal = double.tryParse(financialRisk) ?? 0;
+      borderColor = riskVal > 0 ? Colors.orange.shade300 : Colors.green.shade300;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: borderColor != null ? Border.all(color: borderColor, width: 1.5) : null,
+        borderRadius: BorderRadius.circular(8),
+        color: theme.colorScheme.surface,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          )),
+          const SizedBox(height: 8),
+          ...lines.map((line) => Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(line, style: theme.textTheme.bodySmall),
+          )),
+        ],
+      ),
+    );
   }
 
   // ── Finance Section ────────────────────────────────────────

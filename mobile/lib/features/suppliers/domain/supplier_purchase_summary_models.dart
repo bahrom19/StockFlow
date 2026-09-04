@@ -224,3 +224,68 @@ class SupplierReturnSummary with _$SupplierReturnSummary {
   factory SupplierReturnSummary.fromJson(Map<String, dynamic> json) =>
       _$SupplierReturnSummaryFromJson(json);
 }
+
+// ── G5-B7 Performance Overview ────────────────────────────────
+
+@freezed
+class PurchasePerformance with _$PurchasePerformance {
+  const factory PurchasePerformance({
+    required String netPurchaseSpend,
+    required int totalPurchasedQuantity,
+    required int invoiceCount,
+  }) = _PurchasePerformance;
+
+  factory PurchasePerformance.fromJson(Map<String, dynamic> json) =>
+      _$PurchasePerformanceFromJson(json);
+}
+
+@freezed
+class DeliveryPerformance with _$DeliveryPerformance {
+  const factory DeliveryPerformance({
+    required double onTimeDeliveryRate,
+    required double averageLeadTimeDays,
+    required double cancellationRate,
+  }) = _DeliveryPerformance;
+
+  factory DeliveryPerformance.fromJson(Map<String, dynamic> json) =>
+      _$DeliveryPerformanceFromJson(json);
+}
+
+@freezed
+class ReturnPerformance with _$ReturnPerformance {
+  const factory ReturnPerformance({
+    required double amountReturnRate,
+    required double quantityReturnRate,
+    required int returnCount,
+  }) = _ReturnPerformance;
+
+  factory ReturnPerformance.fromJson(Map<String, dynamic> json) =>
+      _$ReturnPerformanceFromJson(json);
+}
+
+@freezed
+class FinancialRisk with _$FinancialRisk {
+  const factory FinancialRisk({
+    required String totalOutstanding,
+    required int overdueCount,
+    required String overdue90plus,
+  }) = _FinancialRisk;
+
+  factory FinancialRisk.fromJson(Map<String, dynamic> json) =>
+      _$FinancialRiskFromJson(json);
+}
+
+@freezed
+class SupplierPerformance with _$SupplierPerformance {
+  const factory SupplierPerformance({
+    required String dateFrom,
+    required String dateTo,
+    required PurchasePerformance purchase,
+    required DeliveryPerformance delivery,
+    required ReturnPerformance returns,
+    required FinancialRisk financialRisk,
+  }) = _SupplierPerformance;
+
+  factory SupplierPerformance.fromJson(Map<String, dynamic> json) =>
+      _$SupplierPerformanceFromJson(json);
+}

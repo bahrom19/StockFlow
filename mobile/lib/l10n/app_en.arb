@@ -978,5 +978,16 @@
   "qtyReturnRate": "Qty Return Rate",
   "returnCount": "Returns",
   "topReturnedProducts": "Top Returned Products",
-  "noReturns": "No returns in this period"
+  "noReturns": "No returns in this period",
+  "performanceOverview": "Performance Overview",
+  "periodBased": "For selected period",
+  "purchasePerformance": "Purchase Performance",
+  "deliveryPerformance": "Delivery Performance",
+  "returnPerformance": "Return Performance",
+  "financialRisk": "Financial Risk",
+  "netPurchase": "Net purchase",
+  "invoiceCount": "Invoices",
+  "onTimeRate": "On-time rate",
+  "totalOutstanding": "Outstanding",
+  "overdueCount": "Overdue invoices"
 }

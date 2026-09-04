@@ -4107,3 +4107,1093 @@ abstract class _SupplierReturnSummary implements SupplierReturnSummary {
   _$$SupplierReturnSummaryImplCopyWith<_$SupplierReturnSummaryImpl>
       get copyWith => throw _privateConstructorUsedError;
 }
+
+PurchasePerformance _$PurchasePerformanceFromJson(Map<String, dynamic> json) {
+  return _PurchasePerformance.fromJson(json);
+}
+
+/// @nodoc
+mixin _$PurchasePerformance {
+  String get netPurchaseSpend => throw _privateConstructorUsedError;
+  int get totalPurchasedQuantity => throw _privateConstructorUsedError;
+  int get invoiceCount => throw _privateConstructorUsedError;
+
+  /// Serializes this PurchasePerformance to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of PurchasePerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PurchasePerformanceCopyWith<PurchasePerformance> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PurchasePerformanceCopyWith<$Res> {
+  factory $PurchasePerformanceCopyWith(
+          PurchasePerformance value, $Res Function(PurchasePerformance) then) =
+      _$PurchasePerformanceCopyWithImpl<$Res, PurchasePerformance>;
+  @useResult
+  $Res call(
+      {String netPurchaseSpend, int totalPurchasedQuantity, int invoiceCount});
+}
+
+/// @nodoc
+class _$PurchasePerformanceCopyWithImpl<$Res, $Val extends PurchasePerformance>
+    implements $PurchasePerformanceCopyWith<$Res> {
+  _$PurchasePerformanceCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PurchasePerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? netPurchaseSpend = null,
+    Object? totalPurchasedQuantity = null,
+    Object? invoiceCount = null,
+  }) {
+    return _then(_value.copyWith(
+      netPurchaseSpend: null == netPurchaseSpend
+          ? _value.netPurchaseSpend
+          : netPurchaseSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalPurchasedQuantity: null == totalPurchasedQuantity
+          ? _value.totalPurchasedQuantity
+          : totalPurchasedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      invoiceCount: null == invoiceCount
+          ? _value.invoiceCount
+          : invoiceCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$PurchasePerformanceImplCopyWith<$Res>
+    implements $PurchasePerformanceCopyWith<$Res> {
+  factory _$$PurchasePerformanceImplCopyWith(_$PurchasePerformanceImpl value,
+          $Res Function(_$PurchasePerformanceImpl) then) =
+      __$$PurchasePerformanceImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String netPurchaseSpend, int totalPurchasedQuantity, int invoiceCount});
+}
+
+/// @nodoc
+class __$$PurchasePerformanceImplCopyWithImpl<$Res>
+    extends _$PurchasePerformanceCopyWithImpl<$Res, _$PurchasePerformanceImpl>
+    implements _$$PurchasePerformanceImplCopyWith<$Res> {
+  __$$PurchasePerformanceImplCopyWithImpl(_$PurchasePerformanceImpl _value,
+      $Res Function(_$PurchasePerformanceImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of PurchasePerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? netPurchaseSpend = null,
+    Object? totalPurchasedQuantity = null,
+    Object? invoiceCount = null,
+  }) {
+    return _then(_$PurchasePerformanceImpl(
+      netPurchaseSpend: null == netPurchaseSpend
+          ? _value.netPurchaseSpend
+          : netPurchaseSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalPurchasedQuantity: null == totalPurchasedQuantity
+          ? _value.totalPurchasedQuantity
+          : totalPurchasedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      invoiceCount: null == invoiceCount
+          ? _value.invoiceCount
+          : invoiceCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$PurchasePerformanceImpl implements _PurchasePerformance {
+  const _$PurchasePerformanceImpl(
+      {required this.netPurchaseSpend,
+      required this.totalPurchasedQuantity,
+      required this.invoiceCount});
+
+  factory _$PurchasePerformanceImpl.fromJson(Map<String, dynamic> json) =>
+      _$$PurchasePerformanceImplFromJson(json);
+
+  @override
+  final String netPurchaseSpend;
+  @override
+  final int totalPurchasedQuantity;
+  @override
+  final int invoiceCount;
+
+  @override
+  String toString() {
+    return 'PurchasePerformance(netPurchaseSpend: $netPurchaseSpend, totalPurchasedQuantity: $totalPurchasedQuantity, invoiceCount: $invoiceCount)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PurchasePerformanceImpl &&
+            (identical(other.netPurchaseSpend, netPurchaseSpend) ||
+                other.netPurchaseSpend == netPurchaseSpend) &&
+            (identical(other.totalPurchasedQuantity, totalPurchasedQuantity) ||
+                other.totalPurchasedQuantity == totalPurchasedQuantity) &&
+            (identical(other.invoiceCount, invoiceCount) ||
+                other.invoiceCount == invoiceCount));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType, netPurchaseSpend, totalPurchasedQuantity, invoiceCount);
+
+  /// Create a copy of PurchasePerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PurchasePerformanceImplCopyWith<_$PurchasePerformanceImpl> get copyWith =>
+      __$$PurchasePerformanceImplCopyWithImpl<_$PurchasePerformanceImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$PurchasePerformanceImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _PurchasePerformance implements PurchasePerformance {
+  const factory _PurchasePerformance(
+      {required final String netPurchaseSpend,
+      required final int totalPurchasedQuantity,
+      required final int invoiceCount}) = _$PurchasePerformanceImpl;
+
+  factory _PurchasePerformance.fromJson(Map<String, dynamic> json) =
+      _$PurchasePerformanceImpl.fromJson;
+
+  @override
+  String get netPurchaseSpend;
+  @override
+  int get totalPurchasedQuantity;
+  @override
+  int get invoiceCount;
+
+  /// Create a copy of PurchasePerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PurchasePerformanceImplCopyWith<_$PurchasePerformanceImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+DeliveryPerformance _$DeliveryPerformanceFromJson(Map<String, dynamic> json) {
+  return _DeliveryPerformance.fromJson(json);
+}
+
+/// @nodoc
+mixin _$DeliveryPerformance {
+  double get onTimeDeliveryRate => throw _privateConstructorUsedError;
+  double get averageLeadTimeDays => throw _privateConstructorUsedError;
+  double get cancellationRate => throw _privateConstructorUsedError;
+
+  /// Serializes this DeliveryPerformance to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of DeliveryPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $DeliveryPerformanceCopyWith<DeliveryPerformance> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $DeliveryPerformanceCopyWith<$Res> {
+  factory $DeliveryPerformanceCopyWith(
+          DeliveryPerformance value, $Res Function(DeliveryPerformance) then) =
+      _$DeliveryPerformanceCopyWithImpl<$Res, DeliveryPerformance>;
+  @useResult
+  $Res call(
+      {double onTimeDeliveryRate,
+      double averageLeadTimeDays,
+      double cancellationRate});
+}
+
+/// @nodoc
+class _$DeliveryPerformanceCopyWithImpl<$Res, $Val extends DeliveryPerformance>
+    implements $DeliveryPerformanceCopyWith<$Res> {
+  _$DeliveryPerformanceCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of DeliveryPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? onTimeDeliveryRate = null,
+    Object? averageLeadTimeDays = null,
+    Object? cancellationRate = null,
+  }) {
+    return _then(_value.copyWith(
+      onTimeDeliveryRate: null == onTimeDeliveryRate
+          ? _value.onTimeDeliveryRate
+          : onTimeDeliveryRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      averageLeadTimeDays: null == averageLeadTimeDays
+          ? _value.averageLeadTimeDays
+          : averageLeadTimeDays // ignore: cast_nullable_to_non_nullable
+              as double,
+      cancellationRate: null == cancellationRate
+          ? _value.cancellationRate
+          : cancellationRate // ignore: cast_nullable_to_non_nullable
+              as double,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$DeliveryPerformanceImplCopyWith<$Res>
+    implements $DeliveryPerformanceCopyWith<$Res> {
+  factory _$$DeliveryPerformanceImplCopyWith(_$DeliveryPerformanceImpl value,
+          $Res Function(_$DeliveryPerformanceImpl) then) =
+      __$$DeliveryPerformanceImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {double onTimeDeliveryRate,
+      double averageLeadTimeDays,
+      double cancellationRate});
+}
+
+/// @nodoc
+class __$$DeliveryPerformanceImplCopyWithImpl<$Res>
+    extends _$DeliveryPerformanceCopyWithImpl<$Res, _$DeliveryPerformanceImpl>
+    implements _$$DeliveryPerformanceImplCopyWith<$Res> {
+  __$$DeliveryPerformanceImplCopyWithImpl(_$DeliveryPerformanceImpl _value,
+      $Res Function(_$DeliveryPerformanceImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of DeliveryPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? onTimeDeliveryRate = null,
+    Object? averageLeadTimeDays = null,
+    Object? cancellationRate = null,
+  }) {
+    return _then(_$DeliveryPerformanceImpl(
+      onTimeDeliveryRate: null == onTimeDeliveryRate
+          ? _value.onTimeDeliveryRate
+          : onTimeDeliveryRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      averageLeadTimeDays: null == averageLeadTimeDays
+          ? _value.averageLeadTimeDays
+          : averageLeadTimeDays // ignore: cast_nullable_to_non_nullable
+              as double,
+      cancellationRate: null == cancellationRate
+          ? _value.cancellationRate
+          : cancellationRate // ignore: cast_nullable_to_non_nullable
+              as double,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$DeliveryPerformanceImpl implements _DeliveryPerformance {
+  const _$DeliveryPerformanceImpl(
+      {required this.onTimeDeliveryRate,
+      required this.averageLeadTimeDays,
+      required this.cancellationRate});
+
+  factory _$DeliveryPerformanceImpl.fromJson(Map<String, dynamic> json) =>
+      _$$DeliveryPerformanceImplFromJson(json);
+
+  @override
+  final double onTimeDeliveryRate;
+  @override
+  final double averageLeadTimeDays;
+  @override
+  final double cancellationRate;
+
+  @override
+  String toString() {
+    return 'DeliveryPerformance(onTimeDeliveryRate: $onTimeDeliveryRate, averageLeadTimeDays: $averageLeadTimeDays, cancellationRate: $cancellationRate)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$DeliveryPerformanceImpl &&
+            (identical(other.onTimeDeliveryRate, onTimeDeliveryRate) ||
+                other.onTimeDeliveryRate == onTimeDeliveryRate) &&
+            (identical(other.averageLeadTimeDays, averageLeadTimeDays) ||
+                other.averageLeadTimeDays == averageLeadTimeDays) &&
+            (identical(other.cancellationRate, cancellationRate) ||
+                other.cancellationRate == cancellationRate));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType, onTimeDeliveryRate, averageLeadTimeDays, cancellationRate);
+
+  /// Create a copy of DeliveryPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$DeliveryPerformanceImplCopyWith<_$DeliveryPerformanceImpl> get copyWith =>
+      __$$DeliveryPerformanceImplCopyWithImpl<_$DeliveryPerformanceImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$DeliveryPerformanceImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _DeliveryPerformance implements DeliveryPerformance {
+  const factory _DeliveryPerformance(
+      {required final double onTimeDeliveryRate,
+      required final double averageLeadTimeDays,
+      required final double cancellationRate}) = _$DeliveryPerformanceImpl;
+
+  factory _DeliveryPerformance.fromJson(Map<String, dynamic> json) =
+      _$DeliveryPerformanceImpl.fromJson;
+
+  @override
+  double get onTimeDeliveryRate;
+  @override
+  double get averageLeadTimeDays;
+  @override
+  double get cancellationRate;
+
+  /// Create a copy of DeliveryPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$DeliveryPerformanceImplCopyWith<_$DeliveryPerformanceImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+ReturnPerformance _$ReturnPerformanceFromJson(Map<String, dynamic> json) {
+  return _ReturnPerformance.fromJson(json);
+}
+
+/// @nodoc
+mixin _$ReturnPerformance {
+  double get amountReturnRate => throw _privateConstructorUsedError;
+  double get quantityReturnRate => throw _privateConstructorUsedError;
+  int get returnCount => throw _privateConstructorUsedError;
+
+  /// Serializes this ReturnPerformance to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of ReturnPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ReturnPerformanceCopyWith<ReturnPerformance> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ReturnPerformanceCopyWith<$Res> {
+  factory $ReturnPerformanceCopyWith(
+          ReturnPerformance value, $Res Function(ReturnPerformance) then) =
+      _$ReturnPerformanceCopyWithImpl<$Res, ReturnPerformance>;
+  @useResult
+  $Res call(
+      {double amountReturnRate, double quantityReturnRate, int returnCount});
+}
+
+/// @nodoc
+class _$ReturnPerformanceCopyWithImpl<$Res, $Val extends ReturnPerformance>
+    implements $ReturnPerformanceCopyWith<$Res> {
+  _$ReturnPerformanceCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ReturnPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? amountReturnRate = null,
+    Object? quantityReturnRate = null,
+    Object? returnCount = null,
+  }) {
+    return _then(_value.copyWith(
+      amountReturnRate: null == amountReturnRate
+          ? _value.amountReturnRate
+          : amountReturnRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      quantityReturnRate: null == quantityReturnRate
+          ? _value.quantityReturnRate
+          : quantityReturnRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      returnCount: null == returnCount
+          ? _value.returnCount
+          : returnCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$ReturnPerformanceImplCopyWith<$Res>
+    implements $ReturnPerformanceCopyWith<$Res> {
+  factory _$$ReturnPerformanceImplCopyWith(_$ReturnPerformanceImpl value,
+          $Res Function(_$ReturnPerformanceImpl) then) =
+      __$$ReturnPerformanceImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {double amountReturnRate, double quantityReturnRate, int returnCount});
+}
+
+/// @nodoc
+class __$$ReturnPerformanceImplCopyWithImpl<$Res>
+    extends _$ReturnPerformanceCopyWithImpl<$Res, _$ReturnPerformanceImpl>
+    implements _$$ReturnPerformanceImplCopyWith<$Res> {
+  __$$ReturnPerformanceImplCopyWithImpl(_$ReturnPerformanceImpl _value,
+      $Res Function(_$ReturnPerformanceImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of ReturnPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? amountReturnRate = null,
+    Object? quantityReturnRate = null,
+    Object? returnCount = null,
+  }) {
+    return _then(_$ReturnPerformanceImpl(
+      amountReturnRate: null == amountReturnRate
+          ? _value.amountReturnRate
+          : amountReturnRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      quantityReturnRate: null == quantityReturnRate
+          ? _value.quantityReturnRate
+          : quantityReturnRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      returnCount: null == returnCount
+          ? _value.returnCount
+          : returnCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$ReturnPerformanceImpl implements _ReturnPerformance {
+  const _$ReturnPerformanceImpl(
+      {required this.amountReturnRate,
+      required this.quantityReturnRate,
+      required this.returnCount});
+
+  factory _$ReturnPerformanceImpl.fromJson(Map<String, dynamic> json) =>
+      _$$ReturnPerformanceImplFromJson(json);
+
+  @override
+  final double amountReturnRate;
+  @override
+  final double quantityReturnRate;
+  @override
+  final int returnCount;
+
+  @override
+  String toString() {
+    return 'ReturnPerformance(amountReturnRate: $amountReturnRate, quantityReturnRate: $quantityReturnRate, returnCount: $returnCount)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ReturnPerformanceImpl &&
+            (identical(other.amountReturnRate, amountReturnRate) ||
+                other.amountReturnRate == amountReturnRate) &&
+            (identical(other.quantityReturnRate, quantityReturnRate) ||
+                other.quantityReturnRate == quantityReturnRate) &&
+            (identical(other.returnCount, returnCount) ||
+                other.returnCount == returnCount));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType, amountReturnRate, quantityReturnRate, returnCount);
+
+  /// Create a copy of ReturnPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ReturnPerformanceImplCopyWith<_$ReturnPerformanceImpl> get copyWith =>
+      __$$ReturnPerformanceImplCopyWithImpl<_$ReturnPerformanceImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$ReturnPerformanceImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _ReturnPerformance implements ReturnPerformance {
+  const factory _ReturnPerformance(
+      {required final double amountReturnRate,
+      required final double quantityReturnRate,
+      required final int returnCount}) = _$ReturnPerformanceImpl;
+
+  factory _ReturnPerformance.fromJson(Map<String, dynamic> json) =
+      _$ReturnPerformanceImpl.fromJson;
+
+  @override
+  double get amountReturnRate;
+  @override
+  double get quantityReturnRate;
+  @override
+  int get returnCount;
+
+  /// Create a copy of ReturnPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ReturnPerformanceImplCopyWith<_$ReturnPerformanceImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+FinancialRisk _$FinancialRiskFromJson(Map<String, dynamic> json) {
+  return _FinancialRisk.fromJson(json);
+}
+
+/// @nodoc
+mixin _$FinancialRisk {
+  String get totalOutstanding => throw _privateConstructorUsedError;
+  int get overdueCount => throw _privateConstructorUsedError;
+  String get overdue90plus => throw _privateConstructorUsedError;
+
+  /// Serializes this FinancialRisk to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of FinancialRisk
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $FinancialRiskCopyWith<FinancialRisk> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $FinancialRiskCopyWith<$Res> {
+  factory $FinancialRiskCopyWith(
+          FinancialRisk value, $Res Function(FinancialRisk) then) =
+      _$FinancialRiskCopyWithImpl<$Res, FinancialRisk>;
+  @useResult
+  $Res call({String totalOutstanding, int overdueCount, String overdue90plus});
+}
+
+/// @nodoc
+class _$FinancialRiskCopyWithImpl<$Res, $Val extends FinancialRisk>
+    implements $FinancialRiskCopyWith<$Res> {
+  _$FinancialRiskCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of FinancialRisk
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalOutstanding = null,
+    Object? overdueCount = null,
+    Object? overdue90plus = null,
+  }) {
+    return _then(_value.copyWith(
+      totalOutstanding: null == totalOutstanding
+          ? _value.totalOutstanding
+          : totalOutstanding // ignore: cast_nullable_to_non_nullable
+              as String,
+      overdueCount: null == overdueCount
+          ? _value.overdueCount
+          : overdueCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      overdue90plus: null == overdue90plus
+          ? _value.overdue90plus
+          : overdue90plus // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$FinancialRiskImplCopyWith<$Res>
+    implements $FinancialRiskCopyWith<$Res> {
+  factory _$$FinancialRiskImplCopyWith(
+          _$FinancialRiskImpl value, $Res Function(_$FinancialRiskImpl) then) =
+      __$$FinancialRiskImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({String totalOutstanding, int overdueCount, String overdue90plus});
+}
+
+/// @nodoc
+class __$$FinancialRiskImplCopyWithImpl<$Res>
+    extends _$FinancialRiskCopyWithImpl<$Res, _$FinancialRiskImpl>
+    implements _$$FinancialRiskImplCopyWith<$Res> {
+  __$$FinancialRiskImplCopyWithImpl(
+      _$FinancialRiskImpl _value, $Res Function(_$FinancialRiskImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of FinancialRisk
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalOutstanding = null,
+    Object? overdueCount = null,
+    Object? overdue90plus = null,
+  }) {
+    return _then(_$FinancialRiskImpl(
+      totalOutstanding: null == totalOutstanding
+          ? _value.totalOutstanding
+          : totalOutstanding // ignore: cast_nullable_to_non_nullable
+              as String,
+      overdueCount: null == overdueCount
+          ? _value.overdueCount
+          : overdueCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      overdue90plus: null == overdue90plus
+          ? _value.overdue90plus
+          : overdue90plus // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$FinancialRiskImpl implements _FinancialRisk {
+  const _$FinancialRiskImpl(
+      {required this.totalOutstanding,
+      required this.overdueCount,
+      required this.overdue90plus});
+
+  factory _$FinancialRiskImpl.fromJson(Map<String, dynamic> json) =>
+      _$$FinancialRiskImplFromJson(json);
+
+  @override
+  final String totalOutstanding;
+  @override
+  final int overdueCount;
+  @override
+  final String overdue90plus;
+
+  @override
+  String toString() {
+    return 'FinancialRisk(totalOutstanding: $totalOutstanding, overdueCount: $overdueCount, overdue90plus: $overdue90plus)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$FinancialRiskImpl &&
+            (identical(other.totalOutstanding, totalOutstanding) ||
+                other.totalOutstanding == totalOutstanding) &&
+            (identical(other.overdueCount, overdueCount) ||
+                other.overdueCount == overdueCount) &&
+            (identical(other.overdue90plus, overdue90plus) ||
+                other.overdue90plus == overdue90plus));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, totalOutstanding, overdueCount, overdue90plus);
+
+  /// Create a copy of FinancialRisk
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$FinancialRiskImplCopyWith<_$FinancialRiskImpl> get copyWith =>
+      __$$FinancialRiskImplCopyWithImpl<_$FinancialRiskImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$FinancialRiskImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _FinancialRisk implements FinancialRisk {
+  const factory _FinancialRisk(
+      {required final String totalOutstanding,
+      required final int overdueCount,
+      required final String overdue90plus}) = _$FinancialRiskImpl;
+
+  factory _FinancialRisk.fromJson(Map<String, dynamic> json) =
+      _$FinancialRiskImpl.fromJson;
+
+  @override
+  String get totalOutstanding;
+  @override
+  int get overdueCount;
+  @override
+  String get overdue90plus;
+
+  /// Create a copy of FinancialRisk
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FinancialRiskImplCopyWith<_$FinancialRiskImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+SupplierPerformance _$SupplierPerformanceFromJson(Map<String, dynamic> json) {
+  return _SupplierPerformance.fromJson(json);
+}
+
+/// @nodoc
+mixin _$SupplierPerformance {
+  String get dateFrom => throw _privateConstructorUsedError;
+  String get dateTo => throw _privateConstructorUsedError;
+  PurchasePerformance get purchase => throw _privateConstructorUsedError;
+  DeliveryPerformance get delivery => throw _privateConstructorUsedError;
+  ReturnPerformance get returns => throw _privateConstructorUsedError;
+  FinancialRisk get financialRisk => throw _privateConstructorUsedError;
+
+  /// Serializes this SupplierPerformance to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of SupplierPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $SupplierPerformanceCopyWith<SupplierPerformance> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $SupplierPerformanceCopyWith<$Res> {
+  factory $SupplierPerformanceCopyWith(
+          SupplierPerformance value, $Res Function(SupplierPerformance) then) =
+      _$SupplierPerformanceCopyWithImpl<$Res, SupplierPerformance>;
+  @useResult
+  $Res call(
+      {String dateFrom,
+      String dateTo,
+      PurchasePerformance purchase,
+      DeliveryPerformance delivery,
+      ReturnPerformance returns,
+      FinancialRisk financialRisk});
+
+  $PurchasePerformanceCopyWith<$Res> get purchase;
+  $DeliveryPerformanceCopyWith<$Res> get delivery;
+  $ReturnPerformanceCopyWith<$Res> get returns;
+  $FinancialRiskCopyWith<$Res> get financialRisk;
+}
+
+/// @nodoc
+class _$SupplierPerformanceCopyWithImpl<$Res, $Val extends SupplierPerformance>
+    implements $SupplierPerformanceCopyWith<$Res> {
+  _$SupplierPerformanceCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of SupplierPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? purchase = null,
+    Object? delivery = null,
+    Object? returns = null,
+    Object? financialRisk = null,
+  }) {
+    return _then(_value.copyWith(
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      purchase: null == purchase
+          ? _value.purchase
+          : purchase // ignore: cast_nullable_to_non_nullable
+              as PurchasePerformance,
+      delivery: null == delivery
+          ? _value.delivery
+          : delivery // ignore: cast_nullable_to_non_nullable
+              as DeliveryPerformance,
+      returns: null == returns
+          ? _value.returns
+          : returns // ignore: cast_nullable_to_non_nullable
+              as ReturnPerformance,
+      financialRisk: null == financialRisk
+          ? _value.financialRisk
+          : financialRisk // ignore: cast_nullable_to_non_nullable
+              as FinancialRisk,
+    ) as $Val);
+  }
+
+  /// Create a copy of SupplierPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $PurchasePerformanceCopyWith<$Res> get purchase {
+    return $PurchasePerformanceCopyWith<$Res>(_value.purchase, (value) {
+      return _then(_value.copyWith(purchase: value) as $Val);
+    });
+  }
+
+  /// Create a copy of SupplierPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $DeliveryPerformanceCopyWith<$Res> get delivery {
+    return $DeliveryPerformanceCopyWith<$Res>(_value.delivery, (value) {
+      return _then(_value.copyWith(delivery: value) as $Val);
+    });
+  }
+
+  /// Create a copy of SupplierPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ReturnPerformanceCopyWith<$Res> get returns {
+    return $ReturnPerformanceCopyWith<$Res>(_value.returns, (value) {
+      return _then(_value.copyWith(returns: value) as $Val);
+    });
+  }
+
+  /// Create a copy of SupplierPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $FinancialRiskCopyWith<$Res> get financialRisk {
+    return $FinancialRiskCopyWith<$Res>(_value.financialRisk, (value) {
+      return _then(_value.copyWith(financialRisk: value) as $Val);
+    });
+  }
+}
+
+/// @nodoc
+abstract class _$$SupplierPerformanceImplCopyWith<$Res>
+    implements $SupplierPerformanceCopyWith<$Res> {
+  factory _$$SupplierPerformanceImplCopyWith(_$SupplierPerformanceImpl value,
+          $Res Function(_$SupplierPerformanceImpl) then) =
+      __$$SupplierPerformanceImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String dateFrom,
+      String dateTo,
+      PurchasePerformance purchase,
+      DeliveryPerformance delivery,
+      ReturnPerformance returns,
+      FinancialRisk financialRisk});
+
+  @override
+  $PurchasePerformanceCopyWith<$Res> get purchase;
+  @override
+  $DeliveryPerformanceCopyWith<$Res> get delivery;
+  @override
+  $ReturnPerformanceCopyWith<$Res> get returns;
+  @override
+  $FinancialRiskCopyWith<$Res> get financialRisk;
+}
+
+/// @nodoc
+class __$$SupplierPerformanceImplCopyWithImpl<$Res>
+    extends _$SupplierPerformanceCopyWithImpl<$Res, _$SupplierPerformanceImpl>
+    implements _$$SupplierPerformanceImplCopyWith<$Res> {
+  __$$SupplierPerformanceImplCopyWithImpl(_$SupplierPerformanceImpl _value,
+      $Res Function(_$SupplierPerformanceImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of SupplierPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? purchase = null,
+    Object? delivery = null,
+    Object? returns = null,
+    Object? financialRisk = null,
+  }) {
+    return _then(_$SupplierPerformanceImpl(
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      purchase: null == purchase
+          ? _value.purchase
+          : purchase // ignore: cast_nullable_to_non_nullable
+              as PurchasePerformance,
+      delivery: null == delivery
+          ? _value.delivery
+          : delivery // ignore: cast_nullable_to_non_nullable
+              as DeliveryPerformance,
+      returns: null == returns
+          ? _value.returns
+          : returns // ignore: cast_nullable_to_non_nullable
+              as ReturnPerformance,
+      financialRisk: null == financialRisk
+          ? _value.financialRisk
+          : financialRisk // ignore: cast_nullable_to_non_nullable
+              as FinancialRisk,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$SupplierPerformanceImpl implements _SupplierPerformance {
+  const _$SupplierPerformanceImpl(
+      {required this.dateFrom,
+      required this.dateTo,
+      required this.purchase,
+      required this.delivery,
+      required this.returns,
+      required this.financialRisk});
+
+  factory _$SupplierPerformanceImpl.fromJson(Map<String, dynamic> json) =>
+      _$$SupplierPerformanceImplFromJson(json);
+
+  @override
+  final String dateFrom;
+  @override
+  final String dateTo;
+  @override
+  final PurchasePerformance purchase;
+  @override
+  final DeliveryPerformance delivery;
+  @override
+  final ReturnPerformance returns;
+  @override
+  final FinancialRisk financialRisk;
+
+  @override
+  String toString() {
+    return 'SupplierPerformance(dateFrom: $dateFrom, dateTo: $dateTo, purchase: $purchase, delivery: $delivery, returns: $returns, financialRisk: $financialRisk)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$SupplierPerformanceImpl &&
+            (identical(other.dateFrom, dateFrom) ||
+                other.dateFrom == dateFrom) &&
+            (identical(other.dateTo, dateTo) || other.dateTo == dateTo) &&
+            (identical(other.purchase, purchase) ||
+                other.purchase == purchase) &&
+            (identical(other.delivery, delivery) ||
+                other.delivery == delivery) &&
+            (identical(other.returns, returns) || other.returns == returns) &&
+            (identical(other.financialRisk, financialRisk) ||
+                other.financialRisk == financialRisk));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, dateFrom, dateTo, purchase,
+      delivery, returns, financialRisk);
+
+  /// Create a copy of SupplierPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$SupplierPerformanceImplCopyWith<_$SupplierPerformanceImpl> get copyWith =>
+      __$$SupplierPerformanceImplCopyWithImpl<_$SupplierPerformanceImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$SupplierPerformanceImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _SupplierPerformance implements SupplierPerformance {
+  const factory _SupplierPerformance(
+      {required final String dateFrom,
+      required final String dateTo,
+      required final PurchasePerformance purchase,
+      required final DeliveryPerformance delivery,
+      required final ReturnPerformance returns,
+      required final FinancialRisk financialRisk}) = _$SupplierPerformanceImpl;
+
+  factory _SupplierPerformance.fromJson(Map<String, dynamic> json) =
+      _$SupplierPerformanceImpl.fromJson;
+
+  @override
+  String get dateFrom;
+  @override
+  String get dateTo;
+  @override
+  PurchasePerformance get purchase;
+  @override
+  DeliveryPerformance get delivery;
+  @override
+  ReturnPerformance get returns;
+  @override
+  FinancialRisk get financialRisk;
+
+  /// Create a copy of SupplierPerformance
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$SupplierPerformanceImplCopyWith<_$SupplierPerformanceImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}

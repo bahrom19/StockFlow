@@ -978,5 +978,16 @@
   "qtyReturnRate": "% қайтару (саны)",
   "returnCount": "Қайтару саны",
   "topReturnedProducts": "Жиі қайтарылатын тауарлар",
-  "noReturns": "Бұл кезеңде қайтару жоқ"
+  "noReturns": "Бұл кезеңде қайтару жоқ",
+  "performanceOverview": "Көрсеткіштерді шолу",
+  "periodBased": "Таңдалған кезең үшін",
+  "purchasePerformance": "Сатып алу көрсеткіштері",
+  "deliveryPerformance": "Жеткізу көрсеткіштері",
+  "returnPerformance": "Қайтару көрсеткіштері",
+  "financialRisk": "Қаржылық тәуекел",
+  "netPurchase": "Таза сатып алу",
+  "invoiceCount": "Шоттар",
+  "onTimeRate": "Уақытында",
+  "totalOutstanding": "Қарыз",
+  "overdueCount": "Мерзімі өткен шоттар"
 }

@@ -19,6 +19,7 @@ import { SupplierReliabilityEntity } from '../entities/supplier-reliability.enti
 import { SupplierPriceHistoryEntity } from '../entities/supplier-price-history.entity';
 import { SupplierPaymentAgingEntity } from '../entities/supplier-payment-aging.entity';
 import { SupplierReturnSummaryEntity } from '../entities/supplier-return-summary.entity';
+import { SupplierPerformanceEntity } from '../entities/supplier-performance.entity';
 
 @ApiTags('suppliers / analytics')
 @ApiBearerAuth()
@@ -158,6 +159,27 @@ export class SupplierAnalyticsController {
     @CurrentUser() user?: JwtPayload,
   ) {
     return this.analyticsService.getReturnSummary(
+      supplierId,
+      user!.companyId,
+      dateFrom,
+      dateTo,
+    );
+  }
+
+  @Get('analytics/performance')
+  @RequirePermission('suppliers:read')
+  @ApiOperation({ summary: 'Get supplier performance overview (KPI dashboard)' })
+  @ApiParam({ name: 'supplierId', type: String })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
+  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
+  @ApiResponse({ status: 200, type: SupplierPerformanceEntity })
+  async getPerformance(
+    @Param('supplierId') supplierId: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.analyticsService.getPerformance(
       supplierId,
       user!.companyId,
       dateFrom,

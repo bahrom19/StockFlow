@@ -1120,3 +1120,174 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
     expect(result.topReturnedProducts[0]!.returnedQuantity).toBe(150);
   });
 });
+
+describe('SupplierAnalyticsService.getPerformance', () => {
+  let service: SupplierAnalyticsService;
+  let mockPrisma: any;
+  let mockSuppliersRepo: any;
+  const companyId = 'company-1';
+  const supplierId = 'supplier-1';
+
+  beforeEach(() => {
+    mockPrisma = {
+      purchaseInvoice: { aggregate: jest.fn() },
+      purchaseInvoiceItem: { aggregate: jest.fn(), groupBy: jest.fn() },
+      purchaseReturn: { aggregate: jest.fn() },
+      supplierPayment: { aggregate: jest.fn() },
+      $queryRaw: jest.fn(),
+    };
+    mockSuppliersRepo = {
+      findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+    };
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('should return 404 when supplier not found', async () => {
+    mockSuppliersRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.getPerformance(supplierId, companyId),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should compose data from B1/B3/B5/B6 facade methods', async () => {
+    // Spy on internal methods — testing facade composition, not internals
+    jest.spyOn(service, 'getPurchaseSummary').mockResolvedValue({
+      dateFrom: '2025-09-04', dateTo: '2026-09-04',
+      totalInvoiced: '10000000', totalReturned: '500000', netPurchaseSpend: '9500000',
+      totalPurchasedQuantity: 3000, weightedAverageUnitCost: '3333.3333',
+      invoiceCount: 20, returnCount: 3,
+      firstPurchaseDate: '2025-01-01', lastPurchaseDate: '2026-01-01',
+      monthlySpend: [], currentTotalPaid: '7500000', currentOutstanding: '2500000',
+    } as any);
+    jest.spyOn(service, 'getReliability').mockResolvedValue({
+      totalOrders: 10, totalReceipts: 8,
+      onTimeDeliveryRate: 87.5, averageLeadTimeDays: 5.2,
+      minLeadTimeDays: 2, maxLeadTimeDays: 12,
+      ordersReceived: 8, ordersPartiallyReceived: 0, ordersCancelled: 2,
+      cancellationRate: 20, recentDeliveries: [],
+    } as any);
+    jest.spyOn(service, 'getPaymentAging').mockResolvedValue({
+      totalOutstanding: '2500000',
+      aging: { current: '2000000', days1_30: '300000', days31_60: '150000', days61_90: '50000', overdue90plus: '0' },
+      overdueInvoices: [], invoiceCount: 5, overdueCount: 2,
+    } as any);
+    jest.spyOn(service, 'getReturnSummary').mockResolvedValue({
+      dateFrom: '2025-09-04', dateTo: '2026-09-04',
+      totalReturnedAmount: '500000', totalReturnedQuantity: 200, returnCount: 3,
+      totalPurchaseSpend: '10000000', totalPurchasedQuantity: 3000,
+      amountReturnRate: 5.0, quantityReturnRate: 6.7,
+      topReturnedProducts: [],
+    } as any);
+
+    const result = await service.getPerformance(supplierId, companyId);
+
+    expect(result.dateFrom).toBeDefined();
+    expect(result.dateTo).toBeDefined();
+    expect(result.purchase.netPurchaseSpend).toBe('9500000');
+    expect(result.purchase.totalPurchasedQuantity).toBe(3000);
+    expect(result.purchase.invoiceCount).toBe(20);
+    expect(result.delivery.onTimeDeliveryRate).toBe(87.5);
+    expect(result.delivery.averageLeadTimeDays).toBe(5.2);
+    expect(result.delivery.cancellationRate).toBe(20);
+    expect(result.returns.amountReturnRate).toBe(5.0);
+    expect(result.returns.quantityReturnRate).toBe(6.7);
+    expect(result.returns.returnCount).toBe(3);
+    expect(result.financialRisk.totalOutstanding).toBe('2500000');
+    expect(result.financialRisk.overdueCount).toBe(2);
+    expect(result.financialRisk.overdue90plus).toBe('0');
+
+    // Verify all facade methods were called with correct params
+    expect(service.getPurchaseSummary).toHaveBeenCalledWith(supplierId, companyId, undefined, undefined);
+    expect(service.getReliability).toHaveBeenCalledWith(supplierId, companyId, undefined, undefined);
+    expect(service.getPaymentAging).toHaveBeenCalledWith(supplierId, companyId);
+    expect(service.getReturnSummary).toHaveBeenCalledWith(supplierId, companyId, undefined, undefined);
+  });
+
+  it('should pass dateFrom/dateTo to period-based methods but not to payment aging', async () => {
+    jest.spyOn(service, 'getPurchaseSummary').mockResolvedValue({
+      dateFrom: '2026-01-01', dateTo: '2026-06-30',
+      totalInvoiced: '5000000', totalReturned: '0', netPurchaseSpend: '5000000',
+      totalPurchasedQuantity: 1500, weightedAverageUnitCost: '3333.3333',
+      invoiceCount: 10, returnCount: 0,
+      firstPurchaseDate: '2026-01-01', lastPurchaseDate: '2026-06-30',
+      monthlySpend: [], currentTotalPaid: '5000000', currentOutstanding: '0',
+    } as any);
+    jest.spyOn(service, 'getReliability').mockResolvedValue({
+      totalOrders: 5, totalReceipts: 5,
+      onTimeDeliveryRate: 100, averageLeadTimeDays: 3,
+      minLeadTimeDays: 1, maxLeadTimeDays: 5,
+      ordersReceived: 5, ordersPartiallyReceived: 0, ordersCancelled: 0,
+      cancellationRate: 0, recentDeliveries: [],
+    } as any);
+    jest.spyOn(service, 'getPaymentAging').mockResolvedValue({
+      totalOutstanding: '0',
+      aging: { current: '0', days1_30: '0', days31_60: '0', days61_90: '0', overdue90plus: '0' },
+      overdueInvoices: [], invoiceCount: 0, overdueCount: 0,
+    } as any);
+    jest.spyOn(service, 'getReturnSummary').mockResolvedValue({
+      dateFrom: '2026-01-01', dateTo: '2026-06-30',
+      totalReturnedAmount: '0', totalReturnedQuantity: 0, returnCount: 0,
+      totalPurchaseSpend: '5000000', totalPurchasedQuantity: 1500,
+      amountReturnRate: 0, quantityReturnRate: 0,
+      topReturnedProducts: [],
+    } as any);
+
+    await service.getPerformance(supplierId, companyId, '2026-01-01', '2026-06-30');
+
+    // Period methods get dateFrom/dateTo
+    expect(service.getPurchaseSummary).toHaveBeenCalledWith(supplierId, companyId, '2026-01-01', '2026-06-30');
+    expect(service.getReliability).toHaveBeenCalledWith(supplierId, companyId, '2026-01-01', '2026-06-30');
+    expect(service.getReturnSummary).toHaveBeenCalledWith(supplierId, companyId, '2026-01-01', '2026-06-30');
+    // Payment aging is current-state — no period passed
+    expect(service.getPaymentAging).toHaveBeenCalledWith(supplierId, companyId);
+  });
+
+  it('should return all-zero metrics for supplier with no data', async () => {
+    jest.spyOn(service, 'getPurchaseSummary').mockResolvedValue({
+      dateFrom: '2025-09-04', dateTo: '2026-09-04',
+      totalInvoiced: '0', totalReturned: '0', netPurchaseSpend: '0',
+      totalPurchasedQuantity: 0, weightedAverageUnitCost: '0',
+      invoiceCount: 0, returnCount: 0,
+      firstPurchaseDate: null, lastPurchaseDate: null,
+      monthlySpend: [], currentTotalPaid: '0', currentOutstanding: '0',
+    } as any);
+    jest.spyOn(service, 'getReliability').mockResolvedValue({
+      totalOrders: 0, totalReceipts: 0,
+      onTimeDeliveryRate: 0, averageLeadTimeDays: 0,
+      minLeadTimeDays: 0, maxLeadTimeDays: 0,
+      ordersReceived: 0, ordersPartiallyReceived: 0, ordersCancelled: 0,
+      cancellationRate: 0, recentDeliveries: [],
+    } as any);
+    jest.spyOn(service, 'getPaymentAging').mockResolvedValue({
+      totalOutstanding: '0',
+      aging: { current: '0', days1_30: '0', days31_60: '0', days61_90: '0', overdue90plus: '0' },
+      overdueInvoices: [], invoiceCount: 0, overdueCount: 0,
+    } as any);
+    jest.spyOn(service, 'getReturnSummary').mockResolvedValue({
+      dateFrom: '2025-09-04', dateTo: '2026-09-04',
+      totalReturnedAmount: '0', totalReturnedQuantity: 0, returnCount: 0,
+      totalPurchaseSpend: '0', totalPurchasedQuantity: 0,
+      amountReturnRate: 0, quantityReturnRate: 0,
+      topReturnedProducts: [],
+    } as any);
+
+    const result = await service.getPerformance(supplierId, companyId);
+
+    expect(result.purchase.netPurchaseSpend).toBe('0');
+    expect(result.purchase.totalPurchasedQuantity).toBe(0);
+    expect(result.purchase.invoiceCount).toBe(0);
+    expect(result.delivery.onTimeDeliveryRate).toBe(0);
+    expect(result.delivery.averageLeadTimeDays).toBe(0);
+    expect(result.delivery.cancellationRate).toBe(0);
+    expect(result.returns.amountReturnRate).toBe(0);
+    expect(result.returns.quantityReturnRate).toBe(0);
+    expect(result.returns.returnCount).toBe(0);
+    expect(result.financialRisk.totalOutstanding).toBe('0');
+    expect(result.financialRisk.overdueCount).toBe(0);
+    expect(result.financialRisk.overdue90plus).toBe('0');
+  });
+});
