@@ -957,5 +957,10 @@
   "ordersCancelled": "Cancelled",
   "cancellationRate": "Cancel Rate",
   "recentDeliveries": "Recent Deliveries",
-  "noOrderData": "No order data"
+  "noOrderData": "No order data",
+  "priceHistory": "Price History",
+  "currentQuotedPrice": "Current Quote",
+  "priceTrend": "Price Trend",
+  "noPriceHistory": "No purchase history for this product",
+  "close": "Close"
 }

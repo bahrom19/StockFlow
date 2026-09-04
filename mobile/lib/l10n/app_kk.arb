@@ -957,5 +957,10 @@
   "ordersCancelled": "Бас тартылды",
   "cancellationRate": "% бас тарту",
   "recentDeliveries": "Соңғы жеткізулер",
-  "noOrderData": "Тапсырыс деректері жоқ"
+  "noOrderData": "Тапсырыс деректері жоқ",
+  "priceHistory": "Бағалар тарихы",
+  "currentQuotedPrice": "Қазіргі баға",
+  "priceTrend": "Баға өзгерісі",
+  "noPriceHistory": "Бұл өнім бойынша сатып алу тарихы жоқ",
+  "close": "Жабу"
 }

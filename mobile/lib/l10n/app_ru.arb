@@ -957,5 +957,10 @@
   "ordersCancelled": "Отменено",
   "cancellationRate": "% отмен",
   "recentDeliveries": "Последние поставки",
-  "noOrderData": "Нет данных о заказах"
+  "noOrderData": "Нет данных о заказах",
+  "priceHistory": "История цен",
+  "currentQuotedPrice": "Текущая цена",
+  "priceTrend": "Динамика цен",
+  "noPriceHistory": "Нет истории закупок для этого товара",
+  "close": "Закрыть"
 }

@@ -2063,3 +2063,603 @@ abstract class _SupplierReliability implements SupplierReliability {
   _$$SupplierReliabilityImplCopyWith<_$SupplierReliabilityImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
+
+PricePoint _$PricePointFromJson(Map<String, dynamic> json) {
+  return _PricePoint.fromJson(json);
+}
+
+/// @nodoc
+mixin _$PricePoint {
+  String get invoiceDate => throw _privateConstructorUsedError;
+  String get invoiceNumber => throw _privateConstructorUsedError;
+  String get unitCost => throw _privateConstructorUsedError;
+  int get quantity => throw _privateConstructorUsedError;
+  String get total => throw _privateConstructorUsedError;
+
+  /// Serializes this PricePoint to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of PricePoint
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PricePointCopyWith<PricePoint> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PricePointCopyWith<$Res> {
+  factory $PricePointCopyWith(
+          PricePoint value, $Res Function(PricePoint) then) =
+      _$PricePointCopyWithImpl<$Res, PricePoint>;
+  @useResult
+  $Res call(
+      {String invoiceDate,
+      String invoiceNumber,
+      String unitCost,
+      int quantity,
+      String total});
+}
+
+/// @nodoc
+class _$PricePointCopyWithImpl<$Res, $Val extends PricePoint>
+    implements $PricePointCopyWith<$Res> {
+  _$PricePointCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PricePoint
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? invoiceDate = null,
+    Object? invoiceNumber = null,
+    Object? unitCost = null,
+    Object? quantity = null,
+    Object? total = null,
+  }) {
+    return _then(_value.copyWith(
+      invoiceDate: null == invoiceDate
+          ? _value.invoiceDate
+          : invoiceDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceNumber: null == invoiceNumber
+          ? _value.invoiceNumber
+          : invoiceNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      unitCost: null == unitCost
+          ? _value.unitCost
+          : unitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      total: null == total
+          ? _value.total
+          : total // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$PricePointImplCopyWith<$Res>
+    implements $PricePointCopyWith<$Res> {
+  factory _$$PricePointImplCopyWith(
+          _$PricePointImpl value, $Res Function(_$PricePointImpl) then) =
+      __$$PricePointImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String invoiceDate,
+      String invoiceNumber,
+      String unitCost,
+      int quantity,
+      String total});
+}
+
+/// @nodoc
+class __$$PricePointImplCopyWithImpl<$Res>
+    extends _$PricePointCopyWithImpl<$Res, _$PricePointImpl>
+    implements _$$PricePointImplCopyWith<$Res> {
+  __$$PricePointImplCopyWithImpl(
+      _$PricePointImpl _value, $Res Function(_$PricePointImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of PricePoint
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? invoiceDate = null,
+    Object? invoiceNumber = null,
+    Object? unitCost = null,
+    Object? quantity = null,
+    Object? total = null,
+  }) {
+    return _then(_$PricePointImpl(
+      invoiceDate: null == invoiceDate
+          ? _value.invoiceDate
+          : invoiceDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceNumber: null == invoiceNumber
+          ? _value.invoiceNumber
+          : invoiceNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      unitCost: null == unitCost
+          ? _value.unitCost
+          : unitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      total: null == total
+          ? _value.total
+          : total // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$PricePointImpl implements _PricePoint {
+  const _$PricePointImpl(
+      {required this.invoiceDate,
+      required this.invoiceNumber,
+      required this.unitCost,
+      required this.quantity,
+      required this.total});
+
+  factory _$PricePointImpl.fromJson(Map<String, dynamic> json) =>
+      _$$PricePointImplFromJson(json);
+
+  @override
+  final String invoiceDate;
+  @override
+  final String invoiceNumber;
+  @override
+  final String unitCost;
+  @override
+  final int quantity;
+  @override
+  final String total;
+
+  @override
+  String toString() {
+    return 'PricePoint(invoiceDate: $invoiceDate, invoiceNumber: $invoiceNumber, unitCost: $unitCost, quantity: $quantity, total: $total)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PricePointImpl &&
+            (identical(other.invoiceDate, invoiceDate) ||
+                other.invoiceDate == invoiceDate) &&
+            (identical(other.invoiceNumber, invoiceNumber) ||
+                other.invoiceNumber == invoiceNumber) &&
+            (identical(other.unitCost, unitCost) ||
+                other.unitCost == unitCost) &&
+            (identical(other.quantity, quantity) ||
+                other.quantity == quantity) &&
+            (identical(other.total, total) || other.total == total));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType, invoiceDate, invoiceNumber, unitCost, quantity, total);
+
+  /// Create a copy of PricePoint
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PricePointImplCopyWith<_$PricePointImpl> get copyWith =>
+      __$$PricePointImplCopyWithImpl<_$PricePointImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$PricePointImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _PricePoint implements PricePoint {
+  const factory _PricePoint(
+      {required final String invoiceDate,
+      required final String invoiceNumber,
+      required final String unitCost,
+      required final int quantity,
+      required final String total}) = _$PricePointImpl;
+
+  factory _PricePoint.fromJson(Map<String, dynamic> json) =
+      _$PricePointImpl.fromJson;
+
+  @override
+  String get invoiceDate;
+  @override
+  String get invoiceNumber;
+  @override
+  String get unitCost;
+  @override
+  int get quantity;
+  @override
+  String get total;
+
+  /// Create a copy of PricePoint
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PricePointImplCopyWith<_$PricePointImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+SupplierPriceHistory _$SupplierPriceHistoryFromJson(Map<String, dynamic> json) {
+  return _SupplierPriceHistory.fromJson(json);
+}
+
+/// @nodoc
+mixin _$SupplierPriceHistory {
+  String get productId => throw _privateConstructorUsedError;
+  String get productName => throw _privateConstructorUsedError;
+  String? get sku => throw _privateConstructorUsedError;
+  String get dateFrom => throw _privateConstructorUsedError;
+  String get dateTo => throw _privateConstructorUsedError;
+  String? get currentQuotedPrice => throw _privateConstructorUsedError;
+  String get averageUnitCost => throw _privateConstructorUsedError;
+  String get minUnitCost => throw _privateConstructorUsedError;
+  String get maxUnitCost => throw _privateConstructorUsedError;
+  List<PricePoint> get pricePoints => throw _privateConstructorUsedError;
+
+  /// Serializes this SupplierPriceHistory to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of SupplierPriceHistory
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $SupplierPriceHistoryCopyWith<SupplierPriceHistory> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $SupplierPriceHistoryCopyWith<$Res> {
+  factory $SupplierPriceHistoryCopyWith(SupplierPriceHistory value,
+          $Res Function(SupplierPriceHistory) then) =
+      _$SupplierPriceHistoryCopyWithImpl<$Res, SupplierPriceHistory>;
+  @useResult
+  $Res call(
+      {String productId,
+      String productName,
+      String? sku,
+      String dateFrom,
+      String dateTo,
+      String? currentQuotedPrice,
+      String averageUnitCost,
+      String minUnitCost,
+      String maxUnitCost,
+      List<PricePoint> pricePoints});
+}
+
+/// @nodoc
+class _$SupplierPriceHistoryCopyWithImpl<$Res,
+        $Val extends SupplierPriceHistory>
+    implements $SupplierPriceHistoryCopyWith<$Res> {
+  _$SupplierPriceHistoryCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of SupplierPriceHistory
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? productName = null,
+    Object? sku = freezed,
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? currentQuotedPrice = freezed,
+    Object? averageUnitCost = null,
+    Object? minUnitCost = null,
+    Object? maxUnitCost = null,
+    Object? pricePoints = null,
+  }) {
+    return _then(_value.copyWith(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productName: null == productName
+          ? _value.productName
+          : productName // ignore: cast_nullable_to_non_nullable
+              as String,
+      sku: freezed == sku
+          ? _value.sku
+          : sku // ignore: cast_nullable_to_non_nullable
+              as String?,
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      currentQuotedPrice: freezed == currentQuotedPrice
+          ? _value.currentQuotedPrice
+          : currentQuotedPrice // ignore: cast_nullable_to_non_nullable
+              as String?,
+      averageUnitCost: null == averageUnitCost
+          ? _value.averageUnitCost
+          : averageUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      minUnitCost: null == minUnitCost
+          ? _value.minUnitCost
+          : minUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      maxUnitCost: null == maxUnitCost
+          ? _value.maxUnitCost
+          : maxUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      pricePoints: null == pricePoints
+          ? _value.pricePoints
+          : pricePoints // ignore: cast_nullable_to_non_nullable
+              as List<PricePoint>,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$SupplierPriceHistoryImplCopyWith<$Res>
+    implements $SupplierPriceHistoryCopyWith<$Res> {
+  factory _$$SupplierPriceHistoryImplCopyWith(_$SupplierPriceHistoryImpl value,
+          $Res Function(_$SupplierPriceHistoryImpl) then) =
+      __$$SupplierPriceHistoryImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String productId,
+      String productName,
+      String? sku,
+      String dateFrom,
+      String dateTo,
+      String? currentQuotedPrice,
+      String averageUnitCost,
+      String minUnitCost,
+      String maxUnitCost,
+      List<PricePoint> pricePoints});
+}
+
+/// @nodoc
+class __$$SupplierPriceHistoryImplCopyWithImpl<$Res>
+    extends _$SupplierPriceHistoryCopyWithImpl<$Res, _$SupplierPriceHistoryImpl>
+    implements _$$SupplierPriceHistoryImplCopyWith<$Res> {
+  __$$SupplierPriceHistoryImplCopyWithImpl(_$SupplierPriceHistoryImpl _value,
+      $Res Function(_$SupplierPriceHistoryImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of SupplierPriceHistory
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? productName = null,
+    Object? sku = freezed,
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? currentQuotedPrice = freezed,
+    Object? averageUnitCost = null,
+    Object? minUnitCost = null,
+    Object? maxUnitCost = null,
+    Object? pricePoints = null,
+  }) {
+    return _then(_$SupplierPriceHistoryImpl(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productName: null == productName
+          ? _value.productName
+          : productName // ignore: cast_nullable_to_non_nullable
+              as String,
+      sku: freezed == sku
+          ? _value.sku
+          : sku // ignore: cast_nullable_to_non_nullable
+              as String?,
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      currentQuotedPrice: freezed == currentQuotedPrice
+          ? _value.currentQuotedPrice
+          : currentQuotedPrice // ignore: cast_nullable_to_non_nullable
+              as String?,
+      averageUnitCost: null == averageUnitCost
+          ? _value.averageUnitCost
+          : averageUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      minUnitCost: null == minUnitCost
+          ? _value.minUnitCost
+          : minUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      maxUnitCost: null == maxUnitCost
+          ? _value.maxUnitCost
+          : maxUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      pricePoints: null == pricePoints
+          ? _value._pricePoints
+          : pricePoints // ignore: cast_nullable_to_non_nullable
+              as List<PricePoint>,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$SupplierPriceHistoryImpl implements _SupplierPriceHistory {
+  const _$SupplierPriceHistoryImpl(
+      {required this.productId,
+      required this.productName,
+      this.sku,
+      required this.dateFrom,
+      required this.dateTo,
+      this.currentQuotedPrice,
+      required this.averageUnitCost,
+      required this.minUnitCost,
+      required this.maxUnitCost,
+      final List<PricePoint> pricePoints = const []})
+      : _pricePoints = pricePoints;
+
+  factory _$SupplierPriceHistoryImpl.fromJson(Map<String, dynamic> json) =>
+      _$$SupplierPriceHistoryImplFromJson(json);
+
+  @override
+  final String productId;
+  @override
+  final String productName;
+  @override
+  final String? sku;
+  @override
+  final String dateFrom;
+  @override
+  final String dateTo;
+  @override
+  final String? currentQuotedPrice;
+  @override
+  final String averageUnitCost;
+  @override
+  final String minUnitCost;
+  @override
+  final String maxUnitCost;
+  final List<PricePoint> _pricePoints;
+  @override
+  @JsonKey()
+  List<PricePoint> get pricePoints {
+    if (_pricePoints is EqualUnmodifiableListView) return _pricePoints;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_pricePoints);
+  }
+
+  @override
+  String toString() {
+    return 'SupplierPriceHistory(productId: $productId, productName: $productName, sku: $sku, dateFrom: $dateFrom, dateTo: $dateTo, currentQuotedPrice: $currentQuotedPrice, averageUnitCost: $averageUnitCost, minUnitCost: $minUnitCost, maxUnitCost: $maxUnitCost, pricePoints: $pricePoints)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$SupplierPriceHistoryImpl &&
+            (identical(other.productId, productId) ||
+                other.productId == productId) &&
+            (identical(other.productName, productName) ||
+                other.productName == productName) &&
+            (identical(other.sku, sku) || other.sku == sku) &&
+            (identical(other.dateFrom, dateFrom) ||
+                other.dateFrom == dateFrom) &&
+            (identical(other.dateTo, dateTo) || other.dateTo == dateTo) &&
+            (identical(other.currentQuotedPrice, currentQuotedPrice) ||
+                other.currentQuotedPrice == currentQuotedPrice) &&
+            (identical(other.averageUnitCost, averageUnitCost) ||
+                other.averageUnitCost == averageUnitCost) &&
+            (identical(other.minUnitCost, minUnitCost) ||
+                other.minUnitCost == minUnitCost) &&
+            (identical(other.maxUnitCost, maxUnitCost) ||
+                other.maxUnitCost == maxUnitCost) &&
+            const DeepCollectionEquality()
+                .equals(other._pricePoints, _pricePoints));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType,
+      productId,
+      productName,
+      sku,
+      dateFrom,
+      dateTo,
+      currentQuotedPrice,
+      averageUnitCost,
+      minUnitCost,
+      maxUnitCost,
+      const DeepCollectionEquality().hash(_pricePoints));
+
+  /// Create a copy of SupplierPriceHistory
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$SupplierPriceHistoryImplCopyWith<_$SupplierPriceHistoryImpl>
+      get copyWith =>
+          __$$SupplierPriceHistoryImplCopyWithImpl<_$SupplierPriceHistoryImpl>(
+              this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$SupplierPriceHistoryImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _SupplierPriceHistory implements SupplierPriceHistory {
+  const factory _SupplierPriceHistory(
+      {required final String productId,
+      required final String productName,
+      final String? sku,
+      required final String dateFrom,
+      required final String dateTo,
+      final String? currentQuotedPrice,
+      required final String averageUnitCost,
+      required final String minUnitCost,
+      required final String maxUnitCost,
+      final List<PricePoint> pricePoints}) = _$SupplierPriceHistoryImpl;
+
+  factory _SupplierPriceHistory.fromJson(Map<String, dynamic> json) =
+      _$SupplierPriceHistoryImpl.fromJson;
+
+  @override
+  String get productId;
+  @override
+  String get productName;
+  @override
+  String? get sku;
+  @override
+  String get dateFrom;
+  @override
+  String get dateTo;
+  @override
+  String? get currentQuotedPrice;
+  @override
+  String get averageUnitCost;
+  @override
+  String get minUnitCost;
+  @override
+  String get maxUnitCost;
+  @override
+  List<PricePoint> get pricePoints;
+
+  /// Create a copy of SupplierPriceHistory
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$SupplierPriceHistoryImplCopyWith<_$SupplierPriceHistoryImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}

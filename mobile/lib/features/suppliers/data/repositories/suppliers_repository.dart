@@ -343,6 +343,26 @@ class SuppliersRepository {
     }
   }
 
+  Future<SuppliersResult<SupplierPriceHistory>> getPriceHistory(
+      String supplierId, String productId,
+      {String? dateFrom, String? dateTo}) async {
+    try {
+      final params = <String, dynamic>{
+        'productId': productId,
+      };
+      if (dateFrom != null && dateFrom.isNotEmpty) params['dateFrom'] = dateFrom;
+      if (dateTo != null && dateTo.isNotEmpty) params['dateTo'] = dateTo;
+      final response = await _api.get<Map<String, dynamic>>(
+        '/suppliers/$supplierId/analytics/price-history',
+        queryParameters: params,
+      );
+      return SuppliersSuccess(
+          SupplierPriceHistory.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
   // ── Supplier Products ────────────────────────────────
 
   Future<SuppliersResult<SupplierProductListResponse>> getSupplierProducts(

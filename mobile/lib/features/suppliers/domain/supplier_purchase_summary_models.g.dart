@@ -182,3 +182,54 @@ Map<String, dynamic> _$$SupplierReliabilityImplToJson(
       'cancellationRate': instance.cancellationRate,
       'recentDeliveries': instance.recentDeliveries,
     };
+
+_$PricePointImpl _$$PricePointImplFromJson(Map<String, dynamic> json) =>
+    _$PricePointImpl(
+      invoiceDate: json['invoiceDate'] as String,
+      invoiceNumber: json['invoiceNumber'] as String,
+      unitCost: json['unitCost'] as String,
+      quantity: (json['quantity'] as num).toInt(),
+      total: json['total'] as String,
+    );
+
+Map<String, dynamic> _$$PricePointImplToJson(_$PricePointImpl instance) =>
+    <String, dynamic>{
+      'invoiceDate': instance.invoiceDate,
+      'invoiceNumber': instance.invoiceNumber,
+      'unitCost': instance.unitCost,
+      'quantity': instance.quantity,
+      'total': instance.total,
+    };
+
+_$SupplierPriceHistoryImpl _$$SupplierPriceHistoryImplFromJson(
+        Map<String, dynamic> json) =>
+    _$SupplierPriceHistoryImpl(
+      productId: json['productId'] as String,
+      productName: json['productName'] as String,
+      sku: json['sku'] as String?,
+      dateFrom: json['dateFrom'] as String,
+      dateTo: json['dateTo'] as String,
+      currentQuotedPrice: json['currentQuotedPrice'] as String?,
+      averageUnitCost: json['averageUnitCost'] as String,
+      minUnitCost: json['minUnitCost'] as String,
+      maxUnitCost: json['maxUnitCost'] as String,
+      pricePoints: (json['pricePoints'] as List<dynamic>?)
+              ?.map((e) => PricePoint.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+
+Map<String, dynamic> _$$SupplierPriceHistoryImplToJson(
+        _$SupplierPriceHistoryImpl instance) =>
+    <String, dynamic>{
+      'productId': instance.productId,
+      'productName': instance.productName,
+      'sku': instance.sku,
+      'dateFrom': instance.dateFrom,
+      'dateTo': instance.dateTo,
+      'currentQuotedPrice': instance.currentQuotedPrice,
+      'averageUnitCost': instance.averageUnitCost,
+      'minUnitCost': instance.minUnitCost,
+      'maxUnitCost': instance.maxUnitCost,
+      'pricePoints': instance.pricePoints,
+    };

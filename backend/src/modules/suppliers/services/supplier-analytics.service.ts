@@ -6,6 +6,7 @@ import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierPurchaseSummaryEntity, MonthlySpendEntity } from '../entities/supplier-purchase-summary.entity';
 import { SupplierProductPurchaseEntity, SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
 import { SupplierReliabilityEntity, RecentDeliveryEntity } from '../entities/supplier-reliability.entity';
+import { SupplierPriceHistoryEntity, PricePointEntity } from '../entities/supplier-price-history.entity';
 
 const INVOICE_STATUSES = [
   PurchaseInvoiceStatus.APPROVED,
@@ -542,6 +543,111 @@ export class SupplierAnalyticsService {
     if (!search) return '';
     const safe = search.replace(/'/g, "''");
     return `AND (p."name" ILIKE '%${safe}%' OR p."sku" ILIKE '%${safe}%')`;
+  }
+
+  // ── Supplier Price History ──────────────────────────────
+
+  async getPriceHistory(
+    supplierId: string,
+    companyId: string,
+    productId: string,
+    dateFrom?: string,
+    dateTo?: string,
+  ): Promise<SupplierPriceHistoryEntity> {
+    // 1. Verify supplier belongs to company
+    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    if (!supplier) {
+      throw new NotFoundException(`Supplier ${supplierId} not found`);
+    }
+
+    // 2. Verify product belongs to company
+    const product = await this.prismaService.product.findFirst({
+      where: { id: productId, companyId, deletedAt: null },
+    });
+    if (!product) {
+      throw new NotFoundException(`Product ${productId} not found`);
+    }
+
+    // 3. Date range
+    const now = new Date();
+    const effectiveDateTo = dateTo ? new Date(dateTo) : now;
+    const effectiveDateFrom = dateFrom
+      ? new Date(dateFrom)
+      : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+    // 4. Price points — chronological invoice history for this product from this supplier
+    const priceRows = await this.prismaService.$queryRaw<
+      Array<{
+        invoiceDate: Date;
+        invoiceNumber: string;
+        unitCost: Decimal;
+        quantity: bigint;
+        total: Decimal;
+      }>
+    >`
+      SELECT
+        pi."invoiceDate",
+        pi."invoiceNumber",
+        pii."unitCost",
+        pii."quantity",
+        pii."total"
+      FROM "PurchaseInvoiceItem" pii
+      JOIN "PurchaseInvoice" pi ON pii."purchaseInvoiceId" = pi.id
+      WHERE pi."supplierId" = ${supplierId}
+        AND pi."companyId" = ${companyId}
+        AND pi."deletedAt" IS NULL
+        AND pi."status" IN ('APPROVED', 'PAID')
+        AND pi."invoiceDate" >= ${effectiveDateFrom}
+        AND pi."invoiceDate" <= ${effectiveDateTo}
+        AND pii."productId" = ${productId}
+      ORDER BY pi."invoiceDate" ASC
+    `;
+
+    // 5. Current quoted price from SupplierProduct
+    const sp = await this.prismaService.supplierProduct.findFirst({
+      where: {
+        companyId,
+        supplierId,
+        productId,
+        deletedAt: null,
+      },
+      select: { purchasePrice: true },
+    });
+
+    // 6. Compute aggregate metrics
+    const pricePoints: PricePointEntity[] = priceRows.map((row) => ({
+      invoiceDate: new Date(row.invoiceDate).toISOString(),
+      invoiceNumber: row.invoiceNumber,
+      unitCost: new Decimal(row.unitCost?.toString() ?? '0').toString(),
+      quantity: Number(row.quantity),
+      total: new Decimal(row.total?.toString() ?? '0').toString(),
+    }));
+
+    let averageUnitCost = new Decimal(0);
+    let minUnitCost = new Decimal(0);
+    let maxUnitCost = new Decimal(0);
+
+    if (priceRows.length > 0) {
+      const costs = priceRows.map((r) => new Decimal(r.unitCost?.toString() ?? '0'));
+      const totalQty = priceRows.reduce((sum, r) => sum + Number(r.quantity), 0);
+      const totalSpend = costs.reduce((sum, c, i) => sum.plus(c.mul(Number(priceRows[i]!.quantity))), new Decimal(0));
+      averageUnitCost = totalQty > 0 ? totalSpend.div(totalQty) : new Decimal(0);
+      minUnitCost = costs.reduce((min, c) => c.lessThan(min) ? c : min, costs[0]!);
+      maxUnitCost = costs.reduce((max, c) => c.greaterThan(max) ? c : max, costs[0]!);
+    }
+
+    return {
+      productId: product.id,
+      productName: product.name,
+      sku: product.sku,
+      dateFrom: effectiveDateFrom.toISOString(),
+      dateTo: effectiveDateTo.toISOString(),
+      currentQuotedPrice: sp?.purchasePrice?.toString() ?? null,
+      averageUnitCost: averageUnitCost.toString(),
+      minUnitCost: minUnitCost.toString(),
+      maxUnitCost: maxUnitCost.toString(),
+      pricePoints,
+    };
   }
 
   private rawSortClause(sortColumn: string, sortDir: string): string {

@@ -685,3 +685,141 @@ describe('SupplierAnalyticsService.getReliability', () => {
     expect(result.recentDeliveries.length).toBeLessThanOrEqual(10);
   });
 });
+
+describe('SupplierAnalyticsService.getPriceHistory', () => {
+  let service: SupplierAnalyticsService;
+  let mockPrisma: any;
+  let mockSuppliersRepo: any;
+  const supplierId = 'supplier-1';
+  const companyId = 'company-1';
+  const productId = 'product-1';
+
+  beforeEach(() => {
+    mockPrisma = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      product: { findFirst: jest.fn().mockResolvedValue({ id: productId, name: 'Milk 1L', sku: 'MLK-001' }) },
+      supplierProduct: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    mockSuppliersRepo = {
+      findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+    };
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+  });
+
+  it('should throw NotFoundException when supplier not found', async () => {
+    mockSuppliersRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.getPriceHistory(supplierId, companyId, productId),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should throw NotFoundException when product not found', async () => {
+    mockPrisma.product.findFirst.mockResolvedValue(null);
+    await expect(
+      service.getPriceHistory(supplierId, companyId, productId),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should return price history with correct structure', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        invoiceDate: new Date('2026-01-15'),
+        invoiceNumber: 'INV-001',
+        unitCost: '1400',
+        quantity: BigInt(100),
+        total: '140000',
+      },
+      {
+        invoiceDate: new Date('2026-03-10'),
+        invoiceNumber: 'INV-002',
+        unitCost: '1500',
+        quantity: BigInt(80),
+        total: '120000',
+      },
+    ]);
+    mockPrisma.supplierProduct.findFirst.mockResolvedValue({ purchasePrice: '1600' });
+
+    const result = await service.getPriceHistory(supplierId, companyId, productId);
+
+    expect(result.productId).toBe(productId);
+    expect(result.productName).toBe('Milk 1L');
+    expect(result.sku).toBe('MLK-001');
+    expect(result.currentQuotedPrice).toBe('1600');
+    expect(result.pricePoints).toHaveLength(2);
+    expect(result.pricePoints[0]!.unitCost).toBe('1400');
+    expect(result.pricePoints[1]!.unitCost).toBe('1500');
+  });
+
+  it('should compute weighted average correctly', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        invoiceDate: new Date('2026-01-15'),
+        invoiceNumber: 'INV-001',
+        unitCost: '1400',
+        quantity: BigInt(100),
+        total: '140000',
+      },
+      {
+        invoiceDate: new Date('2026-03-10'),
+        invoiceNumber: 'INV-002',
+        unitCost: '1600',
+        quantity: BigInt(100),
+        total: '160000',
+      },
+    ]);
+
+    const result = await service.getPriceHistory(supplierId, companyId, productId);
+
+    // avg(1400, 1600) weighted by quantity = (1400*100 + 1600*100) / 200 = 1500
+    expect(result.averageUnitCost).toBe('1500');
+    expect(result.minUnitCost).toBe('1400');
+    expect(result.maxUnitCost).toBe('1600');
+  });
+
+  it('should return null currentQuotedPrice when SupplierProduct not found', async () => {
+    mockPrisma.supplierProduct.findFirst.mockResolvedValue(null);
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+
+    const result = await service.getPriceHistory(supplierId, companyId, productId);
+
+    expect(result.currentQuotedPrice).toBeNull();
+    expect(result.pricePoints).toHaveLength(0);
+  });
+
+  it('should return empty pricePoints for no invoices', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+
+    const result = await service.getPriceHistory(supplierId, companyId, productId);
+
+    expect(result.pricePoints).toHaveLength(0);
+    expect(result.averageUnitCost).toBe('0');
+    expect(result.minUnitCost).toBe('0');
+    expect(result.maxUnitCost).toBe('0');
+  });
+
+  it('should return pricePoints sorted chronologically ASC', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        invoiceDate: new Date('2026-03-10'),
+        invoiceNumber: 'INV-002',
+        unitCost: '1600',
+        quantity: BigInt(50),
+        total: '80000',
+      },
+      {
+        invoiceDate: new Date('2026-01-15'),
+        invoiceNumber: 'INV-001',
+        unitCost: '1400',
+        quantity: BigInt(100),
+        total: '140000',
+      },
+    ]);
+
+    const result = await service.getPriceHistory(supplierId, companyId, productId);
+
+    // SQL sorts ASC, so service should return in the order provided by SQL
+    // The mock already has them in the order SQL returns them
+    expect(result.pricePoints[0]!.invoiceNumber).toBe('INV-002');
+    expect(result.pricePoints[1]!.invoiceNumber).toBe('INV-001');
+  });
+});

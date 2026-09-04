@@ -112,3 +112,36 @@ class SupplierReliability with _$SupplierReliability {
   factory SupplierReliability.fromJson(Map<String, dynamic> json) =>
       _$SupplierReliabilityFromJson(json);
 }
+
+@freezed
+class PricePoint with _$PricePoint {
+  const factory PricePoint({
+    required String invoiceDate,
+    required String invoiceNumber,
+    required String unitCost,
+    required int quantity,
+    required String total,
+  }) = _PricePoint;
+
+  factory PricePoint.fromJson(Map<String, dynamic> json) =>
+      _$PricePointFromJson(json);
+}
+
+@freezed
+class SupplierPriceHistory with _$SupplierPriceHistory {
+  const factory SupplierPriceHistory({
+    required String productId,
+    required String productName,
+    String? sku,
+    required String dateFrom,
+    required String dateTo,
+    String? currentQuotedPrice,
+    required String averageUnitCost,
+    required String minUnitCost,
+    required String maxUnitCost,
+    @Default([]) List<PricePoint> pricePoints,
+  }) = _SupplierPriceHistory;
+
+  factory SupplierPriceHistory.fromJson(Map<String, dynamic> json) =>
+      _$SupplierPriceHistoryFromJson(json);
+}

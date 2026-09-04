@@ -1037,56 +1037,60 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                           color: theme.colorScheme.onSurfaceVariant)),
                 )
               else ...[
-                ..._productPurchases.map((p) => Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                ..._productPurchases.map((p) => InkWell(
+                  onTap: () => _showPriceHistoryDialog(p.productId, p.productName),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(p.productName,
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                            fontWeight: FontWeight.w600)),
+                                    if (p.sku != null && p.sku!.isNotEmpty)
+                                      Text('SKU: ${p.sku}',
+                                          style: theme.textTheme.bodySmall?.copyWith(
+                                              color: theme.colorScheme.onSurfaceVariant)),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text(p.productName,
+                                  Text('₸${p.netPurchaseSpend}',
                                       style: theme.textTheme.bodyMedium?.copyWith(
-                                          fontWeight: FontWeight.w600)),
-                                  if (p.sku != null && p.sku!.isNotEmpty)
-                                    Text('SKU: ${p.sku}',
-                                        style: theme.textTheme.bodySmall?.copyWith(
-                                            color: theme.colorScheme.onSurfaceVariant)),
+                                          fontWeight: FontWeight.w700)),
+                                  Text('${context.l10n.netQty}: ${p.netPurchasedQuantity}',
+                                      style: theme.textTheme.bodySmall),
                                 ],
                               ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text('₸${p.netPurchaseSpend}',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                        fontWeight: FontWeight.w700)),
-                                Text('${context.l10n.netQty}: ${p.netPurchasedQuantity}',
-                                    style: theme.textTheme.bodySmall),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 4,
-                          children: [
-                            _analyticsStat(context.l10n.totalSpend, '₸${p.totalPurchaseSpend}', theme),
-                            _analyticsStat(context.l10n.qtyReturned, '${p.totalReturnedQuantity}', theme),
-                            _analyticsStat(context.l10n.avgCost, '₸${p.weightedAverageUnitCost}', theme),
-                            _analyticsStat(context.l10n.minMaxCost, '₸${p.minUnitCost} / ₸${p.maxUnitCost}', theme),
-                            _analyticsStat(context.l10n.invoices, '${p.invoiceCount}', theme),
-                            if (p.lastPurchaseDate != null)
-                              _analyticsStat(context.l10n.lastPurchase, p.lastPurchaseDate!.substring(0, 10), theme),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 4,
+                            children: [
+                              _analyticsStat(context.l10n.totalSpend, '₸${p.totalPurchaseSpend}', theme),
+                              _analyticsStat(context.l10n.qtyReturned, '${p.totalReturnedQuantity}', theme),
+                              _analyticsStat(context.l10n.avgCost, '₸${p.weightedAverageUnitCost}', theme),
+                              _analyticsStat(context.l10n.minMaxCost, '₸${p.minUnitCost} / ₸${p.maxUnitCost}', theme),
+                              _analyticsStat(context.l10n.invoices, '${p.invoiceCount}', theme),
+                              if (p.lastPurchaseDate != null)
+                                _analyticsStat(context.l10n.lastPurchase, p.lastPurchaseDate!.substring(0, 10), theme),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 )),
@@ -1142,6 +1146,105 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
               color: highlighted ? theme.colorScheme.primary : null,
             )),
       ],
+    );
+  }
+
+  // ── Price History Dialog ──────────────────────────────
+
+  Future<void> _showPriceHistoryDialog(String productId, String productName) async {
+    if (!mounted) return;
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getPriceHistory(widget.supplierId, productId,
+        dateFrom: _purchaseDateFrom, dateTo: _purchaseDateTo);
+    if (!mounted) return;
+    if (result is SuppliersSuccess<SupplierPriceHistory>) {
+      _showPriceHistoryDialogContent(result.data);
+    } else if (result is SuppliersFailure<SupplierPriceHistory>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error.message)),
+      );
+    }
+  }
+
+  void _showPriceHistoryDialogContent(SupplierPriceHistory history) {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${context.l10n.priceHistory} — ${history.productName}'),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (history.sku != null)
+                  Text('SKU: ${history.sku}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  children: [
+                    if (history.currentQuotedPrice != null)
+                      _analyticsStat(context.l10n.currentQuotedPrice, '₸${history.currentQuotedPrice}', theme),
+                    _analyticsStat(context.l10n.avgCost, '₸${history.averageUnitCost}', theme),
+                    _analyticsStat(context.l10n.minMaxCost, '₸${history.minUnitCost} / ₸${history.maxUnitCost}', theme),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (history.pricePoints.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text(context.l10n.noPriceHistory,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                  )
+                else ...[
+                  Text(context.l10n.priceTrend,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                  const SizedBox(height: 8),
+                  ...history.pricePoints.map((pp) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          child: Text(pp.invoiceDate.substring(0, 10),
+                              style: theme.textTheme.bodySmall),
+                        ),
+                        Expanded(
+                          child: Text(pp.invoiceNumber,
+                              style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
+                        ),
+                        SizedBox(
+                          width: 70,
+                          child: Text('₸${pp.unitCost}',
+                              style: theme.textTheme.bodySmall, textAlign: TextAlign.end),
+                        ),
+                        SizedBox(
+                          width: 50,
+                          child: Text('×${pp.quantity}',
+                              style: theme.textTheme.bodySmall, textAlign: TextAlign.end),
+                        ),
+                      ],
+                    ),
+                  )),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(context.l10n.close),
+          ),
+        ],
+      ),
     );
   }
 
