@@ -920,5 +920,21 @@
     "placeholders": {
       "number": { "type": "String" }
     }
-  }
+  },
+  "purchaseAnalytics": "Сатып алу аналитикасы",
+  "periodAllTime": "Барлық уақыт",
+  "periodLast3Months": "Соңғы 3 ай",
+  "periodLast6Months": "Соңғы 6 ай",
+  "periodLastYear": "Соңғы жыл",
+  "periodYearToDate": "Жыл басынан бері",
+  "returned": "Қайтарылған",
+  "netPurchaseSpend": "Таза сатып алу",
+  "purchasedQuantity": "Сатып алынған саны",
+  "weightedAvgCost": "Орташа бірлік баға",
+  "invoices": "Шоттар",
+  "noPurchaseData": "Осы жеткізуші үшін сатып алу деректері жоқ",
+  "currentPaid": "Төленді (жалпы)",
+  "firstPurchase": "Бірінші сатып алу",
+  "lastPurchase": "Соңғы сатып алу",
+  "monthlySpend": "Ай сайынғы сатып алу"
 }

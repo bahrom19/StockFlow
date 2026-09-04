@@ -4,11 +4,13 @@ import { SupplierContactsController } from './controllers/supplier-contacts.cont
 import { SupplierAddressesController } from './controllers/supplier-addresses.controller';
 import { SupplierPaymentsController } from './controllers/supplier-payments.controller';
 import { SupplierProductsController } from './controllers/supplier-products.controller';
+import { SupplierAnalyticsController } from './controllers/supplier-analytics.controller';
 import { SuppliersService } from './services/suppliers.service';
 import { SupplierContactsService } from './services/supplier-contacts.service';
 import { SupplierAddressesService } from './services/supplier-addresses.service';
 import { SupplierPaymentsService } from './services/supplier-payments.service';
 import { SupplierProductsService } from './services/supplier-products.service';
+import { SupplierAnalyticsService } from './services/supplier-analytics.service';
 import { SuppliersRepository } from './repositories/suppliers.repository';
 import { SupplierContactsRepository } from './repositories/supplier-contacts.repository';
 import { SupplierAddressesRepository } from './repositories/supplier-addresses.repository';
@@ -25,6 +27,7 @@ import { SharedModule } from '../shared/shared.module';
     SupplierAddressesController,
     SupplierPaymentsController,
     SupplierProductsController,
+    SupplierAnalyticsController,
   ],
   providers: [
     SuppliersService,
@@ -37,6 +40,7 @@ import { SharedModule } from '../shared/shared.module';
     SupplierPaymentsRepository,
     SupplierProductsService,
     SupplierProductsRepository,
+    SupplierAnalyticsService,
   ],
   exports: [SuppliersService],
 })

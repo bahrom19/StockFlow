@@ -10,6 +10,7 @@ import 'package:stockflow/features/suppliers/domain/supplier_contact_models.dart
 import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_purchase_summary_models.dart';
 import 'package:stockflow/features/products/data/repositories/products_repository.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 
@@ -29,6 +30,11 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   SupplierFinanceSummary? _financeSummary;
   List<SupplierPayment> _payments = [];
   List<SupplierProduct> _supplierProducts = [];
+  SupplierPurchaseSummary? _purchaseSummary;
+  bool _isLoadingPurchaseSummary = false;
+  String? _purchaseSummaryError;
+  String? _purchaseDateFrom;
+  String? _purchaseDateTo;
   bool _isLoading = true;
   String? _error;
 
@@ -92,6 +98,32 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
           ? productsResult.data.items
           : [];
       _isLoading = false;
+    });
+
+    // Load purchase analytics after main data
+    _loadPurchaseSummary();
+  }
+
+  Future<void> _loadPurchaseSummary() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingPurchaseSummary = true;
+      _purchaseSummaryError = null;
+    });
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getPurchaseSummary(
+      widget.supplierId,
+      dateFrom: _purchaseDateFrom,
+      dateTo: _purchaseDateTo,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<SupplierPurchaseSummary>) {
+        _purchaseSummary = result.data;
+      } else if (result is SuppliersFailure<SupplierPurchaseSummary>) {
+        _purchaseSummaryError = result.error.message;
+      }
+      _isLoadingPurchaseSummary = false;
     });
   }
 
@@ -169,6 +201,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
               // ── Finance Section ──────────────────────────────
               _buildFinanceSection(theme),
+              const SizedBox(height: 24),
+
+              // ── Purchase Analytics Section ───────────────────
+              _buildPurchaseAnalyticsSection(theme),
               const SizedBox(height: 24),
 
               // ── Products Section ─────────────────────────────
@@ -693,6 +729,212 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.l10n.addPayment)),
+    );
+  }
+
+  // ── Purchase Analytics Section ──────────────────────────
+
+  Widget _buildPurchaseAnalyticsSection(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.analytics_outlined,
+                    size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(context.l10n.purchaseAnalytics,
+                    style: theme.textTheme.titleSmall),
+                const Spacer(),
+                // Period selector
+                PopupMenuButton<String?>(
+                  icon: Icon(Icons.date_range,
+                      size: 20, color: theme.colorScheme.onSurfaceVariant),
+                  onSelected: (value) {
+                    final now = DateTime.now();
+                    setState(() {
+                      if (value == null) {
+                        _purchaseDateFrom = null;
+                        _purchaseDateTo = null;
+                      } else if (value == '3m') {
+                        _purchaseDateFrom = DateTime(now.year, now.month - 3, now.day).toIso8601String().substring(0, 10);
+                        _purchaseDateTo = null;
+                      } else if (value == '6m') {
+                        _purchaseDateFrom = DateTime(now.year, now.month - 6, now.day).toIso8601String().substring(0, 10);
+                        _purchaseDateTo = null;
+                      } else if (value == '1y') {
+                        _purchaseDateFrom = DateTime(now.year - 1, now.month, now.day).toIso8601String().substring(0, 10);
+                        _purchaseDateTo = null;
+                      } else if (value == 'ytd') {
+                        _purchaseDateFrom = DateTime(now.year, 1, 1).toIso8601String().substring(0, 10);
+                        _purchaseDateTo = null;
+                      }
+                    });
+                    _loadPurchaseSummary();
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(value: null, child: Text(context.l10n.periodAllTime)),
+                    PopupMenuItem(value: '3m', child: Text(context.l10n.periodLast3Months)),
+                    PopupMenuItem(value: '6m', child: Text(context.l10n.periodLast6Months)),
+                    PopupMenuItem(value: '1y', child: Text(context.l10n.periodLastYear)),
+                    PopupMenuItem(value: 'ytd', child: Text(context.l10n.periodYearToDate)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Loading state
+            if (_isLoadingPurchaseSummary)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            // Error state
+            else if (_purchaseSummaryError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    Text(
+                      _purchaseSummaryError!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.error),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _loadPurchaseSummary,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(context.l10n.retry),
+                    ),
+                  ],
+                ),
+              )
+            // Data state
+            else if (_purchaseSummary != null) ...[
+              // Summary stats
+              Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                children: [
+                  _analyticsStat(context.l10n.totalInvoiced, '₸${_purchaseSummary!.totalInvoiced}', theme),
+                  _analyticsStat(context.l10n.returned, '₸${_purchaseSummary!.totalReturned}', theme),
+                  _analyticsStat(context.l10n.netPurchaseSpend, '₸${_purchaseSummary!.netPurchaseSpend}', theme, highlighted: true),
+                  _analyticsStat(context.l10n.purchasedQuantity, '${_purchaseSummary!.totalPurchasedQuantity}', theme),
+                  _analyticsStat(context.l10n.weightedAvgCost, '₸${_purchaseSummary!.weightedAverageUnitCost}', theme),
+                  _analyticsStat(context.l10n.invoices, '${_purchaseSummary!.invoiceCount}', theme),
+                  _analyticsStat(context.l10n.returned, '${_purchaseSummary!.returnCount}', theme),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Current financials
+              Divider(color: theme.colorScheme.outlineVariant),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _analyticsStat(context.l10n.currentPaid, '₸${_purchaseSummary!.currentTotalPaid}', theme),
+                  const SizedBox(width: 24),
+                  _analyticsStat(context.l10n.outstanding, '₸${_purchaseSummary!.currentOutstanding}', theme),
+                ],
+              ),
+              if (_purchaseSummary!.firstPurchaseDate != null || _purchaseSummary!.lastPurchaseDate != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    if (_purchaseSummary!.firstPurchaseDate != null)
+                      _analyticsStat(context.l10n.firstPurchase, _purchaseSummary!.firstPurchaseDate!.substring(0, 10), theme),
+                    if (_purchaseSummary!.firstPurchaseDate != null && _purchaseSummary!.lastPurchaseDate != null)
+                      const SizedBox(width: 24),
+                    if (_purchaseSummary!.lastPurchaseDate != null)
+                      _analyticsStat(context.l10n.lastPurchase, _purchaseSummary!.lastPurchaseDate!.substring(0, 10), theme),
+                  ],
+                ),
+              ],
+              // Monthly spend
+              if (_purchaseSummary!.monthlySpend.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Divider(color: theme.colorScheme.outlineVariant),
+                const SizedBox(height: 12),
+                Text(context.l10n.monthlySpend, style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                ..._purchaseSummary!.monthlySpend.map((m) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 70,
+                        child: Text(m.month, style: theme.textTheme.bodySmall),
+                      ),
+                      Expanded(
+                        child: LinearProgressIndicator(
+                          value: _maxMonthlySpend > 0
+                              ? (double.tryParse(m.amount) ?? 0) / _maxMonthlySpend
+                              : 0,
+                          minHeight: 14,
+                          borderRadius: BorderRadius.circular(4),
+                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 90,
+                        child: Text(
+                          '₸${m.amount}',
+                          style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
+                          textAlign: TextAlign.end,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+              ],
+            ]
+            // Empty state
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(context.l10n.noPurchaseData,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double get _maxMonthlySpend {
+    if (_purchaseSummary == null || _purchaseSummary!.monthlySpend.isEmpty) return 0;
+    return _purchaseSummary!.monthlySpend
+        .map((m) => double.tryParse(m.amount) ?? 0)
+        .reduce((a, b) => a > b ? a : b);
+  }
+
+  Widget _analyticsStat(String label, String value, ThemeData theme, {bool highlighted = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 2),
+        Text(value,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: highlighted ? FontWeight.w700 : FontWeight.w600,
+              color: highlighted ? theme.colorScheme.primary : null,
+            )),
+      ],
     );
   }
 

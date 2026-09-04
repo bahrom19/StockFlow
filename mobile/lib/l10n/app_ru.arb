@@ -920,5 +920,21 @@
     "placeholders": {
       "number": { "type": "String" }
     }
-  }
+  },
+  "purchaseAnalytics": "Аналитика закупок",
+  "periodAllTime": "За всё время",
+  "periodLast3Months": "Последние 3 месяца",
+  "periodLast6Months": "Последние 6 месяцев",
+  "periodLastYear": "Последний год",
+  "periodYearToDate": "С начала года",
+  "returned": "Возвраты",
+  "netPurchaseSpend": "Чистые закупки",
+  "purchasedQuantity": "Кол-во закуплено",
+  "weightedAvgCost": "Средняя цена за ед.",
+  "invoices": "Счета",
+  "noPurchaseData": "Нет данных о закупках для этого поставщика",
+  "currentPaid": "Оплачено всего",
+  "firstPurchase": "Первая закупка",
+  "lastPurchase": "Последняя закупка",
+  "monthlySpend": "Закупки по месяцам"
 }

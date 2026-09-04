@@ -920,5 +920,21 @@
     "placeholders": {
       "number": { "type": "String" }
     }
-  }
+  },
+  "purchaseAnalytics": "Purchase Analytics",
+  "periodAllTime": "All Time",
+  "periodLast3Months": "Last 3 Months",
+  "periodLast6Months": "Last 6 Months",
+  "periodLastYear": "Last Year",
+  "periodYearToDate": "Year to Date",
+  "returned": "Returned",
+  "netPurchaseSpend": "Net Purchase",
+  "purchasedQuantity": "Qty Purchased",
+  "weightedAvgCost": "Avg Unit Cost",
+  "invoices": "Invoices",
+  "noPurchaseData": "No purchase data for this supplier",
+  "currentPaid": "Total Paid",
+  "firstPurchase": "First Purchase",
+  "lastPurchase": "Last Purchase",
+  "monthlySpend": "Monthly Spend"
 }
