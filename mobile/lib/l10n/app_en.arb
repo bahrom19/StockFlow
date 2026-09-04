@@ -962,5 +962,13 @@
   "currentQuotedPrice": "Current Quote",
   "priceTrend": "Price Trend",
   "noPriceHistory": "No purchase history for this product",
-  "close": "Close"
+  "close": "Close",
+  "paymentAging": "Payment Aging",
+  "current": "Current",
+  "days1To30": "1-30 Days",
+  "days31To60": "31-60 Days",
+  "days61To90": "61-90 Days",
+  "overdue90Plus": "90+ Days",
+  "overdueInvoices": "Overdue Invoices",
+  "daysOverdue": "days overdue"
 }

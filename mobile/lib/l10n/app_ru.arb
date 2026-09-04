@@ -962,5 +962,13 @@
   "currentQuotedPrice": "Текущая цена",
   "priceTrend": "Динамика цен",
   "noPriceHistory": "Нет истории закупок для этого товара",
-  "close": "Закрыть"
+  "close": "Закрыть",
+  "paymentAging": "Сроки оплаты",
+  "current": "Текущие",
+  "days1To30": "1-30 дней",
+  "days31To60": "31-60 дней",
+  "days61To90": "61-90 дней",
+  "overdue90Plus": "90+ дней",
+  "overdueInvoices": "Просроченные счета",
+  "daysOverdue": "дн. просрочки"
 }

@@ -233,3 +233,74 @@ Map<String, dynamic> _$$SupplierPriceHistoryImplToJson(
       'maxUnitCost': instance.maxUnitCost,
       'pricePoints': instance.pricePoints,
     };
+
+_$OverdueSupplierInvoiceImpl _$$OverdueSupplierInvoiceImplFromJson(
+        Map<String, dynamic> json) =>
+    _$OverdueSupplierInvoiceImpl(
+      invoiceId: json['invoiceId'] as String,
+      invoiceNumber: json['invoiceNumber'] as String,
+      invoiceDate: json['invoiceDate'] as String,
+      dueDate: json['dueDate'] as String?,
+      grandTotal: json['grandTotal'] as String,
+      paidAmount: json['paidAmount'] as String,
+      outstanding: json['outstanding'] as String,
+      daysOverdue: (json['daysOverdue'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$OverdueSupplierInvoiceImplToJson(
+        _$OverdueSupplierInvoiceImpl instance) =>
+    <String, dynamic>{
+      'invoiceId': instance.invoiceId,
+      'invoiceNumber': instance.invoiceNumber,
+      'invoiceDate': instance.invoiceDate,
+      'dueDate': instance.dueDate,
+      'grandTotal': instance.grandTotal,
+      'paidAmount': instance.paidAmount,
+      'outstanding': instance.outstanding,
+      'daysOverdue': instance.daysOverdue,
+    };
+
+_$PaymentAgingBucketsImpl _$$PaymentAgingBucketsImplFromJson(
+        Map<String, dynamic> json) =>
+    _$PaymentAgingBucketsImpl(
+      current: json['current'] as String,
+      days1To30: json['days1To30'] as String,
+      days31To60: json['days31To60'] as String,
+      days61To90: json['days61To90'] as String,
+      overdue90Plus: json['overdue90Plus'] as String,
+    );
+
+Map<String, dynamic> _$$PaymentAgingBucketsImplToJson(
+        _$PaymentAgingBucketsImpl instance) =>
+    <String, dynamic>{
+      'current': instance.current,
+      'days1To30': instance.days1To30,
+      'days31To60': instance.days31To60,
+      'days61To90': instance.days61To90,
+      'overdue90Plus': instance.overdue90Plus,
+    };
+
+_$SupplierPaymentAgingImpl _$$SupplierPaymentAgingImplFromJson(
+        Map<String, dynamic> json) =>
+    _$SupplierPaymentAgingImpl(
+      totalOutstanding: json['totalOutstanding'] as String,
+      aging:
+          PaymentAgingBuckets.fromJson(json['aging'] as Map<String, dynamic>),
+      overdueInvoices: (json['overdueInvoices'] as List<dynamic>?)
+              ?.map((e) =>
+                  OverdueSupplierInvoice.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      invoiceCount: (json['invoiceCount'] as num).toInt(),
+      overdueCount: (json['overdueCount'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$SupplierPaymentAgingImplToJson(
+        _$SupplierPaymentAgingImpl instance) =>
+    <String, dynamic>{
+      'totalOutstanding': instance.totalOutstanding,
+      'aging': instance.aging,
+      'overdueInvoices': instance.overdueInvoices,
+      'invoiceCount': instance.invoiceCount,
+      'overdueCount': instance.overdueCount,
+    };

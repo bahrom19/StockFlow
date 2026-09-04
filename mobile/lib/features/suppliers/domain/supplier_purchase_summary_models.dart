@@ -145,3 +145,48 @@ class SupplierPriceHistory with _$SupplierPriceHistory {
   factory SupplierPriceHistory.fromJson(Map<String, dynamic> json) =>
       _$SupplierPriceHistoryFromJson(json);
 }
+
+@freezed
+class OverdueSupplierInvoice with _$OverdueSupplierInvoice {
+  const factory OverdueSupplierInvoice({
+    required String invoiceId,
+    required String invoiceNumber,
+    required String invoiceDate,
+    String? dueDate,
+    required String grandTotal,
+    required String paidAmount,
+    required String outstanding,
+    required int daysOverdue,
+  }) = _OverdueSupplierInvoice;
+
+  factory OverdueSupplierInvoice.fromJson(Map<String, dynamic> json) =>
+      _$OverdueSupplierInvoiceFromJson(json);
+}
+
+@freezed
+class PaymentAgingBuckets with _$PaymentAgingBuckets {
+  const factory PaymentAgingBuckets({
+    required String current,
+    required String days1To30,
+    required String days31To60,
+    required String days61To90,
+    required String overdue90Plus,
+  }) = _PaymentAgingBuckets;
+
+  factory PaymentAgingBuckets.fromJson(Map<String, dynamic> json) =>
+      _$PaymentAgingBucketsFromJson(json);
+}
+
+@freezed
+class SupplierPaymentAging with _$SupplierPaymentAging {
+  const factory SupplierPaymentAging({
+    required String totalOutstanding,
+    required PaymentAgingBuckets aging,
+    @Default([]) List<OverdueSupplierInvoice> overdueInvoices,
+    required int invoiceCount,
+    required int overdueCount,
+  }) = _SupplierPaymentAging;
+
+  factory SupplierPaymentAging.fromJson(Map<String, dynamic> json) =>
+      _$SupplierPaymentAgingFromJson(json);
+}

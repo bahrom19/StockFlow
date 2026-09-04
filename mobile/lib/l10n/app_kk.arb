@@ -962,5 +962,13 @@
   "currentQuotedPrice": "Қазіргі баға",
   "priceTrend": "Баға өзгерісі",
   "noPriceHistory": "Бұл өнім бойынша сатып алу тарихы жоқ",
-  "close": "Жабу"
+  "close": "Жабу",
+  "paymentAging": "Төлем мерзімдері",
+  "current": "Ағымдағы",
+  "days1To30": "1-30 күн",
+  "days31To60": "31-60 күн",
+  "days61To90": "61-90 күн",
+  "overdue90Plus": "90+ күн",
+  "overdueInvoices": "Мерзімі өткен шоттар",
+  "daysOverdue": "күн кешіктіру"
 }

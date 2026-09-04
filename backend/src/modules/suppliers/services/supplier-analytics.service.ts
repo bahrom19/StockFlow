@@ -7,6 +7,7 @@ import { SupplierPurchaseSummaryEntity, MonthlySpendEntity } from '../entities/s
 import { SupplierProductPurchaseEntity, SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
 import { SupplierReliabilityEntity, RecentDeliveryEntity } from '../entities/supplier-reliability.entity';
 import { SupplierPriceHistoryEntity, PricePointEntity } from '../entities/supplier-price-history.entity';
+import { SupplierPaymentAgingEntity, PaymentAgingBucketsEntity, OverdueInvoiceEntity } from '../entities/supplier-payment-aging.entity';
 
 const INVOICE_STATUSES = [
   PurchaseInvoiceStatus.APPROVED,
@@ -647,6 +648,141 @@ export class SupplierAnalyticsService {
       minUnitCost: minUnitCost.toString(),
       maxUnitCost: maxUnitCost.toString(),
       pricePoints,
+    };
+  }
+
+  // ── Supplier Payment Aging ──────────────────────────────
+
+  async getPaymentAging(
+    supplierId: string,
+    companyId: string,
+  ): Promise<SupplierPaymentAgingEntity> {
+    // 1. Verify supplier belongs to company
+    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    if (!supplier) {
+      throw new NotFoundException(`Supplier ${supplierId} not found`);
+    }
+
+    // 2. Get all outstanding invoices for this supplier
+    //    Only APPROVED/PAID with outstanding balance > 0
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const invoiceRows = await this.prismaService.$queryRaw<
+      Array<{
+        id: string;
+        invoiceNumber: string;
+        invoiceDate: Date;
+        dueDate: Date | null;
+        grandTotal: Decimal;
+        paidAmount: Decimal;
+      }>
+    >`
+      SELECT
+        pi.id,
+        pi."invoiceNumber",
+        pi."invoiceDate",
+        pi."dueDate",
+        pi."grandTotal",
+        pi."paidAmount"
+      FROM "PurchaseInvoice" pi
+      WHERE pi."supplierId" = ${supplierId}
+        AND pi."companyId" = ${companyId}
+        AND pi."deletedAt" IS NULL
+        AND pi."status" IN ('APPROVED', 'PAID')
+        AND (pi."grandTotal" - pi."paidAmount") > 0
+      ORDER BY pi."dueDate" ASC NULLS LAST, pi."invoiceDate" ASC
+    `;
+
+    // 3. Compute aging buckets
+    const agingBuckets = {
+      current: new Decimal(0),
+      days1_30: new Decimal(0),
+      days31_60: new Decimal(0),
+      days61_90: new Decimal(0),
+      overdue90plus: new Decimal(0),
+    };
+
+    const overdueInvoices: OverdueInvoiceEntity[] = [];
+    let invoiceCount = 0;
+    let overdueCount = 0;
+
+    for (const row of invoiceRows) {
+      const grandTotal = new Decimal(row.grandTotal?.toString() ?? '0');
+      const paidAmount = new Decimal(row.paidAmount?.toString() ?? '0');
+      const outstanding = grandTotal.sub(paidAmount);
+
+      if (outstanding.lte(0)) continue; // fully paid
+
+      invoiceCount++;
+      const dueDate = row.dueDate ? new Date(row.dueDate) : null;
+
+      if (!dueDate) {
+        // No due date — don't include in aging buckets
+        // But still count as outstanding
+        continue;
+      }
+
+      const diffMs = today.getTime() - dueDate.getTime();
+      const daysOverdue = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+      if (daysOverdue <= 0) {
+        // Not yet due
+        agingBuckets.current = agingBuckets.current.add(outstanding);
+      } else if (daysOverdue <= 30) {
+        agingBuckets.days1_30 = agingBuckets.days1_30.add(outstanding);
+      } else if (daysOverdue <= 60) {
+        agingBuckets.days31_60 = agingBuckets.days31_60.add(outstanding);
+      } else if (daysOverdue <= 90) {
+        agingBuckets.days61_90 = agingBuckets.days61_90.add(outstanding);
+      } else {
+        agingBuckets.overdue90plus = agingBuckets.overdue90plus.add(outstanding);
+      }
+
+      // Collect overdue invoices (dueDate < today)
+      if (daysOverdue > 0) {
+        overdueCount++;
+        overdueInvoices.push({
+          invoiceId: row.id,
+          invoiceNumber: row.invoiceNumber,
+          invoiceDate: new Date(row.invoiceDate).toISOString(),
+          dueDate: dueDate.toISOString(),
+          grandTotal: grandTotal.toString(),
+          paidAmount: paidAmount.toString(),
+          outstanding: outstanding.toString(),
+          daysOverdue,
+        });
+      }
+    }
+
+    // Sort overdue: daysOverdue DESC, then dueDate ASC
+    overdueInvoices.sort((a, b) => {
+      const diff = b.daysOverdue - a.daysOverdue;
+      if (diff !== 0) return diff;
+      return new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime();
+    });
+
+    const totalOutstanding = invoiceRows.reduce(
+      (sum, row) => sum.plus(
+        new Decimal(row.grandTotal?.toString() ?? '0').sub(
+          new Decimal(row.paidAmount?.toString() ?? '0'),
+        ),
+      ),
+      new Decimal(0),
+    );
+
+    return {
+      totalOutstanding: totalOutstanding.toString(),
+      aging: {
+        current: agingBuckets.current.toString(),
+        days1_30: agingBuckets.days1_30.toString(),
+        days31_60: agingBuckets.days31_60.toString(),
+        days61_90: agingBuckets.days61_90.toString(),
+        overdue90plus: agingBuckets.overdue90plus.toString(),
+      },
+      overdueInvoices,
+      invoiceCount,
+      overdueCount,
     };
   }
 

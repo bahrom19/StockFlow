@@ -42,6 +42,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   String? _purchaseDateFrom;
   String? _purchaseDateTo;
   SupplierReliability? _reliability;
+  SupplierPaymentAging? _paymentAging;
+  bool _isLoadingPaymentAging = false;
+  String? _paymentAgingError;
   bool _isLoadingReliability = false;
   String? _reliabilityError;
   bool _isLoading = true;
@@ -134,9 +137,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       }
       _isLoadingPurchaseSummary = false;
     });
-    // Also load product purchases and reliability
+    // Also load product purchases, reliability, and payment aging
     _loadProductPurchases();
     _loadReliability();
+    _loadPaymentAging();
   }
 
   Future<void> _loadProductPurchases() async {
@@ -185,6 +189,25 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
         _reliabilityError = result.error.message;
       }
       _isLoadingReliability = false;
+    });
+  }
+
+  Future<void> _loadPaymentAging() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingPaymentAging = true;
+      _paymentAgingError = null;
+    });
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getPaymentAging(widget.supplierId);
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<SupplierPaymentAging>) {
+        _paymentAging = result.data;
+      } else if (result is SuppliersFailure<SupplierPaymentAging>) {
+        _paymentAgingError = result.error.message;
+      }
+      _isLoadingPaymentAging = false;
     });
   }
 
@@ -738,6 +761,69 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                 ],
               ),
               const SizedBox(height: 12),
+            ],
+            // Payment Aging
+            if (_isLoadingPaymentAging)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (_paymentAging != null && _paymentAging!.invoiceCount > 0) ...[
+              Divider(color: theme.colorScheme.outlineVariant),
+              const SizedBox(height: 8),
+              Text(context.l10n.paymentAging,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                children: [
+                  _financeStat(context.l10n.current, '₸${_paymentAging!.aging.current}', theme),
+                  _financeStat(context.l10n.days1To30, '₸${_paymentAging!.aging.days1To30}', theme),
+                  _financeStat(context.l10n.days31To60, '₸${_paymentAging!.aging.days31To60}', theme),
+                  _financeStat(context.l10n.days61To90, '₸${_paymentAging!.aging.days61To90}', theme),
+                  _financeStat(context.l10n.overdue90Plus, '₸${_paymentAging!.aging.overdue90Plus}', theme),
+                ],
+              ),
+              if (_paymentAging!.overdueInvoices.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('${context.l10n.overdueInvoices} (${_paymentAging!.overdueCount})',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.error)),
+                const SizedBox(height: 4),
+                ..._paymentAging!.overdueInvoices.take(5).map((inv) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(inv.invoiceNumber,
+                            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
+                      ),
+                      SizedBox(
+                        width: 80,
+                        child: Text(inv.dueDate != null ? inv.dueDate!.substring(0, 10) : '—',
+                            style: theme.textTheme.bodySmall),
+                      ),
+                      SizedBox(
+                        width: 90,
+                        child: Text('₸${inv.outstanding}',
+                            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                            textAlign: TextAlign.end),
+                      ),
+                      SizedBox(
+                        width: 40,
+                        child: Text('${inv.daysOverdue}d',
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                            textAlign: TextAlign.end),
+                      ),
+                    ],
+                  ),
+                )),
+              ],
             ],
             if (_payments.isEmpty)
               Padding(

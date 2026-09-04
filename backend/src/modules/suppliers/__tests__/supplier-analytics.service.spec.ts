@@ -823,3 +823,168 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
     expect(result.pricePoints[1]!.invoiceNumber).toBe('INV-001');
   });
 });
+
+describe('SupplierAnalyticsService.getPaymentAging', () => {
+  let service: SupplierAnalyticsService;
+  let mockPrisma: any;
+  let mockSuppliersRepo: any;
+  const supplierId = 'supplier-1';
+  const companyId = 'company-1';
+
+  beforeEach(() => {
+    mockPrisma = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+    mockSuppliersRepo = {
+      findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+    };
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+  });
+
+  it('should throw NotFoundException when supplier not found', async () => {
+    mockSuppliersRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.getPaymentAging(supplierId, companyId),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should return zero outstanding when no invoices', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+
+    const result = await service.getPaymentAging(supplierId, companyId);
+
+    expect(result.totalOutstanding).toBe('0');
+    expect(result.invoiceCount).toBe(0);
+    expect(result.overdueCount).toBe(0);
+    expect(result.overdueInvoices).toHaveLength(0);
+  });
+
+  it('should compute current bucket for not-yet-due invoices', async () => {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 30);
+    mockPrisma.$queryRaw.mockResolvedValue([{
+      id: 'inv-1',
+      invoiceNumber: 'INV-001',
+      invoiceDate: new Date('2026-01-01'),
+      dueDate: futureDate,
+      grandTotal: '100000',
+      paidAmount: '0',
+    }]);
+
+    const result = await service.getPaymentAging(supplierId, companyId);
+
+    expect(result.aging.current).toBe('100000');
+    expect(result.invoiceCount).toBe(1);
+    expect(result.overdueCount).toBe(0);
+  });
+
+  it('should compute 1-30 day overdue bucket', async () => {
+    const pastDate = new Date();
+    pastDate.setDate(pastDate.getDate() - 15);
+    mockPrisma.$queryRaw.mockResolvedValue([{
+      id: 'inv-1',
+      invoiceNumber: 'INV-001',
+      invoiceDate: new Date('2026-01-01'),
+      dueDate: pastDate,
+      grandTotal: '200000',
+      paidAmount: '50000',
+    }]);
+
+    const result = await service.getPaymentAging(supplierId, companyId);
+
+    expect(result.aging.days1_30).toBe('150000');
+    expect(result.overdueCount).toBe(1);
+    expect(result.overdueInvoices[0]!.daysOverdue).toBeGreaterThanOrEqual(14);
+    expect(result.overdueInvoices[0]!.daysOverdue).toBeLessThanOrEqual(16);
+  });
+
+  it('should exclude fully paid invoices', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([{
+      id: 'inv-1',
+      invoiceNumber: 'INV-001',
+      invoiceDate: new Date('2026-01-01'),
+      dueDate: new Date('2026-06-01'),
+      grandTotal: '100000',
+      paidAmount: '100000',
+    }]);
+
+    const result = await service.getPaymentAging(supplierId, companyId);
+
+    expect(result.invoiceCount).toBe(0);
+    expect(result.totalOutstanding).toBe('0');
+  });
+
+  it('should compute totalOutstanding as sum of all outstanding', async () => {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 10);
+    const pastDate = new Date();
+    pastDate.setDate(pastDate.getDate() - 20);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'inv-1',
+        invoiceNumber: 'INV-001',
+        invoiceDate: new Date('2026-01-01'),
+        dueDate: futureDate,
+        grandTotal: '100000',
+        paidAmount: '0',
+      },
+      {
+        id: 'inv-2',
+        invoiceNumber: 'INV-002',
+        invoiceDate: new Date('2026-02-01'),
+        dueDate: pastDate,
+        grandTotal: '300000',
+        paidAmount: '100000',
+      },
+    ]);
+
+    const result = await service.getPaymentAging(supplierId, companyId);
+
+    // inv-1: 100000 current, inv-2: 200000 1-30 days
+    expect(result.totalOutstanding).toBe('300000');
+    expect(result.aging.current).toBe('100000');
+    expect(result.aging.days1_30).toBe('200000');
+    expect(result.invoiceCount).toBe(2);
+  });
+
+  it('should handle null dueDate by excluding from aging buckets', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([{
+      id: 'inv-1',
+      invoiceNumber: 'INV-001',
+      invoiceDate: new Date('2026-01-01'),
+      dueDate: null,
+      grandTotal: '100000',
+      paidAmount: '0',
+    }]);
+
+    const result = await service.getPaymentAging(supplierId, companyId);
+
+    // Invoice counted but not in any aging bucket
+    expect(result.invoiceCount).toBe(1);
+    expect(result.totalOutstanding).toBe('100000');
+    expect(result.aging.current).toBe('0');
+    expect(result.overdueCount).toBe(0);
+  });
+
+  it('should sort overdue invoices by daysOverdue DESC', async () => {
+    const d1 = new Date(); d1.setDate(d1.getDate() - 10);
+    const d2 = new Date(); d2.setDate(d2.getDate() - 60);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'inv-1', invoiceNumber: 'INV-001', invoiceDate: new Date(),
+        dueDate: d1, grandTotal: '100000', paidAmount: '0',
+      },
+      {
+        id: 'inv-2', invoiceNumber: 'INV-002', invoiceDate: new Date(),
+        dueDate: d2, grandTotal: '200000', paidAmount: '0',
+      },
+    ]);
+
+    const result = await service.getPaymentAging(supplierId, companyId);
+
+    // inv-2 (60 days) should come before inv-1 (10 days)
+    expect(result.overdueInvoices[0]!.daysOverdue).toBeGreaterThan(
+      result.overdueInvoices[1]!.daysOverdue,
+    );
+  });
+});

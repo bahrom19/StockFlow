@@ -17,6 +17,7 @@ import { SupplierPurchaseSummaryEntity } from '../entities/supplier-purchase-sum
 import { SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
 import { SupplierReliabilityEntity } from '../entities/supplier-reliability.entity';
 import { SupplierPriceHistoryEntity } from '../entities/supplier-price-history.entity';
+import { SupplierPaymentAgingEntity } from '../entities/supplier-payment-aging.entity';
 
 @ApiTags('suppliers / analytics')
 @ApiBearerAuth()
@@ -124,6 +125,21 @@ export class SupplierAnalyticsController {
       productId,
       dateFrom,
       dateTo,
+    );
+  }
+
+  @Get('analytics/payment-aging')
+  @RequirePermission('suppliers:read')
+  @ApiOperation({ summary: 'Get supplier payment aging and overdue invoices' })
+  @ApiParam({ name: 'supplierId', type: String })
+  @ApiResponse({ status: 200, type: SupplierPaymentAgingEntity })
+  async getPaymentAging(
+    @Param('supplierId') supplierId: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.analyticsService.getPaymentAging(
+      supplierId,
+      user!.companyId,
     );
   }
 }

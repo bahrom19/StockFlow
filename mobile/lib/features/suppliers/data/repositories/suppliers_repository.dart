@@ -363,6 +363,19 @@ class SuppliersRepository {
     }
   }
 
+  Future<SuppliersResult<SupplierPaymentAging>> getPaymentAging(
+      String supplierId) async {
+    try {
+      final response = await _api.get<Map<String, dynamic>>(
+        '/suppliers/$supplierId/analytics/payment-aging',
+      );
+      return SuppliersSuccess(
+          SupplierPaymentAging.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
   // ── Supplier Products ────────────────────────────────
 
   Future<SuppliersResult<SupplierProductListResponse>> getSupplierProducts(

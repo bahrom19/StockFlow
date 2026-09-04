@@ -2663,3 +2663,819 @@ abstract class _SupplierPriceHistory implements SupplierPriceHistory {
   _$$SupplierPriceHistoryImplCopyWith<_$SupplierPriceHistoryImpl>
       get copyWith => throw _privateConstructorUsedError;
 }
+
+OverdueSupplierInvoice _$OverdueSupplierInvoiceFromJson(
+    Map<String, dynamic> json) {
+  return _OverdueSupplierInvoice.fromJson(json);
+}
+
+/// @nodoc
+mixin _$OverdueSupplierInvoice {
+  String get invoiceId => throw _privateConstructorUsedError;
+  String get invoiceNumber => throw _privateConstructorUsedError;
+  String get invoiceDate => throw _privateConstructorUsedError;
+  String? get dueDate => throw _privateConstructorUsedError;
+  String get grandTotal => throw _privateConstructorUsedError;
+  String get paidAmount => throw _privateConstructorUsedError;
+  String get outstanding => throw _privateConstructorUsedError;
+  int get daysOverdue => throw _privateConstructorUsedError;
+
+  /// Serializes this OverdueSupplierInvoice to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of OverdueSupplierInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $OverdueSupplierInvoiceCopyWith<OverdueSupplierInvoice> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $OverdueSupplierInvoiceCopyWith<$Res> {
+  factory $OverdueSupplierInvoiceCopyWith(OverdueSupplierInvoice value,
+          $Res Function(OverdueSupplierInvoice) then) =
+      _$OverdueSupplierInvoiceCopyWithImpl<$Res, OverdueSupplierInvoice>;
+  @useResult
+  $Res call(
+      {String invoiceId,
+      String invoiceNumber,
+      String invoiceDate,
+      String? dueDate,
+      String grandTotal,
+      String paidAmount,
+      String outstanding,
+      int daysOverdue});
+}
+
+/// @nodoc
+class _$OverdueSupplierInvoiceCopyWithImpl<$Res,
+        $Val extends OverdueSupplierInvoice>
+    implements $OverdueSupplierInvoiceCopyWith<$Res> {
+  _$OverdueSupplierInvoiceCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of OverdueSupplierInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? invoiceId = null,
+    Object? invoiceNumber = null,
+    Object? invoiceDate = null,
+    Object? dueDate = freezed,
+    Object? grandTotal = null,
+    Object? paidAmount = null,
+    Object? outstanding = null,
+    Object? daysOverdue = null,
+  }) {
+    return _then(_value.copyWith(
+      invoiceId: null == invoiceId
+          ? _value.invoiceId
+          : invoiceId // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceNumber: null == invoiceNumber
+          ? _value.invoiceNumber
+          : invoiceNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceDate: null == invoiceDate
+          ? _value.invoiceDate
+          : invoiceDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      dueDate: freezed == dueDate
+          ? _value.dueDate
+          : dueDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      paidAmount: null == paidAmount
+          ? _value.paidAmount
+          : paidAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      outstanding: null == outstanding
+          ? _value.outstanding
+          : outstanding // ignore: cast_nullable_to_non_nullable
+              as String,
+      daysOverdue: null == daysOverdue
+          ? _value.daysOverdue
+          : daysOverdue // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$OverdueSupplierInvoiceImplCopyWith<$Res>
+    implements $OverdueSupplierInvoiceCopyWith<$Res> {
+  factory _$$OverdueSupplierInvoiceImplCopyWith(
+          _$OverdueSupplierInvoiceImpl value,
+          $Res Function(_$OverdueSupplierInvoiceImpl) then) =
+      __$$OverdueSupplierInvoiceImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String invoiceId,
+      String invoiceNumber,
+      String invoiceDate,
+      String? dueDate,
+      String grandTotal,
+      String paidAmount,
+      String outstanding,
+      int daysOverdue});
+}
+
+/// @nodoc
+class __$$OverdueSupplierInvoiceImplCopyWithImpl<$Res>
+    extends _$OverdueSupplierInvoiceCopyWithImpl<$Res,
+        _$OverdueSupplierInvoiceImpl>
+    implements _$$OverdueSupplierInvoiceImplCopyWith<$Res> {
+  __$$OverdueSupplierInvoiceImplCopyWithImpl(
+      _$OverdueSupplierInvoiceImpl _value,
+      $Res Function(_$OverdueSupplierInvoiceImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OverdueSupplierInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? invoiceId = null,
+    Object? invoiceNumber = null,
+    Object? invoiceDate = null,
+    Object? dueDate = freezed,
+    Object? grandTotal = null,
+    Object? paidAmount = null,
+    Object? outstanding = null,
+    Object? daysOverdue = null,
+  }) {
+    return _then(_$OverdueSupplierInvoiceImpl(
+      invoiceId: null == invoiceId
+          ? _value.invoiceId
+          : invoiceId // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceNumber: null == invoiceNumber
+          ? _value.invoiceNumber
+          : invoiceNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceDate: null == invoiceDate
+          ? _value.invoiceDate
+          : invoiceDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      dueDate: freezed == dueDate
+          ? _value.dueDate
+          : dueDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      paidAmount: null == paidAmount
+          ? _value.paidAmount
+          : paidAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      outstanding: null == outstanding
+          ? _value.outstanding
+          : outstanding // ignore: cast_nullable_to_non_nullable
+              as String,
+      daysOverdue: null == daysOverdue
+          ? _value.daysOverdue
+          : daysOverdue // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$OverdueSupplierInvoiceImpl implements _OverdueSupplierInvoice {
+  const _$OverdueSupplierInvoiceImpl(
+      {required this.invoiceId,
+      required this.invoiceNumber,
+      required this.invoiceDate,
+      this.dueDate,
+      required this.grandTotal,
+      required this.paidAmount,
+      required this.outstanding,
+      required this.daysOverdue});
+
+  factory _$OverdueSupplierInvoiceImpl.fromJson(Map<String, dynamic> json) =>
+      _$$OverdueSupplierInvoiceImplFromJson(json);
+
+  @override
+  final String invoiceId;
+  @override
+  final String invoiceNumber;
+  @override
+  final String invoiceDate;
+  @override
+  final String? dueDate;
+  @override
+  final String grandTotal;
+  @override
+  final String paidAmount;
+  @override
+  final String outstanding;
+  @override
+  final int daysOverdue;
+
+  @override
+  String toString() {
+    return 'OverdueSupplierInvoice(invoiceId: $invoiceId, invoiceNumber: $invoiceNumber, invoiceDate: $invoiceDate, dueDate: $dueDate, grandTotal: $grandTotal, paidAmount: $paidAmount, outstanding: $outstanding, daysOverdue: $daysOverdue)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$OverdueSupplierInvoiceImpl &&
+            (identical(other.invoiceId, invoiceId) ||
+                other.invoiceId == invoiceId) &&
+            (identical(other.invoiceNumber, invoiceNumber) ||
+                other.invoiceNumber == invoiceNumber) &&
+            (identical(other.invoiceDate, invoiceDate) ||
+                other.invoiceDate == invoiceDate) &&
+            (identical(other.dueDate, dueDate) || other.dueDate == dueDate) &&
+            (identical(other.grandTotal, grandTotal) ||
+                other.grandTotal == grandTotal) &&
+            (identical(other.paidAmount, paidAmount) ||
+                other.paidAmount == paidAmount) &&
+            (identical(other.outstanding, outstanding) ||
+                other.outstanding == outstanding) &&
+            (identical(other.daysOverdue, daysOverdue) ||
+                other.daysOverdue == daysOverdue));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, invoiceId, invoiceNumber,
+      invoiceDate, dueDate, grandTotal, paidAmount, outstanding, daysOverdue);
+
+  /// Create a copy of OverdueSupplierInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$OverdueSupplierInvoiceImplCopyWith<_$OverdueSupplierInvoiceImpl>
+      get copyWith => __$$OverdueSupplierInvoiceImplCopyWithImpl<
+          _$OverdueSupplierInvoiceImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$OverdueSupplierInvoiceImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _OverdueSupplierInvoice implements OverdueSupplierInvoice {
+  const factory _OverdueSupplierInvoice(
+      {required final String invoiceId,
+      required final String invoiceNumber,
+      required final String invoiceDate,
+      final String? dueDate,
+      required final String grandTotal,
+      required final String paidAmount,
+      required final String outstanding,
+      required final int daysOverdue}) = _$OverdueSupplierInvoiceImpl;
+
+  factory _OverdueSupplierInvoice.fromJson(Map<String, dynamic> json) =
+      _$OverdueSupplierInvoiceImpl.fromJson;
+
+  @override
+  String get invoiceId;
+  @override
+  String get invoiceNumber;
+  @override
+  String get invoiceDate;
+  @override
+  String? get dueDate;
+  @override
+  String get grandTotal;
+  @override
+  String get paidAmount;
+  @override
+  String get outstanding;
+  @override
+  int get daysOverdue;
+
+  /// Create a copy of OverdueSupplierInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$OverdueSupplierInvoiceImplCopyWith<_$OverdueSupplierInvoiceImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+PaymentAgingBuckets _$PaymentAgingBucketsFromJson(Map<String, dynamic> json) {
+  return _PaymentAgingBuckets.fromJson(json);
+}
+
+/// @nodoc
+mixin _$PaymentAgingBuckets {
+  String get current => throw _privateConstructorUsedError;
+  String get days1To30 => throw _privateConstructorUsedError;
+  String get days31To60 => throw _privateConstructorUsedError;
+  String get days61To90 => throw _privateConstructorUsedError;
+  String get overdue90Plus => throw _privateConstructorUsedError;
+
+  /// Serializes this PaymentAgingBuckets to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of PaymentAgingBuckets
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PaymentAgingBucketsCopyWith<PaymentAgingBuckets> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PaymentAgingBucketsCopyWith<$Res> {
+  factory $PaymentAgingBucketsCopyWith(
+          PaymentAgingBuckets value, $Res Function(PaymentAgingBuckets) then) =
+      _$PaymentAgingBucketsCopyWithImpl<$Res, PaymentAgingBuckets>;
+  @useResult
+  $Res call(
+      {String current,
+      String days1To30,
+      String days31To60,
+      String days61To90,
+      String overdue90Plus});
+}
+
+/// @nodoc
+class _$PaymentAgingBucketsCopyWithImpl<$Res, $Val extends PaymentAgingBuckets>
+    implements $PaymentAgingBucketsCopyWith<$Res> {
+  _$PaymentAgingBucketsCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PaymentAgingBuckets
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? current = null,
+    Object? days1To30 = null,
+    Object? days31To60 = null,
+    Object? days61To90 = null,
+    Object? overdue90Plus = null,
+  }) {
+    return _then(_value.copyWith(
+      current: null == current
+          ? _value.current
+          : current // ignore: cast_nullable_to_non_nullable
+              as String,
+      days1To30: null == days1To30
+          ? _value.days1To30
+          : days1To30 // ignore: cast_nullable_to_non_nullable
+              as String,
+      days31To60: null == days31To60
+          ? _value.days31To60
+          : days31To60 // ignore: cast_nullable_to_non_nullable
+              as String,
+      days61To90: null == days61To90
+          ? _value.days61To90
+          : days61To90 // ignore: cast_nullable_to_non_nullable
+              as String,
+      overdue90Plus: null == overdue90Plus
+          ? _value.overdue90Plus
+          : overdue90Plus // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$PaymentAgingBucketsImplCopyWith<$Res>
+    implements $PaymentAgingBucketsCopyWith<$Res> {
+  factory _$$PaymentAgingBucketsImplCopyWith(_$PaymentAgingBucketsImpl value,
+          $Res Function(_$PaymentAgingBucketsImpl) then) =
+      __$$PaymentAgingBucketsImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String current,
+      String days1To30,
+      String days31To60,
+      String days61To90,
+      String overdue90Plus});
+}
+
+/// @nodoc
+class __$$PaymentAgingBucketsImplCopyWithImpl<$Res>
+    extends _$PaymentAgingBucketsCopyWithImpl<$Res, _$PaymentAgingBucketsImpl>
+    implements _$$PaymentAgingBucketsImplCopyWith<$Res> {
+  __$$PaymentAgingBucketsImplCopyWithImpl(_$PaymentAgingBucketsImpl _value,
+      $Res Function(_$PaymentAgingBucketsImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of PaymentAgingBuckets
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? current = null,
+    Object? days1To30 = null,
+    Object? days31To60 = null,
+    Object? days61To90 = null,
+    Object? overdue90Plus = null,
+  }) {
+    return _then(_$PaymentAgingBucketsImpl(
+      current: null == current
+          ? _value.current
+          : current // ignore: cast_nullable_to_non_nullable
+              as String,
+      days1To30: null == days1To30
+          ? _value.days1To30
+          : days1To30 // ignore: cast_nullable_to_non_nullable
+              as String,
+      days31To60: null == days31To60
+          ? _value.days31To60
+          : days31To60 // ignore: cast_nullable_to_non_nullable
+              as String,
+      days61To90: null == days61To90
+          ? _value.days61To90
+          : days61To90 // ignore: cast_nullable_to_non_nullable
+              as String,
+      overdue90Plus: null == overdue90Plus
+          ? _value.overdue90Plus
+          : overdue90Plus // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$PaymentAgingBucketsImpl implements _PaymentAgingBuckets {
+  const _$PaymentAgingBucketsImpl(
+      {required this.current,
+      required this.days1To30,
+      required this.days31To60,
+      required this.days61To90,
+      required this.overdue90Plus});
+
+  factory _$PaymentAgingBucketsImpl.fromJson(Map<String, dynamic> json) =>
+      _$$PaymentAgingBucketsImplFromJson(json);
+
+  @override
+  final String current;
+  @override
+  final String days1To30;
+  @override
+  final String days31To60;
+  @override
+  final String days61To90;
+  @override
+  final String overdue90Plus;
+
+  @override
+  String toString() {
+    return 'PaymentAgingBuckets(current: $current, days1To30: $days1To30, days31To60: $days31To60, days61To90: $days61To90, overdue90Plus: $overdue90Plus)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PaymentAgingBucketsImpl &&
+            (identical(other.current, current) || other.current == current) &&
+            (identical(other.days1To30, days1To30) ||
+                other.days1To30 == days1To30) &&
+            (identical(other.days31To60, days31To60) ||
+                other.days31To60 == days31To60) &&
+            (identical(other.days61To90, days61To90) ||
+                other.days61To90 == days61To90) &&
+            (identical(other.overdue90Plus, overdue90Plus) ||
+                other.overdue90Plus == overdue90Plus));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType, current, days1To30, days31To60, days61To90, overdue90Plus);
+
+  /// Create a copy of PaymentAgingBuckets
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PaymentAgingBucketsImplCopyWith<_$PaymentAgingBucketsImpl> get copyWith =>
+      __$$PaymentAgingBucketsImplCopyWithImpl<_$PaymentAgingBucketsImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$PaymentAgingBucketsImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _PaymentAgingBuckets implements PaymentAgingBuckets {
+  const factory _PaymentAgingBuckets(
+      {required final String current,
+      required final String days1To30,
+      required final String days31To60,
+      required final String days61To90,
+      required final String overdue90Plus}) = _$PaymentAgingBucketsImpl;
+
+  factory _PaymentAgingBuckets.fromJson(Map<String, dynamic> json) =
+      _$PaymentAgingBucketsImpl.fromJson;
+
+  @override
+  String get current;
+  @override
+  String get days1To30;
+  @override
+  String get days31To60;
+  @override
+  String get days61To90;
+  @override
+  String get overdue90Plus;
+
+  /// Create a copy of PaymentAgingBuckets
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PaymentAgingBucketsImplCopyWith<_$PaymentAgingBucketsImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+SupplierPaymentAging _$SupplierPaymentAgingFromJson(Map<String, dynamic> json) {
+  return _SupplierPaymentAging.fromJson(json);
+}
+
+/// @nodoc
+mixin _$SupplierPaymentAging {
+  String get totalOutstanding => throw _privateConstructorUsedError;
+  PaymentAgingBuckets get aging => throw _privateConstructorUsedError;
+  List<OverdueSupplierInvoice> get overdueInvoices =>
+      throw _privateConstructorUsedError;
+  int get invoiceCount => throw _privateConstructorUsedError;
+  int get overdueCount => throw _privateConstructorUsedError;
+
+  /// Serializes this SupplierPaymentAging to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of SupplierPaymentAging
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $SupplierPaymentAgingCopyWith<SupplierPaymentAging> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $SupplierPaymentAgingCopyWith<$Res> {
+  factory $SupplierPaymentAgingCopyWith(SupplierPaymentAging value,
+          $Res Function(SupplierPaymentAging) then) =
+      _$SupplierPaymentAgingCopyWithImpl<$Res, SupplierPaymentAging>;
+  @useResult
+  $Res call(
+      {String totalOutstanding,
+      PaymentAgingBuckets aging,
+      List<OverdueSupplierInvoice> overdueInvoices,
+      int invoiceCount,
+      int overdueCount});
+
+  $PaymentAgingBucketsCopyWith<$Res> get aging;
+}
+
+/// @nodoc
+class _$SupplierPaymentAgingCopyWithImpl<$Res,
+        $Val extends SupplierPaymentAging>
+    implements $SupplierPaymentAgingCopyWith<$Res> {
+  _$SupplierPaymentAgingCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of SupplierPaymentAging
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalOutstanding = null,
+    Object? aging = null,
+    Object? overdueInvoices = null,
+    Object? invoiceCount = null,
+    Object? overdueCount = null,
+  }) {
+    return _then(_value.copyWith(
+      totalOutstanding: null == totalOutstanding
+          ? _value.totalOutstanding
+          : totalOutstanding // ignore: cast_nullable_to_non_nullable
+              as String,
+      aging: null == aging
+          ? _value.aging
+          : aging // ignore: cast_nullable_to_non_nullable
+              as PaymentAgingBuckets,
+      overdueInvoices: null == overdueInvoices
+          ? _value.overdueInvoices
+          : overdueInvoices // ignore: cast_nullable_to_non_nullable
+              as List<OverdueSupplierInvoice>,
+      invoiceCount: null == invoiceCount
+          ? _value.invoiceCount
+          : invoiceCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      overdueCount: null == overdueCount
+          ? _value.overdueCount
+          : overdueCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+
+  /// Create a copy of SupplierPaymentAging
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $PaymentAgingBucketsCopyWith<$Res> get aging {
+    return $PaymentAgingBucketsCopyWith<$Res>(_value.aging, (value) {
+      return _then(_value.copyWith(aging: value) as $Val);
+    });
+  }
+}
+
+/// @nodoc
+abstract class _$$SupplierPaymentAgingImplCopyWith<$Res>
+    implements $SupplierPaymentAgingCopyWith<$Res> {
+  factory _$$SupplierPaymentAgingImplCopyWith(_$SupplierPaymentAgingImpl value,
+          $Res Function(_$SupplierPaymentAgingImpl) then) =
+      __$$SupplierPaymentAgingImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String totalOutstanding,
+      PaymentAgingBuckets aging,
+      List<OverdueSupplierInvoice> overdueInvoices,
+      int invoiceCount,
+      int overdueCount});
+
+  @override
+  $PaymentAgingBucketsCopyWith<$Res> get aging;
+}
+
+/// @nodoc
+class __$$SupplierPaymentAgingImplCopyWithImpl<$Res>
+    extends _$SupplierPaymentAgingCopyWithImpl<$Res, _$SupplierPaymentAgingImpl>
+    implements _$$SupplierPaymentAgingImplCopyWith<$Res> {
+  __$$SupplierPaymentAgingImplCopyWithImpl(_$SupplierPaymentAgingImpl _value,
+      $Res Function(_$SupplierPaymentAgingImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of SupplierPaymentAging
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? totalOutstanding = null,
+    Object? aging = null,
+    Object? overdueInvoices = null,
+    Object? invoiceCount = null,
+    Object? overdueCount = null,
+  }) {
+    return _then(_$SupplierPaymentAgingImpl(
+      totalOutstanding: null == totalOutstanding
+          ? _value.totalOutstanding
+          : totalOutstanding // ignore: cast_nullable_to_non_nullable
+              as String,
+      aging: null == aging
+          ? _value.aging
+          : aging // ignore: cast_nullable_to_non_nullable
+              as PaymentAgingBuckets,
+      overdueInvoices: null == overdueInvoices
+          ? _value._overdueInvoices
+          : overdueInvoices // ignore: cast_nullable_to_non_nullable
+              as List<OverdueSupplierInvoice>,
+      invoiceCount: null == invoiceCount
+          ? _value.invoiceCount
+          : invoiceCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      overdueCount: null == overdueCount
+          ? _value.overdueCount
+          : overdueCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$SupplierPaymentAgingImpl implements _SupplierPaymentAging {
+  const _$SupplierPaymentAgingImpl(
+      {required this.totalOutstanding,
+      required this.aging,
+      final List<OverdueSupplierInvoice> overdueInvoices = const [],
+      required this.invoiceCount,
+      required this.overdueCount})
+      : _overdueInvoices = overdueInvoices;
+
+  factory _$SupplierPaymentAgingImpl.fromJson(Map<String, dynamic> json) =>
+      _$$SupplierPaymentAgingImplFromJson(json);
+
+  @override
+  final String totalOutstanding;
+  @override
+  final PaymentAgingBuckets aging;
+  final List<OverdueSupplierInvoice> _overdueInvoices;
+  @override
+  @JsonKey()
+  List<OverdueSupplierInvoice> get overdueInvoices {
+    if (_overdueInvoices is EqualUnmodifiableListView) return _overdueInvoices;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_overdueInvoices);
+  }
+
+  @override
+  final int invoiceCount;
+  @override
+  final int overdueCount;
+
+  @override
+  String toString() {
+    return 'SupplierPaymentAging(totalOutstanding: $totalOutstanding, aging: $aging, overdueInvoices: $overdueInvoices, invoiceCount: $invoiceCount, overdueCount: $overdueCount)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$SupplierPaymentAgingImpl &&
+            (identical(other.totalOutstanding, totalOutstanding) ||
+                other.totalOutstanding == totalOutstanding) &&
+            (identical(other.aging, aging) || other.aging == aging) &&
+            const DeepCollectionEquality()
+                .equals(other._overdueInvoices, _overdueInvoices) &&
+            (identical(other.invoiceCount, invoiceCount) ||
+                other.invoiceCount == invoiceCount) &&
+            (identical(other.overdueCount, overdueCount) ||
+                other.overdueCount == overdueCount));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType,
+      totalOutstanding,
+      aging,
+      const DeepCollectionEquality().hash(_overdueInvoices),
+      invoiceCount,
+      overdueCount);
+
+  /// Create a copy of SupplierPaymentAging
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$SupplierPaymentAgingImplCopyWith<_$SupplierPaymentAgingImpl>
+      get copyWith =>
+          __$$SupplierPaymentAgingImplCopyWithImpl<_$SupplierPaymentAgingImpl>(
+              this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$SupplierPaymentAgingImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _SupplierPaymentAging implements SupplierPaymentAging {
+  const factory _SupplierPaymentAging(
+      {required final String totalOutstanding,
+      required final PaymentAgingBuckets aging,
+      final List<OverdueSupplierInvoice> overdueInvoices,
+      required final int invoiceCount,
+      required final int overdueCount}) = _$SupplierPaymentAgingImpl;
+
+  factory _SupplierPaymentAging.fromJson(Map<String, dynamic> json) =
+      _$SupplierPaymentAgingImpl.fromJson;
+
+  @override
+  String get totalOutstanding;
+  @override
+  PaymentAgingBuckets get aging;
+  @override
+  List<OverdueSupplierInvoice> get overdueInvoices;
+  @override
+  int get invoiceCount;
+  @override
+  int get overdueCount;
+
+  /// Create a copy of SupplierPaymentAging
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$SupplierPaymentAgingImplCopyWith<_$SupplierPaymentAgingImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
