@@ -970,5 +970,13 @@
   "days61To90": "61-90 күн",
   "overdue90Plus": "90+ күн",
   "overdueInvoices": "Мерзімі өткен шоттар",
-  "daysOverdue": "күн кешіктіру"
+  "daysOverdue": "күн кешіктіру",
+  "returnAnalysis": "Қайтару аналитикасы",
+  "returnedAmount": "Қайтарылған сома",
+  "returnedQty": "Қайтару саны",
+  "amountReturnRate": "% қайтару (сома)",
+  "qtyReturnRate": "% қайтару (саны)",
+  "returnCount": "Қайтару саны",
+  "topReturnedProducts": "Жиі қайтарылатын тауарлар",
+  "noReturns": "Бұл кезеңде қайтару жоқ"
 }

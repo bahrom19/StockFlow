@@ -988,3 +988,135 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
     );
   });
 });
+
+describe('SupplierAnalyticsService.getReturnSummary', () => {
+  let service: SupplierAnalyticsService;
+  let mockPrisma: any;
+  let mockSuppliersRepo: any;
+  const supplierId = 'supplier-1';
+  const companyId = 'company-1';
+
+  beforeEach(() => {
+    mockPrisma = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      purchaseReturn: { aggregate: jest.fn().mockResolvedValue({ _sum: { grandTotal: null }, _count: { id: 0 } }) },
+      product: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    mockSuppliersRepo = {
+      findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+    };
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+  });
+
+  it('should throw NotFoundException when supplier not found', async () => {
+    mockSuppliersRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.getReturnSummary(supplierId, companyId),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should return zero values when no returns exist', async () => {
+    const result = await service.getReturnSummary(supplierId, companyId);
+
+    expect(result.totalReturnedAmount).toBe('0');
+    expect(result.totalReturnedQuantity).toBe(0);
+    expect(result.returnCount).toBe(0);
+    expect(result.totalPurchaseSpend).toBe('0');
+    expect(result.totalPurchasedQuantity).toBe(0);
+    expect(result.amountReturnRate).toBe(0);
+    expect(result.quantityReturnRate).toBe(0);
+    expect(result.topReturnedProducts).toHaveLength(0);
+  });
+
+  it('should compute return amounts and quantities correctly', async () => {
+    mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+      _sum: { grandTotal: '350000' },
+      _count: { id: 5 },
+    });
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([
+        { productId: 'p1', returnedQuantity: BigInt(100), returnedAmount: '150000', returnCount: BigInt(3) },
+        { productId: 'p2', returnedQuantity: BigInt(50), returnedAmount: '100000', returnCount: BigInt(2) },
+      ])
+      .mockResolvedValueOnce([{ totalSpend: '5000000', totalQuantity: BigInt(3000) }]);
+    mockPrisma.product.findFirst
+      .mockResolvedValueOnce({ name: 'Milk 1L', sku: 'MLK-001' })
+      .mockResolvedValueOnce({ name: 'Bread', sku: 'BRD-001' });
+
+    const result = await service.getReturnSummary(supplierId, companyId);
+
+    expect(result.totalReturnedAmount).toBe('350000');
+    expect(result.returnCount).toBe(5);
+    expect(result.totalReturnedQuantity).toBe(150);
+    expect(result.totalPurchaseSpend).toBe('5000000');
+    expect(result.totalPurchasedQuantity).toBe(3000);
+    expect(result.amountReturnRate).toBe(7);
+    expect(result.quantityReturnRate).toBe(5);
+    expect(result.topReturnedProducts).toHaveLength(2);
+    expect(result.topReturnedProducts[0]!.productName).toBe('Milk 1L');
+  });
+
+  it('should compute return rates with zero purchase baseline', async () => {
+    mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+      _sum: { grandTotal: '100000' },
+      _count: { id: 1 },
+    });
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([{ productId: 'p1', returnedQuantity: BigInt(50), returnedAmount: '100000', returnCount: BigInt(1) }])
+      .mockResolvedValueOnce([{ totalSpend: '0', totalQuantity: BigInt(0) }]);
+    mockPrisma.product.findFirst.mockResolvedValue({ name: 'Milk', sku: null });
+
+    const result = await service.getReturnSummary(supplierId, companyId);
+
+    expect(result.amountReturnRate).toBe(0);
+    expect(result.quantityReturnRate).toBe(0);
+  });
+
+  it('should sort top returned products by amount DESC', async () => {
+    mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+      _sum: { grandTotal: '250000' },
+      _count: { id: 2 },
+    });
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([
+        { productId: 'p1', returnedQuantity: BigInt(50), returnedAmount: '150000', returnCount: BigInt(1) },
+        { productId: 'p2', returnedQuantity: BigInt(100), returnedAmount: '100000', returnCount: BigInt(1) },
+      ])
+      .mockResolvedValueOnce([{ totalSpend: '5000000', totalQuantity: BigInt(3000) }]);
+    mockPrisma.product.findFirst
+      .mockResolvedValueOnce({ name: 'A', sku: null })
+      .mockResolvedValueOnce({ name: 'B', sku: null });
+
+    const result = await service.getReturnSummary(supplierId, companyId);
+
+    // SQL sorts by returnedAmount DESC
+    expect(result.topReturnedProducts[0]!.returnedAmount).toBe('150000');
+    expect(result.topReturnedProducts[1]!.returnedAmount).toBe('100000');
+  });
+
+  it('should return empty top products when no returns', async () => {
+    const result = await service.getReturnSummary(supplierId, companyId);
+
+    expect(result.topReturnedProducts).toHaveLength(0);
+    expect(result.totalReturnedQuantity).toBe(0);
+  });
+
+  it('should handle multiple return items for same product', async () => {
+    mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+      _sum: { grandTotal: '200000' },
+      _count: { id: 2 },
+    });
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([
+        { productId: 'p1', returnedQuantity: BigInt(150), returnedAmount: '200000', returnCount: BigInt(2) },
+      ])
+      .mockResolvedValueOnce([{ totalSpend: '1000000', totalQuantity: BigInt(500) }]);
+    mockPrisma.product.findFirst.mockResolvedValue({ name: 'Milk', sku: 'MLK' });
+
+    const result = await service.getReturnSummary(supplierId, companyId);
+
+    // returnCount = 2 (distinct returns), not 1 (item)
+    expect(result.topReturnedProducts[0]!.returnCount).toBe(2);
+    expect(result.topReturnedProducts[0]!.returnedQuantity).toBe(150);
+  });
+});

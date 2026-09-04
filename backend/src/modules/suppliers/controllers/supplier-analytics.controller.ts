@@ -18,6 +18,7 @@ import { SupplierProductPurchaseListEntity } from '../entities/supplier-product-
 import { SupplierReliabilityEntity } from '../entities/supplier-reliability.entity';
 import { SupplierPriceHistoryEntity } from '../entities/supplier-price-history.entity';
 import { SupplierPaymentAgingEntity } from '../entities/supplier-payment-aging.entity';
+import { SupplierReturnSummaryEntity } from '../entities/supplier-return-summary.entity';
 
 @ApiTags('suppliers / analytics')
 @ApiBearerAuth()
@@ -140,6 +141,27 @@ export class SupplierAnalyticsController {
     return this.analyticsService.getPaymentAging(
       supplierId,
       user!.companyId,
+    );
+  }
+
+  @Get('analytics/return-summary')
+  @RequirePermission('suppliers:read')
+  @ApiOperation({ summary: 'Get supplier return analysis summary' })
+  @ApiParam({ name: 'supplierId', type: String })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
+  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
+  @ApiResponse({ status: 200, type: SupplierReturnSummaryEntity })
+  async getReturnSummary(
+    @Param('supplierId') supplierId: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.analyticsService.getReturnSummary(
+      supplierId,
+      user!.companyId,
+      dateFrom,
+      dateTo,
     );
   }
 }

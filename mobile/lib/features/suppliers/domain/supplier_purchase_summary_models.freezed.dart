@@ -3479,3 +3479,631 @@ abstract class _SupplierPaymentAging implements SupplierPaymentAging {
   _$$SupplierPaymentAgingImplCopyWith<_$SupplierPaymentAgingImpl>
       get copyWith => throw _privateConstructorUsedError;
 }
+
+TopReturnedProduct _$TopReturnedProductFromJson(Map<String, dynamic> json) {
+  return _TopReturnedProduct.fromJson(json);
+}
+
+/// @nodoc
+mixin _$TopReturnedProduct {
+  String get productId => throw _privateConstructorUsedError;
+  String get productName => throw _privateConstructorUsedError;
+  String? get sku => throw _privateConstructorUsedError;
+  int get returnedQuantity => throw _privateConstructorUsedError;
+  String get returnedAmount => throw _privateConstructorUsedError;
+  int get returnCount => throw _privateConstructorUsedError;
+
+  /// Serializes this TopReturnedProduct to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of TopReturnedProduct
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $TopReturnedProductCopyWith<TopReturnedProduct> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $TopReturnedProductCopyWith<$Res> {
+  factory $TopReturnedProductCopyWith(
+          TopReturnedProduct value, $Res Function(TopReturnedProduct) then) =
+      _$TopReturnedProductCopyWithImpl<$Res, TopReturnedProduct>;
+  @useResult
+  $Res call(
+      {String productId,
+      String productName,
+      String? sku,
+      int returnedQuantity,
+      String returnedAmount,
+      int returnCount});
+}
+
+/// @nodoc
+class _$TopReturnedProductCopyWithImpl<$Res, $Val extends TopReturnedProduct>
+    implements $TopReturnedProductCopyWith<$Res> {
+  _$TopReturnedProductCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of TopReturnedProduct
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? productName = null,
+    Object? sku = freezed,
+    Object? returnedQuantity = null,
+    Object? returnedAmount = null,
+    Object? returnCount = null,
+  }) {
+    return _then(_value.copyWith(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productName: null == productName
+          ? _value.productName
+          : productName // ignore: cast_nullable_to_non_nullable
+              as String,
+      sku: freezed == sku
+          ? _value.sku
+          : sku // ignore: cast_nullable_to_non_nullable
+              as String?,
+      returnedQuantity: null == returnedQuantity
+          ? _value.returnedQuantity
+          : returnedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      returnedAmount: null == returnedAmount
+          ? _value.returnedAmount
+          : returnedAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      returnCount: null == returnCount
+          ? _value.returnCount
+          : returnCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$TopReturnedProductImplCopyWith<$Res>
+    implements $TopReturnedProductCopyWith<$Res> {
+  factory _$$TopReturnedProductImplCopyWith(_$TopReturnedProductImpl value,
+          $Res Function(_$TopReturnedProductImpl) then) =
+      __$$TopReturnedProductImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String productId,
+      String productName,
+      String? sku,
+      int returnedQuantity,
+      String returnedAmount,
+      int returnCount});
+}
+
+/// @nodoc
+class __$$TopReturnedProductImplCopyWithImpl<$Res>
+    extends _$TopReturnedProductCopyWithImpl<$Res, _$TopReturnedProductImpl>
+    implements _$$TopReturnedProductImplCopyWith<$Res> {
+  __$$TopReturnedProductImplCopyWithImpl(_$TopReturnedProductImpl _value,
+      $Res Function(_$TopReturnedProductImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of TopReturnedProduct
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? productName = null,
+    Object? sku = freezed,
+    Object? returnedQuantity = null,
+    Object? returnedAmount = null,
+    Object? returnCount = null,
+  }) {
+    return _then(_$TopReturnedProductImpl(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productName: null == productName
+          ? _value.productName
+          : productName // ignore: cast_nullable_to_non_nullable
+              as String,
+      sku: freezed == sku
+          ? _value.sku
+          : sku // ignore: cast_nullable_to_non_nullable
+              as String?,
+      returnedQuantity: null == returnedQuantity
+          ? _value.returnedQuantity
+          : returnedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      returnedAmount: null == returnedAmount
+          ? _value.returnedAmount
+          : returnedAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      returnCount: null == returnCount
+          ? _value.returnCount
+          : returnCount // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$TopReturnedProductImpl implements _TopReturnedProduct {
+  const _$TopReturnedProductImpl(
+      {required this.productId,
+      required this.productName,
+      this.sku,
+      required this.returnedQuantity,
+      required this.returnedAmount,
+      required this.returnCount});
+
+  factory _$TopReturnedProductImpl.fromJson(Map<String, dynamic> json) =>
+      _$$TopReturnedProductImplFromJson(json);
+
+  @override
+  final String productId;
+  @override
+  final String productName;
+  @override
+  final String? sku;
+  @override
+  final int returnedQuantity;
+  @override
+  final String returnedAmount;
+  @override
+  final int returnCount;
+
+  @override
+  String toString() {
+    return 'TopReturnedProduct(productId: $productId, productName: $productName, sku: $sku, returnedQuantity: $returnedQuantity, returnedAmount: $returnedAmount, returnCount: $returnCount)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$TopReturnedProductImpl &&
+            (identical(other.productId, productId) ||
+                other.productId == productId) &&
+            (identical(other.productName, productName) ||
+                other.productName == productName) &&
+            (identical(other.sku, sku) || other.sku == sku) &&
+            (identical(other.returnedQuantity, returnedQuantity) ||
+                other.returnedQuantity == returnedQuantity) &&
+            (identical(other.returnedAmount, returnedAmount) ||
+                other.returnedAmount == returnedAmount) &&
+            (identical(other.returnCount, returnCount) ||
+                other.returnCount == returnCount));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, productId, productName, sku,
+      returnedQuantity, returnedAmount, returnCount);
+
+  /// Create a copy of TopReturnedProduct
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$TopReturnedProductImplCopyWith<_$TopReturnedProductImpl> get copyWith =>
+      __$$TopReturnedProductImplCopyWithImpl<_$TopReturnedProductImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$TopReturnedProductImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _TopReturnedProduct implements TopReturnedProduct {
+  const factory _TopReturnedProduct(
+      {required final String productId,
+      required final String productName,
+      final String? sku,
+      required final int returnedQuantity,
+      required final String returnedAmount,
+      required final int returnCount}) = _$TopReturnedProductImpl;
+
+  factory _TopReturnedProduct.fromJson(Map<String, dynamic> json) =
+      _$TopReturnedProductImpl.fromJson;
+
+  @override
+  String get productId;
+  @override
+  String get productName;
+  @override
+  String? get sku;
+  @override
+  int get returnedQuantity;
+  @override
+  String get returnedAmount;
+  @override
+  int get returnCount;
+
+  /// Create a copy of TopReturnedProduct
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$TopReturnedProductImplCopyWith<_$TopReturnedProductImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+SupplierReturnSummary _$SupplierReturnSummaryFromJson(
+    Map<String, dynamic> json) {
+  return _SupplierReturnSummary.fromJson(json);
+}
+
+/// @nodoc
+mixin _$SupplierReturnSummary {
+  String get dateFrom => throw _privateConstructorUsedError;
+  String get dateTo => throw _privateConstructorUsedError;
+  String get totalReturnedAmount => throw _privateConstructorUsedError;
+  int get totalReturnedQuantity => throw _privateConstructorUsedError;
+  int get returnCount => throw _privateConstructorUsedError;
+  String get totalPurchaseSpend => throw _privateConstructorUsedError;
+  int get totalPurchasedQuantity => throw _privateConstructorUsedError;
+  double get amountReturnRate => throw _privateConstructorUsedError;
+  double get quantityReturnRate => throw _privateConstructorUsedError;
+  List<TopReturnedProduct> get topReturnedProducts =>
+      throw _privateConstructorUsedError;
+
+  /// Serializes this SupplierReturnSummary to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of SupplierReturnSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $SupplierReturnSummaryCopyWith<SupplierReturnSummary> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $SupplierReturnSummaryCopyWith<$Res> {
+  factory $SupplierReturnSummaryCopyWith(SupplierReturnSummary value,
+          $Res Function(SupplierReturnSummary) then) =
+      _$SupplierReturnSummaryCopyWithImpl<$Res, SupplierReturnSummary>;
+  @useResult
+  $Res call(
+      {String dateFrom,
+      String dateTo,
+      String totalReturnedAmount,
+      int totalReturnedQuantity,
+      int returnCount,
+      String totalPurchaseSpend,
+      int totalPurchasedQuantity,
+      double amountReturnRate,
+      double quantityReturnRate,
+      List<TopReturnedProduct> topReturnedProducts});
+}
+
+/// @nodoc
+class _$SupplierReturnSummaryCopyWithImpl<$Res,
+        $Val extends SupplierReturnSummary>
+    implements $SupplierReturnSummaryCopyWith<$Res> {
+  _$SupplierReturnSummaryCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of SupplierReturnSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? totalReturnedAmount = null,
+    Object? totalReturnedQuantity = null,
+    Object? returnCount = null,
+    Object? totalPurchaseSpend = null,
+    Object? totalPurchasedQuantity = null,
+    Object? amountReturnRate = null,
+    Object? quantityReturnRate = null,
+    Object? topReturnedProducts = null,
+  }) {
+    return _then(_value.copyWith(
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalReturnedAmount: null == totalReturnedAmount
+          ? _value.totalReturnedAmount
+          : totalReturnedAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalReturnedQuantity: null == totalReturnedQuantity
+          ? _value.totalReturnedQuantity
+          : totalReturnedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      returnCount: null == returnCount
+          ? _value.returnCount
+          : returnCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalPurchaseSpend: null == totalPurchaseSpend
+          ? _value.totalPurchaseSpend
+          : totalPurchaseSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalPurchasedQuantity: null == totalPurchasedQuantity
+          ? _value.totalPurchasedQuantity
+          : totalPurchasedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      amountReturnRate: null == amountReturnRate
+          ? _value.amountReturnRate
+          : amountReturnRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      quantityReturnRate: null == quantityReturnRate
+          ? _value.quantityReturnRate
+          : quantityReturnRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      topReturnedProducts: null == topReturnedProducts
+          ? _value.topReturnedProducts
+          : topReturnedProducts // ignore: cast_nullable_to_non_nullable
+              as List<TopReturnedProduct>,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$SupplierReturnSummaryImplCopyWith<$Res>
+    implements $SupplierReturnSummaryCopyWith<$Res> {
+  factory _$$SupplierReturnSummaryImplCopyWith(
+          _$SupplierReturnSummaryImpl value,
+          $Res Function(_$SupplierReturnSummaryImpl) then) =
+      __$$SupplierReturnSummaryImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String dateFrom,
+      String dateTo,
+      String totalReturnedAmount,
+      int totalReturnedQuantity,
+      int returnCount,
+      String totalPurchaseSpend,
+      int totalPurchasedQuantity,
+      double amountReturnRate,
+      double quantityReturnRate,
+      List<TopReturnedProduct> topReturnedProducts});
+}
+
+/// @nodoc
+class __$$SupplierReturnSummaryImplCopyWithImpl<$Res>
+    extends _$SupplierReturnSummaryCopyWithImpl<$Res,
+        _$SupplierReturnSummaryImpl>
+    implements _$$SupplierReturnSummaryImplCopyWith<$Res> {
+  __$$SupplierReturnSummaryImplCopyWithImpl(_$SupplierReturnSummaryImpl _value,
+      $Res Function(_$SupplierReturnSummaryImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of SupplierReturnSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? dateFrom = null,
+    Object? dateTo = null,
+    Object? totalReturnedAmount = null,
+    Object? totalReturnedQuantity = null,
+    Object? returnCount = null,
+    Object? totalPurchaseSpend = null,
+    Object? totalPurchasedQuantity = null,
+    Object? amountReturnRate = null,
+    Object? quantityReturnRate = null,
+    Object? topReturnedProducts = null,
+  }) {
+    return _then(_$SupplierReturnSummaryImpl(
+      dateFrom: null == dateFrom
+          ? _value.dateFrom
+          : dateFrom // ignore: cast_nullable_to_non_nullable
+              as String,
+      dateTo: null == dateTo
+          ? _value.dateTo
+          : dateTo // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalReturnedAmount: null == totalReturnedAmount
+          ? _value.totalReturnedAmount
+          : totalReturnedAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalReturnedQuantity: null == totalReturnedQuantity
+          ? _value.totalReturnedQuantity
+          : totalReturnedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      returnCount: null == returnCount
+          ? _value.returnCount
+          : returnCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalPurchaseSpend: null == totalPurchaseSpend
+          ? _value.totalPurchaseSpend
+          : totalPurchaseSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalPurchasedQuantity: null == totalPurchasedQuantity
+          ? _value.totalPurchasedQuantity
+          : totalPurchasedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      amountReturnRate: null == amountReturnRate
+          ? _value.amountReturnRate
+          : amountReturnRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      quantityReturnRate: null == quantityReturnRate
+          ? _value.quantityReturnRate
+          : quantityReturnRate // ignore: cast_nullable_to_non_nullable
+              as double,
+      topReturnedProducts: null == topReturnedProducts
+          ? _value._topReturnedProducts
+          : topReturnedProducts // ignore: cast_nullable_to_non_nullable
+              as List<TopReturnedProduct>,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$SupplierReturnSummaryImpl implements _SupplierReturnSummary {
+  const _$SupplierReturnSummaryImpl(
+      {required this.dateFrom,
+      required this.dateTo,
+      required this.totalReturnedAmount,
+      required this.totalReturnedQuantity,
+      required this.returnCount,
+      required this.totalPurchaseSpend,
+      required this.totalPurchasedQuantity,
+      required this.amountReturnRate,
+      required this.quantityReturnRate,
+      final List<TopReturnedProduct> topReturnedProducts = const []})
+      : _topReturnedProducts = topReturnedProducts;
+
+  factory _$SupplierReturnSummaryImpl.fromJson(Map<String, dynamic> json) =>
+      _$$SupplierReturnSummaryImplFromJson(json);
+
+  @override
+  final String dateFrom;
+  @override
+  final String dateTo;
+  @override
+  final String totalReturnedAmount;
+  @override
+  final int totalReturnedQuantity;
+  @override
+  final int returnCount;
+  @override
+  final String totalPurchaseSpend;
+  @override
+  final int totalPurchasedQuantity;
+  @override
+  final double amountReturnRate;
+  @override
+  final double quantityReturnRate;
+  final List<TopReturnedProduct> _topReturnedProducts;
+  @override
+  @JsonKey()
+  List<TopReturnedProduct> get topReturnedProducts {
+    if (_topReturnedProducts is EqualUnmodifiableListView)
+      return _topReturnedProducts;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_topReturnedProducts);
+  }
+
+  @override
+  String toString() {
+    return 'SupplierReturnSummary(dateFrom: $dateFrom, dateTo: $dateTo, totalReturnedAmount: $totalReturnedAmount, totalReturnedQuantity: $totalReturnedQuantity, returnCount: $returnCount, totalPurchaseSpend: $totalPurchaseSpend, totalPurchasedQuantity: $totalPurchasedQuantity, amountReturnRate: $amountReturnRate, quantityReturnRate: $quantityReturnRate, topReturnedProducts: $topReturnedProducts)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$SupplierReturnSummaryImpl &&
+            (identical(other.dateFrom, dateFrom) ||
+                other.dateFrom == dateFrom) &&
+            (identical(other.dateTo, dateTo) || other.dateTo == dateTo) &&
+            (identical(other.totalReturnedAmount, totalReturnedAmount) ||
+                other.totalReturnedAmount == totalReturnedAmount) &&
+            (identical(other.totalReturnedQuantity, totalReturnedQuantity) ||
+                other.totalReturnedQuantity == totalReturnedQuantity) &&
+            (identical(other.returnCount, returnCount) ||
+                other.returnCount == returnCount) &&
+            (identical(other.totalPurchaseSpend, totalPurchaseSpend) ||
+                other.totalPurchaseSpend == totalPurchaseSpend) &&
+            (identical(other.totalPurchasedQuantity, totalPurchasedQuantity) ||
+                other.totalPurchasedQuantity == totalPurchasedQuantity) &&
+            (identical(other.amountReturnRate, amountReturnRate) ||
+                other.amountReturnRate == amountReturnRate) &&
+            (identical(other.quantityReturnRate, quantityReturnRate) ||
+                other.quantityReturnRate == quantityReturnRate) &&
+            const DeepCollectionEquality()
+                .equals(other._topReturnedProducts, _topReturnedProducts));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType,
+      dateFrom,
+      dateTo,
+      totalReturnedAmount,
+      totalReturnedQuantity,
+      returnCount,
+      totalPurchaseSpend,
+      totalPurchasedQuantity,
+      amountReturnRate,
+      quantityReturnRate,
+      const DeepCollectionEquality().hash(_topReturnedProducts));
+
+  /// Create a copy of SupplierReturnSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$SupplierReturnSummaryImplCopyWith<_$SupplierReturnSummaryImpl>
+      get copyWith => __$$SupplierReturnSummaryImplCopyWithImpl<
+          _$SupplierReturnSummaryImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$SupplierReturnSummaryImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _SupplierReturnSummary implements SupplierReturnSummary {
+  const factory _SupplierReturnSummary(
+          {required final String dateFrom,
+          required final String dateTo,
+          required final String totalReturnedAmount,
+          required final int totalReturnedQuantity,
+          required final int returnCount,
+          required final String totalPurchaseSpend,
+          required final int totalPurchasedQuantity,
+          required final double amountReturnRate,
+          required final double quantityReturnRate,
+          final List<TopReturnedProduct> topReturnedProducts}) =
+      _$SupplierReturnSummaryImpl;
+
+  factory _SupplierReturnSummary.fromJson(Map<String, dynamic> json) =
+      _$SupplierReturnSummaryImpl.fromJson;
+
+  @override
+  String get dateFrom;
+  @override
+  String get dateTo;
+  @override
+  String get totalReturnedAmount;
+  @override
+  int get totalReturnedQuantity;
+  @override
+  int get returnCount;
+  @override
+  String get totalPurchaseSpend;
+  @override
+  int get totalPurchasedQuantity;
+  @override
+  double get amountReturnRate;
+  @override
+  double get quantityReturnRate;
+  @override
+  List<TopReturnedProduct> get topReturnedProducts;
+
+  /// Create a copy of SupplierReturnSummary
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$SupplierReturnSummaryImplCopyWith<_$SupplierReturnSummaryImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}

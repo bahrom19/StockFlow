@@ -45,6 +45,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   SupplierPaymentAging? _paymentAging;
   bool _isLoadingPaymentAging = false;
   String? _paymentAgingError;
+  SupplierReturnSummary? _returnSummary;
+  bool _isLoadingReturnSummary = false;
+  String? _returnSummaryError;
   bool _isLoadingReliability = false;
   String? _reliabilityError;
   bool _isLoading = true;
@@ -141,6 +144,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     _loadProductPurchases();
     _loadReliability();
     _loadPaymentAging();
+    _loadReturnSummary();
   }
 
   Future<void> _loadProductPurchases() async {
@@ -208,6 +212,29 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
         _paymentAgingError = result.error.message;
       }
       _isLoadingPaymentAging = false;
+    });
+  }
+
+  Future<void> _loadReturnSummary() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingReturnSummary = true;
+      _returnSummaryError = null;
+    });
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getReturnSummary(
+      widget.supplierId,
+      dateFrom: _purchaseDateFrom,
+      dateTo: _purchaseDateTo,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<SupplierReturnSummary>) {
+        _returnSummary = result.data;
+      } else if (result is SuppliersFailure<SupplierReturnSummary>) {
+        _returnSummaryError = result.error.message;
+      }
+      _isLoadingReturnSummary = false;
     });
   }
 
@@ -293,6 +320,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
               // ── Supplier Reliability Section ────────────────
               _buildReliabilitySection(theme),
+              const SizedBox(height: 24),
+
+              // ── Return Analysis Section ───────────────────────
+              _buildReturnSummarySection(theme),
               const SizedBox(height: 24),
 
               // ── Products Section ─────────────────────────────
@@ -928,6 +959,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                     _loadPurchaseSummary();
                     _loadProductPurchases();
                     _loadReliability();
+                    _loadReturnSummary();
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem(value: null, child: Text(context.l10n.periodAllTime)),
@@ -1468,6 +1500,113 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(context.l10n.noOrderData,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Return Analysis Section ──────────────────────────
+
+  Widget _buildReturnSummarySection(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.assignment_return,
+                    size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(context.l10n.returnAnalysis,
+                    style: theme.textTheme.titleSmall),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_isLoadingReturnSummary)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else if (_returnSummaryError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    Text(
+                      _returnSummaryError!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.error),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _loadReturnSummary,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(context.l10n.retry),
+                    ),
+                  ],
+                ),
+              )
+            else if (_returnSummary != null) ...[
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: [
+                  _analyticsStat(context.l10n.returnedAmount, '₸${_returnSummary!.totalReturnedAmount}', theme),
+                  _analyticsStat(context.l10n.returnedQty, '${_returnSummary!.totalReturnedQuantity}', theme),
+                  _analyticsStat(context.l10n.amountReturnRate, '${_returnSummary!.amountReturnRate}%', theme),
+                  _analyticsStat(context.l10n.qtyReturnRate, '${_returnSummary!.quantityReturnRate}%', theme),
+                  _analyticsStat(context.l10n.returnCount, '${_returnSummary!.returnCount}', theme),
+                ],
+              ),
+              if (_returnSummary!.topReturnedProducts.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Divider(color: theme.colorScheme.outlineVariant),
+                const SizedBox(height: 8),
+                Text(context.l10n.topReturnedProducts,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                ..._returnSummary!.topReturnedProducts.map((p) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Text(p.productName,
+                            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
+                      ),
+                      SizedBox(
+                        width: 50,
+                        child: Text('×${p.returnedQuantity}',
+                            style: theme.textTheme.bodySmall, textAlign: TextAlign.end),
+                      ),
+                      SizedBox(
+                        width: 90,
+                        child: Text('₸${p.returnedAmount}',
+                            style: theme.textTheme.bodySmall, textAlign: TextAlign.end),
+                      ),
+                    ],
+                  ),
+                )),
+              ],
+            ]
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(context.l10n.noReturns,
                     style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
               ),

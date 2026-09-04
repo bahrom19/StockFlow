@@ -304,3 +304,59 @@ Map<String, dynamic> _$$SupplierPaymentAgingImplToJson(
       'invoiceCount': instance.invoiceCount,
       'overdueCount': instance.overdueCount,
     };
+
+_$TopReturnedProductImpl _$$TopReturnedProductImplFromJson(
+        Map<String, dynamic> json) =>
+    _$TopReturnedProductImpl(
+      productId: json['productId'] as String,
+      productName: json['productName'] as String,
+      sku: json['sku'] as String?,
+      returnedQuantity: (json['returnedQuantity'] as num).toInt(),
+      returnedAmount: json['returnedAmount'] as String,
+      returnCount: (json['returnCount'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$TopReturnedProductImplToJson(
+        _$TopReturnedProductImpl instance) =>
+    <String, dynamic>{
+      'productId': instance.productId,
+      'productName': instance.productName,
+      'sku': instance.sku,
+      'returnedQuantity': instance.returnedQuantity,
+      'returnedAmount': instance.returnedAmount,
+      'returnCount': instance.returnCount,
+    };
+
+_$SupplierReturnSummaryImpl _$$SupplierReturnSummaryImplFromJson(
+        Map<String, dynamic> json) =>
+    _$SupplierReturnSummaryImpl(
+      dateFrom: json['dateFrom'] as String,
+      dateTo: json['dateTo'] as String,
+      totalReturnedAmount: json['totalReturnedAmount'] as String,
+      totalReturnedQuantity: (json['totalReturnedQuantity'] as num).toInt(),
+      returnCount: (json['returnCount'] as num).toInt(),
+      totalPurchaseSpend: json['totalPurchaseSpend'] as String,
+      totalPurchasedQuantity: (json['totalPurchasedQuantity'] as num).toInt(),
+      amountReturnRate: (json['amountReturnRate'] as num).toDouble(),
+      quantityReturnRate: (json['quantityReturnRate'] as num).toDouble(),
+      topReturnedProducts: (json['topReturnedProducts'] as List<dynamic>?)
+              ?.map(
+                  (e) => TopReturnedProduct.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+
+Map<String, dynamic> _$$SupplierReturnSummaryImplToJson(
+        _$SupplierReturnSummaryImpl instance) =>
+    <String, dynamic>{
+      'dateFrom': instance.dateFrom,
+      'dateTo': instance.dateTo,
+      'totalReturnedAmount': instance.totalReturnedAmount,
+      'totalReturnedQuantity': instance.totalReturnedQuantity,
+      'returnCount': instance.returnCount,
+      'totalPurchaseSpend': instance.totalPurchaseSpend,
+      'totalPurchasedQuantity': instance.totalPurchasedQuantity,
+      'amountReturnRate': instance.amountReturnRate,
+      'quantityReturnRate': instance.quantityReturnRate,
+      'topReturnedProducts': instance.topReturnedProducts,
+    };

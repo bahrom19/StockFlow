@@ -8,6 +8,7 @@ import { SupplierProductPurchaseEntity, SupplierProductPurchaseListEntity } from
 import { SupplierReliabilityEntity, RecentDeliveryEntity } from '../entities/supplier-reliability.entity';
 import { SupplierPriceHistoryEntity, PricePointEntity } from '../entities/supplier-price-history.entity';
 import { SupplierPaymentAgingEntity, PaymentAgingBucketsEntity, OverdueInvoiceEntity } from '../entities/supplier-payment-aging.entity';
+import { SupplierReturnSummaryEntity, TopReturnedProductEntity } from '../entities/supplier-return-summary.entity';
 
 const INVOICE_STATUSES = [
   PurchaseInvoiceStatus.APPROVED,
@@ -783,6 +784,136 @@ export class SupplierAnalyticsService {
       overdueInvoices,
       invoiceCount,
       overdueCount,
+    };
+  }
+
+  // ── Supplier Return Summary ──────────────────────────────
+
+  async getReturnSummary(
+    supplierId: string,
+    companyId: string,
+    dateFrom?: string,
+    dateTo?: string,
+  ): Promise<SupplierReturnSummaryEntity> {
+    // 1. Verify supplier belongs to company
+    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    if (!supplier) {
+      throw new NotFoundException(`Supplier ${supplierId} not found`);
+    }
+
+    // 2. Date range — default to last 12 months
+    const now = new Date();
+    const effectiveDateTo = dateTo ? new Date(dateTo) : now;
+    const effectiveDateFrom = dateFrom
+      ? new Date(dateFrom)
+      : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+    // 3. Return aggregation (APPROVED/COMPLETED only)
+    const returnAgg = await this.prismaService.purchaseReturn.aggregate({
+      where: {
+        supplierId,
+        companyId,
+        deletedAt: null,
+        status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+        returnDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
+      },
+      _sum: { grandTotal: true },
+      _count: { id: true },
+    });
+
+    const totalReturnedAmount = new Decimal(returnAgg._sum.grandTotal ?? 0);
+    const returnCount = returnAgg._count.id;
+
+    // 4. Return quantity and top returned products
+    const returnItemRows = await this.prismaService.$queryRaw<
+      Array<{
+        productId: string;
+        returnedQuantity: bigint;
+        returnedAmount: Decimal;
+        returnCount: bigint;
+      }>
+    >`
+      SELECT
+        pri."productId",
+        SUM(pri."quantity") AS "returnedQuantity",
+        SUM(pri."total") AS "returnedAmount",
+        COUNT(DISTINCT pr."id") AS "returnCount"
+      FROM "PurchaseReturnItem" pri
+      JOIN "PurchaseReturn" pr ON pri."purchaseReturnId" = pr.id
+      WHERE pr."supplierId" = ${supplierId}
+        AND pr."companyId" = ${companyId}
+        AND pr."deletedAt" IS NULL
+        AND pr."status" IN ('APPROVED', 'COMPLETED')
+        AND pr."returnDate" >= ${effectiveDateFrom}
+        AND pr."returnDate" <= ${effectiveDateTo}
+      GROUP BY pri."productId"
+      ORDER BY SUM(pri."total") DESC, SUM(pri."quantity") DESC, pri."productId" ASC
+      LIMIT 10
+    `;
+
+    const totalReturnedQuantity = returnItemRows.reduce(
+      (sum, row) => sum + Number(row.returnedQuantity), 0,
+    );
+
+    // 5. Purchase baseline (same semantics as G5-B1/B2)
+    const purchaseAgg = await this.prismaService.$queryRaw<
+      Array<{
+        totalSpend: Decimal;
+        totalQuantity: bigint;
+      }>
+    >`
+      SELECT
+        SUM(pii."total") AS "totalSpend",
+        SUM(pii."quantity") AS "totalQuantity"
+      FROM "PurchaseInvoiceItem" pii
+      JOIN "PurchaseInvoice" pi ON pii."purchaseInvoiceId" = pi.id
+      WHERE pi."supplierId" = ${supplierId}
+        AND pi."companyId" = ${companyId}
+        AND pi."deletedAt" IS NULL
+        AND pi."status" IN ('APPROVED', 'PAID')
+        AND pi."invoiceDate" >= ${effectiveDateFrom}
+        AND pi."invoiceDate" <= ${effectiveDateTo}
+    `;
+
+    const totalPurchaseSpend = new Decimal(purchaseAgg[0]?.totalSpend?.toString() ?? '0');
+    const totalPurchasedQuantity = Number(purchaseAgg[0]?.totalQuantity ?? 0);
+
+    // 6. Return rates
+    const amountReturnRate = totalPurchaseSpend.greaterThan(0)
+      ? Math.round(totalReturnedAmount.div(totalPurchaseSpend).mul(1000).toNumber()) / 10
+      : 0;
+    const quantityReturnRate = totalPurchasedQuantity > 0
+      ? Math.round((totalReturnedQuantity / totalPurchasedQuantity) * 1000) / 10
+      : 0;
+
+    // 7. Top returned products with names
+    const topReturnedProducts: TopReturnedProductEntity[] = [];
+    for (const row of returnItemRows) {
+      const product = await this.prismaService.product.findFirst({
+        where: { id: row.productId, companyId, deletedAt: null },
+        select: { name: true, sku: true },
+      });
+      topReturnedProducts.push({
+        productId: row.productId,
+        productName: product?.name ?? 'Unknown',
+        sku: product?.sku ?? null,
+        returnedQuantity: Number(row.returnedQuantity),
+        returnedAmount: new Decimal(row.returnedAmount?.toString() ?? '0').toString(),
+        returnCount: Number(row.returnCount),
+      });
+    }
+
+    return {
+      dateFrom: effectiveDateFrom.toISOString(),
+      dateTo: effectiveDateTo.toISOString(),
+      totalReturnedAmount: totalReturnedAmount.toString(),
+      totalReturnedQuantity,
+      returnCount,
+      totalPurchaseSpend: totalPurchaseSpend.toString(),
+      totalPurchasedQuantity,
+      amountReturnRate,
+      quantityReturnRate,
+      topReturnedProducts,
     };
   }
 

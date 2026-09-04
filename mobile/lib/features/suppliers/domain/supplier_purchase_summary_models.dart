@@ -190,3 +190,37 @@ class SupplierPaymentAging with _$SupplierPaymentAging {
   factory SupplierPaymentAging.fromJson(Map<String, dynamic> json) =>
       _$SupplierPaymentAgingFromJson(json);
 }
+
+@freezed
+class TopReturnedProduct with _$TopReturnedProduct {
+  const factory TopReturnedProduct({
+    required String productId,
+    required String productName,
+    String? sku,
+    required int returnedQuantity,
+    required String returnedAmount,
+    required int returnCount,
+  }) = _TopReturnedProduct;
+
+  factory TopReturnedProduct.fromJson(Map<String, dynamic> json) =>
+      _$TopReturnedProductFromJson(json);
+}
+
+@freezed
+class SupplierReturnSummary with _$SupplierReturnSummary {
+  const factory SupplierReturnSummary({
+    required String dateFrom,
+    required String dateTo,
+    required String totalReturnedAmount,
+    required int totalReturnedQuantity,
+    required int returnCount,
+    required String totalPurchaseSpend,
+    required int totalPurchasedQuantity,
+    required double amountReturnRate,
+    required double quantityReturnRate,
+    @Default([]) List<TopReturnedProduct> topReturnedProducts,
+  }) = _SupplierReturnSummary;
+
+  factory SupplierReturnSummary.fromJson(Map<String, dynamic> json) =>
+      _$SupplierReturnSummaryFromJson(json);
+}

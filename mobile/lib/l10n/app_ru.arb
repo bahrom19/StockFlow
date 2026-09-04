@@ -970,5 +970,13 @@
   "days61To90": "61-90 дней",
   "overdue90Plus": "90+ дней",
   "overdueInvoices": "Просроченные счета",
-  "daysOverdue": "дн. просрочки"
+  "daysOverdue": "дн. просрочки",
+  "returnAnalysis": "Аналитика возвратов",
+  "returnedAmount": "Сумма возвратов",
+  "returnedQty": "Кол-во возвратов",
+  "amountReturnRate": "% возврата (сумма)",
+  "qtyReturnRate": "% возврата (кол-во)",
+  "returnCount": "Кол-во возвратов",
+  "topReturnedProducts": "Часто возвращаемые товары",
+  "noReturns": "Нет возвратов за этот период"
 }

@@ -970,5 +970,13 @@
   "days61To90": "61-90 Days",
   "overdue90Plus": "90+ Days",
   "overdueInvoices": "Overdue Invoices",
-  "daysOverdue": "days overdue"
+  "daysOverdue": "days overdue",
+  "returnAnalysis": "Return Analysis",
+  "returnedAmount": "Returned Amount",
+  "returnedQty": "Returned Qty",
+  "amountReturnRate": "Amount Return Rate",
+  "qtyReturnRate": "Qty Return Rate",
+  "returnCount": "Returns",
+  "topReturnedProducts": "Top Returned Products",
+  "noReturns": "No returns in this period"
 }
