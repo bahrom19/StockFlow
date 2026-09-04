@@ -14,6 +14,7 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { SupplierAnalyticsService } from '../services/supplier-analytics.service';
 import { SupplierPurchaseSummaryEntity } from '../entities/supplier-purchase-summary.entity';
+import { SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
 
 @ApiTags('suppliers / analytics')
 @ApiBearerAuth()
@@ -40,6 +41,42 @@ export class SupplierAnalyticsController {
       user!.companyId,
       dateFrom,
       dateTo,
+    );
+  }
+
+  @Get('analytics/product-purchases')
+  @RequirePermission('suppliers:read')
+  @ApiOperation({ summary: 'Get supplier product purchase detail' })
+  @ApiParam({ name: 'supplierId', type: String })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String })
+  @ApiQuery({ name: 'dateTo', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'sortBy', required: false, type: String })
+  @ApiQuery({ name: 'sortOrder', required: false, type: String })
+  @ApiResponse({ status: 200, type: SupplierProductPurchaseListEntity })
+  async getProductPurchases(
+    @Param('supplierId') supplierId: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.analyticsService.getProductPurchases(
+      supplierId,
+      user!.companyId,
+      dateFrom,
+      dateTo,
+      page ?? 1,
+      limit ?? 20,
+      search,
+      sortBy,
+      sortOrder as 'asc' | 'desc' | undefined,
     );
   }
 }

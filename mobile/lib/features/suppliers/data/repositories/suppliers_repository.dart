@@ -10,6 +10,7 @@ import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart
 import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_purchase_summary_models.dart';
+// ProductPurchaseListResponse is in the same file
 
 sealed class SuppliersResult<T> {
   const SuppliersResult();
@@ -290,6 +291,36 @@ class SuppliersRepository {
       );
       return SuppliersSuccess(
           SupplierPurchaseSummary.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  Future<SuppliersResult<ProductPurchaseListResponse>> getProductPurchases(
+      String supplierId, {
+      String? dateFrom,
+      String? dateTo,
+      int page = 1,
+      int limit = 20,
+      String? search,
+      String sortBy = 'totalPurchaseSpend',
+      String sortOrder = 'desc'}) async {
+    try {
+      final params = <String, dynamic>{
+        'page': page,
+        'limit': limit,
+        'sortBy': sortBy,
+        'sortOrder': sortOrder,
+      };
+      if (dateFrom != null && dateFrom.isNotEmpty) params['dateFrom'] = dateFrom;
+      if (dateTo != null && dateTo.isNotEmpty) params['dateTo'] = dateTo;
+      if (search != null && search.isNotEmpty) params['search'] = search;
+      final response = await _api.get<Map<String, dynamic>>(
+        '/suppliers/$supplierId/analytics/product-purchases',
+        queryParameters: params,
+      );
+      return SuppliersSuccess(
+          ProductPurchaseListResponse.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }

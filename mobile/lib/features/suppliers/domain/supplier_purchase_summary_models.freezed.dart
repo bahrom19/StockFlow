@@ -637,3 +637,698 @@ abstract class _SupplierPurchaseSummary implements SupplierPurchaseSummary {
   _$$SupplierPurchaseSummaryImplCopyWith<_$SupplierPurchaseSummaryImpl>
       get copyWith => throw _privateConstructorUsedError;
 }
+
+ProductPurchaseDetail _$ProductPurchaseDetailFromJson(
+    Map<String, dynamic> json) {
+  return _ProductPurchaseDetail.fromJson(json);
+}
+
+/// @nodoc
+mixin _$ProductPurchaseDetail {
+  String get productId => throw _privateConstructorUsedError;
+  String get productName => throw _privateConstructorUsedError;
+  String? get sku => throw _privateConstructorUsedError;
+  int get totalPurchasedQuantity => throw _privateConstructorUsedError;
+  String get totalPurchaseSpend => throw _privateConstructorUsedError;
+  String get weightedAverageUnitCost => throw _privateConstructorUsedError;
+  String get minUnitCost => throw _privateConstructorUsedError;
+  String get maxUnitCost => throw _privateConstructorUsedError;
+  int get totalReturnedQuantity => throw _privateConstructorUsedError;
+  String get totalReturnedSpend => throw _privateConstructorUsedError;
+  int get netPurchasedQuantity => throw _privateConstructorUsedError;
+  String get netPurchaseSpend => throw _privateConstructorUsedError;
+  int get invoiceCount => throw _privateConstructorUsedError;
+  String? get firstPurchaseDate => throw _privateConstructorUsedError;
+  String? get lastPurchaseDate => throw _privateConstructorUsedError;
+
+  /// Serializes this ProductPurchaseDetail to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of ProductPurchaseDetail
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ProductPurchaseDetailCopyWith<ProductPurchaseDetail> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ProductPurchaseDetailCopyWith<$Res> {
+  factory $ProductPurchaseDetailCopyWith(ProductPurchaseDetail value,
+          $Res Function(ProductPurchaseDetail) then) =
+      _$ProductPurchaseDetailCopyWithImpl<$Res, ProductPurchaseDetail>;
+  @useResult
+  $Res call(
+      {String productId,
+      String productName,
+      String? sku,
+      int totalPurchasedQuantity,
+      String totalPurchaseSpend,
+      String weightedAverageUnitCost,
+      String minUnitCost,
+      String maxUnitCost,
+      int totalReturnedQuantity,
+      String totalReturnedSpend,
+      int netPurchasedQuantity,
+      String netPurchaseSpend,
+      int invoiceCount,
+      String? firstPurchaseDate,
+      String? lastPurchaseDate});
+}
+
+/// @nodoc
+class _$ProductPurchaseDetailCopyWithImpl<$Res,
+        $Val extends ProductPurchaseDetail>
+    implements $ProductPurchaseDetailCopyWith<$Res> {
+  _$ProductPurchaseDetailCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ProductPurchaseDetail
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? productName = null,
+    Object? sku = freezed,
+    Object? totalPurchasedQuantity = null,
+    Object? totalPurchaseSpend = null,
+    Object? weightedAverageUnitCost = null,
+    Object? minUnitCost = null,
+    Object? maxUnitCost = null,
+    Object? totalReturnedQuantity = null,
+    Object? totalReturnedSpend = null,
+    Object? netPurchasedQuantity = null,
+    Object? netPurchaseSpend = null,
+    Object? invoiceCount = null,
+    Object? firstPurchaseDate = freezed,
+    Object? lastPurchaseDate = freezed,
+  }) {
+    return _then(_value.copyWith(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productName: null == productName
+          ? _value.productName
+          : productName // ignore: cast_nullable_to_non_nullable
+              as String,
+      sku: freezed == sku
+          ? _value.sku
+          : sku // ignore: cast_nullable_to_non_nullable
+              as String?,
+      totalPurchasedQuantity: null == totalPurchasedQuantity
+          ? _value.totalPurchasedQuantity
+          : totalPurchasedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalPurchaseSpend: null == totalPurchaseSpend
+          ? _value.totalPurchaseSpend
+          : totalPurchaseSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      weightedAverageUnitCost: null == weightedAverageUnitCost
+          ? _value.weightedAverageUnitCost
+          : weightedAverageUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      minUnitCost: null == minUnitCost
+          ? _value.minUnitCost
+          : minUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      maxUnitCost: null == maxUnitCost
+          ? _value.maxUnitCost
+          : maxUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalReturnedQuantity: null == totalReturnedQuantity
+          ? _value.totalReturnedQuantity
+          : totalReturnedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalReturnedSpend: null == totalReturnedSpend
+          ? _value.totalReturnedSpend
+          : totalReturnedSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      netPurchasedQuantity: null == netPurchasedQuantity
+          ? _value.netPurchasedQuantity
+          : netPurchasedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      netPurchaseSpend: null == netPurchaseSpend
+          ? _value.netPurchaseSpend
+          : netPurchaseSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceCount: null == invoiceCount
+          ? _value.invoiceCount
+          : invoiceCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      firstPurchaseDate: freezed == firstPurchaseDate
+          ? _value.firstPurchaseDate
+          : firstPurchaseDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      lastPurchaseDate: freezed == lastPurchaseDate
+          ? _value.lastPurchaseDate
+          : lastPurchaseDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$ProductPurchaseDetailImplCopyWith<$Res>
+    implements $ProductPurchaseDetailCopyWith<$Res> {
+  factory _$$ProductPurchaseDetailImplCopyWith(
+          _$ProductPurchaseDetailImpl value,
+          $Res Function(_$ProductPurchaseDetailImpl) then) =
+      __$$ProductPurchaseDetailImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String productId,
+      String productName,
+      String? sku,
+      int totalPurchasedQuantity,
+      String totalPurchaseSpend,
+      String weightedAverageUnitCost,
+      String minUnitCost,
+      String maxUnitCost,
+      int totalReturnedQuantity,
+      String totalReturnedSpend,
+      int netPurchasedQuantity,
+      String netPurchaseSpend,
+      int invoiceCount,
+      String? firstPurchaseDate,
+      String? lastPurchaseDate});
+}
+
+/// @nodoc
+class __$$ProductPurchaseDetailImplCopyWithImpl<$Res>
+    extends _$ProductPurchaseDetailCopyWithImpl<$Res,
+        _$ProductPurchaseDetailImpl>
+    implements _$$ProductPurchaseDetailImplCopyWith<$Res> {
+  __$$ProductPurchaseDetailImplCopyWithImpl(_$ProductPurchaseDetailImpl _value,
+      $Res Function(_$ProductPurchaseDetailImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of ProductPurchaseDetail
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? productName = null,
+    Object? sku = freezed,
+    Object? totalPurchasedQuantity = null,
+    Object? totalPurchaseSpend = null,
+    Object? weightedAverageUnitCost = null,
+    Object? minUnitCost = null,
+    Object? maxUnitCost = null,
+    Object? totalReturnedQuantity = null,
+    Object? totalReturnedSpend = null,
+    Object? netPurchasedQuantity = null,
+    Object? netPurchaseSpend = null,
+    Object? invoiceCount = null,
+    Object? firstPurchaseDate = freezed,
+    Object? lastPurchaseDate = freezed,
+  }) {
+    return _then(_$ProductPurchaseDetailImpl(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productName: null == productName
+          ? _value.productName
+          : productName // ignore: cast_nullable_to_non_nullable
+              as String,
+      sku: freezed == sku
+          ? _value.sku
+          : sku // ignore: cast_nullable_to_non_nullable
+              as String?,
+      totalPurchasedQuantity: null == totalPurchasedQuantity
+          ? _value.totalPurchasedQuantity
+          : totalPurchasedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalPurchaseSpend: null == totalPurchaseSpend
+          ? _value.totalPurchaseSpend
+          : totalPurchaseSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      weightedAverageUnitCost: null == weightedAverageUnitCost
+          ? _value.weightedAverageUnitCost
+          : weightedAverageUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      minUnitCost: null == minUnitCost
+          ? _value.minUnitCost
+          : minUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      maxUnitCost: null == maxUnitCost
+          ? _value.maxUnitCost
+          : maxUnitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      totalReturnedQuantity: null == totalReturnedQuantity
+          ? _value.totalReturnedQuantity
+          : totalReturnedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      totalReturnedSpend: null == totalReturnedSpend
+          ? _value.totalReturnedSpend
+          : totalReturnedSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      netPurchasedQuantity: null == netPurchasedQuantity
+          ? _value.netPurchasedQuantity
+          : netPurchasedQuantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      netPurchaseSpend: null == netPurchaseSpend
+          ? _value.netPurchaseSpend
+          : netPurchaseSpend // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceCount: null == invoiceCount
+          ? _value.invoiceCount
+          : invoiceCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      firstPurchaseDate: freezed == firstPurchaseDate
+          ? _value.firstPurchaseDate
+          : firstPurchaseDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      lastPurchaseDate: freezed == lastPurchaseDate
+          ? _value.lastPurchaseDate
+          : lastPurchaseDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$ProductPurchaseDetailImpl implements _ProductPurchaseDetail {
+  const _$ProductPurchaseDetailImpl(
+      {required this.productId,
+      required this.productName,
+      this.sku,
+      required this.totalPurchasedQuantity,
+      required this.totalPurchaseSpend,
+      required this.weightedAverageUnitCost,
+      required this.minUnitCost,
+      required this.maxUnitCost,
+      required this.totalReturnedQuantity,
+      required this.totalReturnedSpend,
+      required this.netPurchasedQuantity,
+      required this.netPurchaseSpend,
+      required this.invoiceCount,
+      this.firstPurchaseDate,
+      this.lastPurchaseDate});
+
+  factory _$ProductPurchaseDetailImpl.fromJson(Map<String, dynamic> json) =>
+      _$$ProductPurchaseDetailImplFromJson(json);
+
+  @override
+  final String productId;
+  @override
+  final String productName;
+  @override
+  final String? sku;
+  @override
+  final int totalPurchasedQuantity;
+  @override
+  final String totalPurchaseSpend;
+  @override
+  final String weightedAverageUnitCost;
+  @override
+  final String minUnitCost;
+  @override
+  final String maxUnitCost;
+  @override
+  final int totalReturnedQuantity;
+  @override
+  final String totalReturnedSpend;
+  @override
+  final int netPurchasedQuantity;
+  @override
+  final String netPurchaseSpend;
+  @override
+  final int invoiceCount;
+  @override
+  final String? firstPurchaseDate;
+  @override
+  final String? lastPurchaseDate;
+
+  @override
+  String toString() {
+    return 'ProductPurchaseDetail(productId: $productId, productName: $productName, sku: $sku, totalPurchasedQuantity: $totalPurchasedQuantity, totalPurchaseSpend: $totalPurchaseSpend, weightedAverageUnitCost: $weightedAverageUnitCost, minUnitCost: $minUnitCost, maxUnitCost: $maxUnitCost, totalReturnedQuantity: $totalReturnedQuantity, totalReturnedSpend: $totalReturnedSpend, netPurchasedQuantity: $netPurchasedQuantity, netPurchaseSpend: $netPurchaseSpend, invoiceCount: $invoiceCount, firstPurchaseDate: $firstPurchaseDate, lastPurchaseDate: $lastPurchaseDate)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ProductPurchaseDetailImpl &&
+            (identical(other.productId, productId) ||
+                other.productId == productId) &&
+            (identical(other.productName, productName) ||
+                other.productName == productName) &&
+            (identical(other.sku, sku) || other.sku == sku) &&
+            (identical(other.totalPurchasedQuantity, totalPurchasedQuantity) ||
+                other.totalPurchasedQuantity == totalPurchasedQuantity) &&
+            (identical(other.totalPurchaseSpend, totalPurchaseSpend) ||
+                other.totalPurchaseSpend == totalPurchaseSpend) &&
+            (identical(
+                    other.weightedAverageUnitCost, weightedAverageUnitCost) ||
+                other.weightedAverageUnitCost == weightedAverageUnitCost) &&
+            (identical(other.minUnitCost, minUnitCost) ||
+                other.minUnitCost == minUnitCost) &&
+            (identical(other.maxUnitCost, maxUnitCost) ||
+                other.maxUnitCost == maxUnitCost) &&
+            (identical(other.totalReturnedQuantity, totalReturnedQuantity) ||
+                other.totalReturnedQuantity == totalReturnedQuantity) &&
+            (identical(other.totalReturnedSpend, totalReturnedSpend) ||
+                other.totalReturnedSpend == totalReturnedSpend) &&
+            (identical(other.netPurchasedQuantity, netPurchasedQuantity) ||
+                other.netPurchasedQuantity == netPurchasedQuantity) &&
+            (identical(other.netPurchaseSpend, netPurchaseSpend) ||
+                other.netPurchaseSpend == netPurchaseSpend) &&
+            (identical(other.invoiceCount, invoiceCount) ||
+                other.invoiceCount == invoiceCount) &&
+            (identical(other.firstPurchaseDate, firstPurchaseDate) ||
+                other.firstPurchaseDate == firstPurchaseDate) &&
+            (identical(other.lastPurchaseDate, lastPurchaseDate) ||
+                other.lastPurchaseDate == lastPurchaseDate));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType,
+      productId,
+      productName,
+      sku,
+      totalPurchasedQuantity,
+      totalPurchaseSpend,
+      weightedAverageUnitCost,
+      minUnitCost,
+      maxUnitCost,
+      totalReturnedQuantity,
+      totalReturnedSpend,
+      netPurchasedQuantity,
+      netPurchaseSpend,
+      invoiceCount,
+      firstPurchaseDate,
+      lastPurchaseDate);
+
+  /// Create a copy of ProductPurchaseDetail
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ProductPurchaseDetailImplCopyWith<_$ProductPurchaseDetailImpl>
+      get copyWith => __$$ProductPurchaseDetailImplCopyWithImpl<
+          _$ProductPurchaseDetailImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$ProductPurchaseDetailImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _ProductPurchaseDetail implements ProductPurchaseDetail {
+  const factory _ProductPurchaseDetail(
+      {required final String productId,
+      required final String productName,
+      final String? sku,
+      required final int totalPurchasedQuantity,
+      required final String totalPurchaseSpend,
+      required final String weightedAverageUnitCost,
+      required final String minUnitCost,
+      required final String maxUnitCost,
+      required final int totalReturnedQuantity,
+      required final String totalReturnedSpend,
+      required final int netPurchasedQuantity,
+      required final String netPurchaseSpend,
+      required final int invoiceCount,
+      final String? firstPurchaseDate,
+      final String? lastPurchaseDate}) = _$ProductPurchaseDetailImpl;
+
+  factory _ProductPurchaseDetail.fromJson(Map<String, dynamic> json) =
+      _$ProductPurchaseDetailImpl.fromJson;
+
+  @override
+  String get productId;
+  @override
+  String get productName;
+  @override
+  String? get sku;
+  @override
+  int get totalPurchasedQuantity;
+  @override
+  String get totalPurchaseSpend;
+  @override
+  String get weightedAverageUnitCost;
+  @override
+  String get minUnitCost;
+  @override
+  String get maxUnitCost;
+  @override
+  int get totalReturnedQuantity;
+  @override
+  String get totalReturnedSpend;
+  @override
+  int get netPurchasedQuantity;
+  @override
+  String get netPurchaseSpend;
+  @override
+  int get invoiceCount;
+  @override
+  String? get firstPurchaseDate;
+  @override
+  String? get lastPurchaseDate;
+
+  /// Create a copy of ProductPurchaseDetail
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ProductPurchaseDetailImplCopyWith<_$ProductPurchaseDetailImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+ProductPurchaseListResponse _$ProductPurchaseListResponseFromJson(
+    Map<String, dynamic> json) {
+  return _ProductPurchaseListResponse.fromJson(json);
+}
+
+/// @nodoc
+mixin _$ProductPurchaseListResponse {
+  List<ProductPurchaseDetail> get items => throw _privateConstructorUsedError;
+  int get total => throw _privateConstructorUsedError;
+  int get page => throw _privateConstructorUsedError;
+  int get limit => throw _privateConstructorUsedError;
+
+  /// Serializes this ProductPurchaseListResponse to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of ProductPurchaseListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ProductPurchaseListResponseCopyWith<ProductPurchaseListResponse>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ProductPurchaseListResponseCopyWith<$Res> {
+  factory $ProductPurchaseListResponseCopyWith(
+          ProductPurchaseListResponse value,
+          $Res Function(ProductPurchaseListResponse) then) =
+      _$ProductPurchaseListResponseCopyWithImpl<$Res,
+          ProductPurchaseListResponse>;
+  @useResult
+  $Res call(
+      {List<ProductPurchaseDetail> items, int total, int page, int limit});
+}
+
+/// @nodoc
+class _$ProductPurchaseListResponseCopyWithImpl<$Res,
+        $Val extends ProductPurchaseListResponse>
+    implements $ProductPurchaseListResponseCopyWith<$Res> {
+  _$ProductPurchaseListResponseCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ProductPurchaseListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? items = null,
+    Object? total = null,
+    Object? page = null,
+    Object? limit = null,
+  }) {
+    return _then(_value.copyWith(
+      items: null == items
+          ? _value.items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<ProductPurchaseDetail>,
+      total: null == total
+          ? _value.total
+          : total // ignore: cast_nullable_to_non_nullable
+              as int,
+      page: null == page
+          ? _value.page
+          : page // ignore: cast_nullable_to_non_nullable
+              as int,
+      limit: null == limit
+          ? _value.limit
+          : limit // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$ProductPurchaseListResponseImplCopyWith<$Res>
+    implements $ProductPurchaseListResponseCopyWith<$Res> {
+  factory _$$ProductPurchaseListResponseImplCopyWith(
+          _$ProductPurchaseListResponseImpl value,
+          $Res Function(_$ProductPurchaseListResponseImpl) then) =
+      __$$ProductPurchaseListResponseImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {List<ProductPurchaseDetail> items, int total, int page, int limit});
+}
+
+/// @nodoc
+class __$$ProductPurchaseListResponseImplCopyWithImpl<$Res>
+    extends _$ProductPurchaseListResponseCopyWithImpl<$Res,
+        _$ProductPurchaseListResponseImpl>
+    implements _$$ProductPurchaseListResponseImplCopyWith<$Res> {
+  __$$ProductPurchaseListResponseImplCopyWithImpl(
+      _$ProductPurchaseListResponseImpl _value,
+      $Res Function(_$ProductPurchaseListResponseImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of ProductPurchaseListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? items = null,
+    Object? total = null,
+    Object? page = null,
+    Object? limit = null,
+  }) {
+    return _then(_$ProductPurchaseListResponseImpl(
+      items: null == items
+          ? _value._items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<ProductPurchaseDetail>,
+      total: null == total
+          ? _value.total
+          : total // ignore: cast_nullable_to_non_nullable
+              as int,
+      page: null == page
+          ? _value.page
+          : page // ignore: cast_nullable_to_non_nullable
+              as int,
+      limit: null == limit
+          ? _value.limit
+          : limit // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$ProductPurchaseListResponseImpl
+    implements _ProductPurchaseListResponse {
+  const _$ProductPurchaseListResponseImpl(
+      {required final List<ProductPurchaseDetail> items,
+      required this.total,
+      required this.page,
+      required this.limit})
+      : _items = items;
+
+  factory _$ProductPurchaseListResponseImpl.fromJson(
+          Map<String, dynamic> json) =>
+      _$$ProductPurchaseListResponseImplFromJson(json);
+
+  final List<ProductPurchaseDetail> _items;
+  @override
+  List<ProductPurchaseDetail> get items {
+    if (_items is EqualUnmodifiableListView) return _items;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_items);
+  }
+
+  @override
+  final int total;
+  @override
+  final int page;
+  @override
+  final int limit;
+
+  @override
+  String toString() {
+    return 'ProductPurchaseListResponse(items: $items, total: $total, page: $page, limit: $limit)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ProductPurchaseListResponseImpl &&
+            const DeepCollectionEquality().equals(other._items, _items) &&
+            (identical(other.total, total) || other.total == total) &&
+            (identical(other.page, page) || other.page == page) &&
+            (identical(other.limit, limit) || other.limit == limit));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType,
+      const DeepCollectionEquality().hash(_items), total, page, limit);
+
+  /// Create a copy of ProductPurchaseListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ProductPurchaseListResponseImplCopyWith<_$ProductPurchaseListResponseImpl>
+      get copyWith => __$$ProductPurchaseListResponseImplCopyWithImpl<
+          _$ProductPurchaseListResponseImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$ProductPurchaseListResponseImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _ProductPurchaseListResponse
+    implements ProductPurchaseListResponse {
+  const factory _ProductPurchaseListResponse(
+      {required final List<ProductPurchaseDetail> items,
+      required final int total,
+      required final int page,
+      required final int limit}) = _$ProductPurchaseListResponseImpl;
+
+  factory _ProductPurchaseListResponse.fromJson(Map<String, dynamic> json) =
+      _$ProductPurchaseListResponseImpl.fromJson;
+
+  @override
+  List<ProductPurchaseDetail> get items;
+  @override
+  int get total;
+  @override
+  int get page;
+  @override
+  int get limit;
+
+  /// Create a copy of ProductPurchaseListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ProductPurchaseListResponseImplCopyWith<_$ProductPurchaseListResponseImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}

@@ -936,5 +936,14 @@
   "currentPaid": "Оплачено всего",
   "firstPurchase": "Первая закупка",
   "lastPurchase": "Последняя закупка",
-  "monthlySpend": "Закупки по месяцам"
+  "monthlySpend": "Закупки по месяцам",
+  "productPurchaseDetail": "Закупки по товарам",
+  "searchProducts": "Поиск товаров...",
+  "qtyReturned": "Возврат",
+  "netQty": "Чистое кол-во",
+  "totalSpend": "Сумма закупок",
+  "avgCost": "Средняя цена",
+  "minMaxCost": "Мин / Макс",
+  "noProductPurchases": "Нет данных о закупках товаров",
+  "loadMore": "Показать ещё"
 }

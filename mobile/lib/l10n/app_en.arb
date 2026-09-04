@@ -936,5 +936,14 @@
   "currentPaid": "Total Paid",
   "firstPurchase": "First Purchase",
   "lastPurchase": "Last Purchase",
-  "monthlySpend": "Monthly Spend"
+  "monthlySpend": "Monthly Spend",
+  "productPurchaseDetail": "Product Purchases",
+  "searchProducts": "Search products...",
+  "qtyReturned": "Returned",
+  "netQty": "Net Qty",
+  "totalSpend": "Total Spend",
+  "avgCost": "Avg Cost",
+  "minMaxCost": "Min / Max",
+  "noProductPurchases": "No product purchase data",
+  "loadMore": "Load More"
 }

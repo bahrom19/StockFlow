@@ -936,5 +936,14 @@
   "currentPaid": "Төленді (жалпы)",
   "firstPurchase": "Бірінші сатып алу",
   "lastPurchase": "Соңғы сатып алу",
-  "monthlySpend": "Ай сайынғы сатып алу"
+  "monthlySpend": "Ай сайынғы сатып алу",
+  "productPurchaseDetail": "Тауарлар бойынша сатып алу",
+  "searchProducts": "Тауарларды іздеу...",
+  "qtyReturned": "Қайтарылған",
+  "netQty": "Таза сан",
+  "totalSpend": "Жалпы сатып алу",
+  "avgCost": "Орташа баға",
+  "minMaxCost": "Мин / Макс",
+  "noProductPurchases": "Тауарларды сатып алу деректері жоқ",
+  "loadMore": "Көбірек көрсету"
 }

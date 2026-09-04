@@ -4,6 +4,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierPurchaseSummaryEntity, MonthlySpendEntity } from '../entities/supplier-purchase-summary.entity';
+import { SupplierProductPurchaseEntity, SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
 
 const INVOICE_STATUSES = [
   PurchaseInvoiceStatus.APPROVED,
@@ -188,5 +189,186 @@ export class SupplierAnalyticsService {
       currentTotalPaid: currentPaid.toString(),
       currentOutstanding: currentOutstanding.toString(),
     };
+  }
+
+  // ── Product Purchase Detail ────────────────────────────────
+
+  private static readonly ALLOWED_SORT_FIELDS: Record<string, string> = {
+    totalPurchaseSpend: '"totalPurchaseSpend"',
+    totalPurchasedQuantity: '"totalPurchasedQuantity"',
+    weightedAverageUnitCost: '"weightedAverageUnitCost"',
+    lastPurchaseDate: '"lastPurchaseDate"',
+    productName: '"productName"',
+  };
+
+  async getProductPurchases(
+    supplierId: string,
+    companyId: string,
+    dateFrom?: string,
+    dateTo?: string,
+    page = 1,
+    limit = 20,
+    search?: string,
+    sortBy = 'totalPurchaseSpend',
+    sortOrder: 'asc' | 'desc' = 'desc',
+  ): Promise<SupplierProductPurchaseListEntity> {
+    // 1. Verify supplier
+    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    if (!supplier) {
+      throw new NotFoundException(`Supplier ${supplierId} not found`);
+    }
+
+    // 2. Date range
+    const now = new Date();
+    const effectiveDateTo = dateTo ? new Date(dateTo) : now;
+    const effectiveDateFrom = dateFrom
+      ? new Date(dateFrom)
+      : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+    // 3. Whitelist sort
+    const sortColumn = SupplierAnalyticsService.ALLOWED_SORT_FIELDS[sortBy]
+      ?? SupplierAnalyticsService.ALLOWED_SORT_FIELDS['totalPurchaseSpend']!;
+    const sortDir = sortOrder === 'asc' ? 'ASC' : 'DESC';
+
+    // 4. Search filter
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const offset = (Math.max(1, page) - 1) * safeLimit;
+
+    // 5. Main query — purchases per product
+    const purchaseRows = await this.prismaService.$queryRaw<
+      Array<{
+        productId: string;
+        productName: string;
+        sku: string | null;
+        totalPurchasedQuantity: bigint;
+        totalPurchaseSpend: Decimal;
+        totalSubtotal: Decimal;
+        minUnitCost: Decimal;
+        maxUnitCost: Decimal;
+        invoiceCount: bigint;
+        firstPurchaseDate: Date;
+        lastPurchaseDate: Date;
+      }>
+    >`
+      SELECT
+        pii."productId",
+        p."name" AS "productName",
+        p."sku",
+        SUM(pii."quantity") AS "totalPurchasedQuantity",
+        SUM(pii."total") AS "totalPurchaseSpend",
+        SUM(pii."subtotal") AS "totalSubtotal",
+        MIN(pii."unitCost") AS "minUnitCost",
+        MAX(pii."unitCost") AS "maxUnitCost",
+        COUNT(DISTINCT pi."id") AS "invoiceCount",
+        MIN(pi."invoiceDate") AS "firstPurchaseDate",
+        MAX(pi."invoiceDate") AS "lastPurchaseDate"
+      FROM "PurchaseInvoiceItem" pii
+      JOIN "PurchaseInvoice" pi ON pii."purchaseInvoiceId" = pi.id
+      JOIN "Product" p ON pii."productId" = p.id
+      WHERE pi."supplierId" = ${supplierId}
+        AND pi."companyId" = ${companyId}
+        AND pi."deletedAt" IS NULL
+        AND pi."status" IN ('APPROVED', 'PAID')
+        AND pi."invoiceDate" >= ${effectiveDateFrom}
+        AND pi."invoiceDate" <= ${effectiveDateTo}
+        ${this.rawSearchClause(search)}
+      GROUP BY pii."productId", p."name", p."sku"
+      ORDER BY ${this.rawSortClause(sortColumn, sortDir)}
+      LIMIT ${safeLimit} OFFSET ${offset}
+    `;
+
+    // 6. Count query
+    const countRows = await this.prismaService.$queryRaw<
+      Array<{ total: bigint }>
+    >`
+      SELECT COUNT(DISTINCT pii."productId") AS total
+      FROM "PurchaseInvoiceItem" pii
+      JOIN "PurchaseInvoice" pi ON pii."purchaseInvoiceId" = pi.id
+      JOIN "Product" p ON pii."productId" = p.id
+      WHERE pi."supplierId" = ${supplierId}
+        AND pi."companyId" = ${companyId}
+        AND pi."deletedAt" IS NULL
+        AND pi."status" IN ('APPROVED', 'PAID')
+        AND pi."invoiceDate" >= ${effectiveDateFrom}
+        AND pi."invoiceDate" <= ${effectiveDateTo}
+        ${this.rawSearchClause(search)}
+    `;
+
+    const total = Number(countRows[0]?.total ?? 0);
+
+    // 7. Returns per product (same date range, same supplier/company)
+    let returnMap = new Map<string, { qty: number; spend: Decimal }>();
+
+    const returnRows = await this.prismaService.$queryRaw<
+      Array<{
+        productId: string;
+        returnedQuantity: bigint;
+        returnedSpend: Decimal;
+      }>
+    >`
+      SELECT
+        pri."productId",
+        SUM(pri."quantity") AS "returnedQuantity",
+        SUM(pri."total") AS "returnedSpend"
+      FROM "PurchaseReturnItem" pri
+      JOIN "PurchaseReturn" pr ON pri."purchaseReturnId" = pr.id
+      WHERE pr."supplierId" = ${supplierId}
+        AND pr."companyId" = ${companyId}
+        AND pr."deletedAt" IS NULL
+        AND pr."status" IN ('APPROVED', 'COMPLETED')
+        AND pr."returnDate" >= ${effectiveDateFrom}
+        AND pr."returnDate" <= ${effectiveDateTo}
+      GROUP BY pri."productId"
+    `;
+
+    for (const row of returnRows) {
+      returnMap.set(row.productId, {
+        qty: Number(row.returnedQuantity),
+        spend: new Decimal(row.returnedSpend?.toString() ?? '0'),
+      });
+    }
+
+    // 8. Assemble response
+    const items: SupplierProductPurchaseEntity[] = purchaseRows.map((row) => {
+      const qty = Number(row.totalPurchasedQuantity);
+      const spend = new Decimal(row.totalPurchaseSpend?.toString() ?? '0');
+      const subtotal = new Decimal(row.totalSubtotal?.toString() ?? '0');
+      const weightedAvg = qty > 0 ? subtotal.div(qty) : new Decimal(0);
+
+      const ret = returnMap.get(row.productId);
+      const retQty = ret?.qty ?? 0;
+      const retSpend = ret?.spend ?? new Decimal(0);
+
+      return {
+        productId: row.productId,
+        productName: row.productName,
+        sku: row.sku,
+        totalPurchasedQuantity: qty,
+        totalPurchaseSpend: spend.toString(),
+        weightedAverageUnitCost: weightedAvg.toString(),
+        minUnitCost: new Decimal(row.minUnitCost?.toString() ?? '0').toString(),
+        maxUnitCost: new Decimal(row.maxUnitCost?.toString() ?? '0').toString(),
+        totalReturnedQuantity: retQty,
+        totalReturnedSpend: retSpend.toString(),
+        netPurchasedQuantity: qty - retQty,
+        netPurchaseSpend: spend.sub(retSpend).toString(),
+        invoiceCount: Number(row.invoiceCount),
+        firstPurchaseDate: row.firstPurchaseDate?.toISOString() ?? null,
+        lastPurchaseDate: row.lastPurchaseDate?.toISOString() ?? null,
+      };
+    });
+
+    return { items, total, page, limit: safeLimit };
+  }
+
+  private rawSearchClause(search: string | undefined): string {
+    if (!search) return '';
+    const safe = search.replace(/'/g, "''");
+    return `AND (p."name" ILIKE '%${safe}%' OR p."sku" ILIKE '%${safe}%')`;
+  }
+
+  private rawSortClause(sortColumn: string, sortDir: string): string {
+    // sortColumn is already from the whitelist — safe
+    return `${sortColumn} ${sortDir}`;
   }
 }

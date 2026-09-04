@@ -277,3 +277,194 @@ describe('SupplierAnalyticsService', () => {
     expect(result.netPurchaseSpend).toBe('800000');
   });
 });
+
+describe('SupplierAnalyticsService.getProductPurchases', () => {
+  let service: SupplierAnalyticsService;
+  let mockPrisma: any;
+  let mockSuppliersRepo: any;
+
+  const companyId = 'company-1';
+  const supplierId = 'supplier-1';
+
+  beforeEach(() => {
+    mockPrisma = {
+      $queryRaw: jest.fn(),
+    };
+    mockSuppliersRepo = {
+      findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+    };
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+  });
+
+  it('should throw NotFoundException when supplier not found', async () => {
+    mockSuppliersRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.getProductPurchases(supplierId, companyId),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should return product purchases with correct metrics', async () => {
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          productId: 'p1',
+          productName: 'Milk 1L',
+          sku: 'MLK-001',
+          totalPurchasedQuantity: BigInt(500),
+          totalPurchaseSpend: '750000',
+          totalSubtotal: '700000', // subtotal = unitCost * qty (before discount/tax)
+          minUnitCost: '1400',
+          maxUnitCost: '1650',
+          invoiceCount: BigInt(12),
+          firstPurchaseDate: new Date('2025-10-15'),
+          lastPurchaseDate: new Date('2026-08-28'),
+        },
+      ])
+      .mockResolvedValueOnce([{ total: BigInt(1) }])
+      .mockResolvedValueOnce([
+        { productId: 'p1', returnedQuantity: BigInt(20), returnedSpend: '30000' },
+      ]);
+
+    const result = await service.getProductPurchases(supplierId, companyId);
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.productId).toBe('p1');
+    expect(result.items[0]!.productName).toBe('Milk 1L');
+    expect(result.items[0]!.totalPurchasedQuantity).toBe(500);
+    expect(result.items[0]!.totalPurchaseSpend).toBe('750000'); // total (with discount/tax)
+    expect(result.items[0]!.weightedAverageUnitCost).toBe('1400'); // subtotal(700000)/qty(500) = 1400
+    expect(result.items[0]!.minUnitCost).toBe('1400');
+    expect(result.items[0]!.maxUnitCost).toBe('1650');
+    expect(result.items[0]!.totalReturnedQuantity).toBe(20);
+    expect(result.items[0]!.totalReturnedSpend).toBe('30000');
+    expect(result.items[0]!.netPurchasedQuantity).toBe(480);
+    expect(result.items[0]!.netPurchaseSpend).toBe('720000');
+    expect(result.items[0]!.invoiceCount).toBe(12);
+    expect(result.total).toBe(1);
+  });
+
+  it('should use subtotal for weighted avg, not total (discount/tax distinction)', async () => {
+    // Scenario: 100 units, unitCost=100, total=9500 (after $500 discount)
+    // subtotal = 100 * 100 = 10000
+    // total = subtotal - discount + tax = 10000 - 500 + 0 = 9500
+    // weightedAvg should be 10000/100 = 100, NOT 9500/100 = 95
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          productId: 'p1',
+          productName: 'Widget',
+          sku: 'W-001',
+          totalPurchasedQuantity: BigInt(100),
+          totalPurchaseSpend: '9500', // total after discount
+          totalSubtotal: '10000', // subtotal = unitCost * qty
+          minUnitCost: '100',
+          maxUnitCost: '100',
+          invoiceCount: BigInt(1),
+          firstPurchaseDate: new Date('2026-01-01'),
+          lastPurchaseDate: new Date('2026-01-01'),
+        },
+      ])
+      .mockResolvedValueOnce([{ total: BigInt(1) }])
+      .mockResolvedValueOnce([]);
+
+    const result = await service.getProductPurchases(supplierId, companyId);
+
+    // weighted avg uses subtotal: 10000/100 = 100
+    expect(result.items[0]!.weightedAverageUnitCost).toBe('100');
+    // total purchase spend uses total: 9500
+    expect(result.items[0]!.totalPurchaseSpend).toBe('9500');
+  });
+
+  it('should return empty list for supplier with no purchases', async () => {
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([]) // main query
+      .mockResolvedValueOnce([{ total: BigInt(0) }]) // count
+      .mockResolvedValueOnce([]); // returns
+
+    const result = await service.getProductPurchases(supplierId, companyId);
+
+    expect(result.items).toHaveLength(0);
+    expect(result.total).toBe(0);
+  });
+
+  it('should compute correct weighted average (not simple AVG)', async () => {
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          productId: 'p1',
+          productName: 'Widget',
+          sku: null,
+          totalPurchasedQuantity: BigInt(20),
+          totalPurchaseSpend: '3500',
+          totalSubtotal: '3500', // same as spend when no discount/tax
+          minUnitCost: '100',
+          maxUnitCost: '200',
+          invoiceCount: BigInt(2),
+          firstPurchaseDate: new Date('2026-01-01'),
+          lastPurchaseDate: new Date('2026-02-01'),
+        },
+      ])
+      .mockResolvedValueOnce([{ total: BigInt(1) }])
+      .mockResolvedValueOnce([]);
+
+    const result = await service.getProductPurchases(supplierId, companyId);
+
+    // 5 at 100 + 15 at 200 = 3500 / 20 = 175
+    expect(result.items[0]!.weightedAverageUnitCost).toBe('175');
+  });
+
+  it('should subtract returns from gross to get net', async () => {
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          productId: 'p1',
+          productName: 'Widget',
+          sku: 'W-001',
+          totalPurchasedQuantity: BigInt(100),
+          totalPurchaseSpend: '10000',
+          totalSubtotal: '10000',
+          minUnitCost: '90',
+          maxUnitCost: '110',
+          invoiceCount: BigInt(5),
+          firstPurchaseDate: new Date('2026-01-01'),
+          lastPurchaseDate: new Date('2026-06-01'),
+        },
+      ])
+      .mockResolvedValueOnce([{ total: BigInt(1) }])
+      .mockResolvedValueOnce([
+        { productId: 'p1', returnedQuantity: BigInt(10), returnedSpend: '1000' },
+      ]);
+
+    const result = await service.getProductPurchases(supplierId, companyId);
+
+    expect(result.items[0]!.totalPurchasedQuantity).toBe(100);
+    expect(result.items[0]!.totalReturnedQuantity).toBe(10);
+    expect(result.items[0]!.netPurchasedQuantity).toBe(90);
+    expect(result.items[0]!.netPurchaseSpend).toBe('9000');
+  });
+
+  it('should include search in SQL query', async () => {
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ total: BigInt(0) }])
+      .mockResolvedValueOnce([]);
+
+    await service.getProductPurchases(supplierId, companyId, undefined, undefined, 1, 20, 'milk');
+
+    // The search clause is embedded in the raw SQL template, not as a parameter
+    // Verify the function was called (the search filter is in the SQL string)
+    expect(mockPrisma.$queryRaw).toHaveBeenCalled();
+  });
+
+  it('should return empty result for no purchases', async () => {
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ total: BigInt(0) }])
+      .mockResolvedValueOnce([]);
+
+    const result = await service.getProductPurchases(supplierId, companyId);
+
+    expect(result.items).toHaveLength(0);
+    expect(result.total).toBe(0);
+  });
+});

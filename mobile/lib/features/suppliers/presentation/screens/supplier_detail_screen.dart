@@ -33,6 +33,12 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   SupplierPurchaseSummary? _purchaseSummary;
   bool _isLoadingPurchaseSummary = false;
   String? _purchaseSummaryError;
+  List<ProductPurchaseDetail> _productPurchases = [];
+  bool _isLoadingProductPurchases = false;
+  String? _productPurchasesError;
+  int _productPurchasePage = 1;
+  int _productPurchaseTotal = 0;
+  String? _productPurchaseSearch;
   String? _purchaseDateFrom;
   String? _purchaseDateTo;
   bool _isLoading = true;
@@ -124,6 +130,34 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
         _purchaseSummaryError = result.error.message;
       }
       _isLoadingPurchaseSummary = false;
+    });
+    // Also load product purchases
+    _loadProductPurchases();
+  }
+
+  Future<void> _loadProductPurchases() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingProductPurchases = true;
+      _productPurchasesError = null;
+    });
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getProductPurchases(
+      widget.supplierId,
+      dateFrom: _purchaseDateFrom,
+      dateTo: _purchaseDateTo,
+      page: _productPurchasePage,
+      search: _productPurchaseSearch,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<ProductPurchaseListResponse>) {
+        _productPurchases = result.data.items;
+        _productPurchaseTotal = result.data.total;
+      } else if (result is SuppliersFailure<ProductPurchaseListResponse>) {
+        _productPurchasesError = result.error.message;
+      }
+      _isLoadingProductPurchases = false;
     });
   }
 
@@ -773,7 +807,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                         _purchaseDateTo = null;
                       }
                     });
+                    _productPurchasePage = 1;
                     _loadPurchaseSummary();
+                    _loadProductPurchases();
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem(value: null, child: Text(context.l10n.periodAllTime)),
@@ -897,6 +933,145 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                     ],
                   ),
                 )),
+              ],
+              // ── Product Purchase Detail ───────────────
+              const SizedBox(height: 16),
+              Divider(color: theme.colorScheme.outlineVariant),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.shopping_cart_outlined,
+                      size: 18, color: theme.colorScheme.primary),
+                  const SizedBox(width: 6),
+                  Text(context.l10n.productPurchaseDetail,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Search field
+              SizedBox(
+                height: 36,
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: context.l10n.searchProducts,
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onChanged: (value) {
+                    _productPurchaseSearch = value.isEmpty ? null : value;
+                    _productPurchasePage = 1;
+                    _loadProductPurchases();
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Product purchase list
+              if (_isLoadingProductPurchases)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24, height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              else if (_productPurchasesError != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    children: [
+                      Text(_productPurchasesError!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.error)),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: _loadProductPurchases,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: Text(context.l10n.retry),
+                      ),
+                    ],
+                  ),
+                )
+              else if (_productPurchases.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(context.l10n.noProductPurchases,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                )
+              else ...[
+                ..._productPurchases.map((p) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(p.productName,
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                          fontWeight: FontWeight.w600)),
+                                  if (p.sku != null && p.sku!.isNotEmpty)
+                                    Text('SKU: ${p.sku}',
+                                        style: theme.textTheme.bodySmall?.copyWith(
+                                            color: theme.colorScheme.onSurfaceVariant)),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text('₸${p.netPurchaseSpend}',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.w700)),
+                                Text('${context.l10n.netQty}: ${p.netPurchasedQuantity}',
+                                    style: theme.textTheme.bodySmall),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 4,
+                          children: [
+                            _analyticsStat(context.l10n.totalSpend, '₸${p.totalPurchaseSpend}', theme),
+                            _analyticsStat(context.l10n.qtyReturned, '${p.totalReturnedQuantity}', theme),
+                            _analyticsStat(context.l10n.avgCost, '₸${p.weightedAverageUnitCost}', theme),
+                            _analyticsStat(context.l10n.minMaxCost, '₸${p.minUnitCost} / ₸${p.maxUnitCost}', theme),
+                            _analyticsStat(context.l10n.invoices, '${p.invoiceCount}', theme),
+                            if (p.lastPurchaseDate != null)
+                              _analyticsStat(context.l10n.lastPurchase, p.lastPurchaseDate!.substring(0, 10), theme),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                )),
+                // Load more / pagination
+                if (_productPurchases.length < _productPurchaseTotal)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Center(
+                      child: TextButton(
+                        onPressed: () {
+                          _productPurchasePage++;
+                          _loadProductPurchases();
+                        },
+                        child: Text(context.l10n.loadMore),
+                      ),
+                    ),
+                  ),
               ],
             ]
             // Empty state
