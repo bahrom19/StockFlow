@@ -209,7 +209,6 @@
   "eventEmptyCatalogReason": "Пока нет товаров и нулевая стоимость запасов.",
   "eventEmptyCatalogAction": "Создайте первые товары и внесите начальные остатки.",
   "eventEmptyCatalogImpact": "Продавать нечего, пока каталог не заполнен",
-  "addProduct": "Добавить товар",
   "@_CashDrawer": {},
   "cashDrawer": "Кассовый ящик",
   "cashInDrawer": "Наличные в кассе",
@@ -842,8 +841,6 @@
   "addresses": "Адреса",
   "newContact": "Новый контакт",
   "newAddress": "Новый адрес",
-  "firstName": "Имя",
-  "lastName": "Фамилия",
   "position": "Должность",
   "contactCreated": "Контакт создан",
   "contactUpdated": "Контакт обновлён",
@@ -938,7 +935,6 @@
   "lastPurchase": "Последняя закупка",
   "monthlySpend": "Закупки по месяцам",
   "productPurchaseDetail": "Закупки по товарам",
-  "searchProducts": "Поиск товаров...",
   "qtyReturned": "Возврат",
   "netQty": "Чистое кол-во",
   "totalSpend": "Сумма закупок",
@@ -961,7 +957,6 @@
   "currentQuotedPrice": "Текущая цена",
   "priceTrend": "Динамика цен",
   "noPriceHistory": "Нет истории закупок для этого товара",
-  "close": "Закрыть",
   "paymentAging": "Сроки оплаты",
   "current": "Текущие",
   "days1To30": "1-30 дней",
@@ -1025,6 +1020,5 @@
   "importUnknownError": "Неизвестная ошибка",
   "row": "Строка",
   "viewProducts": "Посмотреть товары",
-  "sellingPrice": "Цена продажи",
-  "description": "Описание"
+  "sellingPrice": "Цена продажи"
 }

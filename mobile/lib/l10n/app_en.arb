@@ -209,7 +209,6 @@
   "eventEmptyCatalogReason": "No products and zero stock value yet.",
   "eventEmptyCatalogAction": "Create your first products and record opening stock.",
   "eventEmptyCatalogImpact": "Nothing to sell until the catalog is filled",
-  "addProduct": "Add product",
   "@_CashDrawer": {},
   "cashDrawer": "Cash Drawer",
   "cashInDrawer": "Cash in drawer",
@@ -842,8 +841,6 @@
   "addresses": "Addresses",
   "newContact": "New Contact",
   "newAddress": "New Address",
-  "firstName": "First Name",
-  "lastName": "Last Name",
   "position": "Position",
   "contactCreated": "Contact created",
   "contactUpdated": "Contact updated",
@@ -938,7 +935,6 @@
   "lastPurchase": "Last Purchase",
   "monthlySpend": "Monthly Spend",
   "productPurchaseDetail": "Product Purchases",
-  "searchProducts": "Search products...",
   "qtyReturned": "Returned",
   "netQty": "Net Qty",
   "totalSpend": "Total Spend",
@@ -961,7 +957,6 @@
   "currentQuotedPrice": "Current Quote",
   "priceTrend": "Price Trend",
   "noPriceHistory": "No purchase history for this product",
-  "close": "Close",
   "paymentAging": "Payment Aging",
   "current": "Current",
   "days1To30": "1-30 Days",
@@ -1025,6 +1020,5 @@
   "importUnknownError": "Unknown error",
   "row": "Row",
   "viewProducts": "View Products",
-  "sellingPrice": "Selling Price",
-  "description": "Description"
+  "sellingPrice": "Selling Price"
 }

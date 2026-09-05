@@ -209,7 +209,6 @@
   "eventEmptyCatalogReason": "Әзірге тауарлар жоқ, қор құны нөлге тең.",
   "eventEmptyCatalogAction": "Алғашқы тауарларды жасап, бастапқы қалдықтарды енгізіңіз.",
   "eventEmptyCatalogImpact": "Каталог толмайынша сатуға ештеңе жоқ",
-  "addProduct": "Тауар қосу",
   "@_CashDrawer": {},
   "cashDrawer": "Касса",
   "cashInDrawer": "Кассадағы қолма-қол ақша",
@@ -842,8 +841,6 @@
   "addresses": "Мекенжайлар",
   "newContact": "Жаңа байланыс",
   "newAddress": "Жаңа мекенжай",
-  "firstName": "Аты",
-  "lastName": "Тегі",
   "position": "Лауазым",
   "contactCreated": "Байланыс жасалды",
   "contactUpdated": "Байланыс жаңартылды",
@@ -938,7 +935,6 @@
   "lastPurchase": "Соңғы сатып алу",
   "monthlySpend": "Ай сайынғы сатып алу",
   "productPurchaseDetail": "Тауарлар бойынша сатып алу",
-  "searchProducts": "Тауарларды іздеу...",
   "qtyReturned": "Қайтарылған",
   "netQty": "Таза сан",
   "totalSpend": "Жалпы сатып алу",
@@ -961,7 +957,6 @@
   "currentQuotedPrice": "Қазіргі баға",
   "priceTrend": "Баға өзгерісі",
   "noPriceHistory": "Бұл өнім бойынша сатып алу тарихы жоқ",
-  "close": "Жабу",
   "paymentAging": "Төлем мерзімдері",
   "current": "Ағымдағы",
   "days1To30": "1-30 күн",
@@ -1025,6 +1020,5 @@
   "importUnknownError": "Белгісіз қате",
   "row": "Жол",
   "viewProducts": "Тауарларды көру",
-  "sellingPrice": "Сату бағасы",
-  "description": "Сипаттама"
+  "sellingPrice": "Сату бағасы"
 }
