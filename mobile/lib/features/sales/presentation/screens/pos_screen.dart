@@ -16,8 +16,12 @@ import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/sales/data/receipt_export.dart';
 import 'package:stockflow/features/sales/presentation/screens/pos_workspace.dart';
 import 'package:stockflow/features/sales/presentation/widgets/pos_customer_picker.dart';
+import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/currency/money.dart';
+import 'package:stockflow/features/sales/presentation/labels.dart';
+import 'package:stockflow/features/sales/presentation/providers/held_sales_provider.dart';
 
 // ──────────────────────────────────
 // POS Screen — Responsive Terminal
@@ -101,6 +105,85 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
     } else {
       setState(() => _isSearching = false);
     }
+  }
+
+  // ── Held Sales ──────────────────────────────────────────
+  Future<void> _holdSale() async {
+    final cart = ref.read(cartProvider);
+    if (cart.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.posNothingToHold)),
+      );
+      return;
+    }
+    await ref.read(heldSalesProvider.notifier).hold(cart);
+    ref.read(cartProvider.notifier).clear();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.posSaleHeld),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  Future<void> _resumeHeld() async {
+    await ref.read(heldSalesProvider.notifier).load();
+    if (!mounted) return;
+    final held = ref.read(heldSalesProvider).held;
+    if (held.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.posNoHeldSales)),
+      );
+      return;
+    }
+    final selected = await showDialog<HeldSale>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(context.l10n.posResumeHeldSale),
+        children: [
+          for (final h in held)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(h),
+              child: Row(
+                children: [
+                  Icon(Icons.pause_circle_outline,
+                      size: 18, color: Theme.of(ctx).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${heldSaleDisplayLabel(context.l10n, h.label)} · '
+                      '${context.l10n.posItemsCount(h.itemCount)} · '
+                      '${CurrencyCatalog.format(h.total, code: h.currency)}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final restored =
+        await ref.read(heldSalesProvider.notifier).resume(selected.id);
+    if (restored == null || !mounted) return;
+    await ref.read(currencyProvider.notifier).setCurrency(restored.currency);
+    final notifier = ref.read(cartProvider.notifier);
+    notifier.clear();
+    for (final item in restored.items) {
+      notifier.addItem(item);
+    }
+    if (restored.customerId != null) {
+      notifier.setCustomer(restored.customerId, restored.customerName);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.l10n.posSaleResumed),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   void _addToCart(Product product) {
@@ -195,6 +278,18 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                         child: Text(w.name),
                       ))
                   .toList(),
+            ),
+          // ── Held Sales buttons ──
+          IconButton(
+            onPressed: _resumeHeld,
+            icon: const Icon(Icons.history, size: 20),
+            tooltip: context.l10n.posResume,
+          ),
+          if (cart.itemCount > 0)
+            IconButton(
+              onPressed: _holdSale,
+              icon: const Icon(Icons.pause_circle_outline, size: 20),
+              tooltip: context.l10n.posHold,
             ),
           if (cart.itemCount > 0)
             TextButton.icon(
@@ -291,6 +386,9 @@ class _MobilePosScreenState extends ConsumerState<_MobilePosScreen> {
                         Text(context.l10n.posMobileCartEmptyHint,
                             style: theme.textTheme.bodyMedium
                                 ?.copyWith(color: theme.colorScheme.outline)),
+                        // ── Held sales indicator when cart is empty ──
+                        const SizedBox(height: 16),
+                        _HeldSalesIndicator(onResume: _resumeHeld),
                       ],
                     ),
                   )
@@ -845,6 +943,32 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
           Text(context.money(amount),
               style: TextStyle(fontWeight: FontWeight.bold, color: color)),
         ],
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────
+// Held Sales Indicator (empty cart)
+// ──────────────────────────────────
+class _HeldSalesIndicator extends ConsumerWidget {
+  final VoidCallback onResume;
+  const _HeldSalesIndicator({required this.onResume});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final held = ref.watch(heldSalesProvider).held;
+    if (held.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return TextButton.icon(
+      onPressed: onResume,
+      icon: Icon(Icons.pause_circle_outline,
+          size: 16, color: theme.colorScheme.primary),
+      label: Text(
+        '${held.length} ${context.l10n.posResume.toLowerCase()}',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.primary,
+        ),
       ),
     );
   }
