@@ -277,6 +277,70 @@ void main() {
       expect(call['queryParameters'], isNull);
     });
   });
+
+  // ── CURRENCY-4: Purchase Order / Purchase Return currency ──
+  group('CURRENCY-4 PurchaseOrder currency', () {
+    const basePoJson = {
+      'id': 'po-1', 'companyId': 'c-1', 'supplierId': 's-1',
+      'orderNumber': 'PO-0001', 'orderDate': '2026-07-26T10:00:00Z',
+      'status': 'DRAFT',
+      'subtotal': '1000.0000', 'discountAmount': '0.0000',
+      'taxAmount': '0.0000', 'grandTotal': '1000.0000',
+      'paidAmount': '0.0000',
+      'createdAt': '2026-07-26T10:00:00Z', 'updatedAt': '2026-07-26T10:00:00Z',
+      'items': [],
+    };
+
+    test('CreatePurchaseOrderRequest defaults to KZT', () {
+      final req = CreatePurchaseOrderRequest(
+        supplierId: 's-1',
+        items: const [CreatePurchaseOrderItem(productId: 'p-1', quantity: 1, unitCost: 10)],
+      );
+      expect(req.currency, 'KZT');
+      expect(req.toJson()['currency'], 'KZT');
+    });
+
+    test('USD payload travels in toJson', () {
+      final req = CreatePurchaseOrderRequest(
+        supplierId: 's-1',
+        currency: 'USD',
+        items: const [CreatePurchaseOrderItem(productId: 'p-1', quantity: 1, unitCost: 10)],
+      );
+      expect(req.toJson()['currency'], 'USD');
+    });
+
+    test('fromJson parses USD currency', () {
+      final po = PurchaseOrder.fromJson({...basePoJson, 'currency': 'USD'});
+      expect(po.currency, 'USD');
+    });
+
+    test('fromJson defaults to KZT when currency is missing', () {
+      final po = PurchaseOrder.fromJson(basePoJson);
+      expect(po.currency, 'KZT');
+    });
+  });
+
+  group('CURRENCY-4 PurchaseReturn currency', () {
+    test('CreatePurchaseReturnRequest defaults to KZT', () {
+      final req = CreatePurchaseReturnRequest(
+        supplierId: 's-1',
+        warehouseId: 'w-1',
+        items: const [CreatePurchaseReturnItem(productId: 'p-1', quantity: 1, unitCost: 10)],
+      );
+      expect(req.currency, 'KZT');
+      expect(req.toJson()['currency'], 'KZT');
+    });
+
+    test('USD payload travels in toJson', () {
+      final req = CreatePurchaseReturnRequest(
+        supplierId: 's-1',
+        warehouseId: 'w-1',
+        currency: 'USD',
+        items: const [CreatePurchaseReturnItem(productId: 'p-1', quantity: 1, unitCost: 10)],
+      );
+      expect(req.toJson()['currency'], 'USD');
+    });
+  });
 }
 
 /// Minimal ApiClient double that records PATCH invocations so repository

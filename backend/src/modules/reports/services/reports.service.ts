@@ -10,9 +10,23 @@ import {
 export class ReportsService {
   constructor(private readonly repo: ReportsRepository) {}
 
+  /// Resolves the monetary filter currency for a report.
+  ///
+  /// An explicit `query.currency` wins. When omitted, the company's base
+  /// currency (Company.currency, default KZT) is used — monetary aggregates
+  /// are NEVER mixed across currencies into one total.
+  private async resolveCurrency(
+    companyId: string,
+    requested?: string,
+  ): Promise<string> {
+    if (requested) return requested;
+    return this.repo.companyCurrency(companyId);
+  }
+
   // ── Dashboard ──────────────────────────────────────────────────
 
-  async getDashboard(companyId: string) {
+  async getDashboard(companyId: string, query: ReportQueryDto) {
+    const currency = await this.resolveCurrency(companyId, query.currency);
     const now = new Date();
     const todayStart = new Date(
       now.getFullYear(),
@@ -36,6 +50,7 @@ export class ReportsService {
       todayStart,
       todayEnd,
       monthStart,
+      currency,
     );
 
     let inventoryValue = new Prisma.Decimal(0);
@@ -51,8 +66,9 @@ export class ReportsService {
       (s) => s.quantity > 0 && s.quantity <= 5,
     ).length;
 
-    // Gross revenue & profit (all completed sales — no date filter)
-    const grossData = await this.repo.grossProfitData(companyId);
+    // Gross revenue & profit (all completed sales — no date filter) — scoped
+    // to the single report currency.
+    const grossData = await this.repo.grossProfitData(companyId, currency);
     let grossRevenue = new Prisma.Decimal(0);
     let grossCost = new Prisma.Decimal(0);
     for (const sale of grossData) {
@@ -114,6 +130,7 @@ export class ReportsService {
       sortBy = 'createdAt',
       sortOrder = 'desc',
     } = query;
+    const currency = await this.resolveCurrency(companyId, query.currency);
     const where = this.repo.buildSaleWhere(
       companyId,
       dateFrom ? new Date(dateFrom) : undefined,
@@ -122,6 +139,7 @@ export class ReportsService {
       cashierId,
       customerId,
       status,
+      currency,
     );
     // P1: when the caller does not explicitly filter by status, scope the
     // Sales Report to revenue-generating sales so its summary stays
@@ -235,9 +253,10 @@ export class ReportsService {
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : undefined;
     const dateTo = query.dateTo ? new Date(query.dateTo) : undefined;
     const top = query.top ?? 10;
+    const currency = await this.resolveCurrency(companyId, query.currency);
 
     const saleIds = (
-      await this.repo.completedSaleIds(companyId, dateFrom, dateTo)
+      await this.repo.completedSaleIds(companyId, dateFrom, dateTo, currency)
     ).map((s) => s.id);
     if (saleIds.length === 0) return { items: [], total: 0 };
 
@@ -334,6 +353,7 @@ export class ReportsService {
   async getCustomerReport(companyId: string, query: ReportQueryDto) {
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : undefined;
     const dateTo = query.dateTo ? new Date(query.dateTo) : undefined;
+    const currency = await this.resolveCurrency(companyId, query.currency);
     const [customers, total] = await this.repo.customerList(
       companyId,
       query.search,
@@ -349,6 +369,7 @@ export class ReportsService {
             customerIds,
             dateFrom,
             dateTo,
+            currency,
           )
         : [];
     const aggMap = new Map(aggs.map((a) => [a.customerId, a]));
@@ -381,6 +402,7 @@ export class ReportsService {
   async getSupplierReport(companyId: string, query: ReportQueryDto) {
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : undefined;
     const dateTo = query.dateTo ? new Date(query.dateTo) : undefined;
+    const currency = await this.resolveCurrency(companyId, query.currency);
     const [suppliers, total] = await this.repo.supplierList(
       companyId,
       query.search,
@@ -396,6 +418,7 @@ export class ReportsService {
             supplierIds,
             dateFrom,
             dateTo,
+            currency,
           )
         : [];
     const aggMap = new Map(aggs.map((a) => [a.supplierId, a]));
@@ -424,7 +447,13 @@ export class ReportsService {
   async getPurchasingReport(companyId: string, query: ReportQueryDto) {
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : undefined;
     const dateTo = query.dateTo ? new Date(query.dateTo) : undefined;
-    const where = this.repo.buildPurchaseWhere(companyId, dateFrom, dateTo);
+    const currency = await this.resolveCurrency(companyId, query.currency);
+    const where = this.repo.buildPurchaseWhere(
+      companyId,
+      dateFrom,
+      dateTo,
+      currency,
+    );
     const [orders, agg, statusCounts] = await this.repo.purchasingReportData(
       companyId,
       where,
@@ -459,6 +488,7 @@ export class ReportsService {
   async getCashShiftReport(companyId: string, query: ReportQueryDto) {
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : undefined;
     const dateTo = query.dateTo ? new Date(query.dateTo) : undefined;
+    const currency = await this.resolveCurrency(companyId, query.currency);
     const where = this.repo.buildCashShiftWhere(
       companyId,
       query.warehouseId,
@@ -466,6 +496,7 @@ export class ReportsService {
       query.status,
       dateFrom,
       dateTo,
+      currency,
     );
     const [shifts, total] = await this.repo.cashShiftData(
       companyId,
@@ -509,7 +540,17 @@ export class ReportsService {
   async getProfitReport(companyId: string, query: ReportQueryDto) {
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : undefined;
     const dateTo = query.dateTo ? new Date(query.dateTo) : undefined;
-    const where = this.repo.buildSaleWhere(companyId, dateFrom, dateTo);
+    const currency = await this.resolveCurrency(companyId, query.currency);
+    const where = this.repo.buildSaleWhere(
+      companyId,
+      dateFrom,
+      dateTo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      currency,
+    );
     const sales = await this.repo.profitReportData(companyId, where);
 
     let revenue = new Prisma.Decimal(0);

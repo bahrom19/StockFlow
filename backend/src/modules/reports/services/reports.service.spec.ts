@@ -38,8 +38,14 @@ describe('ReportsService — net refunds (P1)', () => {
           _cashierId?: string,
           _customerId?: string,
           status?: string,
-        ) => (status ? { companyId, status } : { companyId }),
+          currency?: string,
+        ) => ({
+          companyId,
+          ...(status ? { status } : {}),
+          ...(currency ? { currency } : {}),
+        }),
       ),
+      companyCurrency: jest.fn().mockResolvedValue('KZT'),
       profitReportData: jest.fn(),
       grossProfitData: jest.fn(),
       salesReportData: jest.fn(),
@@ -144,7 +150,10 @@ describe('ReportsService — net refunds (P1)', () => {
     ];
     repo.grossProfitData.mockResolvedValue(netSales);
     repo.profitReportData.mockResolvedValue(netSales);
-    const dashboard = await service.getDashboard('comp-1');
+    const dashboard = await service.getDashboard(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
     const profit = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
@@ -432,5 +441,125 @@ describe('ReportsService — net refunds (P1)', () => {
     expect(result.summary.revenue).toBe('1500');
     expect(result.summary.profit).toBe('500');
     expect(result.summary.count).toBe(1);
+  });
+
+  // ── Multi-currency scoping (Currency-4) ─────────────────────────
+
+  it('sales report: currency=KZT forwards the filter and keeps revenue status scope', async () => {
+    repo.salesReportData.mockResolvedValue([
+      [],
+      { _sum: {}, _count: { id: 0 }, _avg: {} },
+      { _sum: {} },
+    ]);
+    await service.getSalesReport(
+      'comp-1',
+      { currency: 'KZT' } as ReportQueryDto,
+    );
+    const where = repo.salesReportData.mock.calls[0][1];
+    expect(where.currency).toBe('KZT');
+    expect(where.status).toEqual({ in: ['COMPLETED', 'PARTIALLY_REFUNDED'] });
+  });
+
+  it('sales report: currency=USD forwards the filter', async () => {
+    repo.salesReportData.mockResolvedValue([
+      [],
+      { _sum: {}, _count: { id: 0 }, _avg: {} },
+      { _sum: {} },
+    ]);
+    await service.getSalesReport(
+      'comp-1',
+      { currency: 'USD' } as ReportQueryDto,
+    );
+    const where = repo.salesReportData.mock.calls[0][1];
+    expect(where.currency).toBe('USD');
+  });
+
+  it('profit report: currency filter reaches profitReportData (no mixed-currency total)', async () => {
+    repo.profitReportData.mockResolvedValue([]);
+    await service.getProfitReport(
+      'comp-1',
+      { currency: 'KZT' } as ReportQueryDto,
+    );
+    const where = repo.profitReportData.mock.calls[0][1] as {
+      currency?: string;
+    };
+    expect(where.currency).toBe('KZT');
+  });
+
+  it('dashboard: explicit currency=USD drives dashboardSummary and grossProfitData', async () => {
+    repo.dashboardSummary.mockResolvedValue([
+      { _sum: { total: dec('100.00') }, _count: { id: 1 } },
+      { _sum: { total: null }, _count: { id: 0 } },
+      { _sum: { total: null }, _count: { id: 0 } },
+      1,
+      [],
+      0,
+      0,
+      { _sum: { grandTotal: null } },
+    ]);
+    repo.grossProfitData.mockResolvedValue([]);
+    const dashboard = await service.getDashboard(
+      'comp-1',
+      { currency: 'USD' } as ReportQueryDto,
+    );
+    expect(dashboard.todaySales.revenue).toBe('100');
+    expect(repo.dashboardSummary.mock.calls[0][4]).toBe('USD');
+    expect(repo.grossProfitData.mock.calls[0][1]).toBe('USD');
+  });
+
+  it('dashboard: omitted currency resolves to the company base currency', async () => {
+    (repo.companyCurrency as jest.Mock).mockResolvedValueOnce('USD');
+    repo.dashboardSummary.mockResolvedValue([
+      { _sum: { total: null }, _count: { id: 0 } },
+      { _sum: { total: null }, _count: { id: 0 } },
+      { _sum: { total: null }, _count: { id: 0 } },
+      0,
+      [],
+      0,
+      0,
+      { _sum: { grandTotal: null } },
+    ]);
+    repo.grossProfitData.mockResolvedValue([]);
+    const dashboard = await service.getDashboard(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(dashboard).toBeDefined();
+    expect(repo.dashboardSummary.mock.calls[0][4]).toBe('USD');
+  });
+
+  it('purchasing report: currency filter reaches buildPurchaseWhere', async () => {
+    repo.purchasingReportData.mockResolvedValue([
+      [],
+      { _sum: {}, _count: { id: 0 } },
+      [],
+    ]);
+    await service.getPurchasingReport(
+      'comp-1',
+      { currency: 'USD' } as ReportQueryDto,
+    );
+    expect(repo.buildPurchaseWhere).toHaveBeenCalledWith(
+      'comp-1',
+      undefined,
+      undefined,
+      'USD',
+    );
+  });
+
+  it('cash shift report: currency filter reaches buildCashShiftWhere', async () => {
+    repo.cashShiftData.mockResolvedValue([[], 0]);
+    await service.getCashShiftReport(
+      'comp-1',
+      { currency: 'KZT' } as ReportQueryDto,
+    );
+    expect(repo.buildCashShiftWhere).toHaveBeenCalledWith(
+      'comp-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'KZT',
+    );
   });
 });

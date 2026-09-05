@@ -11,6 +11,7 @@ import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
 import 'package:stockflow/core/currency/currency_provider.dart';
+import 'package:stockflow/core/currency/currency_selector.dart';
 import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
@@ -126,15 +127,25 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
       _showSnack(l10n.posSelectWarehouseFirst);
       return;
     }
-    final openingBalance = await _promptAmount(
-      title: l10n.posOpenCashShiftTitle,
-      message: l10n.posOpenCashShiftMessage,
-      confirmLabel: l10n.posOpenShiftConfirm,
-      hint: l10n.posOpeningBalanceHint,
+    // CURRENCY-4: opening a shift asks for BOTH the drawer balance and the
+    // shift currency (default = company/base/current provider currency). Once
+    // opened the currency is immutable and drives the POS (see
+    // CashShiftNotifier._syncCurrencyFromShift).
+    final result = await showDialog<({double openingBalance, String currency})>(
+      context: context,
+      builder: (ctx) => _OpenShiftPromptDialog(
+        title: l10n.posOpenCashShiftTitle,
+        message: l10n.posOpenCashShiftMessage,
+        confirmLabel: l10n.posOpenShiftConfirm,
+        hint: l10n.posOpeningBalanceHint,
+        initialCurrency: ref.read(currencyProvider),
+      ),
     );
-    if (openingBalance == null || !mounted) return;
-    final shift =
-        await ref.read(cashShiftProvider.notifier).openShift(openingBalance);
+    if (result == null || !mounted) return;
+    final shift = await ref.read(cashShiftProvider.notifier).openShift(
+          result.openingBalance,
+          currency: result.currency,
+        );
     if (shift != null && mounted) {
       _showSnack(l10n.posShiftOpened, isError: false);
     } else if (mounted) {
@@ -1224,6 +1235,107 @@ class _AmountPromptDialogState extends State<_AmountPromptDialog> {
               isDense: true,
             ),
             onSubmitted: (_) => _submit(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(context.l10n.cancel),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(widget.confirmLabel),
+        ),
+      ],
+    );
+  }
+}
+
+/// Open Cash Shift dialog — opening balance + shift currency selector.
+///
+/// Returns a record of `(openingBalance, currency)` or null when cancelled.
+/// The currency defaults to the current operating (company/base) currency;
+/// once the shift is open the currency is immutable (POS invariant:
+/// Sale.currency == CashShift.currency).
+class _OpenShiftPromptDialog extends StatefulWidget {
+  const _OpenShiftPromptDialog({
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+    required this.hint,
+    required this.initialCurrency,
+  });
+
+  final String title;
+  final String message;
+  final String confirmLabel;
+  final String hint;
+  final String initialCurrency;
+
+  @override
+  State<_OpenShiftPromptDialog> createState() => _OpenShiftPromptDialogState();
+}
+
+class _OpenShiftPromptDialogState extends State<_OpenShiftPromptDialog> {
+  final _controller = TextEditingController();
+  late String _currency;
+
+  @override
+  void initState() {
+    super.initState();
+    _currency = widget.initialCurrency;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!mounted) return;
+    final value = double.tryParse(_controller.text.trim());
+    if (value == null) return;
+    Navigator.of(context)
+        .pop((openingBalance: value, currency: _currency));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.message, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            key: const Key('pos_prompt_field'),
+            controller: _controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: widget.hint,
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          CurrencySelector(
+            key: const Key('pos_open_shift_currency'),
+            value: _currency,
+            label: context.l10n.currency,
+            onChanged: (code) => setState(() => _currency = code),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            context.l10n.posShiftCurrencyHint,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
         ],
       ),

@@ -450,6 +450,7 @@
   "posOpeningBalanceHint": "Бастапқы қалдық",
   "posShiftOpened": "Ауысым ашылды",
   "posCouldNotOpenShift": "Ауысымды ашу мүмкін болмады. Рұқсаттарды тексеріңіз.",
+  "posShiftCurrencyHint": "Ауысым валютасы осы ауысымдағы барлық сатылымның валютасын белгілейді. Оны ашқаннан кейін өзгертуге болмайды.",
   "posNoOpenShiftToReport": "Есеп үшін ашық ауысым жоқ",
   "posPdf": "PDF",
   "posCloseCashShiftTitle": "Кассалық ауысымды жабу",

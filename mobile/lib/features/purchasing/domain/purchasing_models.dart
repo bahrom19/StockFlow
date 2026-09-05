@@ -53,6 +53,7 @@ class PurchaseOrder with _$PurchaseOrder {
     required String supplierId,
     required String orderNumber,
     required DateTime orderDate,
+    @Default('KZT') String currency,
     DateTime? expectedDate,
     required String status,
     required String subtotal,
@@ -120,6 +121,7 @@ class CreatePurchaseOrderRequest with _$CreatePurchaseOrderRequest {
     String? orderDate,
     String? expectedDate,
     String? notes,
+    @Default('KZT') String currency,
     required List<CreatePurchaseOrderItem> items,
   }) = _CreatePurchaseOrderRequest;
 
@@ -226,6 +228,7 @@ class PurchaseReturn with _$PurchaseReturn {
     required DateTime returnDate,
     required String warehouseId,
     required String status,
+    @Default('KZT') String currency,
     required String subtotal,
     required String discountAmount,
     required String taxAmount,
@@ -279,4 +282,38 @@ class PurchaseReturnListResponse with _$PurchaseReturnListResponse {
 
   factory PurchaseReturnListResponse.fromJson(Map<String, dynamic> json) =>
       _$PurchaseReturnListResponseFromJson(json);
+}
+
+/// POST /purchasing/purchase-returns — mirrors backend
+/// `CreatePurchaseReturnDto` (currency default KZT).
+@freezed
+class CreatePurchaseReturnRequest with _$CreatePurchaseReturnRequest {
+  const factory CreatePurchaseReturnRequest({
+    required String supplierId,
+    String? returnNumber,
+    String? returnDate,
+    required String warehouseId,
+    String? status,
+    @Default('KZT') String currency,
+    String? notes,
+    required List<CreatePurchaseReturnItem> items,
+  }) = _CreatePurchaseReturnRequest;
+
+  factory CreatePurchaseReturnRequest.fromJson(Map<String, dynamic> json) =>
+      _$CreatePurchaseReturnRequestFromJson(json);
+}
+
+@freezed
+class CreatePurchaseReturnItem with _$CreatePurchaseReturnItem {
+  const factory CreatePurchaseReturnItem({
+    required String productId,
+    required int quantity,
+    required double unitCost,
+    double? discountPercent,
+    double? taxPercent,
+    String? notes,
+  }) = _CreatePurchaseReturnItem;
+
+  factory CreatePurchaseReturnItem.fromJson(Map<String, dynamic> json) =>
+      _$CreatePurchaseReturnItemFromJson(json);
 }

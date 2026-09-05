@@ -10,9 +10,15 @@ import 'package:stockflow/features/products/domain/product_models.dart';
 import 'package:stockflow/features/suppliers/data/repositories/suppliers_repository.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
+import 'package:stockflow/core/currency/currency_selector.dart';
 
+/// New Purchase Order form. Create-only today (always DRAFT → the currency
+/// selector is editable); an optional [initial] order enables future edit
+/// flows where non-DRAFT documents lock the currency read-only.
 class PurchaseOrderFormScreen extends ConsumerStatefulWidget {
-  const PurchaseOrderFormScreen({super.key});
+  const PurchaseOrderFormScreen({super.key, this.initial});
+  final PurchaseOrder? initial;
   @override
   ConsumerState<PurchaseOrderFormScreen> createState() => _PurchaseOrderFormScreenState();
 }
@@ -26,10 +32,18 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
   final _items = <_POLineItem>[];
   TextEditingController _notesCtrl = TextEditingController();
   bool _isSaving = false;
+  String _selectedCurrency = 'KZT';
+
+  /// DRAFT documents (and brand-new orders) may change currency; non-DRAFT
+  /// orders are read-only (backend freeze rule for PO edits).
+  bool get _canEditCurrency =>
+      widget.initial == null || widget.initial!.status == 'DRAFT';
 
   @override
   void initState() {
     super.initState();
+    _selectedCurrency =
+        widget.initial?.currency ?? ref.read(currencyProvider);
     _loadSuppliers();
   }
 
@@ -110,6 +124,7 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
     final request = CreatePurchaseOrderRequest(
       supplierId: _selectedSupplierId!,
       notes: _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
+      currency: _selectedCurrency,
       items: _items.where((i) => i.product.id.isNotEmpty).map((i) => CreatePurchaseOrderItem(
         productId: i.product.id,
         quantity: int.tryParse(i.qtyCtrl.text) ?? 1,
@@ -164,6 +179,16 @@ class _PurchaseOrderFormScreenState extends ConsumerState<PurchaseOrderFormScree
                 setState(() { _selectedSupplierId = v; _selectedSupplierName = s.companyName; });
               },
               validator: (v) => v == null ? context.l10n.required : null,
+            ),
+            const SizedBox(height: 16),
+
+            // Currency — editable for new/DRAFT orders, read-only once the
+            // order leaves DRAFT (backend currency freeze rule).
+            CurrencySelector(
+              value: _selectedCurrency,
+              enabled: _canEditCurrency,
+              label: context.l10n.currency,
+              onChanged: (code) => setState(() => _selectedCurrency = code),
             ),
             const SizedBox(height: 16),
 

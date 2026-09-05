@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/features/dashboard/data/repositories/dashboard_repository.dart';
 import 'package:stockflow/features/dashboard/domain/dashboard_models.dart';
@@ -85,14 +86,20 @@ class DashboardNotifier extends StateNotifier<DashboardUiState> {
   Future<void> _fetchAll() async {
     final repo = _ref.read(dashboardRepositoryProvider);
 
+    // CURRENCY-4: every monetary report is scoped to ONE currency (the
+    // active currencyProvider value — which itself is kept in sync with the
+    // open Cash Shift by CashShiftNotifier). Backend never mixes currencies
+    // into one total.
+    final currency = _ref.read(currencyProvider);
+
     // Fire all requests concurrently. Purchasing summary (limit=1) and the
     // low-stock list are single light requests for Action Center events #4/#3
     // — they do NOT run on the 20s Cash Drawer timer, only on initial load /
     // manual refresh.
     final results = await Future.wait([
-      repo.getDashboardSummary(),
-      repo.getRecentSales(),
-      repo.getProfitReport(),
+      repo.getDashboardSummary(currency: currency),
+      repo.getRecentSales(currency: currency),
+      repo.getProfitReport(currency: currency),
       repo.getPurchasingSummary(),
       repo.getLowStockItems(),
     ]);

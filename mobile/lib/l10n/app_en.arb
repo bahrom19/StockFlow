@@ -450,6 +450,7 @@
   "posOpeningBalanceHint": "Opening balance",
   "posShiftOpened": "Shift opened",
   "posCouldNotOpenShift": "Could not open shift. Check your permissions.",
+  "posShiftCurrencyHint": "The shift currency sets the currency for every sale in this shift. It cannot be changed after opening.",
   "posNoOpenShiftToReport": "No open shift to report",
   "posPdf": "PDF",
   "posCloseCashShiftTitle": "Close Cash Shift",

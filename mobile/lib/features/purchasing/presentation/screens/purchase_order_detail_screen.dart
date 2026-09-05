@@ -5,7 +5,7 @@ import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
 import 'package:stockflow/features/purchasing/data/repositories/purchasing_repository.dart';
 import 'package:stockflow/features/purchasing/presentation/widgets/purchasing_widgets.dart';
-import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/currency_catalog.dart';
 
 class PurchaseOrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
@@ -207,16 +207,20 @@ class _PurchaseOrderDetailScreenState extends ConsumerState<PurchaseOrderDetailS
                   child: Column(
                     children: [
                       _row(context.l10n.subtotal,
-                          double.tryParse(order.subtotal) ?? 0, theme),
+                          double.tryParse(order.subtotal) ?? 0, theme,
+                          currency: order.currency),
                       if ((double.tryParse(order.discountAmount) ?? 0) > 0)
                         _row(context.l10n.discount,
                             -(double.tryParse(order.discountAmount) ?? 0),
                             theme,
-                            color: Colors.orange),
+                            color: Colors.orange,
+                            currency: order.currency),
                       _row(context.l10n.tax,
-                          double.tryParse(order.taxAmount) ?? 0, theme),
+                          double.tryParse(order.taxAmount) ?? 0, theme,
+                          currency: order.currency),
                       const Divider(),
-                      _row(context.l10n.grandTotal, total, theme, bold: true),
+                      _row(context.l10n.grandTotal, total, theme,
+                          bold: true, currency: order.currency),
                     ],
                   ),
                 ),
@@ -238,7 +242,7 @@ class _PurchaseOrderDetailScreenState extends ConsumerState<PurchaseOrderDetailS
                     subtitle: Text(context.l10n.qtyReceivedLabel(
                         item.quantity, item.receivedQuantity)),
                     trailing: Text(
-                      context.money(itemTotal),
+                      CurrencyCatalog.format(itemTotal, code: order.currency),
                       style: theme.textTheme.titleSmall
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
@@ -268,12 +272,13 @@ class _PurchaseOrderDetailScreenState extends ConsumerState<PurchaseOrderDetailS
     );
   }
 
-  Widget _row(String label, double amount, ThemeData theme, {bool bold = false, Color? color}) {
+  Widget _row(String label, double amount, ThemeData theme,
+      {bool bold = false, Color? color, String currency = 'KZT'}) {
     return Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium),
-        Text(context.money(amount), style: (bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium)?.copyWith(fontWeight: bold ? FontWeight.bold : null, color: color)),
+        Text(CurrencyCatalog.format(amount, code: currency), style: (bold ? theme.textTheme.titleSmall : theme.textTheme.bodyMedium)?.copyWith(fontWeight: bold ? FontWeight.bold : null, color: color)),
       ],
     ));
   }

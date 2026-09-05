@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
-import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
-import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/currency_catalog.dart';
 
 // ── PO Status Badge ──
 class POStatusBadge extends StatelessWidget {
@@ -100,7 +99,9 @@ class POCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(context.money(total), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              Text(CurrencyCatalog.format(total, code: order.currency),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(width: 8),
               Icon(Icons.chevron_right, color: theme.colorScheme.outline),
             ],

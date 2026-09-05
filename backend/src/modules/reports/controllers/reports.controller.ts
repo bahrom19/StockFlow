@@ -21,8 +21,11 @@ export class ReportsController {
       'Dashboard summary — today/yesterday/month sales, inventory value, counts',
   })
   @ApiResponse({ status: 200, description: 'Dashboard data' })
-  async getDashboard(@CurrentUser() user: JwtPayload) {
-    return this.reportsService.getDashboard(user.companyId);
+  async getDashboard(
+    @Query() query: ReportQueryDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.reportsService.getDashboard(user.companyId, query);
   }
 
   @Get('sales')

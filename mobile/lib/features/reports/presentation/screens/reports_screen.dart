@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
+import 'package:stockflow/core/currency/currency_selector.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/services/receipt_print_service.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
@@ -64,6 +66,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final data = state is DashboardData ? state : null;
     final summary = data?.summary;
     final sales = data?.recentSales?.sales ?? const <RecentSale>[];
+    // CURRENCY-4: the Reports filter drives the query `currency` parameter for
+    // every dashboard/reports request (single-currency aggregates) and the
+    // money formatting (CurrencyScope/context.money) automatically follows.
+    final selectedCurrency = ref.watch(currencyProvider);
+
+    Future<void> onCurrencyChanged(String code) async {
+      await ref.read(currencyProvider.notifier).setCurrency(code);
+      if (mounted) {
+        ref.read(dashboardProvider.notifier).refresh();
+      }
+    }
 
     return Scaffold(
       body: Column(
@@ -73,6 +86,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             title: context.l10n.reportsTitle,
             subtitle: context.l10n.reportsSubtitle,
             actions: [
+              // CURRENCY-4: single-currency report filter.
+              SizedBox(
+                width: 150,
+                child: CurrencySelector(
+                  key: const Key('reports_currency_filter'),
+                  value: selectedCurrency,
+                  label: context.l10n.currency,
+                  onChanged: (code) => onCurrencyChanged(code),
+                ),
+              ),
               IconButton(
                 tooltip: context.l10n.exportPdf,
                 onPressed: summary == null

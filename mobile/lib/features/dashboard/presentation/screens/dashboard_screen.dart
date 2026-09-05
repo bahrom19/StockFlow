@@ -25,6 +25,8 @@ import 'package:stockflow/features/payments/presentation/widgets/today_payments_
 import 'package:stockflow/features/sales/presentation/providers/cash_shift_provider.dart';
 import 'package:stockflow/features/warehouses/presentation/providers/warehouses_provider.dart';
 import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
+import 'package:stockflow/core/currency/currency_selector.dart';
 
 /// Production Dashboard Screen — answers "How is my business today?" in <5s.
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -170,7 +172,7 @@ const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(
   AppSpacing.xxl,
 );
 
-class _DashboardContentView extends StatelessWidget {
+class _DashboardContentView extends ConsumerWidget {
   final String? userName;
   final DashboardSummary summary;
   final SalesReport? recentSales;
@@ -188,12 +190,25 @@ class _DashboardContentView extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= AppSpacing.breakpointWide;
     final recentSalesWidget = RecentSalesList(
       sales: recentSales?.sales ?? const [],
     );
+    // CURRENCY-4: the Dashboard currency filter scopes every monetary metric
+    // (summary, sales, profit chart) to ONE currency. Selecting a currency
+    // re-queries the backend with `currency=<code>`; display formatting
+    // (CurrencyScope/context.money) follows automatically.
+    final selectedCurrency = ref.watch(currencyProvider);
+
+    Future<void> onCurrencyChanged(String code) async {
+      await ref.read(currencyProvider.notifier).setCurrency(code);
+      if (context.mounted) {
+        // onRefresh is a VoidCallback (fire-and-forget) — just invoke it.
+        onRefresh();
+      }
+    }
 
     // Brand-new company → one informative onboarding block instead of the
     // five scattered "No data" cards (chart, payments, recent, low stock, AI).
@@ -210,7 +225,22 @@ class _DashboardContentView extends StatelessWidget {
           isRefreshing: isRefreshing,
           onRefresh: onRefresh,
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
+
+        // ── Currency filter (CURRENCY-4) ─────────
+        Align(
+          alignment: Alignment.centerRight,
+          child: SizedBox(
+            width: 160,
+            child: CurrencySelector(
+              key: const Key('dashboard_currency_filter'),
+              value: selectedCurrency,
+              label: context.l10n.currency,
+              onChanged: (code) => onCurrencyChanged(code),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
 
         // ── Cash Drawer Hero — the page's #1 answer ──
         const CashDrawerHero(),

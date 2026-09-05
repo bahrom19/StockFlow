@@ -14,6 +14,7 @@ class CashShift {
   final String warehouseId;
   final String cashierId;
   final String status; // OPEN | CLOSED
+  final String currency;
   final DateTime openedAt;
   final DateTime? closedAt;
   final String openingBalance;
@@ -37,6 +38,7 @@ class CashShift {
     required this.warehouseId,
     required this.cashierId,
     required this.status,
+    this.currency = 'KZT',
     required this.openedAt,
     this.closedAt,
     this.openingBalance = '0.0000',
@@ -64,6 +66,7 @@ class CashShift {
       warehouseId: json['warehouseId'] as String,
       cashierId: json['cashierId'] as String,
       status: (json['status'] as String?) ?? 'OPEN',
+      currency: (json['currency'] as String?) ?? 'KZT',
       openedAt: parse(json['openedAt'] as String?),
       closedAt: json['closedAt'] != null
           ? parse(json['closedAt'] as String?)
@@ -118,15 +121,19 @@ class OpenShiftRequest {
   final double openingBalance;
   final String? notes;
 
+  final String currency;
+
   const OpenShiftRequest({
     required this.warehouseId,
     required this.openingBalance,
     this.notes,
+    this.currency = 'KZT',
   });
 
   Map<String, dynamic> toJson() => {
         'warehouseId': warehouseId,
         'openingBalance': openingBalance,
+        'currency': currency,
         if (notes != null && notes!.isNotEmpty) 'notes': notes,
       };
 }

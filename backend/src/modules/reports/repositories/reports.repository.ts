@@ -30,20 +30,33 @@ export class ReportsRepository {
 
   // ── Dashboard ──────────────────────────────────────────────────
 
+  /// Base company currency — the default monetary filter for every money
+  /// report when the caller does not pass an explicit `currency`.
+  companyCurrency(companyId: string) {
+    return this.prismaService.company
+      .findUnique({
+        where: { id: companyId },
+        select: { currency: true },
+      })
+      .then((company) => company?.currency ?? 'KZT');
+  }
+
   async dashboardSummary(
     companyId: string,
     todayStart: Date,
     todayEnd: Date,
     monthStart: Date,
+    currency?: string,
   ) {
     return Promise.all([
-      this.salesSumAgg(companyId, todayStart, todayEnd),
+      this.salesSumAgg(companyId, todayStart, todayEnd, currency),
       this.salesSumAgg(
         companyId,
         new Date(todayStart.getTime() - 86400000),
         todayStart,
+        currency,
       ),
-      this.salesSumAgg(companyId, monthStart, todayEnd),
+      this.salesSumAgg(companyId, monthStart, todayEnd, currency),
       this.prismaService.sale.count({ where: { companyId, deletedAt: null } }),
       this.stockValueAgg(companyId),
       this.prismaService.customer.count({
@@ -52,18 +65,25 @@ export class ReportsRepository {
       this.prismaService.supplier.count({
         where: { companyId, deletedAt: null, isActive: true },
       }),
-      this.purchaseTotalAgg(companyId),
+      this.purchaseTotalAgg(companyId, currency),
     ]);
   }
 
-  private salesSumAgg(companyId: string, from: Date, to: Date) {
+  private salesSumAgg(
+    companyId: string,
+    from: Date,
+    to: Date,
+    currency?: string,
+  ) {
+    const where: Prisma.SaleWhereInput = {
+      companyId,
+      createdAt: { gte: from, lte: to },
+      status: 'COMPLETED',
+      deletedAt: null,
+    };
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
     return this.prismaService.sale.aggregate({
-      where: {
-        companyId,
-        createdAt: { gte: from, lte: to },
-        status: 'COMPLETED',
-        deletedAt: null,
-      },
+      where,
       _sum: { total: true, paidAmount: true },
       _count: { id: true },
     });
@@ -76,20 +96,29 @@ export class ReportsRepository {
     });
   }
 
-  private purchaseTotalAgg(companyId: string) {
+  private purchaseTotalAgg(companyId: string, currency?: string) {
+    const where: Prisma.PurchaseOrderWhereInput = {
+      companyId,
+      deletedAt: null,
+      status: 'RECEIVED',
+    };
+    if (currency)
+      where.currency = currency as Prisma.EnumCurrencyFilter;
     return this.prismaService.purchaseOrder.aggregate({
-      where: { companyId, deletedAt: null, status: 'RECEIVED' },
+      where,
       _sum: { grandTotal: true },
     });
   }
 
-  grossProfitData(companyId: string) {
+  grossProfitData(companyId: string, currency?: string) {
+    const where: Prisma.SaleWhereInput = {
+      companyId,
+      status: { in: REVENUE_SALE_STATUSES },
+      deletedAt: null,
+    };
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
     return this.prismaService.sale.findMany({
-      where: {
-        companyId,
-        status: { in: REVENUE_SALE_STATUSES },
-        deletedAt: null,
-      },
+      where,
       select: {
         total: true,
         items: { select: { costPrice: true, quantity: true } },
@@ -155,6 +184,7 @@ export class ReportsRepository {
     companyId: string,
     dateFrom?: Date,
     dateTo?: Date,
+    currency?: string,
   ): Promise<{ id: string }[]> {
     const where: Prisma.SaleWhereInput = {
       companyId,
@@ -166,6 +196,7 @@ export class ReportsRepository {
       if (dateFrom) where.createdAt.gte = dateFrom;
       if (dateTo) where.createdAt.lte = dateTo;
     }
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
     return this.prismaService.sale.findMany({ where, select: { id: true } });
   }
 
@@ -260,6 +291,7 @@ export class ReportsRepository {
     customerIds: string[],
     dateFrom?: Date,
     dateTo?: Date,
+    currency?: string,
   ) {
     const where: Prisma.SaleWhereInput = {
       companyId,
@@ -272,6 +304,7 @@ export class ReportsRepository {
       if (dateFrom) where.createdAt.gte = dateFrom;
       if (dateTo) where.createdAt.lte = dateTo;
     }
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
     return this.prismaService.sale.groupBy({
       by: ['customerId'],
       where,
@@ -313,6 +346,7 @@ export class ReportsRepository {
     supplierIds: string[],
     dateFrom?: Date,
     dateTo?: Date,
+    currency?: string,
   ) {
     const where: Prisma.PurchaseOrderWhereInput = {
       companyId,
@@ -324,6 +358,8 @@ export class ReportsRepository {
       if (dateFrom) where.createdAt.gte = dateFrom;
       if (dateTo) where.createdAt.lte = dateTo;
     }
+    if (currency)
+      where.currency = currency as Prisma.EnumCurrencyFilter;
     return this.prismaService.purchaseOrder.groupBy({
       by: ['supplierId'],
       where,
@@ -413,6 +449,7 @@ export class ReportsRepository {
     cashierId?: string,
     customerId?: string,
     status?: string,
+    currency?: string,
   ): Prisma.SaleWhereInput {
     const where: Prisma.SaleWhereInput = { companyId, deletedAt: null };
     if (dateFrom || dateTo) {
@@ -424,6 +461,7 @@ export class ReportsRepository {
     if (cashierId) where.cashierId = cashierId;
     if (customerId) where.customerId = customerId;
     if (status) where.status = status as Prisma.EnumSaleStatusFilter['equals'];
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
     return where;
   }
 
@@ -431,6 +469,7 @@ export class ReportsRepository {
     companyId: string,
     dateFrom?: Date,
     dateTo?: Date,
+    currency?: string,
   ): Prisma.PurchaseOrderWhereInput {
     const where: Prisma.PurchaseOrderWhereInput = {
       companyId,
@@ -441,6 +480,8 @@ export class ReportsRepository {
       if (dateFrom) where.createdAt.gte = dateFrom;
       if (dateTo) where.createdAt.lte = dateTo;
     }
+    if (currency)
+      where.currency = currency as Prisma.EnumCurrencyFilter;
     return where;
   }
 
@@ -451,6 +492,7 @@ export class ReportsRepository {
     status?: string,
     dateFrom?: Date,
     dateTo?: Date,
+    currency?: string,
   ): Prisma.CashShiftWhereInput {
     const where: Prisma.CashShiftWhereInput = { companyId };
     if (warehouseId) where.warehouseId = warehouseId;
@@ -461,6 +503,7 @@ export class ReportsRepository {
       if (dateFrom) where.createdAt.gte = dateFrom;
       if (dateTo) where.createdAt.lte = dateTo;
     }
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
     return where;
   }
 }

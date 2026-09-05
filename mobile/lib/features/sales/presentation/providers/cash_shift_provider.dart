@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/currency/currency_catalog.dart';
+import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/outbox/outbox_mutation_queue.dart';
 import 'package:stockflow/core/outbox/outbox_operation.dart';
@@ -53,6 +57,7 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
     final result = await repo.getXReport(warehouseId: warehouseId);
     if (result is ShiftSuccess<CashShift>) {
       state = ShiftLoaded(current: result.data);
+      _syncCurrencyFromShift(result.data);
       return;
     }
     final failure = result as ShiftFailure<CashShift>;
@@ -64,7 +69,25 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
     state = ShiftError(failure.error.message);
   }
 
-  Future<CashShift?> openShift(double openingBalance, {String? notes}) async {
+  /// POS ↔ Cash Shift currency synchronization (CURRENCY-4).
+  ///
+  /// The active CashShift is the source of truth for the POS. Whenever a shift
+  /// becomes current (load/open/refresh), [currencyProvider] is re-aligned to
+  /// the shift currency so Sale.currency == CashShift.currency holds without a
+  /// manual per-sale selection. When no shift is open the existing provider
+  /// value stays untouched.
+  void _syncCurrencyFromShift(CashShift shift) {
+    final code = shift.currency;
+    if (!CurrencyCatalog.isSupported(code)) return;
+    if (_ref.read(currencyProvider) == code) return;
+    unawaited(_ref.read(currencyProvider.notifier).setCurrency(code));
+  }
+
+  Future<CashShift?> openShift(
+    double openingBalance, {
+    String? notes,
+    String? currency,
+  }) async {
     final warehouseId = _warehouseId;
     if (warehouseId == null) return null;
     final current = state;
@@ -78,9 +101,11 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
       warehouseId: warehouseId,
       openingBalance: openingBalance,
       notes: notes,
+      currency: currency ?? _ref.read(currencyProvider),
     ));
     if (result is ShiftSuccess<CashShift>) {
       state = ShiftLoaded(current: result.data);
+      _syncCurrencyFromShift(result.data);
       return result.data;
     }
     final failure = result as ShiftFailure<CashShift>;
@@ -222,6 +247,7 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
     final result = await repo.getXReport(warehouseId: warehouseId);
     if (result is ShiftSuccess<CashShift>) {
       state = ShiftLoaded(current: result.data);
+      _syncCurrencyFromShift(result.data);
       return result.data;
     }
     final failure = result as ShiftFailure<CashShift>;

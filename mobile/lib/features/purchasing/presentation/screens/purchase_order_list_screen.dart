@@ -10,7 +10,7 @@ import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
 import 'package:stockflow/features/purchasing/presentation/providers/purchasing_provider.dart';
 import 'package:stockflow/features/purchasing/presentation/widgets/purchasing_widgets.dart';
-import 'package:stockflow/core/currency/currency_ext.dart';
+import 'package:stockflow/core/currency/currency_catalog.dart';
 
 class PurchaseOrderListScreen extends ConsumerStatefulWidget {
   const PurchaseOrderListScreen({super.key});
@@ -140,8 +140,12 @@ class _PurchaseOrderListScreenState
                   ))),
                   DataCell(StatusBadge(status: o.status)),
                   DataCell(Text('${o.items.length}')),
-                  DataCell(Text(context.money(o.grandTotal))),
-                  DataCell(Text(context.money(o.paidAmount))),
+                  DataCell(Text(
+                    CurrencyCatalog.format(o.grandTotal, code: o.currency),
+                  )),
+                  DataCell(Text(
+                    CurrencyCatalog.format(o.paidAmount, code: o.currency),
+                  )),
                 ],
               ),
               buildCard: (o) => POCard(

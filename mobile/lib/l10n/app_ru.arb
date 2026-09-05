@@ -450,6 +450,7 @@
   "posOpeningBalanceHint": "Начальный остаток",
   "posShiftOpened": "Смена открыта",
   "posCouldNotOpenShift": "Не удалось открыть смену. Проверьте права доступа.",
+  "posShiftCurrencyHint": "Валюта смены задаёт валюту всех продаж в этой смене. После открытия её нельзя изменить.",
   "posNoOpenShiftToReport": "Нет открытой смены для отчёта",
   "posPdf": "PDF",
   "posCloseCashShiftTitle": "Закрыть кассовую смену",

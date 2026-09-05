@@ -28,10 +28,20 @@ class DashboardRepository {
 
   DashboardRepository(this._ref);
 
-  Future<DashboardResult<DashboardSummary>> getDashboardSummary() async {
+  /// [currency] (CURRENCY-4): monetary dashboard aggregates are always scoped
+  /// to a single currency — never mixed totals. When omitted the backend
+  /// defaults to the company's base currency.
+  Future<DashboardResult<DashboardSummary>> getDashboardSummary({
+    String? currency,
+  }) async {
     try {
       final client = _ref.read(apiClientProvider);
-      final response = await client.get(ApiEndpoints.dashboard);
+      final response = await client.get(
+        ApiEndpoints.dashboard,
+        queryParameters: {
+          if (currency != null && currency.isNotEmpty) 'currency': currency,
+        },
+      );
       final data = response.data as Map<String, dynamic>;
       return DashboardSuccess(DashboardSummary.fromJson(data));
     } catch (e) {
@@ -43,6 +53,7 @@ class DashboardRepository {
   Future<DashboardResult<SalesReport>> getRecentSales({
     int page = 1,
     int limit = 10,
+    String? currency,
   }) async {
     try {
       final client = _ref.read(apiClientProvider);
@@ -53,6 +64,7 @@ class DashboardRepository {
           'limit': limit.toString(),
           'sortBy': 'createdAt',
           'sortOrder': 'desc',
+          if (currency != null && currency.isNotEmpty) 'currency': currency,
         },
       );
       final data = response.data as Map<String, dynamic>;
@@ -114,6 +126,7 @@ class DashboardRepository {
 
   Future<DashboardResult<ProfitReport>> getProfitReport({
     int days = 30,
+    String? currency,
   }) async {
     try {
       final now = DateTime.now();
@@ -124,6 +137,7 @@ class DashboardRepository {
         queryParameters: {
           'dateFrom': from.toIso8601String(),
           'dateTo': now.toIso8601String(),
+          if (currency != null && currency.isNotEmpty) 'currency': currency,
         },
       );
       final data = response.data as Map<String, dynamic>;

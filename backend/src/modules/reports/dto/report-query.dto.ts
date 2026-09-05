@@ -79,4 +79,15 @@ export class ReportQueryDto {
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc';
+
+  @ApiPropertyOptional({
+    description:
+      'Currency (ISO code) filter — monetary aggregates are always scoped to ' +
+      'a single currency and never mixed into one total. Defaults to the ' +
+      "company's base currency when omitted.",
+    enum: ['KZT', 'RUB', 'USD', 'EUR', 'CNY', 'AED', 'AUD', 'VND'],
+  })
+  @IsOptional()
+  @IsString()
+  currency?: string;
 }

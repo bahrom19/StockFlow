@@ -13,6 +13,7 @@ _$PurchaseOrderImpl _$$PurchaseOrderImplFromJson(Map<String, dynamic> json) =>
       supplierId: json['supplierId'] as String,
       orderNumber: json['orderNumber'] as String,
       orderDate: DateTime.parse(json['orderDate'] as String),
+      currency: json['currency'] as String? ?? 'KZT',
       expectedDate: json['expectedDate'] == null
           ? null
           : DateTime.parse(json['expectedDate'] as String),
@@ -50,6 +51,7 @@ Map<String, dynamic> _$$PurchaseOrderImplToJson(_$PurchaseOrderImpl instance) =>
       'supplierId': instance.supplierId,
       'orderNumber': instance.orderNumber,
       'orderDate': instance.orderDate.toIso8601String(),
+      'currency': instance.currency,
       'expectedDate': instance.expectedDate?.toIso8601String(),
       'status': instance.status,
       'subtotal': instance.subtotal,
@@ -136,6 +138,7 @@ _$CreatePurchaseOrderRequestImpl _$$CreatePurchaseOrderRequestImplFromJson(
       orderDate: json['orderDate'] as String?,
       expectedDate: json['expectedDate'] as String?,
       notes: json['notes'] as String?,
+      currency: json['currency'] as String? ?? 'KZT',
       items: (json['items'] as List<dynamic>)
           .map((e) =>
               CreatePurchaseOrderItem.fromJson(e as Map<String, dynamic>))
@@ -150,6 +153,7 @@ Map<String, dynamic> _$$CreatePurchaseOrderRequestImplToJson(
       'orderDate': instance.orderDate,
       'expectedDate': instance.expectedDate,
       'notes': instance.notes,
+      'currency': instance.currency,
       'items': instance.items,
     };
 
@@ -294,6 +298,7 @@ _$PurchaseReturnImpl _$$PurchaseReturnImplFromJson(Map<String, dynamic> json) =>
       returnDate: DateTime.parse(json['returnDate'] as String),
       warehouseId: json['warehouseId'] as String,
       status: json['status'] as String,
+      currency: json['currency'] as String? ?? 'KZT',
       subtotal: json['subtotal'] as String,
       discountAmount: json['discountAmount'] as String,
       taxAmount: json['taxAmount'] as String,
@@ -329,6 +334,7 @@ Map<String, dynamic> _$$PurchaseReturnImplToJson(
       'returnDate': instance.returnDate.toIso8601String(),
       'warehouseId': instance.warehouseId,
       'status': instance.status,
+      'currency': instance.currency,
       'subtotal': instance.subtotal,
       'discountAmount': instance.discountAmount,
       'taxAmount': instance.taxAmount,
@@ -400,4 +406,55 @@ Map<String, dynamic> _$$PurchaseReturnListResponseImplToJson(
       'total': instance.total,
       'page': instance.page,
       'limit': instance.limit,
+    };
+
+_$CreatePurchaseReturnRequestImpl _$$CreatePurchaseReturnRequestImplFromJson(
+        Map<String, dynamic> json) =>
+    _$CreatePurchaseReturnRequestImpl(
+      supplierId: json['supplierId'] as String,
+      returnNumber: json['returnNumber'] as String?,
+      returnDate: json['returnDate'] as String?,
+      warehouseId: json['warehouseId'] as String,
+      status: json['status'] as String?,
+      currency: json['currency'] as String? ?? 'KZT',
+      notes: json['notes'] as String?,
+      items: (json['items'] as List<dynamic>)
+          .map((e) =>
+              CreatePurchaseReturnItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+
+Map<String, dynamic> _$$CreatePurchaseReturnRequestImplToJson(
+        _$CreatePurchaseReturnRequestImpl instance) =>
+    <String, dynamic>{
+      'supplierId': instance.supplierId,
+      'returnNumber': instance.returnNumber,
+      'returnDate': instance.returnDate,
+      'warehouseId': instance.warehouseId,
+      'status': instance.status,
+      'currency': instance.currency,
+      'notes': instance.notes,
+      'items': instance.items,
+    };
+
+_$CreatePurchaseReturnItemImpl _$$CreatePurchaseReturnItemImplFromJson(
+        Map<String, dynamic> json) =>
+    _$CreatePurchaseReturnItemImpl(
+      productId: json['productId'] as String,
+      quantity: (json['quantity'] as num).toInt(),
+      unitCost: (json['unitCost'] as num).toDouble(),
+      discountPercent: (json['discountPercent'] as num?)?.toDouble(),
+      taxPercent: (json['taxPercent'] as num?)?.toDouble(),
+      notes: json['notes'] as String?,
+    );
+
+Map<String, dynamic> _$$CreatePurchaseReturnItemImplToJson(
+        _$CreatePurchaseReturnItemImpl instance) =>
+    <String, dynamic>{
+      'productId': instance.productId,
+      'quantity': instance.quantity,
+      'unitCost': instance.unitCost,
+      'discountPercent': instance.discountPercent,
+      'taxPercent': instance.taxPercent,
+      'notes': instance.notes,
     };

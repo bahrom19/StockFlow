@@ -25,6 +25,7 @@ mixin _$PurchaseOrder {
   String get supplierId => throw _privateConstructorUsedError;
   String get orderNumber => throw _privateConstructorUsedError;
   DateTime get orderDate => throw _privateConstructorUsedError;
+  String get currency => throw _privateConstructorUsedError;
   DateTime? get expectedDate => throw _privateConstructorUsedError;
   String get status => throw _privateConstructorUsedError;
   String get subtotal => throw _privateConstructorUsedError;
@@ -64,6 +65,7 @@ abstract class $PurchaseOrderCopyWith<$Res> {
       String supplierId,
       String orderNumber,
       DateTime orderDate,
+      String currency,
       DateTime? expectedDate,
       String status,
       String subtotal,
@@ -102,6 +104,7 @@ class _$PurchaseOrderCopyWithImpl<$Res, $Val extends PurchaseOrder>
     Object? supplierId = null,
     Object? orderNumber = null,
     Object? orderDate = null,
+    Object? currency = null,
     Object? expectedDate = freezed,
     Object? status = null,
     Object? subtotal = null,
@@ -140,6 +143,10 @@ class _$PurchaseOrderCopyWithImpl<$Res, $Val extends PurchaseOrder>
           ? _value.orderDate
           : orderDate // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
       expectedDate: freezed == expectedDate
           ? _value.expectedDate
           : expectedDate // ignore: cast_nullable_to_non_nullable
@@ -222,6 +229,7 @@ abstract class _$$PurchaseOrderImplCopyWith<$Res>
       String supplierId,
       String orderNumber,
       DateTime orderDate,
+      String currency,
       DateTime? expectedDate,
       String status,
       String subtotal,
@@ -258,6 +266,7 @@ class __$$PurchaseOrderImplCopyWithImpl<$Res>
     Object? supplierId = null,
     Object? orderNumber = null,
     Object? orderDate = null,
+    Object? currency = null,
     Object? expectedDate = freezed,
     Object? status = null,
     Object? subtotal = null,
@@ -296,6 +305,10 @@ class __$$PurchaseOrderImplCopyWithImpl<$Res>
           ? _value.orderDate
           : orderDate // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
       expectedDate: freezed == expectedDate
           ? _value.expectedDate
           : expectedDate // ignore: cast_nullable_to_non_nullable
@@ -373,6 +386,7 @@ class _$PurchaseOrderImpl implements _PurchaseOrder {
       required this.supplierId,
       required this.orderNumber,
       required this.orderDate,
+      this.currency = 'KZT',
       this.expectedDate,
       required this.status,
       required this.subtotal,
@@ -404,6 +418,9 @@ class _$PurchaseOrderImpl implements _PurchaseOrder {
   final String orderNumber;
   @override
   final DateTime orderDate;
+  @override
+  @JsonKey()
+  final String currency;
   @override
   final DateTime? expectedDate;
   @override
@@ -445,7 +462,7 @@ class _$PurchaseOrderImpl implements _PurchaseOrder {
 
   @override
   String toString() {
-    return 'PurchaseOrder(id: $id, companyId: $companyId, supplierId: $supplierId, orderNumber: $orderNumber, orderDate: $orderDate, expectedDate: $expectedDate, status: $status, subtotal: $subtotal, discountAmount: $discountAmount, taxAmount: $taxAmount, grandTotal: $grandTotal, paidAmount: $paidAmount, notes: $notes, approvedBy: $approvedBy, approvedAt: $approvedAt, cancelledBy: $cancelledBy, cancelledAt: $cancelledAt, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt, items: $items)';
+    return 'PurchaseOrder(id: $id, companyId: $companyId, supplierId: $supplierId, orderNumber: $orderNumber, orderDate: $orderDate, currency: $currency, expectedDate: $expectedDate, status: $status, subtotal: $subtotal, discountAmount: $discountAmount, taxAmount: $taxAmount, grandTotal: $grandTotal, paidAmount: $paidAmount, notes: $notes, approvedBy: $approvedBy, approvedAt: $approvedAt, cancelledBy: $cancelledBy, cancelledAt: $cancelledAt, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt, items: $items)';
   }
 
   @override
@@ -462,6 +479,8 @@ class _$PurchaseOrderImpl implements _PurchaseOrder {
                 other.orderNumber == orderNumber) &&
             (identical(other.orderDate, orderDate) ||
                 other.orderDate == orderDate) &&
+            (identical(other.currency, currency) ||
+                other.currency == currency) &&
             (identical(other.expectedDate, expectedDate) ||
                 other.expectedDate == expectedDate) &&
             (identical(other.status, status) || other.status == status) &&
@@ -502,6 +521,7 @@ class _$PurchaseOrderImpl implements _PurchaseOrder {
         supplierId,
         orderNumber,
         orderDate,
+        currency,
         expectedDate,
         status,
         subtotal,
@@ -543,6 +563,7 @@ abstract class _PurchaseOrder implements PurchaseOrder {
       required final String supplierId,
       required final String orderNumber,
       required final DateTime orderDate,
+      final String currency,
       final DateTime? expectedDate,
       required final String status,
       required final String subtotal,
@@ -573,6 +594,8 @@ abstract class _PurchaseOrder implements PurchaseOrder {
   String get orderNumber;
   @override
   DateTime get orderDate;
+  @override
+  String get currency;
   @override
   DateTime? get expectedDate;
   @override
@@ -1308,6 +1331,7 @@ mixin _$CreatePurchaseOrderRequest {
   String? get orderDate => throw _privateConstructorUsedError;
   String? get expectedDate => throw _privateConstructorUsedError;
   String? get notes => throw _privateConstructorUsedError;
+  String get currency => throw _privateConstructorUsedError;
   List<CreatePurchaseOrderItem> get items => throw _privateConstructorUsedError;
 
   /// Serializes this CreatePurchaseOrderRequest to a JSON map.
@@ -1333,6 +1357,7 @@ abstract class $CreatePurchaseOrderRequestCopyWith<$Res> {
       String? orderDate,
       String? expectedDate,
       String? notes,
+      String currency,
       List<CreatePurchaseOrderItem> items});
 }
 
@@ -1357,6 +1382,7 @@ class _$CreatePurchaseOrderRequestCopyWithImpl<$Res,
     Object? orderDate = freezed,
     Object? expectedDate = freezed,
     Object? notes = freezed,
+    Object? currency = null,
     Object? items = null,
   }) {
     return _then(_value.copyWith(
@@ -1380,6 +1406,10 @@ class _$CreatePurchaseOrderRequestCopyWithImpl<$Res,
           ? _value.notes
           : notes // ignore: cast_nullable_to_non_nullable
               as String?,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
       items: null == items
           ? _value.items
           : items // ignore: cast_nullable_to_non_nullable
@@ -1403,6 +1433,7 @@ abstract class _$$CreatePurchaseOrderRequestImplCopyWith<$Res>
       String? orderDate,
       String? expectedDate,
       String? notes,
+      String currency,
       List<CreatePurchaseOrderItem> items});
 }
 
@@ -1426,6 +1457,7 @@ class __$$CreatePurchaseOrderRequestImplCopyWithImpl<$Res>
     Object? orderDate = freezed,
     Object? expectedDate = freezed,
     Object? notes = freezed,
+    Object? currency = null,
     Object? items = null,
   }) {
     return _then(_$CreatePurchaseOrderRequestImpl(
@@ -1449,6 +1481,10 @@ class __$$CreatePurchaseOrderRequestImplCopyWithImpl<$Res>
           ? _value.notes
           : notes // ignore: cast_nullable_to_non_nullable
               as String?,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
       items: null == items
           ? _value._items
           : items // ignore: cast_nullable_to_non_nullable
@@ -1466,6 +1502,7 @@ class _$CreatePurchaseOrderRequestImpl implements _CreatePurchaseOrderRequest {
       this.orderDate,
       this.expectedDate,
       this.notes,
+      this.currency = 'KZT',
       required final List<CreatePurchaseOrderItem> items})
       : _items = items;
 
@@ -1483,6 +1520,9 @@ class _$CreatePurchaseOrderRequestImpl implements _CreatePurchaseOrderRequest {
   final String? expectedDate;
   @override
   final String? notes;
+  @override
+  @JsonKey()
+  final String currency;
   final List<CreatePurchaseOrderItem> _items;
   @override
   List<CreatePurchaseOrderItem> get items {
@@ -1493,7 +1533,7 @@ class _$CreatePurchaseOrderRequestImpl implements _CreatePurchaseOrderRequest {
 
   @override
   String toString() {
-    return 'CreatePurchaseOrderRequest(supplierId: $supplierId, orderNumber: $orderNumber, orderDate: $orderDate, expectedDate: $expectedDate, notes: $notes, items: $items)';
+    return 'CreatePurchaseOrderRequest(supplierId: $supplierId, orderNumber: $orderNumber, orderDate: $orderDate, expectedDate: $expectedDate, notes: $notes, currency: $currency, items: $items)';
   }
 
   @override
@@ -1510,6 +1550,8 @@ class _$CreatePurchaseOrderRequestImpl implements _CreatePurchaseOrderRequest {
             (identical(other.expectedDate, expectedDate) ||
                 other.expectedDate == expectedDate) &&
             (identical(other.notes, notes) || other.notes == notes) &&
+            (identical(other.currency, currency) ||
+                other.currency == currency) &&
             const DeepCollectionEquality().equals(other._items, _items));
   }
 
@@ -1522,6 +1564,7 @@ class _$CreatePurchaseOrderRequestImpl implements _CreatePurchaseOrderRequest {
       orderDate,
       expectedDate,
       notes,
+      currency,
       const DeepCollectionEquality().hash(_items));
 
   /// Create a copy of CreatePurchaseOrderRequest
@@ -1549,6 +1592,7 @@ abstract class _CreatePurchaseOrderRequest
           final String? orderDate,
           final String? expectedDate,
           final String? notes,
+          final String currency,
           required final List<CreatePurchaseOrderItem> items}) =
       _$CreatePurchaseOrderRequestImpl;
 
@@ -1565,6 +1609,8 @@ abstract class _CreatePurchaseOrderRequest
   String? get expectedDate;
   @override
   String? get notes;
+  @override
+  String get currency;
   @override
   List<CreatePurchaseOrderItem> get items;
 
@@ -3105,6 +3151,7 @@ mixin _$PurchaseReturn {
   DateTime get returnDate => throw _privateConstructorUsedError;
   String get warehouseId => throw _privateConstructorUsedError;
   String get status => throw _privateConstructorUsedError;
+  String get currency => throw _privateConstructorUsedError;
   String get subtotal => throw _privateConstructorUsedError;
   String get discountAmount => throw _privateConstructorUsedError;
   String get taxAmount => throw _privateConstructorUsedError;
@@ -3143,6 +3190,7 @@ abstract class $PurchaseReturnCopyWith<$Res> {
       DateTime returnDate,
       String warehouseId,
       String status,
+      String currency,
       String subtotal,
       String discountAmount,
       String taxAmount,
@@ -3180,6 +3228,7 @@ class _$PurchaseReturnCopyWithImpl<$Res, $Val extends PurchaseReturn>
     Object? returnDate = null,
     Object? warehouseId = null,
     Object? status = null,
+    Object? currency = null,
     Object? subtotal = null,
     Object? discountAmount = null,
     Object? taxAmount = null,
@@ -3222,6 +3271,10 @@ class _$PurchaseReturnCopyWithImpl<$Res, $Val extends PurchaseReturn>
       status: null == status
           ? _value.status
           : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
               as String,
       subtotal: null == subtotal
           ? _value.subtotal
@@ -3295,6 +3348,7 @@ abstract class _$$PurchaseReturnImplCopyWith<$Res>
       DateTime returnDate,
       String warehouseId,
       String status,
+      String currency,
       String subtotal,
       String discountAmount,
       String taxAmount,
@@ -3330,6 +3384,7 @@ class __$$PurchaseReturnImplCopyWithImpl<$Res>
     Object? returnDate = null,
     Object? warehouseId = null,
     Object? status = null,
+    Object? currency = null,
     Object? subtotal = null,
     Object? discountAmount = null,
     Object? taxAmount = null,
@@ -3372,6 +3427,10 @@ class __$$PurchaseReturnImplCopyWithImpl<$Res>
       status: null == status
           ? _value.status
           : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
               as String,
       subtotal: null == subtotal
           ? _value.subtotal
@@ -3440,6 +3499,7 @@ class _$PurchaseReturnImpl implements _PurchaseReturn {
       required this.returnDate,
       required this.warehouseId,
       required this.status,
+      this.currency = 'KZT',
       required this.subtotal,
       required this.discountAmount,
       required this.taxAmount,
@@ -3472,6 +3532,9 @@ class _$PurchaseReturnImpl implements _PurchaseReturn {
   final String warehouseId;
   @override
   final String status;
+  @override
+  @JsonKey()
+  final String currency;
   @override
   final String subtotal;
   @override
@@ -3507,7 +3570,7 @@ class _$PurchaseReturnImpl implements _PurchaseReturn {
 
   @override
   String toString() {
-    return 'PurchaseReturn(id: $id, companyId: $companyId, supplierId: $supplierId, returnNumber: $returnNumber, returnDate: $returnDate, warehouseId: $warehouseId, status: $status, subtotal: $subtotal, discountAmount: $discountAmount, taxAmount: $taxAmount, grandTotal: $grandTotal, notes: $notes, approvedBy: $approvedBy, approvedAt: $approvedAt, cancelledBy: $cancelledBy, cancelledAt: $cancelledAt, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt, items: $items)';
+    return 'PurchaseReturn(id: $id, companyId: $companyId, supplierId: $supplierId, returnNumber: $returnNumber, returnDate: $returnDate, warehouseId: $warehouseId, status: $status, currency: $currency, subtotal: $subtotal, discountAmount: $discountAmount, taxAmount: $taxAmount, grandTotal: $grandTotal, notes: $notes, approvedBy: $approvedBy, approvedAt: $approvedAt, cancelledBy: $cancelledBy, cancelledAt: $cancelledAt, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt, items: $items)';
   }
 
   @override
@@ -3527,6 +3590,8 @@ class _$PurchaseReturnImpl implements _PurchaseReturn {
             (identical(other.warehouseId, warehouseId) ||
                 other.warehouseId == warehouseId) &&
             (identical(other.status, status) || other.status == status) &&
+            (identical(other.currency, currency) ||
+                other.currency == currency) &&
             (identical(other.subtotal, subtotal) ||
                 other.subtotal == subtotal) &&
             (identical(other.discountAmount, discountAmount) ||
@@ -3564,6 +3629,7 @@ class _$PurchaseReturnImpl implements _PurchaseReturn {
         returnDate,
         warehouseId,
         status,
+        currency,
         subtotal,
         discountAmount,
         taxAmount,
@@ -3605,6 +3671,7 @@ abstract class _PurchaseReturn implements PurchaseReturn {
       required final DateTime returnDate,
       required final String warehouseId,
       required final String status,
+      final String currency,
       required final String subtotal,
       required final String discountAmount,
       required final String taxAmount,
@@ -3636,6 +3703,8 @@ abstract class _PurchaseReturn implements PurchaseReturn {
   String get warehouseId;
   @override
   String get status;
+  @override
+  String get currency;
   @override
   String get subtotal;
   @override
@@ -4330,5 +4399,597 @@ abstract class _PurchaseReturnListResponse
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$PurchaseReturnListResponseImplCopyWith<_$PurchaseReturnListResponseImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+CreatePurchaseReturnRequest _$CreatePurchaseReturnRequestFromJson(
+    Map<String, dynamic> json) {
+  return _CreatePurchaseReturnRequest.fromJson(json);
+}
+
+/// @nodoc
+mixin _$CreatePurchaseReturnRequest {
+  String get supplierId => throw _privateConstructorUsedError;
+  String? get returnNumber => throw _privateConstructorUsedError;
+  String? get returnDate => throw _privateConstructorUsedError;
+  String get warehouseId => throw _privateConstructorUsedError;
+  String? get status => throw _privateConstructorUsedError;
+  String get currency => throw _privateConstructorUsedError;
+  String? get notes => throw _privateConstructorUsedError;
+  List<CreatePurchaseReturnItem> get items =>
+      throw _privateConstructorUsedError;
+
+  /// Serializes this CreatePurchaseReturnRequest to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of CreatePurchaseReturnRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $CreatePurchaseReturnRequestCopyWith<CreatePurchaseReturnRequest>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $CreatePurchaseReturnRequestCopyWith<$Res> {
+  factory $CreatePurchaseReturnRequestCopyWith(
+          CreatePurchaseReturnRequest value,
+          $Res Function(CreatePurchaseReturnRequest) then) =
+      _$CreatePurchaseReturnRequestCopyWithImpl<$Res,
+          CreatePurchaseReturnRequest>;
+  @useResult
+  $Res call(
+      {String supplierId,
+      String? returnNumber,
+      String? returnDate,
+      String warehouseId,
+      String? status,
+      String currency,
+      String? notes,
+      List<CreatePurchaseReturnItem> items});
+}
+
+/// @nodoc
+class _$CreatePurchaseReturnRequestCopyWithImpl<$Res,
+        $Val extends CreatePurchaseReturnRequest>
+    implements $CreatePurchaseReturnRequestCopyWith<$Res> {
+  _$CreatePurchaseReturnRequestCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of CreatePurchaseReturnRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? supplierId = null,
+    Object? returnNumber = freezed,
+    Object? returnDate = freezed,
+    Object? warehouseId = null,
+    Object? status = freezed,
+    Object? currency = null,
+    Object? notes = freezed,
+    Object? items = null,
+  }) {
+    return _then(_value.copyWith(
+      supplierId: null == supplierId
+          ? _value.supplierId
+          : supplierId // ignore: cast_nullable_to_non_nullable
+              as String,
+      returnNumber: freezed == returnNumber
+          ? _value.returnNumber
+          : returnNumber // ignore: cast_nullable_to_non_nullable
+              as String?,
+      returnDate: freezed == returnDate
+          ? _value.returnDate
+          : returnDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      warehouseId: null == warehouseId
+          ? _value.warehouseId
+          : warehouseId // ignore: cast_nullable_to_non_nullable
+              as String,
+      status: freezed == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String?,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+      items: null == items
+          ? _value.items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<CreatePurchaseReturnItem>,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$CreatePurchaseReturnRequestImplCopyWith<$Res>
+    implements $CreatePurchaseReturnRequestCopyWith<$Res> {
+  factory _$$CreatePurchaseReturnRequestImplCopyWith(
+          _$CreatePurchaseReturnRequestImpl value,
+          $Res Function(_$CreatePurchaseReturnRequestImpl) then) =
+      __$$CreatePurchaseReturnRequestImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String supplierId,
+      String? returnNumber,
+      String? returnDate,
+      String warehouseId,
+      String? status,
+      String currency,
+      String? notes,
+      List<CreatePurchaseReturnItem> items});
+}
+
+/// @nodoc
+class __$$CreatePurchaseReturnRequestImplCopyWithImpl<$Res>
+    extends _$CreatePurchaseReturnRequestCopyWithImpl<$Res,
+        _$CreatePurchaseReturnRequestImpl>
+    implements _$$CreatePurchaseReturnRequestImplCopyWith<$Res> {
+  __$$CreatePurchaseReturnRequestImplCopyWithImpl(
+      _$CreatePurchaseReturnRequestImpl _value,
+      $Res Function(_$CreatePurchaseReturnRequestImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of CreatePurchaseReturnRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? supplierId = null,
+    Object? returnNumber = freezed,
+    Object? returnDate = freezed,
+    Object? warehouseId = null,
+    Object? status = freezed,
+    Object? currency = null,
+    Object? notes = freezed,
+    Object? items = null,
+  }) {
+    return _then(_$CreatePurchaseReturnRequestImpl(
+      supplierId: null == supplierId
+          ? _value.supplierId
+          : supplierId // ignore: cast_nullable_to_non_nullable
+              as String,
+      returnNumber: freezed == returnNumber
+          ? _value.returnNumber
+          : returnNumber // ignore: cast_nullable_to_non_nullable
+              as String?,
+      returnDate: freezed == returnDate
+          ? _value.returnDate
+          : returnDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      warehouseId: null == warehouseId
+          ? _value.warehouseId
+          : warehouseId // ignore: cast_nullable_to_non_nullable
+              as String,
+      status: freezed == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String?,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+      items: null == items
+          ? _value._items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<CreatePurchaseReturnItem>,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$CreatePurchaseReturnRequestImpl
+    implements _CreatePurchaseReturnRequest {
+  const _$CreatePurchaseReturnRequestImpl(
+      {required this.supplierId,
+      this.returnNumber,
+      this.returnDate,
+      required this.warehouseId,
+      this.status,
+      this.currency = 'KZT',
+      this.notes,
+      required final List<CreatePurchaseReturnItem> items})
+      : _items = items;
+
+  factory _$CreatePurchaseReturnRequestImpl.fromJson(
+          Map<String, dynamic> json) =>
+      _$$CreatePurchaseReturnRequestImplFromJson(json);
+
+  @override
+  final String supplierId;
+  @override
+  final String? returnNumber;
+  @override
+  final String? returnDate;
+  @override
+  final String warehouseId;
+  @override
+  final String? status;
+  @override
+  @JsonKey()
+  final String currency;
+  @override
+  final String? notes;
+  final List<CreatePurchaseReturnItem> _items;
+  @override
+  List<CreatePurchaseReturnItem> get items {
+    if (_items is EqualUnmodifiableListView) return _items;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_items);
+  }
+
+  @override
+  String toString() {
+    return 'CreatePurchaseReturnRequest(supplierId: $supplierId, returnNumber: $returnNumber, returnDate: $returnDate, warehouseId: $warehouseId, status: $status, currency: $currency, notes: $notes, items: $items)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$CreatePurchaseReturnRequestImpl &&
+            (identical(other.supplierId, supplierId) ||
+                other.supplierId == supplierId) &&
+            (identical(other.returnNumber, returnNumber) ||
+                other.returnNumber == returnNumber) &&
+            (identical(other.returnDate, returnDate) ||
+                other.returnDate == returnDate) &&
+            (identical(other.warehouseId, warehouseId) ||
+                other.warehouseId == warehouseId) &&
+            (identical(other.status, status) || other.status == status) &&
+            (identical(other.currency, currency) ||
+                other.currency == currency) &&
+            (identical(other.notes, notes) || other.notes == notes) &&
+            const DeepCollectionEquality().equals(other._items, _items));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType,
+      supplierId,
+      returnNumber,
+      returnDate,
+      warehouseId,
+      status,
+      currency,
+      notes,
+      const DeepCollectionEquality().hash(_items));
+
+  /// Create a copy of CreatePurchaseReturnRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$CreatePurchaseReturnRequestImplCopyWith<_$CreatePurchaseReturnRequestImpl>
+      get copyWith => __$$CreatePurchaseReturnRequestImplCopyWithImpl<
+          _$CreatePurchaseReturnRequestImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$CreatePurchaseReturnRequestImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _CreatePurchaseReturnRequest
+    implements CreatePurchaseReturnRequest {
+  const factory _CreatePurchaseReturnRequest(
+          {required final String supplierId,
+          final String? returnNumber,
+          final String? returnDate,
+          required final String warehouseId,
+          final String? status,
+          final String currency,
+          final String? notes,
+          required final List<CreatePurchaseReturnItem> items}) =
+      _$CreatePurchaseReturnRequestImpl;
+
+  factory _CreatePurchaseReturnRequest.fromJson(Map<String, dynamic> json) =
+      _$CreatePurchaseReturnRequestImpl.fromJson;
+
+  @override
+  String get supplierId;
+  @override
+  String? get returnNumber;
+  @override
+  String? get returnDate;
+  @override
+  String get warehouseId;
+  @override
+  String? get status;
+  @override
+  String get currency;
+  @override
+  String? get notes;
+  @override
+  List<CreatePurchaseReturnItem> get items;
+
+  /// Create a copy of CreatePurchaseReturnRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$CreatePurchaseReturnRequestImplCopyWith<_$CreatePurchaseReturnRequestImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+CreatePurchaseReturnItem _$CreatePurchaseReturnItemFromJson(
+    Map<String, dynamic> json) {
+  return _CreatePurchaseReturnItem.fromJson(json);
+}
+
+/// @nodoc
+mixin _$CreatePurchaseReturnItem {
+  String get productId => throw _privateConstructorUsedError;
+  int get quantity => throw _privateConstructorUsedError;
+  double get unitCost => throw _privateConstructorUsedError;
+  double? get discountPercent => throw _privateConstructorUsedError;
+  double? get taxPercent => throw _privateConstructorUsedError;
+  String? get notes => throw _privateConstructorUsedError;
+
+  /// Serializes this CreatePurchaseReturnItem to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of CreatePurchaseReturnItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $CreatePurchaseReturnItemCopyWith<CreatePurchaseReturnItem> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $CreatePurchaseReturnItemCopyWith<$Res> {
+  factory $CreatePurchaseReturnItemCopyWith(CreatePurchaseReturnItem value,
+          $Res Function(CreatePurchaseReturnItem) then) =
+      _$CreatePurchaseReturnItemCopyWithImpl<$Res, CreatePurchaseReturnItem>;
+  @useResult
+  $Res call(
+      {String productId,
+      int quantity,
+      double unitCost,
+      double? discountPercent,
+      double? taxPercent,
+      String? notes});
+}
+
+/// @nodoc
+class _$CreatePurchaseReturnItemCopyWithImpl<$Res,
+        $Val extends CreatePurchaseReturnItem>
+    implements $CreatePurchaseReturnItemCopyWith<$Res> {
+  _$CreatePurchaseReturnItemCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of CreatePurchaseReturnItem
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? quantity = null,
+    Object? unitCost = null,
+    Object? discountPercent = freezed,
+    Object? taxPercent = freezed,
+    Object? notes = freezed,
+  }) {
+    return _then(_value.copyWith(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      unitCost: null == unitCost
+          ? _value.unitCost
+          : unitCost // ignore: cast_nullable_to_non_nullable
+              as double,
+      discountPercent: freezed == discountPercent
+          ? _value.discountPercent
+          : discountPercent // ignore: cast_nullable_to_non_nullable
+              as double?,
+      taxPercent: freezed == taxPercent
+          ? _value.taxPercent
+          : taxPercent // ignore: cast_nullable_to_non_nullable
+              as double?,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$CreatePurchaseReturnItemImplCopyWith<$Res>
+    implements $CreatePurchaseReturnItemCopyWith<$Res> {
+  factory _$$CreatePurchaseReturnItemImplCopyWith(
+          _$CreatePurchaseReturnItemImpl value,
+          $Res Function(_$CreatePurchaseReturnItemImpl) then) =
+      __$$CreatePurchaseReturnItemImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String productId,
+      int quantity,
+      double unitCost,
+      double? discountPercent,
+      double? taxPercent,
+      String? notes});
+}
+
+/// @nodoc
+class __$$CreatePurchaseReturnItemImplCopyWithImpl<$Res>
+    extends _$CreatePurchaseReturnItemCopyWithImpl<$Res,
+        _$CreatePurchaseReturnItemImpl>
+    implements _$$CreatePurchaseReturnItemImplCopyWith<$Res> {
+  __$$CreatePurchaseReturnItemImplCopyWithImpl(
+      _$CreatePurchaseReturnItemImpl _value,
+      $Res Function(_$CreatePurchaseReturnItemImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of CreatePurchaseReturnItem
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? productId = null,
+    Object? quantity = null,
+    Object? unitCost = null,
+    Object? discountPercent = freezed,
+    Object? taxPercent = freezed,
+    Object? notes = freezed,
+  }) {
+    return _then(_$CreatePurchaseReturnItemImpl(
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      unitCost: null == unitCost
+          ? _value.unitCost
+          : unitCost // ignore: cast_nullable_to_non_nullable
+              as double,
+      discountPercent: freezed == discountPercent
+          ? _value.discountPercent
+          : discountPercent // ignore: cast_nullable_to_non_nullable
+              as double?,
+      taxPercent: freezed == taxPercent
+          ? _value.taxPercent
+          : taxPercent // ignore: cast_nullable_to_non_nullable
+              as double?,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$CreatePurchaseReturnItemImpl implements _CreatePurchaseReturnItem {
+  const _$CreatePurchaseReturnItemImpl(
+      {required this.productId,
+      required this.quantity,
+      required this.unitCost,
+      this.discountPercent,
+      this.taxPercent,
+      this.notes});
+
+  factory _$CreatePurchaseReturnItemImpl.fromJson(Map<String, dynamic> json) =>
+      _$$CreatePurchaseReturnItemImplFromJson(json);
+
+  @override
+  final String productId;
+  @override
+  final int quantity;
+  @override
+  final double unitCost;
+  @override
+  final double? discountPercent;
+  @override
+  final double? taxPercent;
+  @override
+  final String? notes;
+
+  @override
+  String toString() {
+    return 'CreatePurchaseReturnItem(productId: $productId, quantity: $quantity, unitCost: $unitCost, discountPercent: $discountPercent, taxPercent: $taxPercent, notes: $notes)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$CreatePurchaseReturnItemImpl &&
+            (identical(other.productId, productId) ||
+                other.productId == productId) &&
+            (identical(other.quantity, quantity) ||
+                other.quantity == quantity) &&
+            (identical(other.unitCost, unitCost) ||
+                other.unitCost == unitCost) &&
+            (identical(other.discountPercent, discountPercent) ||
+                other.discountPercent == discountPercent) &&
+            (identical(other.taxPercent, taxPercent) ||
+                other.taxPercent == taxPercent) &&
+            (identical(other.notes, notes) || other.notes == notes));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, productId, quantity, unitCost,
+      discountPercent, taxPercent, notes);
+
+  /// Create a copy of CreatePurchaseReturnItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$CreatePurchaseReturnItemImplCopyWith<_$CreatePurchaseReturnItemImpl>
+      get copyWith => __$$CreatePurchaseReturnItemImplCopyWithImpl<
+          _$CreatePurchaseReturnItemImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$CreatePurchaseReturnItemImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _CreatePurchaseReturnItem implements CreatePurchaseReturnItem {
+  const factory _CreatePurchaseReturnItem(
+      {required final String productId,
+      required final int quantity,
+      required final double unitCost,
+      final double? discountPercent,
+      final double? taxPercent,
+      final String? notes}) = _$CreatePurchaseReturnItemImpl;
+
+  factory _CreatePurchaseReturnItem.fromJson(Map<String, dynamic> json) =
+      _$CreatePurchaseReturnItemImpl.fromJson;
+
+  @override
+  String get productId;
+  @override
+  int get quantity;
+  @override
+  double get unitCost;
+  @override
+  double? get discountPercent;
+  @override
+  double? get taxPercent;
+  @override
+  String? get notes;
+
+  /// Create a copy of CreatePurchaseReturnItem
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$CreatePurchaseReturnItemImplCopyWith<_$CreatePurchaseReturnItemImpl>
       get copyWith => throw _privateConstructorUsedError;
 }
