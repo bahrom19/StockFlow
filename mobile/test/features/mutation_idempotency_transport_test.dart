@@ -40,6 +40,29 @@ class _SpyApi extends ApiClient {
     CancelToken? cancelToken,
   }) async {
     calls.add((path, data: data, query: queryParameters, options: options));
+    // Return a schema-compatible response for GoodsReceipt so
+    // GoodsReceipt.fromJson does not hit a null-String cast.
+    if (path == '/purchasing/goods-receipts') {
+      return Response<T>(
+        requestOptions: RequestOptions(path: path),
+        statusCode: 200,
+        data: <String, dynamic>{
+          'id': 'gr-1',
+          'companyId': 'c1',
+          'purchaseOrderId': 'po-1',
+          'receiptNumber': 'GR-00001',
+          'receiptDate': '2026-08-03T12:00:00Z',
+          'warehouseId': 'wh-1',
+          'status': 'COMPLETED',
+          'notes': null,
+          'receivedBy': null,
+          'createdAt': '2026-08-03T12:00:00Z',
+          'updatedAt': '2026-08-03T12:00:00Z',
+          'deletedAt': null,
+          'items': <dynamic>[],
+        } as T?,
+      );
+    }
     return Response<T>(
       requestOptions: RequestOptions(path: path),
       statusCode: 200,

@@ -265,6 +265,25 @@ class _FakePosApi extends ApiClient {
         path,
       );
     }
+    if (path == ApiEndpoints.reportsPurchasing) {
+      return _respond<T>(
+        {
+          'summary': {
+            'totalOrders': 0,
+            'totalValue': '0',
+            'byStatus': <String, dynamic>{},
+          },
+          'orders': <dynamic>[],
+        },
+        path,
+      );
+    }
+    if (path == ApiEndpoints.reportsLowStock) {
+      return _respond<T>(
+        {'items': <dynamic>[], 'total': 0},
+        path,
+      );
+    }
     if (path == ApiEndpoints.cashShiftXReport) {
       if (openShift != null) return _respond<T>(openShift, path);
       throw _notFound(path);

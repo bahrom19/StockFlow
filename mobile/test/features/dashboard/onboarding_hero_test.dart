@@ -162,7 +162,10 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
+      // Allow localization resolution and any async provider initialization
+      // to settle — the single pump() is insufficient when the full test
+      // suite races localization loading against other widget tests.
+      await tester.pumpAndSettle();
     }
 
     testWidgets('brand-new company → "0 of 4" and all steps actionable',
