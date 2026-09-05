@@ -16,6 +16,7 @@ export class CashShiftMapper {
       warehouseId: shift.warehouseId,
       cashierId: shift.cashierId,
       status: shift.status,
+      currency: shift.currency,
       openedAt: shift.openedAt,
       closedAt: shift.closedAt,
       openingBalance: toMoney(shift.openingBalance),

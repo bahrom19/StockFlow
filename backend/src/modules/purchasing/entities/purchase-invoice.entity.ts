@@ -33,6 +33,7 @@ export class PurchaseInvoiceEntity {
   @ApiProperty({ example: '0.0000' }) taxAmount!: string;
   @ApiProperty({ example: '249.9500' }) grandTotal!: string;
   @ApiProperty({ example: '0.0000' }) paidAmount!: string;
+  @ApiProperty({ enum: ['KZT', 'USD', 'EUR', 'RUB', 'CNY', 'AED', 'AUD', 'VND'], example: 'KZT' }) currency!: string;
   @ApiPropertyOptional() notes!: string | null;
   @ApiPropertyOptional() approvedBy!: string | null;
   @ApiPropertyOptional() approvedAt!: Date | null;

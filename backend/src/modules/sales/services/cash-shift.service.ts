@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
-import { Prisma } from '@prisma/client';
+import { Prisma, Currency } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
@@ -60,6 +60,7 @@ export class CashShiftService {
             openingBalance: new Decimal(dto.openingBalance),
             closingBalance: new Decimal(dto.openingBalance),
             expectedClosing: new Decimal(dto.openingBalance),
+            currency: (dto.currency ?? 'KZT') as Currency,
             notes: dto.notes,
             company: { connect: { id: companyId } },
             warehouse: { connect: { id: dto.warehouseId } },

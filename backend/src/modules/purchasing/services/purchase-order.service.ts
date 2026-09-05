@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PurchaseOrderStatus, StockMovementType } from '@prisma/client';
+import { Prisma, PurchaseOrderStatus, StockMovementType, Currency } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
@@ -136,6 +136,7 @@ export class PurchaseOrderService {
           taxAmount: totalTax,
           grandTotal: subtotal.sub(totalDiscount).add(totalTax),
           paidAmount: new Decimal(0),
+          currency: (dto.currency ?? 'KZT') as Currency,
           notes: dto.notes,
           company: { connect: { id: companyId } },
           supplier: { connect: { id: dto.supplierId } },
@@ -171,7 +172,7 @@ export class PurchaseOrderService {
             discountAmount: po.discountAmount.toString(),
             taxAmount: po.taxAmount.toString(),
             grandTotal: po.grandTotal.toString(),
-            currency: 'KZT',
+            currency: (dto.currency ?? 'KZT') as string,
             items: dto.items.map((i) => ({
               productId: i.productId,
               quantity: i.quantity,
@@ -266,6 +267,7 @@ export class PurchaseOrderService {
       if (dto.expectedDate)
         updateData.expectedDate = new Date(dto.expectedDate);
       if (dto.notes !== undefined) updateData.notes = dto.notes;
+      if (dto.currency) updateData.currency = dto.currency as Currency;
 
       if (dto.items) {
         // Delete old items and recreate

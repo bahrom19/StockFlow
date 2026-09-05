@@ -27,6 +27,7 @@ describe('PurchaseOrderController — transitionStatus (B5 regression)', () => {
     taxAmount: '0',
     grandTotal: '10000',
     paidAmount: '0',
+    currency: 'KZT',
     notes: null,
     approvedBy: null,
     approvedAt: null,

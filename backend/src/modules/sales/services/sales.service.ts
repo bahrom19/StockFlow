@@ -300,6 +300,12 @@ export class SalesService {
       },
     });
     if (cashShift) {
+      // Currency invariant: sale currency must match shift currency
+      if (cashShift.currency !== sale.currency) {
+        throw new BadRequestException(
+          `Sale currency ${sale.currency} does not match shift currency ${cashShift.currency}`,
+        );
+      }
       cashShiftId = cashShift.id;
       const payments = await tx.payment.findMany({
         where: { saleId: sale.id },

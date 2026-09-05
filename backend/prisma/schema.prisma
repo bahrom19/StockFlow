@@ -1033,6 +1033,7 @@ model PurchaseOrder {
   taxAmount       Decimal             @default(0) @db.Decimal(18, 4)
   grandTotal      Decimal             @default(0) @db.Decimal(18, 4)
   paidAmount      Decimal             @default(0) @db.Decimal(18, 4)
+  currency        Currency            @default(KZT)
   notes           String?             @db.Text
   approvedBy      String?             @db.Uuid
   approvedAt      DateTime?
@@ -1147,6 +1148,7 @@ model PurchaseReturn {
   discountAmount  Decimal             @default(0) @db.Decimal(18, 4)
   taxAmount       Decimal             @default(0) @db.Decimal(18, 4)
   grandTotal      Decimal             @default(0) @db.Decimal(18, 4)
+  currency        Currency            @default(KZT)
   notes           String?             @db.Text
   approvedBy      String?             @db.Uuid
   approvedAt      DateTime?
@@ -1233,6 +1235,7 @@ model PurchaseInvoice {
   taxAmount       Decimal                @default(0) @db.Decimal(18, 4)
   grandTotal      Decimal                @default(0) @db.Decimal(18, 4)
   paidAmount      Decimal                @default(0) @db.Decimal(18, 4)
+  currency        Currency               @default(KZT)
   notes           String?                @db.Text
   approvedBy      String?                @db.Uuid
   approvedAt      DateTime?
@@ -1654,6 +1657,7 @@ model CashShift {
   warehouseId    String         @db.Uuid
   cashierId      String         @db.Uuid
   status         CashShiftStatus @default(OPEN)
+  currency       Currency        @default(KZT)
   openedAt       DateTime       @default(now())
   closedAt       DateTime?
   openingBalance Decimal        @default(0) @db.Decimal(18, 4)

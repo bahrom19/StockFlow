@@ -29,6 +29,7 @@ const baseInvoice = {
   taxAmount: new Prisma.Decimal('60'),
   grandTotal: new Prisma.Decimal('560'),
   paidAmount: new Prisma.Decimal('0'),
+  currency: 'KZT' as const,
   notes: null,
   approvedBy: null,
   approvedAt: null,
@@ -180,6 +181,83 @@ describe('PurchaseInvoiceService', () => {
       await expect(service.findById('x', companyId)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  // ── CURRENCY ────────────────────────────────
+  describe('currency', () => {
+    const validDto: CreatePurchaseInvoiceDto = {
+      purchaseOrderId: poId,
+      supplierId,
+      items: [{ productId, quantity: 10, unitCost: 50.0, taxPercent: 12 }],
+    };
+
+    it('should default to KZT when creating invoice from PO without specifying currency', async () => {
+      const poWithUsd = { ...basePo, currency: 'USD' };
+      const mockTx = { purchaseInvoiceItem: { create: jest.fn() } };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
+      mockRepo.create.mockResolvedValue({ ...baseInvoice, currency: 'USD' } as any);
+
+      const result = await service.create(validDto, userId, companyId);
+
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+        mockTx,
+      );
+    });
+
+    it('should use PO currency when invoice currency matches PO', async () => {
+      const poWithUsd = { ...basePo, currency: 'USD' };
+      const mockTx = { purchaseInvoiceItem: { create: jest.fn() } };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
+      mockRepo.create.mockResolvedValue({ ...baseInvoice, currency: 'USD' } as any);
+
+      await service.create(
+        { ...validDto, currency: 'USD' as any },
+        userId,
+        companyId,
+      );
+
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+        mockTx,
+      );
+    });
+
+    it('should reject when invoice currency mismatches PO currency', async () => {
+      const poWithUsd = { ...basePo, currency: 'USD' };
+      const mockTx = { purchaseInvoiceItem: { create: jest.fn() } };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
+
+      await expect(
+        service.create(
+          { ...validDto, currency: 'KZT' as any },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('should reject when KZT PO gets USD invoice', async () => {
+      const poWithKzt = { ...basePo, currency: 'KZT' };
+      const mockTx = { purchaseInvoiceItem: { create: jest.fn() } };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(poWithKzt as any);
+
+      await expect(
+        service.create(
+          { ...validDto, currency: 'EUR' as any },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockRepo.create).not.toHaveBeenCalled();
     });
   });
 

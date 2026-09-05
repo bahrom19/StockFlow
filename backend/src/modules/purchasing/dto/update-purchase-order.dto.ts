@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString,
   IsNotEmpty,
@@ -10,6 +10,7 @@ import {
   IsNumber,
   Min,
 } from 'class-validator';
+import { Currency } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class UpdatePurchaseOrderItemDto {
@@ -90,6 +91,11 @@ export class UpdatePurchaseOrderDto {
     'CANCELLED',
   ])
   status?: string;
+
+  @ApiPropertyOptional({ enum: Currency, description: 'Currency (only changeable while DRAFT)' })
+  @IsOptional()
+  @IsEnum(Currency)
+  currency?: Currency;
 
   @ApiProperty({ description: 'Notes', required: false })
   @IsOptional()

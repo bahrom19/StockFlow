@@ -31,6 +31,7 @@ const baseReturn = {
   discountAmount: new Prisma.Decimal('0'),
   taxAmount: new Prisma.Decimal('0'),
   grandTotal: new Prisma.Decimal('100'),
+  currency: 'KZT' as const,
   notes: null,
   approvedBy: null,
   approvedAt: null,
@@ -403,6 +404,102 @@ describe('PurchaseReturnService', () => {
           companyId,
         ),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ── CURRENCY ────────────────────────────────
+  describe('currency', () => {
+    const validDto: CreatePurchaseReturnDto = {
+      supplierId,
+      warehouseId,
+      items: [{ productId, quantity: 5, unitCost: 20.0 }],
+    };
+
+    it('should default to KZT when currency not provided', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: warehouseId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          }),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue(baseReturn as any);
+
+      await service.create(validDto, userId, companyId);
+
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'KZT' }),
+        mockTx,
+      );
+    });
+
+    it('should save USD when currency is provided', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: warehouseId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          }),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue({ ...baseReturn, currency: 'USD' } as any);
+
+      await service.create(
+        { ...validDto, currency: 'USD' as any },
+        userId,
+        companyId,
+      );
+
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+        mockTx,
+      );
+    });
+
+    it('should allow currency change while DRAFT', async () => {
+      const mockTx = {
+        purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+      mockRepo.update.mockResolvedValue({ ...baseReturn, currency: 'USD' } as any);
+
+      const result = await service.update(
+        'pr-1',
+        { currency: 'USD' as any },
+        companyId,
+      );
+
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'pr-1',
+        expect.objectContaining({ currency: 'USD' }),
+        companyId,
+        mockTx,
+      );
+    });
+
+    it('should reject currency change when not DRAFT', async () => {
+      const approvedReturn = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
+      const mockTx = {
+        purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(approvedReturn as any);
+
+      await expect(
+        service.update(
+          'pr-1',
+          { currency: 'USD' as any },
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

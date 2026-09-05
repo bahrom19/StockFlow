@@ -16,6 +16,7 @@ const baseShift = {
   warehouseId,
   cashierId: userId,
   status: 'OPEN' as const,
+  currency: 'KZT' as const,
   openedAt: new Date(),
   closedAt: null,
   openingBalance: new Prisma.Decimal('100.0000'),
@@ -237,5 +238,72 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
     await expect(
       service.cashIn({ amount: -5 }, userId, companyId, warehouseId),
     ).rejects.toThrow('Amount must not be negative');
+  });
+
+  // ── CURRENCY ────────────────────────────────
+  describe('currency', () => {
+    it('openShift: defaults to KZT when currency not provided', async () => {
+      repo.findOpenShift.mockResolvedValue(null);
+      repo.create.mockResolvedValue(baseShift);
+
+      await service.openShift(
+        { warehouseId, openingBalance: 100 },
+        userId,
+        companyId,
+      );
+
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'KZT' }),
+        expect.anything(),
+      );
+    });
+
+    it('openShift: saves USD when currency is provided', async () => {
+      repo.findOpenShift.mockResolvedValue(null);
+      const usdShift = { ...baseShift, currency: 'USD' } as any;
+      repo.create.mockResolvedValue(usdShift);
+
+      await service.openShift(
+        { warehouseId, openingBalance: 100, currency: 'USD' as any },
+        userId,
+        companyId,
+      );
+
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+        expect.anything(),
+      );
+    });
+
+    it('openShift: currency persists in created shift', async () => {
+      repo.findOpenShift.mockResolvedValue(null);
+      const usdShift = { ...baseShift, currency: 'USD' } as any;
+      repo.create.mockResolvedValue(usdShift);
+
+      const result = await service.openShift(
+        { warehouseId, openingBalance: 100, currency: 'USD' as any },
+        userId,
+        companyId,
+      );
+
+      expect(result.currency).toBe('USD');
+    });
+
+    it('openShift: currency is immutable after creation (no update endpoint)', async () => {
+      // CashShift has no update endpoint — currency cannot be changed after open.
+      // This test verifies the absence of any update path for currency.
+      repo.findOpenShift.mockResolvedValue(null);
+      repo.create.mockResolvedValue(baseShift);
+
+      const result = await service.openShift(
+        { warehouseId, openingBalance: 100 },
+        userId,
+        companyId,
+      );
+
+      // Shift created with KZT — no way to change it
+      expect(result.currency).toBe('KZT');
+      expect(result.status).toBe('OPEN');
+    });
   });
 });

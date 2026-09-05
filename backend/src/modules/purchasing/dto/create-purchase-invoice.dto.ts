@@ -11,6 +11,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { Currency } from '@prisma/client';
 
 export class CreatePurchaseInvoiceItemDto {
   @ApiProperty({ description: 'Product ID' })
@@ -88,6 +89,11 @@ export class CreatePurchaseInvoiceDto {
   @IsOptional()
   @IsEnum(['DRAFT', 'APPROVED', 'PAID', 'CANCELLED'])
   status?: string;
+
+  @ApiPropertyOptional({ enum: Currency, default: 'KZT', description: 'Currency (must match linked PO currency)' })
+  @IsOptional()
+  @IsEnum(Currency)
+  currency?: Currency;
 
   @ApiProperty({ description: 'Notes', required: false })
   @IsOptional()

@@ -73,10 +73,10 @@ export class PurchaseReturnEntity {
   discountAmount!: string;
 
   @ApiProperty({ example: '0.0000' })
-  taxAmount!: string;
+  taxAmount!: string;  @ApiProperty({ example: '100.0000' }) grandTotal!: string;
 
-  @ApiProperty({ example: '100.0000' })
-  grandTotal!: string;
+  @ApiProperty({ enum: ['KZT', 'USD', 'EUR', 'RUB', 'CNY', 'AED', 'AUD', 'VND'], example: 'KZT' })
+  currency!: string;
 
   @ApiPropertyOptional()
   notes!: string | null;

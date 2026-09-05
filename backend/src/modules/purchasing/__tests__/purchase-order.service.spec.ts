@@ -29,6 +29,7 @@ const basePo = {
   taxAmount: new Prisma.Decimal('12.00'),
   grandTotal: new Prisma.Decimal('112.00'),
   paidAmount: new Prisma.Decimal('0'),
+  currency: 'KZT' as const,
   notes: null,
   approvedBy: null,
   approvedAt: null,
@@ -488,6 +489,90 @@ describe('PurchaseOrderService', () => {
           companyId,
         ),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ── CURRENCY ────────────────────────────────
+  describe('currency', () => {
+    const validDto: CreatePurchaseOrderDto = {
+      supplierId,
+      items: [
+        {
+          productId,
+          quantity: 10,
+          unitCost: 10.0,
+          discountPercent: 0,
+          taxPercent: 12,
+        },
+      ],
+    };
+
+    it('should default to KZT when currency not provided', async () => {
+      const mockTx = { purchaseOrderItem: { createMany: jest.fn() } };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue(basePo as any);
+
+      await service.create(validDto, userId, companyId);
+
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'KZT' }),
+        mockTx,
+      );
+    });
+
+    it('should save USD when currency is provided', async () => {
+      const mockTx = { purchaseOrderItem: { createMany: jest.fn() } };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue({ ...basePo, currency: 'USD' } as any);
+
+      await service.create({ ...validDto, currency: 'USD' as any }, userId, companyId);
+
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+        mockTx,
+      );
+    });
+
+    it('should allow currency change while DRAFT', async () => {
+      const mockTx = {
+        purchaseOrderItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+      mockRepo.update.mockResolvedValue({ ...basePo, currency: 'USD' } as any);
+
+      const result = await service.update(
+        'po-1',
+        { currency: 'USD' as any },
+        userId,
+        companyId,
+      );
+
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'po-1',
+        expect.objectContaining({ currency: 'USD' }),
+        companyId,
+        0,
+        mockTx,
+      );
+    });
+
+    it('should reject currency change when not DRAFT', async () => {
+      const approvedPo = { ...basePo, status: PurchaseOrderStatus.APPROVED };
+      const mockTx = {
+        purchaseOrderItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(approvedPo as any);
+
+      await expect(
+        service.update(
+          'po-1',
+          { currency: 'USD' as any },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

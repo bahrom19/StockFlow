@@ -6,6 +6,7 @@ export class CashShiftEntity {
   @ApiProperty() warehouseId!: string;
   @ApiProperty() cashierId!: string;
   @ApiProperty({ enum: ['OPEN', 'CLOSED'] }) status!: string;
+  @ApiProperty({ enum: ['KZT', 'USD', 'EUR', 'RUB', 'CNY', 'AED', 'AUD', 'VND'], example: 'KZT' }) currency!: string;
   @ApiProperty() openedAt!: Date;
   @ApiPropertyOptional() closedAt!: Date | null;
   @ApiProperty({ example: '0.0000' }) openingBalance!: string;

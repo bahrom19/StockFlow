@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString,
   IsNotEmpty,
@@ -10,6 +10,7 @@ import {
   IsNumber,
   Min,
 } from 'class-validator';
+import { Currency } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class CreatePurchaseReturnItemDto {
@@ -78,6 +79,11 @@ export class CreatePurchaseReturnDto {
   @IsOptional()
   @IsEnum(['DRAFT', 'APPROVED', 'COMPLETED', 'CANCELLED'])
   status?: string;
+
+  @ApiPropertyOptional({ enum: Currency, default: 'KZT', description: 'Currency for this return' })
+  @IsOptional()
+  @IsEnum(Currency)
+  currency?: Currency;
 
   @ApiProperty({ description: 'Notes', required: false })
   @IsOptional()

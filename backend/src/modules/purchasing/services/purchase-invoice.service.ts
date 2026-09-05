@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PurchaseInvoiceStatus } from '@prisma/client';
+import { Prisma, PurchaseInvoiceStatus, Currency } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
@@ -67,6 +67,14 @@ export class PurchaseInvoiceService {
           `Purchase order ${dto.purchaseOrderId} not found`,
         );
 
+      // Currency must match linked PO currency
+      const invoiceCurrency = (dto.currency ?? po.currency) as Currency;
+      if (invoiceCurrency !== po.currency) {
+        throw new BadRequestException(
+          `Invoice currency ${invoiceCurrency} does not match PO currency ${po.currency}`,
+        );
+      }
+
       let subtotal = new Decimal(0);
       let totalDiscount = new Decimal(0);
       let totalTax = new Decimal(0);
@@ -115,6 +123,7 @@ export class PurchaseInvoiceService {
           taxAmount: totalTax,
           grandTotal: subtotal.sub(totalDiscount).add(totalTax),
           paidAmount: new Decimal(0),
+          currency: invoiceCurrency,
           notes: dto.notes,
           company: { connect: { id: companyId } },
           purchaseOrder: { connect: { id: dto.purchaseOrderId } },

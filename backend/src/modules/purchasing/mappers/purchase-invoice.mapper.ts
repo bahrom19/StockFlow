@@ -60,6 +60,7 @@ export class PurchaseInvoiceMapper {
       taxAmount: toMoney(invoice.taxAmount),
       grandTotal: toMoney(invoice.grandTotal),
       paidAmount: toMoney(invoice.paidAmount),
+      currency: invoice.currency,
       notes: invoice.notes,
       approvedBy: invoice.approvedBy,
       approvedAt: invoice.approvedAt,

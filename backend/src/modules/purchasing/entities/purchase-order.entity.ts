@@ -97,6 +97,9 @@ export class PurchaseOrderEntity {
   @ApiProperty({ example: '0.0000' })
   paidAmount!: string;
 
+  @ApiProperty({ enum: ['KZT', 'USD', 'EUR', 'RUB', 'CNY', 'AED', 'AUD', 'VND'], example: 'KZT' })
+  currency!: string;
+
   @ApiPropertyOptional()
   notes!: string | null;
 

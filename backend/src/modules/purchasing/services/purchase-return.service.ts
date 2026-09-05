@@ -8,6 +8,7 @@ import {
   Prisma,
   PurchaseReturnStatus,
   StockMovementType,
+  Currency,
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
@@ -120,6 +121,7 @@ export class PurchaseReturnService {
           discountAmount: totalDiscount,
           taxAmount: totalTax,
           grandTotal: subtotal.sub(totalDiscount).add(totalTax),
+          currency: (dto.currency ?? 'KZT') as Currency,
           notes: dto.notes,
           company: { connect: { id: companyId } },
           supplier: { connect: { id: dto.supplierId } },
@@ -208,6 +210,7 @@ export class PurchaseReturnService {
       if (dto.warehouseId)
         updateData.warehouse = { connect: { id: dto.warehouseId } };
       if (dto.notes !== undefined) updateData.notes = dto.notes;
+      if (dto.currency) updateData.currency = dto.currency as Currency;
 
       if (dto.items) {
         await tx.purchaseReturnItem.deleteMany({

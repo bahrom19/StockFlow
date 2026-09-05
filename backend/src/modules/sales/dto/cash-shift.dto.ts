@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { Currency } from '@prisma/client';
 
 export class OpenShiftDto {
   @ApiProperty({ description: 'Warehouse ID' })
@@ -10,6 +11,11 @@ export class OpenShiftDto {
   @IsNumber()
   @Min(0)
   openingBalance!: number;
+
+  @ApiPropertyOptional({ enum: Currency, default: 'KZT', description: 'Currency for this shift' })
+  @IsOptional()
+  @IsEnum(Currency)
+  currency?: Currency;
 
   @ApiPropertyOptional({ description: 'Notes' })
   @IsOptional()
