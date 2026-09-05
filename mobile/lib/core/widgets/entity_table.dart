@@ -43,6 +43,8 @@ class EntityTable<T> extends StatelessWidget {
   final VoidCallback? onLoadMore;
   final VoidCallback? onCreate;
   final String? createLabel;
+  final VoidCallback? onImport;
+  final String? importLabel;
 
   // Export
   final String? exportFileName;
@@ -80,6 +82,8 @@ class EntityTable<T> extends StatelessWidget {
     this.onLoadMore,
     this.onCreate,
     this.createLabel,
+    this.onImport,
+    this.importLabel,
     this.exportFileName,
     this.exportHeaders,
     this.exportRows,
@@ -118,6 +122,8 @@ class EntityTable<T> extends StatelessWidget {
           isRefreshing: isRefreshing,
           onCreate: onCreate,
           createLabel: resolvedCreateLabel,
+          onImport: onImport,
+          importLabel: importLabel,
           exportFileName: exportFileName,
           exportHeaders: exportHeaders,
           exportRows: exportRows,
@@ -164,6 +170,8 @@ class _Toolbar extends StatefulWidget {
   final bool isRefreshing;
   final VoidCallback? onCreate;
   final String createLabel;
+  final VoidCallback? onImport;
+  final String? importLabel;
   final String? exportFileName;
   final List<String>? exportHeaders;
   final List<List<String>> Function()? exportRows;
@@ -180,6 +188,8 @@ class _Toolbar extends StatefulWidget {
     required this.isRefreshing,
     required this.onCreate,
     required this.createLabel,
+    this.onImport,
+    this.importLabel,
     required this.exportFileName,
     required this.exportHeaders,
     required this.exportRows,
@@ -304,6 +314,14 @@ class _ToolbarState extends State<_Toolbar> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.refresh, size: 20),
+                ),
+              ],
+              if (widget.onImport != null) ...[
+                const SizedBox(width: AppSpacing.xs),
+                IconButton(
+                  tooltip: widget.importLabel ?? context.l10n.importCsv,
+                  onPressed: widget.onImport,
+                  icon: const Icon(Icons.file_upload_outlined, size: 20),
                 ),
               ],
               if (hasExport) ...[

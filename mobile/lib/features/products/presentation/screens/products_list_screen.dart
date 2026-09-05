@@ -145,6 +145,8 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
                   ref.read(productsListProvider.notifier).refresh(),
               onCreate: () => context.push(RouteNames.productCreate),
               createLabel: l10n.newProduct,
+              onImport: () => context.push(RouteNames.productImport),
+              importLabel: l10n.importCsv,
               exportFileName: 'products.csv',
               exportHeaders: [
                 l10n.name,

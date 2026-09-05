@@ -19,6 +19,7 @@ class RouteNames {
   static const String productDetail = '/products/:id';
   static const String productCreate = '/products/new';
   static const String productEdit = '/products/:id/edit';
+  static const String productImport = '/products/import';
   // Sales
   static const String sales = '/sales';
   static const String saleNew = '/sales/new';

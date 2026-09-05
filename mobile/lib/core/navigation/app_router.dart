@@ -16,6 +16,7 @@ import '../../features/products/domain/product_models.dart';
 import '../../features/products/presentation/screens/product_detail_screen.dart';
 import '../../features/products/presentation/screens/product_form_screen.dart';
 import '../../features/products/presentation/screens/products_list_screen.dart';
+import '../../features/products/presentation/screens/product_import_screen.dart';
 import '../../features/purchasing/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchasing/presentation/screens/purchase_order_detail_screen.dart';
 import '../../features/purchasing/presentation/screens/purchase_order_form_screen.dart';
@@ -187,6 +188,11 @@ final routerProvider = Provider<GoRouter>((ref) {
               product: null,
               productId: state.pathParameters['id'],
             ),
+          ),
+          GoRoute(
+            path: RouteNames.productImport,
+            name: 'productImport',
+            builder: (context, state) => const ProductImportScreen(),
           ),
           GoRoute(
             path: RouteNames.purchasing,
