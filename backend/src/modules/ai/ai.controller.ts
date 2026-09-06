@@ -21,6 +21,7 @@ import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AIService, ConversationNotFoundError, PersistenceError } from './ai.service';
 import { ConversationRepository } from './repositories/conversation.repository';
+import { AIThrottle } from './decorators/ai-throttle.decorator';
 import { AIChatRequestDto } from './dto/ai-chat-request.dto';
 import { AIChatResponseDto } from './dto/ai-chat-response.dto';
 import { ConversationListResponseDto } from './dto/conversation-list-response.dto';
@@ -56,6 +57,7 @@ export class AIController {
   }
 
   @Post('chat')
+  @AIThrottle()
   @RequirePermission('ai:chat')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
