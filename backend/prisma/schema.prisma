@@ -92,6 +92,12 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+enum NotificationType {
+  LOW_STOCK
+  SUPPLIER_PAYMENT_OVERDUE
+  PURCHASE_ORDER_STATUS_CHANGED
+}
+
 enum GoodsReceiptStatus {
   DRAFT
   COMPLETED
@@ -166,6 +172,8 @@ model Company {
   billingUsageRecords   UsageRecord[]
   billingPaymentTransactions PaymentTransaction[]
   documentSequences     DocumentSequence[]
+  notifications         Notification[]
+  aiConversations       AiConversation[]
 
   @@index([name])
   @@index([status])
@@ -567,6 +575,8 @@ model User {
   journalEntriesCreated    JournalEntry[]   @relation("CreatedJournalEntries")
   financialTransactions    FinancialTransaction[]
   supplierPaymentsCreated  SupplierPayment[]
+  notifications            Notification[]
+  aiConversations          AiConversation[]
 
 
   @@index([email])
@@ -2230,4 +2240,73 @@ model IdempotencyRecord {
 
   @@unique([companyId, idempotencyKey])
   @@index([expiresAt])
+}
+
+/// In-app notification (Notifications Foundation V1 — phase N2).
+///
+/// One row per recipient (fan-out at creation time). `titleKey`/`bodyKey`
+/// store localization keys — the client renders localized text from
+/// `params`, the backend never stores display strings.
+/// `dedupeKey` + @@unique([companyId, dedupeKey]) is the write-side
+/// deduplication mechanism (see N1 audit §6).
+model Notification {
+  id         String           @id @default(uuid()) @db.Uuid
+  companyId  String           @db.Uuid
+  userId     String           @db.Uuid
+  type       NotificationType
+
+  titleKey   String           @db.VarChar(100)
+  bodyKey    String?          @db.VarChar(100)
+
+  params     Json?
+
+  entityType String?          @db.VarChar(50)
+  entityId   String?          @db.Uuid
+
+  readAt     DateTime?
+
+  dedupeKey  String           @db.VarChar(255)
+
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, dedupeKey])
+  @@index([companyId, userId, createdAt])
+  @@index([companyId, userId, readAt])
+  @@index([companyId, type])
+}
+
+model AiConversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @db.Uuid
+  userId    String   @db.Uuid
+  title     String?  @db.VarChar(255)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([companyId, userId, createdAt(sort: Desc)])
+  @@index([companyId, createdAt(sort: Desc)])
+}
+
+model AiMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @db.Uuid
+  role           String   @db.VarChar(20)
+  content        String   @db.Text
+  toolCallsJson  Json?
+  toolCallId     String?  @db.VarChar(100)
+  toolName       String?  @db.VarChar(100)
+  tokenCount     Int?
+  createdAt      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt(sort: Asc)])
 }
