@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/notifications/presentation/providers/notifications_provider.dart';
 import '../../features/sales/presentation/providers/cash_shift_provider.dart';
 import '../auth/auth_state.dart';
 import '../auth/models/auth_models.dart';
@@ -64,27 +65,7 @@ class AppTopBar extends ConsumerWidget {
             // Passive — watches providers, never triggers requests.
             const _LiveStatusCluster(),
             const SizedBox(width: AppSpacing.xs),
-            IconButton(
-              tooltip: context.l10n.notifications,
-              onPressed: () {
-                ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          const Icon(Icons.notifications_none, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(context.l10n.notificationsAllCaughtUp)),
-                        ],
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      width: 320,
-                    ),
-                  );
-              },
-              icon: const Icon(Icons.notifications_outlined),
-            ),
+            _NotificationBell(),
             const SizedBox(width: AppSpacing.xs),
             _UserMenu(
               userName: user?.fullName ?? context.l10n.user,
@@ -117,6 +98,7 @@ class AppTopBar extends ConsumerWidget {
     if (location.startsWith(RouteNames.customers)) return l10n.customers;
     if (location.startsWith(RouteNames.reports)) return l10n.reports;
     if (location.startsWith(RouteNames.finance)) return l10n.finance;
+    if (location.startsWith(RouteNames.notifications)) return l10n.notifications;
     if (location.startsWith(RouteNames.profile)) return l10n.profile;
     if (location.startsWith(RouteNames.settings)) return l10n.settings;
     return l10n.dashboard;
@@ -471,6 +453,27 @@ class _UserMenu extends StatelessWidget {
           ),
         ),
       ],
+      ),
+    );
+  }
+}
+
+/// Notification bell icon with unread count badge.
+class _NotificationBell extends ConsumerWidget {
+  const _NotificationBell();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unreadState = ref.watch(unreadCountProvider);
+    final count = unreadState is UnreadCountLoaded ? unreadState.count : 0;
+
+    return IconButton(
+      tooltip: context.l10n.notifications,
+      onPressed: () => context.push(RouteNames.notifications),
+      icon: Badge(
+        isLabelVisible: count > 0,
+        label: count > 99 ? const Text('99+') : Text('$count'),
+        child: const Icon(Icons.notifications_outlined),
       ),
     );
   }

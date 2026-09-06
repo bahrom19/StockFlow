@@ -44,6 +44,9 @@ class RouteNames {
   static const String warehouseNew = '/warehouses/new';
   static const String warehouseEdit = '/warehouses/:id/edit';
 
+  // Notifications
+  static const String notifications = '/notifications';
+
   // System routes
   static const String notFound = '/404';
   static const String maintenance = '/maintenance';

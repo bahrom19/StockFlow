@@ -87,6 +87,12 @@ class ApiEndpoints {
   static const String reportsProfit = '/reports/profit';
 
   // ──────────────────────────────────
+  // Notifications
+  // ──────────────────────────────────
+  static const String notifications = '/notifications';
+  static const String notificationsUnreadCount = '/notifications/unread-count';
+
+  // ──────────────────────────────────
   // Billing
   // ──────────────────────────────────
   static const String billingPlans = '/billing/plans';

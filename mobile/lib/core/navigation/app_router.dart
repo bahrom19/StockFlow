@@ -26,6 +26,7 @@ import '../../features/sales/presentation/screens/sale_history_screen.dart';
 import '../../features/sales/presentation/screens/sale_detail_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/settings/presentation/screens/profile_screen.dart';
+import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../features/suppliers/presentation/screens/suppliers_list_screen.dart';
 import '../../features/suppliers/presentation/screens/supplier_form_screen.dart';
 import '../../features/suppliers/presentation/screens/supplier_detail_screen.dart';
@@ -290,6 +291,11 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
               to: DateTime.tryParse(state.uri.queryParameters['to'] ?? ''),
             ),
+          ),
+          GoRoute(
+            path: RouteNames.notifications,
+            name: 'notifications',
+            builder: (context, state) => const NotificationsScreen(),
           ),
           GoRoute(
             path: RouteNames.settings,
