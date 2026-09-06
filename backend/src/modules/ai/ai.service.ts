@@ -6,6 +6,7 @@ import { SecurityContext } from './security/security-context';
 import { AIAuditLogger } from './logging/ai-audit.logger';
 import { RolesRepository } from '../rbac/repositories/roles.repository';
 import { ConversationRepository } from './repositories/conversation.repository';
+import { validateToolInput, sanitizeToolInput } from './tools/tool-input.validator';
 
 const MAX_TOOL_ITERATIONS = 5;
 const HISTORY_LIMIT = 20;
@@ -300,8 +301,25 @@ export class AIService {
 
           allToolCallsUsed.push(toolCall.name);
 
+          // ── Runtime input validation ─────────────────────────
+          const sanitizedInput = sanitizeToolInput(toolCall.arguments, tool.inputSchema);
+          const validation = validateToolInput(sanitizedInput, tool.inputSchema, tool.name);
+
+          if (!validation.valid) {
+            this.logger.warn(`Tool "${tool.name}" input validation failed: ${validation.errors.join(', ')}`);
+            const errorContent = JSON.stringify({
+              error: `Invalid tool arguments: ${validation.errors.join('; ')}`,
+            });
+            await this.conversationRepository.createMessage(
+              convId, companyId, userId, 'tool', errorContent,
+              { toolCallId: toolCall.id, toolName: toolCall.name },
+            );
+            messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
+            continue;
+          }
+
           try {
-            const result = await tool.execute(toolCall.arguments, securityContext);
+            const result = await tool.execute(sanitizedInput, securityContext);
             let toolContent = JSON.stringify(result);
 
             // Truncate if exceeds max
