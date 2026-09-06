@@ -85,6 +85,7 @@ class ApiEndpoints {
   static const String reportsSuppliers = '/reports/suppliers';
   static const String reportsPurchasing = '/reports/purchasing';
   static const String reportsProfit = '/reports/profit';
+  static const String reportsCashShifts = '/reports/cash-shifts';
 
   // ──────────────────────────────────
   // Notifications

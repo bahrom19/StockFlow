@@ -20,7 +20,12 @@ import '../../features/products/presentation/screens/product_import_screen.dart'
 import '../../features/purchasing/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchasing/presentation/screens/purchase_order_detail_screen.dart';
 import '../../features/purchasing/presentation/screens/purchase_order_form_screen.dart';
-import '../../features/reports/presentation/screens/reports_screen.dart';
+import '../../features/reports/presentation/screens/reports_hub_screen.dart';
+import '../../features/reports/presentation/screens/top_products_screen.dart';
+import '../../features/reports/presentation/screens/inventory_valuation_screen.dart';
+import '../../features/reports/presentation/screens/customer_report_screen.dart';
+import '../../features/reports/presentation/screens/supplier_report_screen.dart';
+import '../../features/reports/presentation/screens/cash_shift_report_screen.dart';
 import '../../features/sales/presentation/screens/pos_screen.dart';
 import '../../features/sales/presentation/screens/sale_history_screen.dart';
 import '../../features/sales/presentation/screens/sale_detail_screen.dart';
@@ -269,7 +274,34 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: RouteNames.reports,
             name: 'reports',
-            builder: (context, state) => const ReportsScreen(),
+            builder: (context, state) => const ReportsHubScreen(),
+            routes: [
+              GoRoute(
+                path: 'top-products',
+                name: 'reportsTopProducts',
+                builder: (context, state) => const TopProductsScreen(),
+              ),
+              GoRoute(
+                path: 'inventory-value',
+                name: 'reportsInventoryValue',
+                builder: (context, state) => const InventoryValuationScreen(),
+              ),
+              GoRoute(
+                path: 'customers',
+                name: 'reportsCustomers',
+                builder: (context, state) => const CustomerReportScreen(),
+              ),
+              GoRoute(
+                path: 'suppliers',
+                name: 'reportsSuppliers',
+                builder: (context, state) => const SupplierReportScreen(),
+              ),
+              GoRoute(
+                path: 'cash-shifts',
+                name: 'reportsCashShifts',
+                builder: (context, state) => const CashShiftReportScreen(),
+              ),
+            ],
           ),
           GoRoute(
             path: RouteNames.finance,

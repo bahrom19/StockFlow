@@ -37,6 +37,11 @@ class RouteNames {
   static const String customerDetail = '/customers/:id';
   static const String finance = '/finance';
   static const String reports = '/reports';
+  static const String reportsTopProducts = '/reports/top-products';
+  static const String reportsInventoryValue = '/reports/inventory-value';
+  static const String reportsCustomers = '/reports/customers';
+  static const String reportsSuppliers = '/reports/suppliers';
+  static const String reportsCashShifts = '/reports/cash-shifts';
   // Payment Analytics (v1.2 Phase 2)
   static const String payments = '/payments';
   static const String paymentDetails = '/payments/details';
