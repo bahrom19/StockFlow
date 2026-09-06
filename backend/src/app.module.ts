@@ -24,6 +24,8 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { CrmModule } from './modules/crm/crm.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AIModule } from './modules/ai/ai.module';
 
 @Module({
   imports: [
@@ -48,6 +50,10 @@ import { BillingModule } from './modules/billing/billing.module';
     FinanceModule,
     CrmModule,
     BillingModule,
+    // Last: subscriptions register after inventory's stock handlers, so a
+    // low-stock check on sale.completed reads post-decrement stock.
+    NotificationsModule,
+    AIModule,
     ThrottlerModule.forRoot([
       {
         name: 'short',

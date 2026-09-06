@@ -338,6 +338,13 @@ const SEED_PERMISSIONS: PermissionSeed[] = [
     description: 'Allows opening/closing cash shifts',
     module: 'sales',
   },
+  // AI
+  {
+    code: 'ai:chat',
+    name: 'Use AI Assistant',
+    description: 'Allows using the AI chat assistant',
+    module: 'ai',
+  },
 ];
 
 @Injectable()
