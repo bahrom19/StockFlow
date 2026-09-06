@@ -5,6 +5,7 @@ import { AIService } from './ai.service';
 import { OpenAIProvider } from './providers/openai-provider';
 import { ToolRegistry } from './tools/tool.registry';
 import { AIAuditLogger } from './logging/ai-audit.logger';
+import { ConversationRepository } from './repositories/conversation.repository';
 import { PrismaModule } from '../../common/prisma';
 import { RbacModule } from '../rbac/rbac.module';
 
@@ -20,11 +21,14 @@ import { GetProfitTool } from './tools/tools/get-profit.tool';
 import { ReportsModule } from '../reports/reports.module';
 
 /**
- * AI Module — StockFlow AI Assistant Foundation (AI-0).
+ * AI Module — StockFlow AI Assistant with conversation persistence.
  *
  * Provides:
  * - POST /ai/chat endpoint
- * - AI Orchestrator with tool execution
+ * - GET /ai/conversations endpoint
+ * - GET /ai/conversations/:id endpoint
+ * - DELETE /ai/conversations/:id endpoint
+ * - AI Orchestrator with tool execution and conversation persistence
  * - OpenAI provider (swappable via interface)
  * - Read-only tool registry
  * - Security context and audit logging
@@ -35,6 +39,9 @@ import { ReportsModule } from '../reports/reports.module';
   providers: [
     // Audit logger
     AIAuditLogger,
+
+    // Conversation Repository
+    ConversationRepository,
 
     // Tool Registry
     ToolRegistry,

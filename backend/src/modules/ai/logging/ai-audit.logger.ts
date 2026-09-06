@@ -4,6 +4,7 @@ export interface AIAuditEntry {
   requestId: string;
   userId: string;
   companyId: string;
+  conversationId?: string;
   provider: string;
   model: string;
   toolCalls: string[];

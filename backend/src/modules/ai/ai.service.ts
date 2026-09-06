@@ -5,8 +5,12 @@ import { ToolRegistry } from './tools/tool.registry';
 import { SecurityContext } from './security/security-context';
 import { AIAuditLogger } from './logging/ai-audit.logger';
 import { RolesRepository } from '../rbac/repositories/roles.repository';
+import { ConversationRepository } from './repositories/conversation.repository';
 
 const MAX_TOOL_ITERATIONS = 5;
+const HISTORY_LIMIT = 20;
+const TOOL_RESULT_MAX_CHARS = 4000;
+const TITLE_MAX_CHARS = 50;
 
 const SYSTEM_PROMPT = `You are StockFlow AI Assistant — a business analytics helper for inventory management software.
 
@@ -32,17 +36,20 @@ TOOL USAGE:
 - You may call multiple tools in sequence to answer complex questions`;
 
 /**
- * AIService — the AI Orchestrator.
+ * AIService — the AI Orchestrator with conversation persistence.
  *
  * Responsibilities:
- * 1. Build system context with company info
- * 2. Resolve user permissions for tool filtering
- * 3. Call LLM provider
- * 4. Execute tool calls with SecurityContext
- * 5. Feed tool results back to LLM
- * 6. Limit iterations to prevent infinite loops
- * 7. Return final response
- * 8. Log audit trail
+ * 1. Create or load conversation
+ * 2. Persist user message BEFORE provider call
+ * 3. Build system context with company info
+ * 4. Load conversation history (last 20 messages)
+ * 5. Resolve user permissions for tool filtering
+ * 6. Call LLM provider
+ * 7. Persist assistant/tool messages during tool loop
+ * 8. Persist final assistant message
+ * 9. Limit iterations to prevent infinite loops
+ * 10. Return final response
+ * 11. Log audit trail
  */
 @Injectable()
 export class AIService {
@@ -53,41 +60,129 @@ export class AIService {
     private readonly toolRegistry: ToolRegistry,
     private readonly auditLogger: AIAuditLogger,
     private readonly rolesRepository: RolesRepository,
+    private readonly conversationRepository: ConversationRepository,
   ) {}
 
   async chat(
     userMessage: string,
     securityContext: SecurityContext,
-  ): Promise<{ content: string; toolCallsUsed: string[] }> {
+    conversationId?: string,
+  ): Promise<{ conversationId: string; content: string; toolCallsUsed: string[]; createdAt: string }> {
     const requestId = randomBytes(8).toString('hex');
     const startTime = Date.now();
 
-    // Resolve permissions from roles
-    const permissionCodes = await this.rolesRepository.findPermissionCodesByRoleNames(
-      securityContext.roles,
-      securityContext.companyId,
+    const { companyId, userId } = securityContext;
+
+    // ── Step 1: Create or load conversation ─────────────────────
+    let convId: string;
+    let isNewConversation = false;
+
+    if (conversationId) {
+      // Verify ownership
+      const conversation = await this.conversationRepository.findConversationByIdForUser(
+        conversationId,
+        companyId,
+        userId,
+      );
+
+      if (!conversation) {
+        // Return structured error — caller (controller) throws NotFoundException
+        throw new ConversationNotFoundError();
+      }
+
+      convId = conversation.id;
+    } else {
+      // Create new conversation
+      const title = userMessage.length > TITLE_MAX_CHARS
+        ? userMessage.substring(0, TITLE_MAX_CHARS).trimEnd() + '...'
+        : userMessage;
+
+      const conversation = await this.conversationRepository.createConversation(
+        companyId,
+        userId,
+        title,
+      );
+      convId = conversation.id;
+      isNewConversation = true;
+    }
+
+    // ── Step 2: Persist user message (BEFORE provider call) ─────
+    const userMsgResult = await this.conversationRepository.createMessage(
+      convId,
+      companyId,
+      userId,
+      'user',
+      userMessage,
     );
 
-    // Get available tools based on user permissions
-    const availableTools = this.toolRegistry.getAvailable(permissionCodes);
+    if (!userMsgResult) {
+      // Ownership check failed or DB error — do NOT call provider
+      this.logger.error(`Failed to persist user message for conversation ${convId}`);
+      throw new PersistenceError('Failed to save your message');
+    }
 
+    // ── Step 3: Load conversation history ───────────────────────
+    const historyMessages = await this.conversationRepository.listMessages(
+      convId,
+      companyId,
+      userId,
+      HISTORY_LIMIT,
+    );
+
+    // ── Step 4: Build messages array for provider ───────────────
+    const permissionCodes = await this.rolesRepository.findPermissionCodesByRoleNames(
+      securityContext.roles,
+      companyId,
+    );
+
+    const availableTools = this.toolRegistry.getAvailable(permissionCodes);
     const toolDefinitions = availableTools.map((t) => ({
       name: t.name,
       description: t.description,
       inputSchema: t.inputSchema,
     }));
 
-    // Build initial messages
     const systemContext = this.buildSystemContext(securityContext);
     const messages: AIMessage[] = [
       { role: 'system', content: systemContext },
-      { role: 'user', content: userMessage },
     ];
+
+    // Add conversation history to messages array
+    // historyMessages includes the user message we just persisted (it's the last one)
+    if (historyMessages && historyMessages.length > 0) {
+      for (const msg of historyMessages) {
+        if (msg.role === 'user') {
+          messages.push({ role: 'user', content: msg.content });
+        } else if (msg.role === 'assistant') {
+          const assistantMsg: AIMessage = {
+            role: 'assistant',
+            content: msg.content,
+          };
+          if (msg.toolCallsJson) {
+            try {
+              assistantMsg.toolCalls = JSON.parse(JSON.stringify(msg.toolCallsJson));
+            } catch {
+              // Ignore malformed toolCallsJson
+            }
+          }
+          messages.push(assistantMsg);
+        } else if (msg.role === 'tool') {
+          const toolMsg: AIMessage = {
+            role: 'tool',
+            content: msg.content,
+            toolCallId: msg.toolCallId ?? undefined,
+          };
+          messages.push(toolMsg);
+        }
+      }
+    }
 
     const allToolCallsUsed: string[] = [];
     let iterations = 0;
+    let conversationCreatedAt: string | null = null;
 
     try {
+      // ── Step 5: Tool loop ──────────────────────────────────────
       while (iterations < MAX_TOOL_ITERATIONS) {
         iterations++;
 
@@ -98,10 +193,39 @@ export class AIService {
 
         // If no tool calls, we have a final response
         if (response.finishReason !== 'tool_calls' || response.toolCalls.length === 0) {
+          // Persist final assistant message
+          const assistantMsgResult = await this.conversationRepository.createMessage(
+            convId,
+            companyId,
+            userId,
+            'assistant',
+            response.content ?? 'I could not generate a response.',
+            {
+              toolCallsJson: response.toolCalls.length > 0 ? response.toolCalls as any : undefined,
+              tokenCount: response.usage.totalTokens,
+            },
+          );
+
+          if (!assistantMsgResult) {
+            this.logger.error(`CRITICAL: Failed to persist final assistant message for conversation ${convId}`);
+            throw new PersistenceError('Failed to save assistant response');
+          }
+
+          conversationCreatedAt = assistantMsgResult.createdAt.toISOString();
+
+          // Update conversation timestamp
+          await this.conversationRepository.updateConversation(
+            convId,
+            companyId,
+            userId,
+            {},
+          );
+
           this.auditLogger.log({
             requestId,
-            userId: securityContext.userId,
-            companyId: securityContext.companyId,
+            userId,
+            companyId,
+            conversationId: convId,
             provider: this.provider.name,
             model: response.model,
             toolCalls: allToolCallsUsed,
@@ -114,70 +238,92 @@ export class AIService {
           });
 
           return {
+            conversationId: convId,
             content: response.content ?? 'I could not generate a response.',
             toolCallsUsed: allToolCallsUsed,
+            createdAt: conversationCreatedAt,
           };
         }
 
-        // Add assistant message with tool calls
+        // ── Step 5a: Persist assistant message WITH tool calls ─────
+        const assistantWithToolsResult = await this.conversationRepository.createMessage(
+          convId,
+          companyId,
+          userId,
+          'assistant',
+          response.content ?? '',
+          {
+            toolCallsJson: response.toolCalls as any,
+            tokenCount: response.usage.totalTokens,
+          },
+        );
+
+        if (!assistantWithToolsResult) {
+          this.logger.error(`CRITICAL: Failed to persist assistant tool-call message for conversation ${convId}`);
+          throw new PersistenceError('Failed to save assistant response');
+        }
+
+        // Add assistant message with tool calls to messages array
         messages.push({
           role: 'assistant',
           content: response.content ?? '',
           toolCalls: response.toolCalls,
         });
 
-        // Execute each tool call
+        // ── Step 5b: Execute each tool and persist results ─────────
         for (const toolCall of response.toolCalls) {
           const tool = this.toolRegistry.get(toolCall.name);
 
           if (!tool) {
             this.logger.warn(`Unknown tool requested: ${toolCall.name}`);
-            messages.push({
-              role: 'tool',
-              content: JSON.stringify({
-                error: `Tool "${toolCall.name}" is not available.`,
-              }),
-              toolCallId: toolCall.id,
-            });
+            const errorContent = JSON.stringify({ error: `Tool "${toolCall.name}" is not available.` });
+            await this.conversationRepository.createMessage(
+              convId, companyId, userId, 'tool', errorContent,
+              { toolCallId: toolCall.id, toolName: toolCall.name },
+            );
+            messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
             continue;
           }
 
-          // Check permission for this specific tool
           if (!permissionCodes.includes(tool.requiredPermission)) {
             this.logger.warn(
               `Tool "${toolCall.name}" requires permission "${tool.requiredPermission}" which user lacks`,
             );
-            messages.push({
-              role: 'tool',
-              content: JSON.stringify({
-                error: `Access denied for tool "${toolCall.name}".`,
-              }),
-              toolCallId: toolCall.id,
-            });
+            const errorContent = JSON.stringify({ error: `Access denied for tool "${toolCall.name}".` });
+            await this.conversationRepository.createMessage(
+              convId, companyId, userId, 'tool', errorContent,
+              { toolCallId: toolCall.id, toolName: toolCall.name },
+            );
+            messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
             continue;
           }
 
           allToolCallsUsed.push(toolCall.name);
 
           try {
-            // CRITICAL: companyId comes from SecurityContext, not from toolCall.arguments
             const result = await tool.execute(toolCall.arguments, securityContext);
-            messages.push({
-              role: 'tool',
-              content: JSON.stringify(result),
-              toolCallId: toolCall.id,
-            });
-          } catch (error: any) {
-            this.logger.error(
-              `Tool "${toolCall.name}" execution failed: ${error.message}`,
+            let toolContent = JSON.stringify(result);
+
+            // Truncate if exceeds max
+            if (toolContent.length > TOOL_RESULT_MAX_CHARS) {
+              toolContent = toolContent.substring(0, TOOL_RESULT_MAX_CHARS) + '... (truncated)';
+            }
+
+            // Persist tool result
+            await this.conversationRepository.createMessage(
+              convId, companyId, userId, 'tool', toolContent,
+              { toolCallId: toolCall.id, toolName: toolCall.name },
             );
-            messages.push({
-              role: 'tool',
-              content: JSON.stringify({
-                error: `Tool execution failed: ${error.message}`,
-              }),
-              toolCallId: toolCall.id,
-            });
+
+            messages.push({ role: 'tool', content: toolContent, toolCallId: toolCall.id });
+          } catch (error: any) {
+            this.logger.error(`Tool "${toolCall.name}" execution failed: ${error.message}`);
+            const errorContent = JSON.stringify({ error: `Tool execution failed: ${error.message}` });
+            await this.conversationRepository.createMessage(
+              convId, companyId, userId, 'tool', errorContent,
+              { toolCallId: toolCall.id, toolName: toolCall.name },
+            );
+            messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
           }
         }
       }
@@ -185,8 +331,9 @@ export class AIService {
       // Max iterations reached
       this.auditLogger.log({
         requestId,
-        userId: securityContext.userId,
-        companyId: securityContext.companyId,
+        userId,
+        companyId,
+        conversationId: convId,
         provider: this.provider.name,
         model: 'unknown',
         toolCalls: allToolCallsUsed,
@@ -197,20 +344,25 @@ export class AIService {
       });
 
       return {
-        content:
-          'I was unable to complete the analysis within the allowed number of steps. Please try a simpler question.',
+        conversationId: convId,
+        content: 'I was unable to complete the analysis within the allowed number of steps. Please try a simpler question.',
         toolCallsUsed: allToolCallsUsed,
+        createdAt: new Date().toISOString(),
       };
     } catch (error: any) {
-      const errorCode =
-        error instanceof AIProviderError ? error.code : 'UNKNOWN';
-      const errorMessage =
-        error instanceof AIProviderError ? error.message : 'Unknown error';
+      // Re-throw persistence and conversation errors
+      if (error instanceof PersistenceError || error instanceof ConversationNotFoundError) {
+        throw error;
+      }
+
+      const errorCode = error instanceof AIProviderError ? error.code : 'UNKNOWN';
+      const errorMessage = error instanceof AIProviderError ? error.message : 'Unknown error';
 
       this.auditLogger.log({
         requestId,
-        userId: securityContext.userId,
-        companyId: securityContext.companyId,
+        userId,
+        companyId,
+        conversationId: convId,
         provider: this.provider.name,
         model: 'unknown',
         toolCalls: allToolCallsUsed,
@@ -223,19 +375,37 @@ export class AIService {
       this.logger.error(`AI chat failed: ${errorMessage}`);
 
       return {
-        content:
-          'I encountered an error while processing your request. Please try again later.',
+        conversationId: convId,
+        content: 'I encountered an error while processing your request. Please try again later.',
         toolCallsUsed: allToolCallsUsed,
+        createdAt: new Date().toISOString(),
       };
     }
   }
 
   private buildSystemContext(ctx: SecurityContext): string {
-    return `${SYSTEM_PROMPT}
+    return `${SYSTEM_PROMPT}\n\nCOMPANY CONTEXT:\n- Currency: ${ctx.currency}\n- Locale: ${ctx.locale}\n- Current date: ${new Date().toISOString().slice(0, 10)}`;
+  }
+}
 
-COMPANY CONTEXT:
-- Currency: ${ctx.currency}
-- Locale: ${ctx.locale}
-- Current date: ${new Date().toISOString().slice(0, 10)}`;
+/**
+ * Thrown when conversation is not found or not owned by the user.
+ * Controller maps this to HTTP 404.
+ */
+export class ConversationNotFoundError extends Error {
+  constructor() {
+    super('Conversation not found');
+    this.name = 'ConversationNotFoundError';
+  }
+}
+
+/**
+ * Thrown when critical persistence fails before or after provider call.
+ * Controller maps this to HTTP 500.
+ */
+export class PersistenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PersistenceError';
   }
 }
