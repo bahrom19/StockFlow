@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AIService, ConversationNotFoundError, PersistenceError } from '../ai.service';
+import { AIService, ConversationNotFoundError, PersistenceError, ToolExecutionTimeoutError } from '../ai.service';
 import { AIProvider, AIRequest, AIResponse } from '../providers/ai-provider.interface';
 import { ToolRegistry } from '../tools/tool.registry';
 import { AIAuditLogger } from '../logging/ai-audit.logger';
@@ -572,6 +572,240 @@ describe('AIService', () => {
 
       // assistant(toolCalls) + assistant(final) = 2 (no error assistant)
       expect(assistantMessages.length).toBe(2);
+    });
+  });
+
+  describe('chat — tool execution timeout (AI-4C)', () => {
+    it('should complete tool execution before timeout', async () => {
+      // Tool resolves quickly
+      (mockTool.execute as jest.Mock).mockResolvedValue({ todaySales: 125000 });
+
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'Sales: 125K',
+          toolCalls: [],
+          usage: { promptTokens: 200, completionTokens: 50, totalTokens: 250 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      const result = await service.chat('Show sales', testSecurityContext);
+
+      expect(result.content).toBe('Sales: 125K');
+      expect(result.toolCallsUsed).toEqual(['get_dashboard']);
+    });
+
+    it('should handle tool execution error', async () => {
+      // Tool throws an error
+      (mockTool.execute as jest.Mock).mockRejectedValue(new Error('DB connection failed'));
+
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'Error occurred',
+          toolCalls: [],
+          usage: { promptTokens: 200, completionTokens: 50, totalTokens: 250 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      const result = await service.chat('Show sales', testSecurityContext);
+
+      // Tool error should be persisted and provider can still respond
+      expect(result.content).toBe('Error occurred');
+
+      // Check tool error was persisted
+      const toolMessages = mockConversationRepository.createMessage.mock.calls.filter(
+        (call) => call[3] === 'tool',
+      );
+      expect(toolMessages.length).toBe(1);
+      expect(toolMessages[0]![4]).toContain('Tool execution failed');
+    });
+
+    it('should timeout on slow tool and not hang', async () => {
+      // Create a service with very short timeout for testing
+      const shortTimeoutService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        50, // 50ms timeout for testing
+      );
+
+      // Tool that takes longer than timeout
+      (mockTool.execute as jest.Mock).mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve({ data: 'slow' }), 200)),
+      );
+
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'Timeout handled',
+          toolCalls: [],
+          usage: { promptTokens: 200, completionTokens: 50, totalTokens: 250 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      const result = await shortTimeoutService.chat('Show sales', testSecurityContext);
+
+      // Should complete quickly (not hang for 200ms)
+      expect(result.content).toBe('Timeout handled');
+
+      // Check tool timeout error was persisted
+      const toolMessages = mockConversationRepository.createMessage.mock.calls.filter(
+        (call) => call[3] === 'tool',
+      );
+      expect(toolMessages.length).toBe(1);
+      expect(toolMessages[0]![4]).toContain('timed out');
+    });
+
+    it('should timeout on never-resolving tool', async () => {
+      // Create a service with very short timeout for testing
+      const shortTimeoutService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        50, // 50ms timeout for testing
+      );
+
+      // Tool that never resolves
+      (mockTool.execute as jest.Mock).mockImplementation(
+        () => new Promise(() => {}), // Never resolves
+      );
+
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'Handled',
+          toolCalls: [],
+          usage: { promptTokens: 200, completionTokens: 50, totalTokens: 250 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      const startTime = Date.now();
+      const result = await shortTimeoutService.chat('Show sales', testSecurityContext);
+      const elapsed = Date.now() - startTime;
+
+      // Should complete within reasonable time (not hang)
+      expect(elapsed).toBeLessThan(500);
+      expect(result.content).toBe('Handled');
+
+      // Check tool timeout error was persisted
+      const toolMessages = mockConversationRepository.createMessage.mock.calls.filter(
+        (call) => call[3] === 'tool',
+      );
+      expect(toolMessages.length).toBe(1);
+      expect(toolMessages[0]![4]).toContain('timed out');
+    });
+
+    it('should persist tool timeout error correctly', async () => {
+      // Create a service with very short timeout for testing
+      const shortTimeoutService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        50, // 50ms timeout for testing
+      );
+
+      // Tool that takes longer than timeout
+      (mockTool.execute as jest.Mock).mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve({ data: 'slow' }), 200)),
+      );
+
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'Timeout handled',
+          toolCalls: [],
+          usage: { promptTokens: 200, completionTokens: 50, totalTokens: 250 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      await shortTimeoutService.chat('Show sales', testSecurityContext);
+
+      // Verify tool error message format
+      const toolMessages = mockConversationRepository.createMessage.mock.calls.filter(
+        (call) => call[3] === 'tool',
+      );
+      expect(toolMessages.length).toBe(1);
+      const errorContent = JSON.parse(toolMessages[0]![4]);
+      expect(errorContent.error).toContain('timed out');
+      expect(errorContent.error).toContain('50');
+    });
+
+    it('successful tool flow should not be affected by timeout mechanism', async () => {
+      // Tool resolves quickly (before timeout)
+      (mockTool.execute as jest.Mock).mockResolvedValue({ todaySales: 125000 });
+
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'You earned 125K today',
+          toolCalls: [],
+          usage: { promptTokens: 200, completionTokens: 50, totalTokens: 250 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      const result = await service.chat('Show sales', testSecurityContext);
+
+      expect(result.content).toBe('You earned 125K today');
+
+      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+
+      // assistant(toolCalls) + assistant(final) = 2 (no error assistant)
+      expect(assistantMessages.length).toBe(2);
+
+      // Tool result should not contain timeout error
+      const toolMessages = createMessageCalls.filter((call) => call[3] === 'tool');
+      expect(toolMessages.length).toBe(1);
+      expect(toolMessages[0]![4]).not.toContain('timed out');
     });
   });
 

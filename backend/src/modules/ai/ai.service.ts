@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { AIProvider, AIRequest, AIMessage, AIProviderError } from './providers/ai-provider.interface';
 import { ToolRegistry } from './tools/tool.registry';
@@ -12,6 +12,7 @@ const MAX_TOOL_ITERATIONS = 5;
 const HISTORY_LIMIT = 20;
 const TOOL_RESULT_MAX_CHARS = 4000;
 const TITLE_MAX_CHARS = 50;
+const DEFAULT_TOOL_EXECUTION_TIMEOUT_MS = 30_000;
 
 const SYSTEM_PROMPT = `You are StockFlow AI Assistant — a business analytics helper for inventory management software.
 
@@ -55,6 +56,7 @@ TOOL USAGE:
 @Injectable()
 export class AIService {
   private readonly logger = new Logger(AIService.name);
+  private readonly toolExecutionTimeoutMs: number;
 
   constructor(
     @Inject('AIProvider') private readonly provider: AIProvider,
@@ -62,7 +64,10 @@ export class AIService {
     private readonly auditLogger: AIAuditLogger,
     private readonly rolesRepository: RolesRepository,
     private readonly conversationRepository: ConversationRepository,
-  ) {}
+    @Optional() toolExecutionTimeoutMs?: number,
+  ) {
+    this.toolExecutionTimeoutMs = toolExecutionTimeoutMs ?? DEFAULT_TOOL_EXECUTION_TIMEOUT_MS;
+  }
 
   async chat(
     userMessage: string,
@@ -319,7 +324,10 @@ export class AIService {
           }
 
           try {
-            const result = await tool.execute(sanitizedInput, securityContext);
+            const result = await this.executeToolWithTimeout(
+              tool.execute(sanitizedInput, securityContext),
+              tool.name,
+            );
             let toolContent = JSON.stringify(result);
 
             // Truncate if exceeds max
@@ -428,6 +436,41 @@ export class AIService {
   private buildSystemContext(ctx: SecurityContext): string {
     return `${SYSTEM_PROMPT}\n\nCOMPANY CONTEXT:\n- Currency: ${ctx.currency}\n- Locale: ${ctx.locale}\n- Current date: ${new Date().toISOString().slice(0, 10)}`;
   }
+
+  /**
+   * Execute a tool promise with a timeout.
+   * 
+   * Uses Promise.race to ensure /ai/chat never hangs indefinitely
+   * waiting for a slow/hanging tool. If the tool doesn't resolve
+   * within the timeout, returns a structured error that fits
+   * the existing tool error flow.
+   * 
+   * Note: The underlying tool Promise may still be running in the
+   * background after timeout. This is acceptable because:
+   * 1. All tools are READ-ONLY — no side effects
+   * 2. The request proceeds immediately
+   * 3. The hanging Promise will eventually be garbage collected
+   */
+  private executeToolWithTimeout<T>(
+    toolPromise: Promise<T>,
+    toolName: string,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new ToolExecutionTimeoutError(toolName, this.toolExecutionTimeoutMs));
+      }, this.toolExecutionTimeoutMs);
+
+      toolPromise
+        .then((result) => {
+          clearTimeout(timer);
+          resolve(result);
+        })
+        .catch((error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+    });
+  }
 }
 
 /**
@@ -449,5 +492,16 @@ export class PersistenceError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'PersistenceError';
+  }
+}
+
+/**
+ * Thrown when a tool execution exceeds the timeout limit.
+ * This is caught by the tool error handler and persisted as a tool error.
+ */
+export class ToolExecutionTimeoutError extends Error {
+  constructor(toolName: string, timeoutMs: number) {
+    super(`Tool execution timed out after ${timeoutMs}ms`);
+    this.name = 'ToolExecutionTimeoutError';
   }
 }
