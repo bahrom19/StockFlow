@@ -84,6 +84,7 @@ describe('AIController', () => {
           companyId: 'company-1',
         }),
         undefined,
+        undefined,
       );
     });
 
@@ -105,6 +106,7 @@ describe('AIController', () => {
           companyId: 'c-456',
           roles: ['Admin'],
         }),
+        undefined,
         undefined,
       );
     });
@@ -142,6 +144,7 @@ describe('AIController', () => {
         'Next question',
         expect.any(Object),
         'conv-4',
+        undefined,
       );
     });
   });

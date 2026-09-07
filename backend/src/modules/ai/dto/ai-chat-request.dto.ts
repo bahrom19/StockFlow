@@ -19,4 +19,14 @@ export class AIChatRequestDto {
   @IsNotEmpty()
   @MaxLength(2000)
   message!: string;
+
+  @ApiPropertyOptional({
+    description: 'Client-provided idempotency key for duplicate request prevention. If omitted, no idempotency tracking is performed.',
+    example: 'client-uuid-123',
+    maxLength: 255,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  idempotencyKey?: string;
 }

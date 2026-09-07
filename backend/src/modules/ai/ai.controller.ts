@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -19,7 +20,7 @@ import { RequirePermission } from '../rbac/decorators/require-permission.decorat
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { AIService, ConversationNotFoundError, PersistenceError } from './ai.service';
+import { AIService, ConversationNotFoundError, PersistenceError, IdempotencyKeyMismatchError } from './ai.service';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { AIThrottle } from './decorators/ai-throttle.decorator';
 import { AIChatRequestDto } from './dto/ai-chat-request.dto';
@@ -74,6 +75,7 @@ export class AIController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden — ai:chat permission required' })
   @ApiResponse({ status: 404, description: 'Conversation not found' })
+  @ApiResponse({ status: 409, description: 'Conflict — request already in progress' })
   async chat(
     @Body() dto: AIChatRequestDto,
     @CurrentUser() user: JwtPayload,
@@ -86,6 +88,7 @@ export class AIController {
         dto.message,
         securityContext,
         dto.conversationId,
+        dto.idempotencyKey,
       );
     } catch (error) {
       if (error instanceof ConversationNotFoundError) {
@@ -93,6 +96,9 @@ export class AIController {
       }
       if (error instanceof PersistenceError) {
         throw new Error('Failed to save conversation data');
+      }
+      if (error instanceof IdempotencyKeyMismatchError) {
+        throw new BadRequestException(error.message);
       }
       throw error;
     }

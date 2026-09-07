@@ -6,6 +6,7 @@ import { OpenAIProvider } from './providers/openai-provider';
 import { ToolRegistry } from './tools/tool.registry';
 import { AIAuditLogger } from './logging/ai-audit.logger';
 import { ConversationRepository } from './repositories/conversation.repository';
+import { IdempotencyRepository } from './repositories/idempotency.repository';
 import { PrismaModule } from '../../common/prisma';
 import { RbacModule } from '../rbac/rbac.module';
 
@@ -42,6 +43,9 @@ import { ReportsModule } from '../reports/reports.module';
 
     // Conversation Repository
     ConversationRepository,
+
+    // Idempotency Repository
+    IdempotencyRepository,
 
     // Tool Registry
     ToolRegistry,

@@ -1,12 +1,15 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { randomBytes, createHash } from 'crypto';
 import { AIProvider, AIRequest, AIMessage, AIProviderError } from './providers/ai-provider.interface';
 import { ToolRegistry } from './tools/tool.registry';
 import { SecurityContext } from './security/security-context';
 import { AIAuditLogger } from './logging/ai-audit.logger';
 import { RolesRepository } from '../rbac/repositories/roles.repository';
 import { ConversationRepository } from './repositories/conversation.repository';
+import { IdempotencyRepository } from './repositories/idempotency.repository';
 import { validateToolInput, sanitizeToolInput } from './tools/tool-input.validator';
+import { PrismaService } from '../../common/prisma';
+import { Prisma } from '@prisma/client';
 
 const MAX_TOOL_ITERATIONS = 5;
 const HISTORY_LIMIT = 20;
@@ -64,6 +67,8 @@ export class AIService {
     private readonly auditLogger: AIAuditLogger,
     private readonly rolesRepository: RolesRepository,
     private readonly conversationRepository: ConversationRepository,
+    private readonly idempotencyRepository: IdempotencyRepository,
+    private readonly prismaService: PrismaService,
     @Optional() toolExecutionTimeoutMs?: number,
   ) {
     this.toolExecutionTimeoutMs = toolExecutionTimeoutMs ?? DEFAULT_TOOL_EXECUTION_TIMEOUT_MS;
@@ -73,43 +78,206 @@ export class AIService {
     userMessage: string,
     securityContext: SecurityContext,
     conversationId?: string,
+    idempotencyKey?: string,
   ): Promise<{ conversationId: string; content: string; toolCallsUsed: string[]; createdAt: string }> {
     const requestId = randomBytes(8).toString('hex');
     const startTime = Date.now();
 
     const { companyId, userId } = securityContext;
 
-    // ── Step 1: Create or load conversation ─────────────────────
-    let convId: string;
+    // ── Step 0: Idempotency check ──────────────────────────────
+    let convId: string = '';
     let isNewConversation = false;
+    let idempotencyAcquired = false;
 
-    if (conversationId) {
-      // Verify ownership
-      const conversation = await this.conversationRepository.findConversationByIdForUser(
-        conversationId,
+    if (idempotencyKey) {
+      const fingerprint = this.computeFingerprint(userMessage, conversationId);
+      
+      // First, check if there's an existing record (without creating)
+      const existingRecord = await this.idempotencyRepository.findByKey(
         companyId,
         userId,
+        idempotencyKey,
       );
 
-      if (!conversation) {
-        // Return structured error — caller (controller) throws NotFoundException
-        throw new ConversationNotFoundError();
+      if (existingRecord) {
+        // Validate fingerprint
+        if (existingRecord.requestFingerprint !== fingerprint) {
+          throw new IdempotencyKeyMismatchError();
+        }
+
+        if (existingRecord.status === 'PENDING') {
+          if (existingRecord.expiresAt < new Date()) {
+            // Stale PENDING - attempt atomic reclaim
+            const reclaimed = await this.idempotencyRepository.reclaimExpired(
+              companyId,
+              userId,
+              idempotencyKey,
+              existingRecord.id,
+            );
+
+            if (!reclaimed) {
+              // Another request already reclaimed it
+              // Re-fetch to see new state
+              const refreshed = await this.idempotencyRepository.findByKey(
+                companyId,
+                userId,
+                idempotencyKey,
+              );
+              
+              if (!refreshed) {
+                // Record was deleted and new one not yet created by winner
+                // Retry acquisition after conversation creation
+              } else if (refreshed.status === 'PENDING' && refreshed.expiresAt >= new Date()) {
+                throw new ConflictException('Request already in progress');
+              } else if (refreshed.status === 'COMPLETED' || refreshed.status === 'FAILED') {
+                return refreshed.responsePayload as any;
+              }
+            }
+            // If reclaimed, continue to create conversation and new PENDING record
+          } else {
+            // Active PENDING - cannot reclaim
+            throw new ConflictException('Request already in progress');
+          }
+        } else if (existingRecord.status === 'COMPLETED' || existingRecord.status === 'FAILED') {
+          // Return stored response
+          return existingRecord.responsePayload as any;
+        }
       }
+      // If no existing record or reclaimed expired PENDING, continue to create conversation
+    }
 
-      convId = conversation.id;
-    } else {
-      // Create new conversation
-      const title = userMessage.length > TITLE_MAX_CHARS
-        ? userMessage.substring(0, TITLE_MAX_CHARS).trimEnd() + '...'
-        : userMessage;
+    // ── Step 1: Create or load conversation ─────────────────────
+    // NOTE: For idempotencyKey requests, conversation creation happens INSIDE transaction
+    // For non-idempotency requests, create conversation here
+    if (!idempotencyKey) {
+      if (conversationId) {
+        // Verify ownership
+        const conversation = await this.conversationRepository.findConversationByIdForUser(
+          conversationId,
+          companyId,
+          userId,
+        );
 
-      const conversation = await this.conversationRepository.createConversation(
-        companyId,
-        userId,
-        title,
-      );
-      convId = conversation.id;
-      isNewConversation = true;
+        if (!conversation) {
+          // Return structured error — caller (controller) throws NotFoundException
+          throw new ConversationNotFoundError();
+        }
+
+        convId = conversation.id;
+      } else {
+        // Create new conversation
+        const title = userMessage.length > TITLE_MAX_CHARS
+          ? userMessage.substring(0, TITLE_MAX_CHARS).trimEnd() + '...'
+          : userMessage;
+
+        const conversation = await this.conversationRepository.createConversation(
+          companyId,
+          userId,
+          title,
+        );
+        convId = conversation.id;
+        isNewConversation = true;
+      }
+    }
+
+    // ── Acquire idempotency lock with transaction ──────────────
+    if (idempotencyKey && !idempotencyAcquired) {
+      const fingerprint = this.computeFingerprint(userMessage, conversationId);
+      
+      // Use transaction to ensure atomicity of idempotency acquisition and conversation creation/linking
+      try {
+        await this.prismaService.$transaction(async (tx) => {
+          // First, try to INSERT idempotency record with conversationId=NULL
+          // This is a short transaction - if P2002, we rollback and handle outside
+          try {
+            await this.idempotencyRepository.acquireLock(
+              companyId,
+              userId,
+              null, // Start with NULL conversationId
+              idempotencyKey,
+              fingerprint,
+              undefined,
+              tx,
+            );
+          } catch (insertError: any) {
+            // If P2002, transaction is aborted - we must rollback
+            if (insertError instanceof Prisma.PrismaClientKnownRequestError && 
+                insertError.code === 'P2002') {
+              // Throw to trigger rollback - will be caught outside transaction
+              throw new IdempotencyConflictError();
+            }
+            throw insertError;
+          }
+          
+          // If we get here, INSERT succeeded - now create conversation and link
+          let conversationConvId: string;
+          
+          if (conversationId) {
+            // Use provided conversationId
+            conversationConvId = conversationId;
+          } else {
+            // Create new conversation within transaction
+            const title = userMessage.length > TITLE_MAX_CHARS
+              ? userMessage.substring(0, TITLE_MAX_CHARS).trimEnd() + '...'
+              : userMessage;
+            
+            const conversation = await this.conversationRepository.createConversation(
+              companyId,
+              userId,
+              title,
+              tx,
+            );
+            conversationConvId = conversation.id;
+            convId = conversation.id;
+            isNewConversation = true;
+          }
+          
+          // Link conversation to idempotency record
+          await this.idempotencyRepository.updateConversationId(
+            companyId,
+            userId,
+            idempotencyKey,
+            conversationConvId,
+            tx,
+          );
+          
+          idempotencyAcquired = true;
+        });
+      } catch (error: any) {
+        // Handle idempotency conflict (P2002 handled outside transaction)
+        if (error instanceof IdempotencyConflictError) {
+          // Transaction was rolled back due to P2002
+          // Now safely fetch existing record OUTSIDE transaction
+          const existing = await this.idempotencyRepository.findByKey(
+            companyId,
+            userId,
+            idempotencyKey,
+          );
+          
+          if (existing) {
+            // Validate fingerprint
+            if (existing.requestFingerprint !== fingerprint) {
+              throw new IdempotencyKeyMismatchError();
+            }
+            
+            if (existing.status === 'PENDING' && existing.expiresAt >= new Date()) {
+              throw new ConflictException('Request already in progress');
+            } else if (existing.status === 'COMPLETED' || existing.status === 'FAILED') {
+              return existing.responsePayload as any;
+            }
+          }
+          // If record disappeared (rare race condition), throw generic error
+          throw new Error('Idempotency record disappeared after conflict');
+        }
+        // Handle other errors that should be propagated
+        if (error instanceof IdempotencyKeyMismatchError || 
+            error instanceof ConflictException) {
+          throw error;
+        }
+        // For other errors, log and continue
+        this.logger.warn(`Idempotency transaction failed: ${error.message}`);
+      }
     }
 
     // ── Step 2: Persist user message (BEFORE provider call) ─────
@@ -243,12 +411,29 @@ export class AIService {
             totalTokens: response.usage.totalTokens,
           });
 
-          return {
+          const result = {
             conversationId: convId,
             content: response.content ?? 'I could not generate a response.',
             toolCallsUsed: allToolCallsUsed,
             createdAt: conversationCreatedAt,
           };
+
+          // ── Update idempotency record on success ────────────────
+          if (idempotencyKey) {
+            try {
+              await this.idempotencyRepository.updateCompleted(
+                companyId,
+                userId,
+                idempotencyKey,
+                result,
+              );
+            } catch (persistErr: any) {
+              this.logger.error(`Failed to update idempotency record: ${persistErr.message}`);
+              // Don't mask the successful response
+            }
+          }
+
+          return result;
         }
 
         // ── Step 5a: Persist assistant message WITH tool calls ─────
@@ -424,17 +609,43 @@ export class AIService {
 
       this.logger.error(`AI chat failed: ${errorMessage}`);
 
-      return {
+      const errorResult = {
         conversationId: convId,
         content: errorAssistantContent,
         toolCallsUsed: allToolCallsUsed,
         createdAt: new Date().toISOString(),
       };
+
+      // ── Update idempotency record on failure ──────────────────
+      if (idempotencyKey) {
+        try {
+          await this.idempotencyRepository.updateFailed(
+            companyId,
+            userId,
+            idempotencyKey,
+            errorResult,
+          );
+        } catch (persistErr: any) {
+          this.logger.error(`Failed to update idempotency record: ${persistErr.message}`);
+          // Don't mask the error response
+        }
+      }
+
+      return errorResult;
     }
   }
 
   private buildSystemContext(ctx: SecurityContext): string {
     return `${SYSTEM_PROMPT}\n\nCOMPANY CONTEXT:\n- Currency: ${ctx.currency}\n- Locale: ${ctx.locale}\n- Current date: ${new Date().toISOString().slice(0, 10)}`;
+  }
+
+  /**
+   * Compute fingerprint for idempotency request.
+   * Uses SHA-256 hash of message + conversationId.
+   */
+  private computeFingerprint(message: string, conversationId?: string): string {
+    const payload = JSON.stringify({ message, conversationId });
+    return createHash('sha256').update(payload).digest('hex');
   }
 
   /**
@@ -503,5 +714,38 @@ export class ToolExecutionTimeoutError extends Error {
   constructor(toolName: string, timeoutMs: number) {
     super(`Tool execution timed out after ${timeoutMs}ms`);
     this.name = 'ToolExecutionTimeoutError';
+  }
+}
+
+/**
+ * Thrown when idempotency key is already in use with a different request.
+ * Controller maps this to HTTP 400.
+ */
+export class IdempotencyKeyMismatchError extends Error {
+  constructor() {
+    super('Idempotency key already used with different request');
+    this.name = 'IdempotencyKeyMismatchError';
+  }
+}
+
+/**
+ * Internal error to return stored response from idempotency record.
+ * Used within transaction to break out and return stored response.
+ */
+export class StoredResponseError extends Error {
+  constructor(public readonly responsePayload: any) {
+    super('Stored response available');
+    this.name = 'StoredResponseError';
+  }
+}
+
+/**
+ * Internal error for idempotency conflict (P2002).
+ * Used to trigger transaction rollback and safe handling outside.
+ */
+export class IdempotencyConflictError extends Error {
+  constructor() {
+    super('Idempotency conflict');
+    this.name = 'IdempotencyConflictError';
   }
 }

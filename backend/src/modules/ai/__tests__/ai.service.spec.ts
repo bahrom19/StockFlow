@@ -1,12 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AIService, ConversationNotFoundError, PersistenceError, ToolExecutionTimeoutError } from '../ai.service';
+import { AIService, ConversationNotFoundError, PersistenceError, ToolExecutionTimeoutError, IdempotencyKeyMismatchError, IdempotencyConflictError } from '../ai.service';
 import { AIProvider, AIRequest, AIResponse } from '../providers/ai-provider.interface';
 import { ToolRegistry } from '../tools/tool.registry';
 import { AIAuditLogger } from '../logging/ai-audit.logger';
 import { RolesRepository } from '../../rbac/repositories/roles.repository';
 import { ConversationRepository } from '../repositories/conversation.repository';
+import { IdempotencyRepository } from '../repositories/idempotency.repository';
 import { AITool } from '../tools/tool.interface';
 import { SecurityContext } from '../security/security-context';
+import { createHash } from 'crypto';
+import { PrismaService } from '../../../common/prisma';
+
+// Helper to compute fingerprint matching AIService.computeFingerprint
+function computeFingerprint(message: string, conversationId?: string): string {
+  const payload = JSON.stringify({ message, conversationId });
+  return createHash('sha256').update(payload).digest('hex');
+}
 
 describe('AIService', () => {
   let service: AIService;
@@ -15,6 +24,7 @@ describe('AIService', () => {
   let mockAuditLogger: jest.Mocked<AIAuditLogger>;
   let mockRolesRepository: jest.Mocked<RolesRepository>;
   let mockConversationRepository: jest.Mocked<ConversationRepository>;
+  let mockIdempotencyRepository: jest.Mocked<IdempotencyRepository>;
 
   const testSecurityContext: SecurityContext = {
     userId: 'user-1',
@@ -57,6 +67,17 @@ describe('AIService', () => {
       updateConversation: jest.fn(),
     } as any;
 
+    mockIdempotencyRepository = {
+      findByKey: jest.fn().mockResolvedValue(null),
+      acquireLock: jest.fn().mockResolvedValue({ acquired: true }),
+      updateConversationId: jest.fn(),
+      updateCompleted: jest.fn(),
+      updateFailed: jest.fn(),
+      reclaimExpired: jest.fn(),
+      delete: jest.fn(),
+      deleteExpired: jest.fn(),
+    } as any;
+
     toolRegistry = new ToolRegistry();
     toolRegistry.register(mockTool);
 
@@ -68,6 +89,8 @@ describe('AIService', () => {
         { provide: AIAuditLogger, useValue: mockAuditLogger },
         { provide: RolesRepository, useValue: mockRolesRepository },
         { provide: ConversationRepository, useValue: mockConversationRepository },
+        { provide: IdempotencyRepository, useValue: mockIdempotencyRepository },
+        { provide: PrismaService, useValue: { $transaction: jest.fn((cb: any) => cb({})) } },
       ],
     }).compile();
 
@@ -643,6 +666,8 @@ describe('AIService', () => {
         mockAuditLogger,
         mockRolesRepository,
         mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
         50, // 50ms timeout for testing
       );
 
@@ -688,6 +713,8 @@ describe('AIService', () => {
         mockAuditLogger,
         mockRolesRepository,
         mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
         50, // 50ms timeout for testing
       );
 
@@ -736,6 +763,8 @@ describe('AIService', () => {
         mockAuditLogger,
         mockRolesRepository,
         mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
         50, // 50ms timeout for testing
       );
 
@@ -832,6 +861,362 @@ describe('AIService', () => {
       const systemMessage = callArgs[0].messages[0];
       expect(systemMessage.content).toContain('USD');
       expect(systemMessage.content).toContain('ru');
+    });
+  });
+
+  describe('chat — idempotency (AI-5)', () => {
+    it('should work without idempotencyKey (backward compatibility)', async () => {
+      mockConversationRepository.listMessages.mockResolvedValue([
+        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+      ]);
+
+      mockProvider.chat.mockResolvedValue({
+        content: 'Response',
+        toolCalls: [],
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      const result = await service.chat('Hello', testSecurityContext);
+
+      expect(result.content).toBe('Response');
+      // Should NOT call idempotency repository
+      expect(mockIdempotencyRepository.acquireLock).not.toHaveBeenCalled();
+    });
+
+    it('should acquire lock on first request with idempotencyKey', async () => {
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockConversationRepository.listMessages.mockResolvedValue([
+        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+      ]);
+
+      mockProvider.chat.mockResolvedValue({
+        content: 'Response',
+        toolCalls: [],
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+
+      expect(result.content).toBe('Response');
+      expect(mockIdempotencyRepository.acquireLock).toHaveBeenCalled();
+      expect(mockIdempotencyRepository.updateCompleted).toHaveBeenCalled();
+    });
+
+    it('should return 409 for duplicate PENDING request', async () => {
+      const fingerprint = computeFingerprint('Hello', undefined);
+      mockIdempotencyRepository.findByKey.mockResolvedValue({
+        id: 'id-1',
+        companyId: 'company-1',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        idempotencyKey: 'key-123',
+        requestFingerprint: fingerprint,
+        status: 'PENDING',
+        responsePayload: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60000),
+      });
+
+      await expect(
+        service.chat('Hello', testSecurityContext, undefined, 'key-123'),
+      ).rejects.toThrow('Request already in progress');
+
+      // Provider should NOT be called
+      expect(mockProvider.chat).not.toHaveBeenCalled();
+    });
+
+    it('should return stored response for duplicate COMPLETED request', async () => {
+      const storedResponse = {
+        conversationId: 'conv-1',
+        content: 'Cached response',
+        toolCallsUsed: ['get_dashboard'],
+        createdAt: '2026-09-07T12:00:00.000Z',
+      };
+
+      const fingerprint = computeFingerprint('Hello', undefined);
+      mockIdempotencyRepository.findByKey.mockResolvedValue({
+        id: 'id-1',
+        companyId: 'company-1',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        idempotencyKey: 'key-123',
+        requestFingerprint: fingerprint,
+        status: 'COMPLETED',
+        responsePayload: storedResponse,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86400000),
+      });
+
+      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+
+      expect(result).toEqual(storedResponse);
+      // Provider should NOT be called
+      expect(mockProvider.chat).not.toHaveBeenCalled();
+    });
+
+    it('should return stored response for duplicate FAILED request', async () => {
+      const storedResponse = {
+        conversationId: 'conv-1',
+        content: 'I encountered an error while processing your request. Please try again later.',
+        toolCallsUsed: [],
+        createdAt: '2026-09-07T12:00:00.000Z',
+      };
+
+      const fingerprint = computeFingerprint('Hello', undefined);
+      mockIdempotencyRepository.findByKey.mockResolvedValue({
+        id: 'id-1',
+        companyId: 'company-1',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        idempotencyKey: 'key-123',
+        requestFingerprint: fingerprint,
+        status: 'FAILED',
+        responsePayload: storedResponse,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86400000),
+      });
+
+      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+
+      expect(result).toEqual(storedResponse);
+      // Provider should NOT be called
+      expect(mockProvider.chat).not.toHaveBeenCalled();
+    });
+
+    it('should update idempotency record on provider failure', async () => {
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockConversationRepository.listMessages.mockResolvedValue([
+        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+      ]);
+
+      mockProvider.chat.mockRejectedValueOnce(
+        Object.assign(new Error('Provider error'), {
+          name: 'AIProviderError',
+          code: 'SERVER_ERROR',
+          retryable: false,
+        }),
+      );
+
+      await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+
+      expect(mockIdempotencyRepository.updateFailed).toHaveBeenCalled();
+    });
+
+    // F1: Test idempotencyKey without conversationId
+    it('should work with idempotencyKey without conversationId', async () => {
+      mockIdempotencyRepository.findByKey.mockResolvedValue(null);
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockConversationRepository.listMessages.mockResolvedValue([
+        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+      ]);
+
+      mockProvider.chat.mockResolvedValue({
+        content: 'Response',
+        toolCalls: [],
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+
+      expect(result.content).toBe('Response');
+      // Should create conversation and then acquire lock
+      expect(mockConversationRepository.createConversation).toHaveBeenCalled();
+      expect(mockIdempotencyRepository.acquireLock).toHaveBeenCalled();
+    });
+
+    // F2: Test fingerprint validation
+    it('should return 400 for same key with different message', async () => {
+      const existingFingerprint = computeFingerprint('Different message', undefined);
+      mockIdempotencyRepository.findByKey.mockResolvedValue({
+        id: 'id-1',
+        companyId: 'company-1',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        idempotencyKey: 'key-123',
+        requestFingerprint: existingFingerprint,
+        status: 'COMPLETED',
+        responsePayload: { conversationId: 'conv-1', content: 'Response', toolCallsUsed: [], createdAt: new Date().toISOString() },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86400000),
+      });
+
+      await expect(
+        service.chat('Hello', testSecurityContext, undefined, 'key-123'),
+      ).rejects.toThrow(IdempotencyKeyMismatchError);
+    });
+
+    it('should return 400 for same key with different conversationId', async () => {
+      const existingFingerprint = computeFingerprint('Hello', 'conv-999');
+      mockIdempotencyRepository.findByKey.mockResolvedValue({
+        id: 'id-1',
+        companyId: 'company-1',
+        userId: 'user-1',
+        conversationId: 'conv-999',
+        idempotencyKey: 'key-123',
+        requestFingerprint: existingFingerprint,
+        status: 'COMPLETED',
+        responsePayload: { conversationId: 'conv-999', content: 'Response', toolCallsUsed: [], createdAt: new Date().toISOString() },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86400000),
+      });
+
+      await expect(
+        service.chat('Hello', testSecurityContext, 'conv-1', 'key-123'),
+      ).rejects.toThrow(IdempotencyKeyMismatchError);
+    });
+
+    it('should allow same key with same request (replay)', async () => {
+      const fingerprint = computeFingerprint('Hello', undefined);
+      const storedResponse = {
+        conversationId: 'conv-1',
+        content: 'Cached response',
+        toolCallsUsed: [],
+        createdAt: new Date().toISOString(),
+      };
+
+      mockIdempotencyRepository.findByKey.mockResolvedValue({
+        id: 'id-1',
+        companyId: 'company-1',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        idempotencyKey: 'key-123',
+        requestFingerprint: fingerprint,
+        status: 'COMPLETED',
+        responsePayload: storedResponse,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86400000),
+      });
+
+      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+
+      expect(result).toEqual(storedResponse);
+      expect(mockProvider.chat).not.toHaveBeenCalled();
+    });
+
+    // F3: Test expired PENDING race condition
+    it('should handle expired PENDING race when refreshed is null', async () => {
+      const expiredRecord = {
+        id: 'id-1',
+        companyId: 'company-1',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        idempotencyKey: 'key-123',
+        requestFingerprint: computeFingerprint('Hello', undefined),
+        status: 'PENDING',
+        responsePayload: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() - 1000), // Expired
+      };
+
+      mockIdempotencyRepository.findByKey.mockResolvedValueOnce(expiredRecord);
+      mockIdempotencyRepository.reclaimExpired.mockResolvedValue(true);
+      // After reclaim, record is deleted, so findByKey returns null
+      mockIdempotencyRepository.findByKey.mockResolvedValueOnce(null);
+      // Then acquireLock succeeds
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockConversationRepository.listMessages.mockResolvedValue([
+        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+      ]);
+
+      mockProvider.chat.mockResolvedValue({
+        content: 'Response',
+        toolCalls: [],
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+
+      expect(result.content).toBe('Response');
+      expect(mockIdempotencyRepository.reclaimExpired).toHaveBeenCalled();
+      expect(mockIdempotencyRepository.acquireLock).toHaveBeenCalled();
+    });
+
+    // Test concurrent expired PENDING reclaim
+    it('should handle concurrent expired PENDING reclaim', async () => {
+      const expiredRecord = {
+        id: 'id-1',
+        companyId: 'company-1',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        idempotencyKey: 'key-123',
+        requestFingerprint: computeFingerprint('Hello', undefined),
+        status: 'PENDING',
+        responsePayload: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() - 1000), // Expired
+      };
+
+      mockIdempotencyRepository.findByKey.mockResolvedValueOnce(expiredRecord);
+      mockIdempotencyRepository.reclaimExpired.mockResolvedValue(false); // Another request reclaimed it
+      // After failed reclaim, record is deleted by winner, so findByKey returns null
+      mockIdempotencyRepository.findByKey.mockResolvedValueOnce(null);
+      // Then acquireLock succeeds
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockConversationRepository.listMessages.mockResolvedValue([
+        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+      ]);
+
+      mockProvider.chat.mockResolvedValue({
+        content: 'Response',
+        toolCalls: [],
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+
+      expect(result.content).toBe('Response');
+      expect(mockIdempotencyRepository.reclaimExpired).toHaveBeenCalled();
+      // Should not throw conflict, should proceed to acquire lock
+      expect(mockIdempotencyRepository.acquireLock).toHaveBeenCalled();
+    });
+
+    // Test that provider is not called on replay
+    it('should not call provider on replay of completed request', async () => {
+      const fingerprint = computeFingerprint('Hello', undefined);
+      const storedResponse = {
+        conversationId: 'conv-1',
+        content: 'Cached response',
+        toolCallsUsed: ['get_dashboard'],
+        createdAt: new Date().toISOString(),
+      };
+
+      mockIdempotencyRepository.findByKey.mockResolvedValue({
+        id: 'id-1',
+        companyId: 'company-1',
+        userId: 'user-1',
+        conversationId: 'conv-1',
+        idempotencyKey: 'key-123',
+        requestFingerprint: fingerprint,
+        status: 'COMPLETED',
+        responsePayload: storedResponse,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86400000),
+      });
+
+      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+
+      expect(result).toEqual(storedResponse);
+      expect(mockProvider.chat).not.toHaveBeenCalled();
+      expect(mockConversationRepository.createMessage).not.toHaveBeenCalled();
     });
   });
 });
