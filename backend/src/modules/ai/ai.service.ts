@@ -347,6 +347,18 @@ export class AIService {
       }
 
       // Max iterations reached
+      const maxIterContent = 'I was unable to complete the analysis within the allowed number of steps. Please try a simpler question.';
+
+      // AI-4B: Close conversation with error assistant message
+      try {
+        await this.conversationRepository.createMessage(
+          convId, companyId, userId, 'assistant', maxIterContent,
+          { tokenCount: 0 },
+        );
+      } catch (persistErr: any) {
+        this.logger.error(`Failed to persist max-iterations assistant message: ${persistErr.message}`);
+      }
+
       this.auditLogger.log({
         requestId,
         userId,
@@ -363,7 +375,7 @@ export class AIService {
 
       return {
         conversationId: convId,
-        content: 'I was unable to complete the analysis within the allowed number of steps. Please try a simpler question.',
+        content: maxIterContent,
         toolCallsUsed: allToolCallsUsed,
         createdAt: new Date().toISOString(),
       };
@@ -375,6 +387,18 @@ export class AIService {
 
       const errorCode = error instanceof AIProviderError ? error.code : 'UNKNOWN';
       const errorMessage = error instanceof AIProviderError ? error.message : 'Unknown error';
+
+      // AI-4B: Close conversation with error assistant message (best-effort)
+      const errorAssistantContent = 'I encountered an error while processing your request. Please try again later.';
+      try {
+        await this.conversationRepository.createMessage(
+          convId, companyId, userId, 'assistant', errorAssistantContent,
+          { tokenCount: 0 },
+        );
+      } catch (persistErr: any) {
+        // Do not mask the original provider error
+        this.logger.error(`Failed to persist error assistant message: ${persistErr.message}`);
+      }
 
       this.auditLogger.log({
         requestId,
@@ -394,7 +418,7 @@ export class AIService {
 
       return {
         conversationId: convId,
-        content: 'I encountered an error while processing your request. Please try again later.',
+        content: errorAssistantContent,
         toolCallsUsed: allToolCallsUsed,
         createdAt: new Date().toISOString(),
       };

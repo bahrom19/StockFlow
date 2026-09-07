@@ -392,6 +392,189 @@ describe('AIService', () => {
     });
   });
 
+  describe('chat — AI-4B: error assistant persistence (F5 fix)', () => {
+    it('should persist error assistant message when provider fails after tool call', async () => {
+      // Step 1: provider requests tool
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        // Step 2: provider fails on next call
+        .mockRejectedValueOnce(
+          Object.assign(new Error('OpenAI rate limit exceeded'), {
+            name: 'AIProviderError',
+            code: 'RATE_LIMITED',
+            retryable: true,
+          }),
+        );
+
+      // Mock tool execution succeeds
+      (mockTool.execute as jest.Mock).mockResolvedValue({ todaySales: 125000 });
+
+      const result = await service.chat('Show sales', testSecurityContext);
+
+      // Error message returned to client
+      expect(result.content).toContain('error');
+
+      // Check that error assistant message was persisted
+      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+
+      // Should have: 1) assistant(toolCalls) + 2) error assistant
+      expect(assistantMessages.length).toBe(2);
+      expect(assistantMessages[1]![4]).toContain('error');
+    });
+
+    it('should persist error assistant message when provider fails without tools', async () => {
+      mockProvider.chat.mockRejectedValueOnce(
+        Object.assign(new Error('OpenAI server error: 500'), {
+          name: 'AIProviderError',
+          code: 'SERVER_ERROR',
+          retryable: true,
+        }),
+      );
+
+      const result = await service.chat('Hello', testSecurityContext);
+
+      expect(result.content).toContain('error');
+
+      // Check error assistant persisted
+      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      expect(assistantMessages.length).toBe(1);
+      expect(assistantMessages[0]![4]).toContain('error');
+    });
+
+    it('should persist error assistant when 429 after retries', async () => {
+      // AI-4A provider retries internally, then throws
+      mockProvider.chat.mockRejectedValueOnce(
+        Object.assign(new Error('OpenAI rate limit exceeded'), {
+          name: 'AIProviderError',
+          code: 'RATE_LIMITED',
+          retryable: true,
+        }),
+      );
+
+      await service.chat('Hello', testSecurityContext);
+
+      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      expect(assistantMessages.length).toBe(1);
+      expect(assistantMessages[0]![4]).toContain('error');
+    });
+
+    it('should persist error assistant when 5xx after retries', async () => {
+      mockProvider.chat.mockRejectedValueOnce(
+        Object.assign(new Error('OpenAI server error: 500'), {
+          name: 'AIProviderError',
+          code: 'SERVER_ERROR',
+          retryable: true,
+        }),
+      );
+
+      await service.chat('Hello', testSecurityContext);
+
+      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      expect(assistantMessages.length).toBe(1);
+      expect(assistantMessages[0]![4]).toContain('error');
+    });
+
+    it('should not mask original error when error assistant persistence fails', async () => {
+      mockProvider.chat.mockRejectedValueOnce(
+        Object.assign(new Error('Provider unavailable'), {
+          name: 'AIProviderError',
+          code: 'SERVER_ERROR',
+          retryable: false,
+        }),
+      );
+
+      // Make error assistant persistence fail
+      mockConversationRepository.createMessage
+        .mockResolvedValueOnce({ id: 'msg-user', role: 'user', createdAt: new Date() } as any) // user msg OK
+        .mockResolvedValueOnce(null); // error assistant fails
+
+      const result = await service.chat('Hello', testSecurityContext);
+
+      // Original error message still returned (not masked by persistence failure)
+      expect(result.content).toContain('error');
+      expect(result.conversationId).toBe('conv-1');
+    });
+
+    it('should persist error assistant on max iterations', async () => {
+      // Always request tools — never stop
+      mockProvider.chat.mockResolvedValue({
+        content: '',
+        toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+        usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+        model: 'gpt-4o-mini',
+        finishReason: 'tool_calls',
+      });
+
+      const result = await service.chat('Complex', testSecurityContext);
+
+      expect(result.content).toContain('unable to complete');
+
+      // Check error assistant persisted on max iterations
+      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+
+      // assistant(toolCalls) × 5 + error assistant = 6
+      expect(assistantMessages.length).toBe(6);
+      expect(assistantMessages[5]![4]).toContain('unable to complete');
+    });
+
+    it('should not create duplicate assistant messages on single failure', async () => {
+      mockProvider.chat.mockRejectedValueOnce(
+        Object.assign(new Error('Timeout'), {
+          name: 'AIProviderError',
+          code: 'TIMEOUT',
+          retryable: true,
+        }),
+      );
+
+      await service.chat('Hello', testSecurityContext);
+
+      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+
+      // Exactly one assistant message (the error assistant)
+      expect(assistantMessages.length).toBe(1);
+    });
+
+    it('successful tool flow should not be affected by AI-4B', async () => {
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'You earned 125K today',
+          toolCalls: [],
+          usage: { promptTokens: 200, completionTokens: 50, totalTokens: 250 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      const result = await service.chat('Show sales', testSecurityContext);
+
+      expect(result.content).toBe('You earned 125K today');
+
+      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+
+      // assistant(toolCalls) + assistant(final) = 2 (no error assistant)
+      expect(assistantMessages.length).toBe(2);
+    });
+  });
+
   describe('chat — company context', () => {
     it('should use currency and locale from SecurityContext', async () => {
       mockProvider.chat.mockResolvedValue({
