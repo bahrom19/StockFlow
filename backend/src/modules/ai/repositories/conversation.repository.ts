@@ -200,11 +200,12 @@ export class ConversationRepository {
       return null; // Not found or not authorized
     }
 
+    // AI-7: Fetch most recent messages (DESC), caller reverses to chronological ASC
     const messages = await this.getClient(tx).aiMessage.findMany({
       where: {
         conversationId,
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: limit,
     });
 

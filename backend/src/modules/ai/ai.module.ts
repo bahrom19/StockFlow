@@ -88,6 +88,22 @@ import { ReportsModule } from '../reports/reports.module';
       inject: [ConfigService],
     },
 
+    // AI-7: Context budget ceiling
+    {
+      provide: 'AI_CONTEXT_MAX_TOKENS',
+      useFactory: (configService: ConfigService) =>
+        configService.get<number>('AI_CONTEXT_MAX_TOKENS', 120_000),
+      inject: [ConfigService],
+    },
+
+    // AI-7: Output token reservation (same as AI_MAX_TOKENS)
+    {
+      provide: 'AI_MAX_TOKENS',
+      useFactory: (configService: ConfigService) =>
+        configService.get<number>('AI_MAX_TOKENS', 2048),
+      inject: [ConfigService],
+    },
+
     // AI Orchestrator
     AIService,
   ],

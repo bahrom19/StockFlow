@@ -18,6 +18,108 @@ const TITLE_MAX_CHARS = 50;
 const DEFAULT_TOOL_EXECUTION_TIMEOUT_MS = 30_000;
 const DEFAULT_REQUEST_BUDGET_MS = 120_000; // AI-6: 120s overall request budget
 
+// ── AI-7: Token-aware context management ───────────────────
+const DEFAULT_CONTEXT_MAX_TOKENS = 120_000;
+const AI_MAX_TOKENS_DEFAULT = 2048; // output reservation
+const SAFETY_OVERHEAD = 500;
+
+/**
+ * Conservative heuristic token estimation.
+ * ~4 chars per token with 20% safety margin.
+ * NOT a mathematical guarantee — V1 heuristic safety mechanism.
+ */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4 * 1.2);
+}
+
+/**
+ * Estimate tokens for the full provider request.
+ * Used before every provider.chat() call (Checkpoint 1).
+ */
+function fullProviderRequestEstimate(
+  messages: AIMessage[],
+  tools: { name: string; description: string; inputSchema: Record<string, unknown> }[],
+  outputReservation: number = AI_MAX_TOKENS_DEFAULT,
+): number {
+  return (
+    estimateMessagesTokens(messages)
+    + estimateToolsTokens(tools)
+    + outputReservation
+    + SAFETY_OVERHEAD
+  );
+}
+
+function estimateMessagesTokens(messages: AIMessage[]): number {
+  return messages.reduce((sum, m) => {
+    const contentTokens = estimateTokens(m.content);
+    const toolCallsTokens = m.toolCalls
+      ? estimateTokens(JSON.stringify(m.toolCalls))
+      : 0;
+    return sum + contentTokens + toolCallsTokens;
+  }, 0);
+}
+
+function estimateToolsTokens(
+  tools: { name: string; description: string; inputSchema: Record<string, unknown> }[],
+): number {
+  if (tools.length === 0) return 0;
+  return estimateTokens(JSON.stringify(tools));
+}
+
+/**
+ * Group messages into conversational turns.
+ * Each turn starts with a user message.
+ * assistant/tool messages continue the current turn.
+ */
+function groupIntoTurns(messages: AIMessage[]): AIMessage[][] {
+  const turns: AIMessage[][] = [];
+  let currentTurn: AIMessage[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'user') {
+      if (currentTurn.length > 0) {
+        turns.push(currentTurn);
+      }
+      currentTurn = [msg];
+    } else {
+      currentTurn.push(msg);
+    }
+  }
+  if (currentTurn.length > 0) {
+    turns.push(currentTurn);
+  }
+  return turns;
+}
+
+/**
+ * Select turns from newest to oldest within token budget.
+ * Returns selected turns in chronological ASC order.
+ */
+function selectTurns(
+  turns: AIMessage[][],
+  budget: number,
+): AIMessage[][] {
+  const selected: AIMessage[][] = [];
+  let remaining = budget;
+
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i];
+    if (!turn) continue;
+    const turnTokens = turn.reduce(
+      (sum, m) => sum + estimateTokens(m.content + JSON.stringify(m.toolCalls ?? [])),
+      0,
+    );
+
+    if (turnTokens <= remaining) {
+      selected.unshift(turn);
+      remaining -= turnTokens;
+    } else {
+      break;
+    }
+  }
+  return selected;
+}
+
 const SYSTEM_PROMPT = `You are StockFlow AI Assistant — a business analytics helper for inventory management software.
 
 YOUR ROLE:
@@ -62,6 +164,8 @@ export class AIService {
   private readonly logger = new Logger(AIService.name);
   private readonly toolExecutionTimeoutMs: number;
   private readonly requestBudgetMs: number;
+  private readonly contextMaxTokens: number;
+  private readonly maxTokens: number; // output reservation from config
 
   constructor(
     @Inject('AIProvider') private readonly provider: AIProvider,
@@ -73,9 +177,13 @@ export class AIService {
     private readonly prismaService: PrismaService,
     @Optional() toolExecutionTimeoutMs?: number,
     @Optional() @Inject('AI_REQUEST_TIMEOUT_MS') requestBudgetMs?: number,
+    @Optional() @Inject('AI_CONTEXT_MAX_TOKENS') contextMaxTokens?: number,
+    @Optional() @Inject('AI_MAX_TOKENS') maxTokens?: number,
   ) {
     this.toolExecutionTimeoutMs = toolExecutionTimeoutMs ?? DEFAULT_TOOL_EXECUTION_TIMEOUT_MS;
     this.requestBudgetMs = requestBudgetMs ?? DEFAULT_REQUEST_BUDGET_MS;
+    this.contextMaxTokens = contextMaxTokens ?? DEFAULT_CONTEXT_MAX_TOKENS;
+    this.maxTokens = maxTokens ?? AI_MAX_TOKENS_DEFAULT;
   }
 
   async chat(
@@ -310,12 +418,14 @@ export class AIService {
     }
 
     // ── Step 3: Load conversation history ───────────────────────
+    // AI-7: Repository returns newest N messages (DESC), reverse to chronological ASC
     const historyMessages = await this.conversationRepository.listMessages(
       convId,
       companyId,
       userId,
       HISTORY_LIMIT,
     );
+    const chronologicalHistory = historyMessages ? [...historyMessages].reverse() : [];
 
     // ── Step 4: Build messages array for provider ───────────────
     const permissionCodes = await this.rolesRepository.findPermissionCodesByRoleNames(
@@ -330,49 +440,97 @@ export class AIService {
       inputSchema: t.inputSchema,
     }));
 
-    const systemContext = this.buildSystemContext(securityContext);
-    const messages: AIMessage[] = [
-      { role: 'system', content: systemContext },
-    ];
-
-    // Add conversation history to messages array
-    // historyMessages includes the user message we just persisted (it's the last one)
-    if (historyMessages && historyMessages.length > 0) {
-      for (const msg of historyMessages) {
-        if (msg.role === 'user') {
-          messages.push({ role: 'user', content: msg.content });
-        } else if (msg.role === 'assistant') {
-          const assistantMsg: AIMessage = {
-            role: 'assistant',
-            content: msg.content,
-          };
-          if (msg.toolCallsJson) {
-            try {
-              assistantMsg.toolCalls = JSON.parse(JSON.stringify(msg.toolCallsJson));
-            } catch {
-              // Ignore malformed toolCallsJson
-            }
+    // AI-7: Convert history DB messages to AIMessage format
+    const historyAsMessages: AIMessage[] = chronologicalHistory.map((msg) => {
+      if (msg.role === 'user') {
+        return { role: 'user' as const, content: msg.content };
+      } else if (msg.role === 'assistant') {
+        const assistantMsg: AIMessage = {
+          role: 'assistant' as const,
+          content: msg.content,
+        };
+        if (msg.toolCallsJson) {
+          try {
+            assistantMsg.toolCalls = JSON.parse(JSON.stringify(msg.toolCallsJson));
+          } catch {
+            // Ignore malformed toolCallsJson
           }
-          messages.push(assistantMsg);
-        } else if (msg.role === 'tool') {
-          const toolMsg: AIMessage = {
-            role: 'tool',
-            content: msg.content,
-            toolCallId: msg.toolCallId ?? undefined,
-          };
-          messages.push(toolMsg);
+        }
+        return assistantMsg;
+      } else {
+        return {
+          role: 'tool' as const,
+          content: msg.content,
+          toolCallId: msg.toolCallId ?? undefined,
+        };
+      }
+    });
+
+    // AI-7: Handle incomplete historical turns (strip orphan toolCalls)
+    const safeHistory = historyAsMessages.map((msg, idx) => {
+      if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+        // Check if following messages in the same turn have tool results
+        const hasFollowingTool = historyAsMessages
+          .slice(idx + 1)
+          .some((m) => m.role === 'tool');
+        if (!hasFollowingTool) {
+          // Incomplete turn — strip toolCalls from a copy
+          return { ...msg, toolCalls: undefined };
         }
       }
+      return msg;
+    });
+
+    // AI-7: Turn-based grouping and newest-first token-aware selection
+    const turns = groupIntoTurns(safeHistory);
+    const systemContext = this.buildSystemContext(securityContext);
+    const systemTokens = estimateTokens(systemContext);
+    const toolsTokensEstimate = estimateToolsTokens(toolDefinitions);
+    const currentUserTokens = estimateTokens(userMessage);
+
+    // AI-7: Calculate available budget for history
+    const effectiveInputBudget = this.contextMaxTokens - this.maxTokens - SAFETY_OVERHEAD;
+    const historyBudget =
+      effectiveInputBudget - systemTokens - toolsTokensEstimate - currentUserTokens;
+
+    // AI-7: Select turns from newest to oldest within budget
+    const selectedTurns = historyBudget > 0 ? selectTurns(turns, historyBudget) : [];
+    const selectedHistory = selectedTurns.flat();
+
+    // AI-7: Ensure current user message is always present
+    const lastHistoryMsg = selectedHistory[selectedHistory.length - 1];
+    const currentUserIncluded = lastHistoryMsg != null
+      && lastHistoryMsg.role === 'user'
+      && lastHistoryMsg.content === userMessage;
+    if (!currentUserIncluded) {
+      selectedHistory.push({ role: 'user', content: userMessage });
     }
+
+    // AI-7: Build final messages array
+    const messages: AIMessage[] = [
+      { role: 'system', content: systemContext },
+      ...selectedHistory,
+    ];
 
     const allToolCallsUsed: string[] = [];
     let iterations = 0;
     let conversationCreatedAt: string | null = null;
 
     try {
+      // AI-7: Dynamic minimum context check (inside try for AI-4B persistence)
+      const minimumRequest =
+        systemTokens + currentUserTokens + toolsTokensEstimate + this.maxTokens + SAFETY_OVERHEAD;
+      if (minimumRequest > this.contextMaxTokens) {
+        throw new ContextBudgetExceededError();
+      }
       // ── Step 5: Tool loop ──────────────────────────────────────
       while (iterations < MAX_TOOL_ITERATIONS) {
         iterations++;
+
+        // ── AI-7 Checkpoint 1: Before provider call ────────────
+        if (fullProviderRequestEstimate(messages, toolDefinitions, this.maxTokens) > this.contextMaxTokens) {
+          throw new ContextBudgetExceededError();
+        }
 
         const response = await this.provider.chat({
           messages,
@@ -454,6 +612,22 @@ export class AIService {
           }
 
           return result;
+        }
+
+        // ── AI-7 Checkpoint 2: Pre-tool conservative reservation ──
+        const MAX_TOOL_RESULT_TOKENS = estimateTokens('x'.repeat(TOOL_RESULT_MAX_CHARS));
+        const preToolEstimate =
+          estimateMessagesTokens(messages)
+          + estimateTokens(JSON.stringify(response.toolCalls))
+          + response.toolCalls.length * MAX_TOOL_RESULT_TOKENS;
+        const preToolFullRequest =
+          preToolEstimate
+          + toolsTokensEstimate
+          + this.maxTokens
+          + SAFETY_OVERHEAD;
+        if (preToolFullRequest > this.contextMaxTokens) {
+          // Tool results won't fit — do NOT execute tools, no orphan messages
+          throw new ContextBudgetExceededError();
         }
 
         // ── Step 5a: Persist assistant message WITH tool calls ─────
@@ -557,9 +731,69 @@ export class AIService {
             messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
           }
 
-          // ── AI-6: Check budget after each tool execution ───────
+          // ── AI-7 Checkpoint 3: After each tool result ────────────
+          // AI-6: Check abort signal FIRST (higher priority)
           if (requestController.signal.aborted) {
             throw new RequestBudgetExceededError();
+          }
+
+          // AI-7: Check if next provider call fits
+          const postToolFullRequest =
+            fullProviderRequestEstimate(messages, toolDefinitions, this.maxTokens);
+          if (postToolFullRequest > this.contextMaxTokens) {
+            // Next normal call doesn't fit — try NO_MORE_TOOLS
+            const noMoreToolsMsg: AIMessage = {
+              role: 'system',
+              content: 'Context limit reached. Provide your final answer now without tools.',
+            };
+            const noMoreToolsFullRequest =
+              fullProviderRequestEstimate(
+                [...messages, noMoreToolsMsg],
+                [],
+                this.maxTokens,
+              );
+
+            if (noMoreToolsFullRequest <= this.contextMaxTokens) {
+              // Final no-tools call is safe
+              messages.push(noMoreToolsMsg);
+              try {
+                const finalResponse = await this.provider.chat({
+                  messages,
+                  tools: [],
+                  signal: requestController.signal,
+                });
+                // Persist final assistant message
+                const finalMsgResult = await this.conversationRepository.createMessage(
+                  convId, companyId, userId, 'assistant',
+                  finalResponse.content ?? 'I could not generate a response.',
+                  {
+                    toolCallsJson: finalResponse.toolCalls.length > 0 ? finalResponse.toolCalls as any : undefined,
+                    tokenCount: finalResponse.usage.totalTokens,
+                  },
+                );
+                if (finalMsgResult) {
+                  conversationCreatedAt = finalMsgResult.createdAt.toISOString();
+                }
+                await this.conversationRepository.updateConversation(convId, companyId, userId, {});
+                const finalResult = {
+                  conversationId: convId,
+                  content: finalResponse.content ?? 'I could not generate a response.',
+                  toolCallsUsed: allToolCallsUsed,
+                  createdAt: conversationCreatedAt ?? new Date().toISOString(),
+                };
+                if (idempotencyKey) {
+                  try {
+                    await this.idempotencyRepository.updateCompleted(companyId, userId, idempotencyKey, finalResult);
+                  } catch { /* don't mask */ }
+                }
+                return finalResult;
+              } catch {
+                // Final call failed — fall through to error path
+              }
+            }
+
+            // NO_MORE_TOOLS not possible or failed — controlled failure
+            throw new ContextBudgetExceededError();
           }
         }
       }
@@ -660,6 +894,11 @@ export class AIService {
       // AI-6: Rethrow budget error so controller maps to HTTP 504
       // Persistence/updateFailed above are best-effort — original error is never masked
       if (error instanceof RequestBudgetExceededError) {
+        throw error;
+      }
+
+      // AI-7: Rethrow context budget error so controller maps to HTTP 500
+      if (error instanceof ContextBudgetExceededError) {
         throw error;
       }
 
@@ -793,5 +1032,16 @@ export class RequestBudgetExceededError extends Error {
   constructor() {
     super('AI request budget exceeded');
     this.name = 'RequestBudgetExceededError';
+  }
+}
+
+/**
+ * AI-7: Thrown when the provider context budget is exceeded.
+ * Controller maps this to HTTP 500 Internal Server Error.
+ */
+export class ContextBudgetExceededError extends Error {
+  constructor() {
+    super('AI context budget exceeded');
+    this.name = 'ContextBudgetExceededError';
   }
 }

@@ -327,13 +327,13 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
   });
 
   describe('listMessages', () => {
-    it('returns messages ordered by createdAt ASC', async () => {
+    it('returns messages ordered by createdAt DESC (newest first, AI-7)', async () => {
       // First verify ownership
       prisma.aiConversation.findFirst.mockResolvedValue({ id: 'conv-1' });
 
       const messages = [
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date('2026-09-07T10:00:00Z') },
         { id: 'msg-2', role: 'assistant', content: 'Hi', createdAt: new Date('2026-09-07T10:00:01Z') },
+        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date('2026-09-07T10:00:00Z') },
       ];
       prisma.aiMessage.findMany.mockResolvedValue(messages);
 
@@ -345,7 +345,7 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
       });
       expect(prisma.aiMessage.findMany).toHaveBeenCalledWith({
         where: { conversationId: 'conv-1' },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         take: 20,
       });
       expect(result).toEqual(messages);

@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AIService, ConversationNotFoundError, PersistenceError, ToolExecutionTimeoutError, IdempotencyKeyMismatchError, IdempotencyConflictError, RequestBudgetExceededError } from '../ai.service';
+import { AIService, ConversationNotFoundError, PersistenceError, ToolExecutionTimeoutError, IdempotencyKeyMismatchError, IdempotencyConflictError, RequestBudgetExceededError, ContextBudgetExceededError } from '../ai.service';
 import { AIProvider, AIRequest, AIResponse } from '../providers/ai-provider.interface';
 import { ToolRegistry } from '../tools/tool.registry';
 import { AIAuditLogger } from '../logging/ai-audit.logger';
@@ -273,11 +273,11 @@ describe('AIService', () => {
         title: 'Previous',
       });
 
-      // DB returns: previous history + newly persisted user message
+      // DB returns: DESC order (newest first) as per AI-7 repository change
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Previous question', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
-        { id: 'msg-2', role: 'assistant', content: 'Previous answer', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
         { id: 'msg-3', role: 'user', content: 'New question', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
+        { id: 'msg-2', role: 'assistant', content: 'Previous answer', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
+        { id: 'msg-1', role: 'user', content: 'Previous question', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -1514,6 +1514,315 @@ describe('AIService', () => {
       await expect(
         budgetService.chat('Both fail', testSecurityContext, undefined, 'key-all'),
       ).rejects.toThrow(RequestBudgetExceededError);
+    });
+  });
+
+  // ── AI-7: Context Budget Tests ──────────────────────────────
+  describe('chat — context budget (AI-7)', () => {
+    let contextService: AIService;
+
+    beforeEach(() => {
+      // Create service with small context budget for testing
+      contextService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, // toolExecutionTimeoutMs
+        undefined, // requestBudgetMs (AI-6)
+        10000,     // contextMaxTokens = 10K for testing
+        2048,      // maxTokens (output reservation)
+      );
+    });
+
+    it('should use default context budget of 120K when not configured', () => {
+      const defaultService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+      );
+      expect(defaultService).toBeDefined();
+    });
+
+    it('should complete when full request fits within budget', async () => {
+      mockProvider.chat.mockResolvedValue({
+        content: 'Success',
+        toolCalls: [],
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      const result = await contextService.chat('Short message', testSecurityContext);
+      expect(result.content).toBe('Success');
+      expect(mockProvider.chat).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw ContextBudgetExceededError when full request oversized', async () => {
+      // Create service with very small budget
+      const tinyService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, undefined,
+        100, // 100 tokens — too small for system + tools + user + output
+        2048,
+      );
+
+      await expect(
+        tinyService.chat('Hello', testSecurityContext),
+      ).rejects.toThrow(ContextBudgetExceededError);
+      // Provider should NOT be called
+      expect(mockProvider.chat).not.toHaveBeenCalled();
+    });
+
+    it('should throw ContextBudgetExceededError when pre-tool reservation exceeds budget', async () => {
+      // Provider returns a tool call, but the reservation won't fit
+      mockProvider.chat.mockResolvedValue({
+        content: '',
+        toolCalls: [{ id: 'call-1', name: 'get_dashboard', arguments: {} }],
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        model: 'gpt-4o-mini',
+        finishReason: 'tool_calls',
+      });
+
+      // Create service with budget that fits initial messages but not tool results
+      const tightService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, undefined,
+        3500, // tight budget
+        2048,
+      );
+
+      await expect(
+        tightService.chat('Tool', testSecurityContext),
+      ).rejects.toThrow(ContextBudgetExceededError);
+      // Provider was called once (for the tool call) but tools were NOT executed
+      expect(mockProvider.chat).toHaveBeenCalledTimes(1);
+      expect(mockTool.execute).not.toHaveBeenCalled();
+    });
+
+    it('should persist error assistant for ContextBudgetExceededError (AI-4B)', async () => {
+      const tinyService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, undefined,
+        100, 2048,
+      );
+
+      await expect(
+        tinyService.chat('Hello', testSecurityContext),
+      ).rejects.toThrow(ContextBudgetExceededError);
+
+      // AI-4B: error assistant should be persisted
+      const assistantCalls = mockConversationRepository.createMessage.mock.calls.filter(
+        (call) => call[3] === 'assistant',
+      );
+      expect(assistantCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should call updateFailed for ContextBudgetExceededError with idempotencyKey', async () => {
+      const tinyService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, undefined,
+        100, 2048,
+      );
+
+      await expect(
+        tinyService.chat('Hello', testSecurityContext, undefined, 'ctx-key'),
+      ).rejects.toThrow(ContextBudgetExceededError);
+
+      expect(mockIdempotencyRepository.updateFailed).toHaveBeenCalledWith(
+        'company-1', 'user-1', 'ctx-key', expect.any(Object),
+      );
+    });
+
+    it('should rethrow ContextBudgetExceededError even if persistence fails', async () => {
+      const tinyService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, undefined,
+        100, 2048,
+      );
+
+      mockConversationRepository.createMessage.mockImplementation(((...args: any[]) => {
+        if (args[3] === 'assistant') {
+          return Promise.reject(new Error('DB down'));
+        }
+        return Promise.resolve({ id: 'msg-1', createdAt: new Date() });
+      }) as any);
+
+      await expect(
+        tinyService.chat('Hello', testSecurityContext),
+      ).rejects.toThrow(ContextBudgetExceededError);
+    });
+
+    it('should rethrow ContextBudgetExceededError even if updateFailed fails', async () => {
+      const tinyService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, undefined,
+        100, 2048,
+      );
+
+      mockIdempotencyRepository.updateFailed.mockRejectedValue(new Error('DB down'));
+
+      await expect(
+        tinyService.chat('Hello', testSecurityContext, undefined, 'ctx-key'),
+      ).rejects.toThrow(ContextBudgetExceededError);
+    });
+
+    it('should preserve current user message in history selection', async () => {
+      mockProvider.chat.mockResolvedValue({
+        content: 'Response',
+        toolCalls: [],
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      // Mock history with some messages
+      mockConversationRepository.listMessages.mockResolvedValue([
+        { id: 'm1', role: 'user', content: 'Old question', createdAt: new Date('2026-01-01') },
+        { id: 'm2', role: 'assistant', content: 'Old answer', createdAt: new Date('2026-01-02') },
+        { id: 'm3', role: 'user', content: 'Test message', createdAt: new Date('2026-01-03') },
+      ] as any);
+
+      const result = await contextService.chat('Test message', testSecurityContext);
+      expect(result.content).toBe('Response');
+
+      // Check that provider received messages with the current user message
+      const providerCall = mockProvider.chat.mock.calls[0]?.[0];
+      expect(providerCall).toBeDefined();
+      const userMessages = providerCall!.messages.filter((m: any) => m.role === 'user');
+      expect(userMessages.some((m: any) => m.content === 'Test message')).toBe(true);
+    });
+
+    it('should select newest turns when history exceeds budget', async () => {
+      mockProvider.chat.mockResolvedValue({
+        content: 'OK',
+        toolCalls: [],
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      // Mock 50 messages (DESC order as returned by repository)
+      const manyMessages = Array.from({ length: 50 }, (_, i) => ({
+        id: `m${i}`,
+        role: i % 2 === 0 ? 'user' : 'assistant',
+        content: `Message ${i} with some content to fill tokens`,
+        createdAt: new Date(Date.now() + i * 1000),
+      }));
+      mockConversationRepository.listMessages.mockResolvedValue(manyMessages as any);
+
+      const result = await contextService.chat('Final message', testSecurityContext);
+      expect(result.content).toBe('OK');
+
+      // Provider should have been called
+      expect(mockProvider.chat).toHaveBeenCalledTimes(1);
+    });
+
+    it('should allow empty history when budget is tight', async () => {
+      mockProvider.chat.mockResolvedValue({
+        content: 'Response',
+        toolCalls: [],
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      // Create service with minimal budget
+      const minimalService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, undefined,
+        4000, // minimal budget
+        2048,
+      );
+
+      const result = await minimalService.chat('Hi', testSecurityContext);
+      expect(result.content).toBe('Response');
+    });
+
+    it('should use NO_MORE_TOOLS final call when messages fit but tools do not', async () => {
+      // First call returns tool_calls, second (final no-tools) returns text
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'call-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'Final answer',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      // Service with budget that fits messages but not tools+next call
+      const noToolsService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, undefined,
+        4500, // fits messages but tool results push over
+        2048,
+      );
+
+      const result = await noToolsService.chat('Quick', testSecurityContext);
+      // Should have received the final no-tools response
+      expect(result.content).toBe('Final answer');
     });
   });
 });

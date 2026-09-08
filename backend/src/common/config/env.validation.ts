@@ -21,4 +21,6 @@ export const envValidationSchema = Joi.object({
   AI_MAX_TOKENS: Joi.number().min(1).max(8192).optional().default(2048),
   AI_TIMEOUT_MS: Joi.number().min(1000).max(120000).optional().default(30000),
   AI_REQUEST_TIMEOUT_MS: Joi.number().min(60000).max(300000).optional().default(120000),
+  // AI-7: Application safety ceiling for provider context (NOT model context window)
+  AI_CONTEXT_MAX_TOKENS: Joi.number().min(4000).max(128000).optional().default(120000),
 }).required();
