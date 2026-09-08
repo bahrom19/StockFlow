@@ -17,6 +17,7 @@ import { PurchaseOrderMapper } from '../mappers/purchase-order.mapper';
 import { PurchaseOrderRepository } from '../repositories/purchase-order.repository';
 import { PurchaseOrderCreatedEvent } from '../events/purchase-order-created.event';
 import { PurchaseOrderApprovedEvent } from '../events/purchase-order-approved.event';
+import { PurchaseOrderStatusChangedEvent } from '../events/purchase-order-status-changed.event';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import {
   DocumentSequenceService,
@@ -450,6 +451,32 @@ export class PurchaseOrderService {
         );
       }
 
+      // Notifications V1 (N3): generic status-change event for EVERY real
+      // transition — additive to purchase.order.approved (finance), which
+      // stays untouched. Wrapped so a notification/publish failure can never
+      // break the PO lifecycle.
+      try {
+        await this.eventBus.publish(
+          new PurchaseOrderStatusChangedEvent({
+            purchaseOrderId: id,
+            companyId,
+            supplierId: order.supplierId,
+            orderNumber: order.orderNumber,
+            previousStatus: currentStatus,
+            newStatus,
+            changedBy: userId,
+            rowVersion: rowVer,
+          }),
+          { context: { transactionClient: tx } },
+        );
+      } catch (error) {
+        this.logger.warn(
+          `purchase.order.status.changed publish failed for ${id}: ${
+            (error as Error).message
+          }`,
+        );
+      }
+
       return PurchaseOrderMapper.toEntity(updated);
     });
   }
@@ -484,6 +511,14 @@ export class PurchaseOrderService {
         rowVer,
         tx,
       );
+      await this.publishStatusChangedFromReceipt(
+        id,
+        companyId,
+        order,
+        PurchaseOrderStatus.RECEIVED,
+        rowVer + 1,
+        tx,
+      );
     } else if (anyReceived) {
       await this.purchaseOrderRepository.update(
         id,
@@ -491,6 +526,51 @@ export class PurchaseOrderService {
         companyId,
         rowVer,
         tx,
+      );
+      await this.publishStatusChangedFromReceipt(
+        id,
+        companyId,
+        order,
+        PurchaseOrderStatus.PARTIALLY_RECEIVED,
+        rowVer + 1,
+        tx,
+      );
+    }
+  }
+
+  /**
+   * N3: publish the generic status event for receipt-driven transitions
+   * (PARTIALLY_RECEIVED / RECEIVED). This path has no acting user
+   * (system-driven from goods receipt), so `changedBy` is null. Wrapped in
+   * try/catch — must never break the goods receipt flow.
+   */
+  private async publishStatusChangedFromReceipt(
+    id: string,
+    companyId: string,
+    order: { supplierId: string; orderNumber: string; status: string },
+    newStatus: PurchaseOrderStatus,
+    rowVersion: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    try {
+      await this.eventBus.publish(
+        new PurchaseOrderStatusChangedEvent({
+          purchaseOrderId: id,
+          companyId,
+          supplierId: order.supplierId,
+          orderNumber: order.orderNumber,
+          previousStatus: order.status as PurchaseOrderStatus,
+          newStatus,
+          changedBy: null,
+          rowVersion,
+        }),
+        { context: { transactionClient: tx } },
+      );
+    } catch (error) {
+      this.logger.warn(
+        `purchase.order.status.changed publish failed for ${id}: ${
+          (error as Error).message
+        }`,
       );
     }
   }
