@@ -1236,6 +1236,54 @@ void main() {
       expect(find.textContaining('2 items'), findsWidgets);
     });
 
+    // Phase 5D-6C regression: held sales held before a browser/app restart
+    // must appear in the POS state automatically when the screen opens — the
+    // notifier hydrates from storage in initState WITHOUT the cashier pressing
+    // Resume/Ctrl+H first (which used to be the only way load() ran).
+    testWidgets(
+        'held sales persist across reload and hydrate into the POS on open',
+        (tester) async {
+      useDesktopSurface(tester);
+      // Seed the exact storage payload (web/desktop localStorage equivalent)
+      // that a previous session would have left behind.
+      final persisted = HeldSale(
+        id: 'held-1',
+        label: 'Restored hold',
+        heldAt: DateTime.utc(2026, 9, 8),
+        items: const [
+          CartItem(
+            productId: 'p1',
+            productName: 'Espresso',
+            productSku: 'ESP',
+            quantity: 2,
+            unitPrice: Money(minorUnits: 1000, currency: 'KZT'),
+            costPrice: Money(minorUnits: 500, currency: 'KZT'),
+          ),
+        ],
+      );
+      SharedPreferences.setMockInitialValues({
+        'held_sales_v1': jsonEncode([persisted.toJson()]),
+      });
+      addTearDown(() => SharedPreferences.setMockInitialValues({}));
+
+      final fake = _FakePosApi()..warehouses = [_warehouse()];
+
+      await tester.pumpWidget(buildWorkspace(fake));
+      await tester.pumpAndSettle();
+
+      // NO manual interaction: no Ctrl+H, no Resume tap, no load() call from
+      // the test — the sale must already be in state because initState kicked
+      // off the hydration.
+      final container =
+          ProviderScope.containerOf(tester.element(find.byType(PosWorkspace)));
+      final held = container.read(heldSalesProvider).held;
+      expect(held, hasLength(1),
+          reason: 'held sale must auto-hydrate from storage on POS open');
+      expect(held.single.label, 'Restored hold');
+      expect(held.single.itemCount, 2);
+      expect(held.single.total, Money.fromMinorUnits(2000, 'KZT'));
+    });
+
     testWidgets('F5 opens a cash shift when none is open', (tester) async {
       useDesktopSurface(tester);
       final fake = _FakePosApi()

@@ -80,6 +80,13 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(posCatalogProvider.notifier).init();
     });
+    // Phase 5D-6C: hydrate held sales after the first frame so sales held in a
+    // previous session (e.g. web localStorage) are visible immediately without
+    // requiring the cashier to open Resume Held Sales first. load() is
+    // idempotent via its _loaded guard.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(heldSalesProvider.notifier).load();
+    });
   }
 
   @override
@@ -1297,8 +1304,7 @@ class _OpenShiftPromptDialogState extends State<_OpenShiftPromptDialog> {
     if (!mounted) return;
     final value = double.tryParse(_controller.text.trim());
     if (value == null) return;
-    Navigator.of(context)
-        .pop((openingBalance: value, currency: _currency));
+    Navigator.of(context).pop((openingBalance: value, currency: _currency));
   }
 
   @override
