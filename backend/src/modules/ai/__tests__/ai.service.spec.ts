@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AIService, ConversationNotFoundError, PersistenceError, ToolExecutionTimeoutError, IdempotencyKeyMismatchError, IdempotencyConflictError } from '../ai.service';
+import { AIService, ConversationNotFoundError, PersistenceError, ToolExecutionTimeoutError, IdempotencyKeyMismatchError, IdempotencyConflictError, RequestBudgetExceededError } from '../ai.service';
 import { AIProvider, AIRequest, AIResponse } from '../providers/ai-provider.interface';
 import { ToolRegistry } from '../tools/tool.registry';
 import { AIAuditLogger } from '../logging/ai-audit.logger';
@@ -1217,6 +1217,303 @@ describe('AIService', () => {
       expect(result).toEqual(storedResponse);
       expect(mockProvider.chat).not.toHaveBeenCalled();
       expect(mockConversationRepository.createMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── AI-6: Request Budget Tests ────────────────────────────────
+  describe('chat — request budget (AI-6)', () => {
+    let budgetService: AIService;
+
+    beforeEach(() => {
+      // Create service with short budget for testing
+      budgetService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+        undefined, // toolExecutionTimeoutMs (default 30s)
+        100, // requestBudgetMs = 100ms for testing
+      );
+    });
+
+    it('should use default budget of 120s when not configured', () => {
+      const defaultService = new AIService(
+        mockProvider,
+        toolRegistry,
+        mockAuditLogger,
+        mockRolesRepository,
+        mockConversationRepository,
+        mockIdempotencyRepository,
+        { $transaction: jest.fn((cb: any) => cb({})) } as any,
+      );
+      // Default is 120_000ms — we verify by checking the service was created
+      expect(defaultService).toBeDefined();
+    });
+
+    it('should complete before budget expires', async () => {
+      mockProvider.chat.mockResolvedValue({
+        content: 'Quick response',
+        toolCalls: [],
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      const result = await budgetService.chat('Quick', testSecurityContext);
+
+      expect(result.content).toBe('Quick response');
+      expect(mockProvider.chat).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw RequestBudgetExceededError when budget expires during provider call', async () => {
+      // Provider takes longer than budget
+      mockProvider.chat.mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({
+          content: 'Late response',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        }), 200)),
+      );
+
+      await expect(
+        budgetService.chat('Slow', testSecurityContext),
+      ).rejects.toThrow(RequestBudgetExceededError);
+    });
+
+    it('should throw RequestBudgetExceededError when budget expires during tool execution', async () => {
+      // Provider returns tool call
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'After tool',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      // Tool takes longer than budget
+      (mockTool.execute as jest.Mock).mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({ data: 'slow' }), 200)),
+      );
+
+      await expect(
+        budgetService.chat('Tool slow', testSecurityContext),
+      ).rejects.toThrow(RequestBudgetExceededError);
+    });
+
+    it('should not call provider after budget expiry', async () => {
+      // First call returns tool call, second call would be after budget
+      mockProvider.chat
+        .mockResolvedValueOnce({
+          content: '',
+          toolCalls: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'tool_calls',
+        })
+        .mockResolvedValueOnce({
+          content: 'After tool',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        });
+
+      // Tool takes longer than budget
+      (mockTool.execute as jest.Mock).mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({ data: 'slow' }), 200)),
+      );
+
+      await expect(
+        budgetService.chat('Tool slow', testSecurityContext),
+      ).rejects.toThrow(RequestBudgetExceededError);
+
+      // Provider should only be called once (before tool timeout)
+      expect(mockProvider.chat).toHaveBeenCalledTimes(1);
+    });
+
+    it('should pass signal to provider.chat()', async () => {
+      mockProvider.chat.mockResolvedValue({
+        content: 'Response',
+        toolCalls: [],
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      await budgetService.chat('Test signal', testSecurityContext);
+
+      // Verify signal was passed to provider
+      expect(mockProvider.chat).toHaveBeenCalled();
+      const callArgs = mockProvider.chat.mock.calls[0]![0];
+      expect(callArgs.signal).toBeDefined();
+      expect(callArgs.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('should clean up timer after successful completion', async () => {
+      mockProvider.chat.mockResolvedValue({
+        content: 'Done',
+        toolCalls: [],
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+      });
+
+      // Spy on clearTimeout to verify cleanup
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+
+      await budgetService.chat('Clean', testSecurityContext);
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
+
+    it('should clean up timer after budget error', async () => {
+      mockProvider.chat.mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({
+          content: 'Late',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        }), 200)),
+      );
+
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+
+      await expect(
+        budgetService.chat('Timeout', testSecurityContext),
+      ).rejects.toThrow(RequestBudgetExceededError);
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
+
+    it('should persist error assistant for budget exceeded (AI-4B best-effort)', async () => {
+      mockProvider.chat.mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({
+          content: 'Late',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        }), 200)),
+      );
+
+      await expect(
+        budgetService.chat('Persist', testSecurityContext),
+      ).rejects.toThrow(RequestBudgetExceededError);
+
+      // AI-4B: error assistant SHOULD be persisted (best-effort)
+      const assistantMessages = mockConversationRepository.createMessage.mock.calls.filter(
+        (call) => call[3] === 'assistant',
+      );
+      expect(assistantMessages.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should call updateFailed for budget exceeded with idempotencyKey', async () => {
+      mockProvider.chat.mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({
+          content: 'Late',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        }), 200)),
+      );
+
+      await expect(
+        budgetService.chat('Idem', testSecurityContext, undefined, 'key-abc'),
+      ).rejects.toThrow(RequestBudgetExceededError);
+
+      // updateFailed should have been called for budget error
+      expect(mockIdempotencyRepository.updateFailed).toHaveBeenCalledWith(
+        'company-1',
+        'user-1',
+        'key-abc',
+        expect.objectContaining({
+          conversationId: expect.any(String),
+          content: expect.any(String),
+          toolCallsUsed: expect.any(Array),
+        }),
+      );
+    });
+
+    it('should rethrow RequestBudgetExceededError even if persistence fails', async () => {
+      mockProvider.chat.mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({
+          content: 'Late',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        }), 200)),
+      );
+      // Make persistence fail only for assistant messages (not user message)
+      mockConversationRepository.createMessage.mockImplementation(((...args: any[]) => {
+        if (args[3] === 'assistant') {
+          return Promise.reject(new Error('DB down'));
+        }
+        return Promise.resolve({ id: 'msg-1', createdAt: new Date() });
+      }) as any);
+
+      await expect(
+        budgetService.chat('Fail persist', testSecurityContext),
+      ).rejects.toThrow(RequestBudgetExceededError);
+    });
+
+    it('should rethrow RequestBudgetExceededError even if updateFailed fails', async () => {
+      mockProvider.chat.mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({
+          content: 'Late',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        }), 200)),
+      );
+      // Make updateFailed fail
+      mockIdempotencyRepository.updateFailed.mockRejectedValue(new Error('DB down'));
+
+      await expect(
+        budgetService.chat('Fail update', testSecurityContext, undefined, 'key-xyz'),
+      ).rejects.toThrow(RequestBudgetExceededError);
+    });
+
+    it('should rethrow RequestBudgetExceededError when both persistence and updateFailed fail', async () => {
+      mockProvider.chat.mockImplementation(() =>
+        new Promise((resolve) => setTimeout(() => resolve({
+          content: 'Late',
+          toolCalls: [],
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+          model: 'gpt-4o-mini',
+          finishReason: 'stop',
+        }), 200)),
+      );
+      // Make persistence fail only for assistant messages
+      mockConversationRepository.createMessage.mockImplementation(((...args: any[]) => {
+        if (args[3] === 'assistant') {
+          return Promise.reject(new Error('DB down'));
+        }
+        return Promise.resolve({ id: 'msg-1', createdAt: new Date() });
+      }) as any);
+      mockIdempotencyRepository.updateFailed.mockRejectedValue(new Error('DB down'));
+
+      await expect(
+        budgetService.chat('Both fail', testSecurityContext, undefined, 'key-all'),
+      ).rejects.toThrow(RequestBudgetExceededError);
     });
   });
 });

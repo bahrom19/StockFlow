@@ -38,6 +38,8 @@ export interface AIRequest {
   messages: AIMessage[];
   tools: AIToolDefinition[];
   model?: string;
+  /** AI-6: Optional request-level abort signal for overall request budget cancellation */
+  signal?: AbortSignal;
 }
 
 export interface AIResponse {

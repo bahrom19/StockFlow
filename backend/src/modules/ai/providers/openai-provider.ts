@@ -89,6 +89,16 @@ export class OpenAIProvider implements AIProvider {
     try {
       // Retry loop (max 2 retries for retryable errors)
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        // ── AI-6: Check external request signal before each attempt ─────
+        if (request.signal?.aborted) {
+          throw new AIProviderError(
+            this.name,
+            'TIMEOUT',
+            'Request budget exceeded',
+            false,
+          );
+        }
+
         // ── F2: Check budget before each attempt ─────────────
         if (Date.now() >= budgetDeadline) {
           this.logger.warn('Provider total timeout budget exceeded — aborting retries');
@@ -109,6 +119,18 @@ export class OpenAIProvider implements AIProvider {
             once: true,
           });
 
+          // AI-6: Link external request-level abort signal to per-request controller
+          // This allows AI-6 request budget to abort in-flight fetch() calls
+          let requestAbort: (() => void) | null = null;
+          if (request.signal) {
+            if (request.signal.aborted) {
+              controller.abort();
+            } else {
+              requestAbort = () => controller.abort();
+              request.signal.addEventListener('abort', requestAbort, { once: true });
+            }
+          }
+
           const timeoutId = setTimeout(() => controller.abort(), perRequestTimeoutMs);
 
           let response: Response;
@@ -125,6 +147,9 @@ export class OpenAIProvider implements AIProvider {
           } finally {
             clearTimeout(timeoutId);
             budgetController.signal.removeEventListener('abort', budgetAbort);
+            if (requestAbort && request.signal) {
+              request.signal.removeEventListener('abort', requestAbort);
+            }
           }
 
           if (!response.ok) {

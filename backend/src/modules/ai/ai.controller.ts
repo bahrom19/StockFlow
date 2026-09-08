@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  GatewayTimeoutException,
   Get,
   HttpCode,
   HttpStatus,
@@ -20,7 +21,7 @@ import { RequirePermission } from '../rbac/decorators/require-permission.decorat
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { AIService, ConversationNotFoundError, PersistenceError, IdempotencyKeyMismatchError } from './ai.service';
+import { AIService, ConversationNotFoundError, PersistenceError, IdempotencyKeyMismatchError, RequestBudgetExceededError } from './ai.service';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { AIThrottle } from './decorators/ai-throttle.decorator';
 import { AIChatRequestDto } from './dto/ai-chat-request.dto';
@@ -99,6 +100,9 @@ export class AIController {
       }
       if (error instanceof IdempotencyKeyMismatchError) {
         throw new BadRequestException(error.message);
+      }
+      if (error instanceof RequestBudgetExceededError) {
+        throw new GatewayTimeoutException('AI request timed out');
       }
       throw error;
     }

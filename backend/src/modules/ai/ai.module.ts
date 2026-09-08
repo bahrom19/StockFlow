@@ -80,6 +80,14 @@ import { ReportsModule } from '../reports/reports.module';
       inject: ['AI_PROVIDER_CONFIG'],
     },
 
+    // AI Request Budget (AI-6)
+    {
+      provide: 'AI_REQUEST_TIMEOUT_MS',
+      useFactory: (configService: ConfigService) =>
+        configService.get<number>('AI_REQUEST_TIMEOUT_MS', 120_000),
+      inject: [ConfigService],
+    },
+
     // AI Orchestrator
     AIService,
   ],

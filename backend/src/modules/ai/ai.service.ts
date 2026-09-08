@@ -16,6 +16,7 @@ const HISTORY_LIMIT = 20;
 const TOOL_RESULT_MAX_CHARS = 4000;
 const TITLE_MAX_CHARS = 50;
 const DEFAULT_TOOL_EXECUTION_TIMEOUT_MS = 30_000;
+const DEFAULT_REQUEST_BUDGET_MS = 120_000; // AI-6: 120s overall request budget
 
 const SYSTEM_PROMPT = `You are StockFlow AI Assistant — a business analytics helper for inventory management software.
 
@@ -60,6 +61,7 @@ TOOL USAGE:
 export class AIService {
   private readonly logger = new Logger(AIService.name);
   private readonly toolExecutionTimeoutMs: number;
+  private readonly requestBudgetMs: number;
 
   constructor(
     @Inject('AIProvider') private readonly provider: AIProvider,
@@ -70,8 +72,10 @@ export class AIService {
     private readonly idempotencyRepository: IdempotencyRepository,
     private readonly prismaService: PrismaService,
     @Optional() toolExecutionTimeoutMs?: number,
+    @Optional() @Inject('AI_REQUEST_TIMEOUT_MS') requestBudgetMs?: number,
   ) {
     this.toolExecutionTimeoutMs = toolExecutionTimeoutMs ?? DEFAULT_TOOL_EXECUTION_TIMEOUT_MS;
+    this.requestBudgetMs = requestBudgetMs ?? DEFAULT_REQUEST_BUDGET_MS;
   }
 
   async chat(
@@ -82,6 +86,10 @@ export class AIService {
   ): Promise<{ conversationId: string; content: string; toolCallsUsed: string[]; createdAt: string }> {
     const requestId = randomBytes(8).toString('hex');
     const startTime = Date.now();
+
+    // ── AI-6: Request budget ───────────────────────────────────
+    const requestController = new AbortController();
+    const requestTimer = setTimeout(() => requestController.abort(), this.requestBudgetMs);
 
     const { companyId, userId } = securityContext;
 
@@ -280,6 +288,12 @@ export class AIService {
       }
     }
 
+    // ── AI-6: Check budget after idempotency ────────────────────
+    if (requestController.signal.aborted) {
+      clearTimeout(requestTimer);
+      throw new RequestBudgetExceededError();
+    }
+
     // ── Step 2: Persist user message (BEFORE provider call) ─────
     const userMsgResult = await this.conversationRepository.createMessage(
       convId,
@@ -363,7 +377,13 @@ export class AIService {
         const response = await this.provider.chat({
           messages,
           tools: toolDefinitions,
+          signal: requestController.signal,
         });
+
+        // ── AI-6: Check budget after provider call ──────────────
+        if (requestController.signal.aborted) {
+          throw new RequestBudgetExceededError();
+        }
 
         // If no tool calls, we have a final response
         if (response.finishReason !== 'tool_calls' || response.toolCalls.length === 0) {
@@ -536,6 +556,11 @@ export class AIService {
             );
             messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
           }
+
+          // ── AI-6: Check budget after each tool execution ───────
+          if (requestController.signal.aborted) {
+            throw new RequestBudgetExceededError();
+          }
         }
       }
 
@@ -582,6 +607,7 @@ export class AIService {
       const errorMessage = error instanceof AIProviderError ? error.message : 'Unknown error';
 
       // AI-4B: Close conversation with error assistant message (best-effort)
+      // This runs for ALL errors including AI-6 RequestBudgetExceededError
       const errorAssistantContent = 'I encountered an error while processing your request. Please try again later.';
       try {
         await this.conversationRepository.createMessage(
@@ -589,7 +615,7 @@ export class AIService {
           { tokenCount: 0 },
         );
       } catch (persistErr: any) {
-        // Do not mask the original provider error
+        // Do not mask the original error
         this.logger.error(`Failed to persist error assistant message: ${persistErr.message}`);
       }
 
@@ -631,7 +657,16 @@ export class AIService {
         }
       }
 
+      // AI-6: Rethrow budget error so controller maps to HTTP 504
+      // Persistence/updateFailed above are best-effort — original error is never masked
+      if (error instanceof RequestBudgetExceededError) {
+        throw error;
+      }
+
       return errorResult;
+    } finally {
+      // AI-6: Clean up request budget timer
+      clearTimeout(requestTimer);
     }
   }
 
@@ -747,5 +782,16 @@ export class IdempotencyConflictError extends Error {
   constructor() {
     super('Idempotency conflict');
     this.name = 'IdempotencyConflictError';
+  }
+}
+
+/**
+ * AI-6: Thrown when the overall request budget is exceeded.
+ * Controller maps this to HTTP 504 Gateway Timeout.
+ */
+export class RequestBudgetExceededError extends Error {
+  constructor() {
+    super('AI request budget exceeded');
+    this.name = 'RequestBudgetExceededError';
   }
 }
