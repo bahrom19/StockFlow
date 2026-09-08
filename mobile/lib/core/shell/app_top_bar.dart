@@ -459,11 +459,33 @@ class _UserMenu extends StatelessWidget {
 }
 
 /// Notification bell icon with unread count badge.
-class _NotificationBell extends ConsumerWidget {
+///
+/// N5-1: the bell owns the ONE initial unread-count load of the session.
+/// It is mounted exclusively inside the authenticated shell (the router
+/// redirects unauthenticated users away from every ShellRoute child) and the
+/// ShellRoute keeps the same element tree across navigation, so initState
+/// runs exactly once per session. The load itself goes through the
+/// idempotent [UnreadCountNotifier.ensureLoaded], so even a re-mounted bell
+/// (e.g. a layout-branch switch) can never produce a duplicate request.
+class _NotificationBell extends ConsumerStatefulWidget {
   const _NotificationBell();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends ConsumerState<_NotificationBell> {
+  @override
+  void initState() {
+    super.initState();
+    // Post-frame: provider reads are not allowed during build.
+    Future.microtask(() {
+      if (mounted) ref.read(unreadCountProvider.notifier).ensureLoaded();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final unreadState = ref.watch(unreadCountProvider);
     final count = unreadState is UnreadCountLoaded ? unreadState.count : 0;
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/features/notifications/data/notifications_repository.dart';
 import 'package:stockflow/features/notifications/domain/notification_models.dart';
@@ -179,6 +180,12 @@ class UnreadCountNotifier extends StateNotifier<UnreadCountState> {
 
   UnreadCountNotifier(this._ref) : super(const UnreadCountLoading());
 
+  /// N5-1: the provider starts in [UnreadCountLoading] and is keep-alive, so
+  /// the state type alone cannot distinguish "never loaded" from "in flight".
+  /// These flags are the single source of truth for the badge lifecycle.
+  bool _loaded = false;
+  bool _fetchInFlight = false;
+
   Future<void> load() async {
     await _fetch();
   }
@@ -187,21 +194,57 @@ class UnreadCountNotifier extends StateNotifier<UnreadCountState> {
     await _fetch();
   }
 
+  /// N5-1: initial badge load — IDEMPOTENT.
+  ///
+  /// No-op once the count is loaded; a fetch already in flight is never
+  /// duplicated either. This is what makes a single lifecycle trigger safe:
+  /// the top-bar bell (initState) and the notifications screen (initState /
+  /// pull-to-refresh) may both call into this notifier, but only the first
+  /// request of the session reaches the API — no duplicate unread-count calls.
+  Future<void> ensureLoaded() async {
+    if (_loaded) return;
+    await _fetch();
+  }
+
+  /// N5-1: clear cross-account state on logout. The provider is keep-alive,
+  /// so without this the next session would briefly show the previous
+  /// account's unread count until its own fetch resolves.
+  void reset() {
+    _loaded = false;
+    state = const UnreadCountLoading();
+  }
+
   Future<void> _fetch() async {
-    final repo = _ref.read(notificationsRepositoryProvider);
-    final result = await repo.unreadCount();
+    // One request at a time: a trigger arriving while a fetch is in flight
+    // resolves against the pending result instead of firing a second call.
+    if (_fetchInFlight) return;
+    _fetchInFlight = true;
+    try {
+      final repo = _ref.read(notificationsRepositoryProvider);
+      final result = await repo.unreadCount();
 
-    if (result is NotificationsFailure) {
-      state = const UnreadCountError();
-      return;
+      if (result is NotificationsFailure) {
+        state = const UnreadCountError();
+        return;
+      }
+
+      final count = (result as NotificationsSuccess<int>).data;
+      _loaded = true;
+      state = UnreadCountLoaded(count);
+    } finally {
+      _fetchInFlight = false;
     }
-
-    final count = (result as NotificationsSuccess<int>).data;
-    state = UnreadCountLoaded(count);
   }
 }
 
 final unreadCountProvider =
     StateNotifierProvider<UnreadCountNotifier, UnreadCountState>((ref) {
-  return UnreadCountNotifier(ref);
+  final notifier = UnreadCountNotifier(ref);
+  // N5-1: the badge provider outlives a session (keep-alive). When auth drops
+  // (logout / session restore failure) the stale count must never leak into
+  // the next account — reset to the neutral loading state.
+  ref.listen<AuthState>(authStateProvider, (_, next) {
+    if (next is AuthUnauthenticated) notifier.reset();
+  });
+  return notifier;
 });
