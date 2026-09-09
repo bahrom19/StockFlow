@@ -369,5 +369,23 @@ void main() {
       handle.dispose();
       await tearDownWidget(tester);
     });
+    // ── expectedClosing regression (d66e35a) ──────────────────────────
+    // d66e35a changed the ARB key `expectedClosing` from a parameterized
+    // message to a plain getter, which broke the hero's call site (it invoked
+    // the getter as a function). The status row must render the localized
+    // label + the centrally formatted amount (label + value pattern).
+    testWidgets('open shift renders expected-closing label with the amount',
+        (tester) async {
+      final fake = _FakeHeroApi()..openShift = _FakeHeroApi._shift();
+      await _pumpHero(tester, fake: fake);
+
+      final rowText =
+          tester.widget<Text>(find.textContaining('Expected')).data;
+      expect(rowText, isNotNull);
+      expect(rowText!, startsWith('Expected')); // l10n.expectedClosing (EN)
+      expect(rowText, contains('1,150')); // context.money(...) formatting
+
+      await tearDownWidget(tester);
+    });
   });
 }

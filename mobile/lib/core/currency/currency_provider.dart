@@ -34,6 +34,7 @@ class CurrencyNotifier extends StateNotifier<String> {
   CurrencyNotifier._fromBackend(String currency) : super(currency);
 
   /// Loads from SharedPreferences cache for fast cold-start UI.
+  Future<void> load() => _loadFromCache();
   Future<void> _loadFromCache() {
     return _loading ??= _doLoad();
   }

@@ -363,9 +363,7 @@ class _ShiftHero extends StatelessWidget {
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          l10n.expectedClosing(
-                            context.money(shift.expectedClosingValue),
-                          ),
+                          '${l10n.expectedClosing} ${context.money(shift.expectedClosingValue)}',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
