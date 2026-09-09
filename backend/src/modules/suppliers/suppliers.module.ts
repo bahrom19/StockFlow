@@ -18,9 +18,10 @@ import { SupplierPaymentsRepository } from './repositories/supplier-payments.rep
 import { SupplierProductsRepository } from './repositories/supplier-products.repository';
 import { FinanceModule } from '../finance/finance.module';
 import { SharedModule } from '../shared/shared.module';
+import { CompaniesModule } from '../companies/companies.module';
 
 @Module({
-  imports: [FinanceModule, SharedModule],
+  imports: [FinanceModule, SharedModule, CompaniesModule],
   controllers: [
     SuppliersController,
     SupplierContactsController,

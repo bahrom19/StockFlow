@@ -7,6 +7,7 @@ import { CashShiftRepository } from '../repositories/cash-shift.repository';
 import { SalesRepository } from '../repositories/sales.repository';
 import { CashShiftService } from '../services/cash-shift.service';
 import { SalesService } from '../services/sales.service';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 /**
  * Regression tests for the route-ordering bug that made
@@ -67,6 +68,8 @@ describe('Sales routes — literal vs param ordering (regression)', () => {
       .useValue({} as unknown as SalesRepository)
       .overrideProvider(CashShiftRepository)
       .useValue({} as unknown as CashShiftRepository)
+      .overrideProvider(CompaniesService)
+      .useValue({ getBaseCurrency: jest.fn().mockResolvedValue('KZT') })
       .overrideGuard(JwtAuthGuard)
       .useValue(authGuard)
       .overrideGuard(RolesGuard)

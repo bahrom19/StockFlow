@@ -6,6 +6,7 @@ import { DocumentSequenceService } from '../../shared/services/document-sequence
 import { EventBus } from '../../../common/events';
 import { PrismaService } from '../../../common/prisma';
 import { PurchaseOrderStatusChangedEvent } from '../events/purchase-order-status-changed.event';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 /**
  * N3 — the generic status event is published ADDITIVELY: the existing
@@ -56,12 +57,14 @@ describe('PurchaseOrderService — purchase.order.status.changed publishing', ()
     const auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     const documentSequenceService = { nextNumber: jest.fn() };
     const eventBus = { publish: jest.fn().mockResolvedValue(undefined) };
+    const companiesService = { getBaseCurrency: jest.fn().mockResolvedValue('KZT') };
     const service = new PurchaseOrderService(
       purchaseOrderRepository as unknown as PurchaseOrderRepository,
       prismaService as unknown as PrismaService,
       auditLog as unknown as AuditLogService,
       documentSequenceService as unknown as DocumentSequenceService,
       eventBus as unknown as EventBus,
+      companiesService as unknown as import('../../companies/services/companies.service').CompaniesService,
     );
     return { service, purchaseOrderRepository, eventBus };
   };
@@ -175,12 +178,14 @@ describe('PurchaseOrderService — receipt-driven status events (changedBy: null
     };
     const auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     const eventBus = { publish: jest.fn().mockResolvedValue(undefined) };
+    const companiesService = { getBaseCurrency: jest.fn().mockResolvedValue('KZT') };
     const service = new PurchaseOrderService(
       purchaseOrderRepository as unknown as PurchaseOrderRepository,
       prismaService as unknown as PrismaService,
       auditLog as unknown as AuditLogService,
       {} as unknown as DocumentSequenceService,
       eventBus as unknown as EventBus,
+      companiesService as unknown as import('../../companies/services/companies.service').CompaniesService,
     );
     const tx = {
       purchaseOrderItem: { findMany: jest.fn().mockResolvedValue(items) },

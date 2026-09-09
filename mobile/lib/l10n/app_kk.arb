@@ -228,7 +228,7 @@
   "cashSales": "Қолма-қол сатылым",
   "nonCash": "Қолма-қол емес",
   "cashOut": "Шығыс",
-  "expectedClosing": "Күтілетін жабылу · {amount}",
+  "expectedClosing": "Күтілген",
   "shiftClosed": "Ауысым жабық",
   "differenceZero": "Айырма 0",
   "differenceAmount": "Айырма {amount}",
@@ -715,7 +715,7 @@
   "purchasingSubtitle": "Сатып алу тапсырыстары, тауар қабылдау және қайтару",
   "poSearchHint": "Тапсырыс нөмірі бойынша іздеу…",
   "newOrder": "Жаңа тапсырыс",
-  "items": "Позициялар",
+  "items": "позиция",
   "grandTotal": "Жалпы қорытынды",
   "order": "Тапсырыс",
   "purchaseOrder": "Сатып алу тапсырысы",
@@ -918,17 +918,23 @@
   "outboxOfflineQueuedMessage": "Интернетке қосылу жоқ. Өзгерістер offline сақталды және автоматты түрде жіберіледі.",
   "@outboxPendingItems": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "@outboxFailedItems": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "@outboxOfflineSaleQueued": {
     "placeholders": {
-      "number": { "type": "String" }
+      "number": {
+        "type": "String"
+      }
     }
   },
   "purchaseAnalytics": "Сатып алу аналитикасы",
@@ -1008,7 +1014,6 @@
   "received": "Алынды",
   "recentOrders": "Соңғы тапсырыстар",
   "cancelled": "Бас тартылды",
-
   "importCsv": "CSV импорт",
   "importCsvProducts": "CSV файлдан тауарларды импорттау",
   "importUploadTitle": "CSV файлды жүктеу",
@@ -1059,15 +1064,12 @@
   "value": "Мән",
   "supplierName": "Жеткізуші",
   "purchaseOrders": "Сатып алулар",
-  "lastPurchase": "Соңғы сатып алу",
   "customerName": "Клиент",
   "openedAt": "Ашылды",
-  "cashier": "Кассир",
   "totalSales": "Сатылымдар",
-  "expectedClosing": "Күтілген",
   "difference": "Айырмашылық",
-  "items": "позиция",
   "productName": "Тауар",
   "orders": "Тапсырыстар",
-  "averageReceipt": "Орташа чек"
+  "averageReceipt": "Орташа чек",
+  "currencyLocked": "Валютаны қаржылық деректер жасалғанға дейін ғана өзгертуге болады."
 }

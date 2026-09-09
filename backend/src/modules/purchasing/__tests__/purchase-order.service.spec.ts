@@ -10,6 +10,7 @@ import { EVENT_BUS } from '../../../common/events';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import { UpdatePurchaseOrderDto } from '../dto/update-purchase-order.dto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -107,6 +108,7 @@ describe('PurchaseOrderService', () => {
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: DocumentSequenceService, useValue: mockSeq },
         { provide: EVENT_BUS, useValue: mockEventBus },
+        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
       ],
     }).compile();
 
@@ -520,41 +522,27 @@ describe('PurchaseOrderService', () => {
       );
     });
 
-    it('should save USD when currency is provided', async () => {
-      const mockTx = { purchaseOrderItem: { createMany: jest.fn() } };
-      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
-      mockRepo.create.mockResolvedValue({ ...basePo, currency: 'USD' } as any);
-
-      await service.create({ ...validDto, currency: 'USD' as any }, userId, companyId);
-
-      expect(mockRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: 'USD' }),
-        mockTx,
-      );
+    it('should reject USD when company currency is KZT', async () => {
+      await expect(
+        service.create({ ...validDto, currency: 'USD' as any }, userId, companyId),
+      ).rejects.toThrow('does not match company currency');
     });
 
-    it('should allow currency change while DRAFT', async () => {
+    it('should reject currency change to different currency', async () => {
       const mockTx = {
         purchaseOrderItem: { deleteMany: jest.fn(), createMany: jest.fn() },
       };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(basePo as any);
-      mockRepo.update.mockResolvedValue({ ...basePo, currency: 'USD' } as any);
 
-      const result = await service.update(
-        'po-1',
-        { currency: 'USD' as any },
-        userId,
-        companyId,
-      );
-
-      expect(mockRepo.update).toHaveBeenCalledWith(
-        'po-1',
-        expect.objectContaining({ currency: 'USD' }),
-        companyId,
-        0,
-        mockTx,
-      );
+      await expect(
+        service.update(
+          'po-1',
+          { currency: 'USD' as any },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow('does not match company currency');
     });
 
     it('should reject currency change when not DRAFT', async () => {

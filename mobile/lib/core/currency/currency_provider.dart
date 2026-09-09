@@ -1,22 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stockflow/core/currency/currency_catalog.dart';
+import 'package:stockflow/core/company/company_provider.dart';
 
-/// Selected currency — Phase 4 wiring.
+/// Selected currency — source of truth is backend Company.currency.
 ///
-/// Persisted in SharedPreferences under the key `app_currency`. Defaults to
-/// `KZT` (the backend company default). Unsupported codes are ignored and the
-/// state stays unchanged; unknown stored values fall back to `KZT`.
+/// On cold start, SharedPreferences provides a warm/offline cache for fast UI.
+/// After login/app-init, CompanyProvider fetches from backend and overwrites.
+/// On logout, the cache is cleared.
 ///
-/// Ownership note: the backend models currency at company level
-/// (`Company.currency @default(KZT)`) but exposes no API for it. This client
-/// provider follows the proven `localeProvider`/`monthlyGoalProvider` pattern
-/// (direct `SharedPreferences.getInstance()` — canonical API, works in tests
-/// via `SharedPreferences.setMockInitialValues`), giving persistence across
-/// reloads with zero backend changes. Sales still record their own per-sale
-/// currency (backend `Sale.currency`), which the POS sends from this provider.
+/// This provider derives from companyCurrencyProvider (backend-driven).
+/// It also supports an offline fallback path when backend is unavailable.
 final currencyProvider =
     StateNotifierProvider<CurrencyNotifier, String>((ref) {
+  // Derive from CompanyProvider when available
+  final companyCurrency = ref.watch(companyCurrencyProvider);
+  // If CompanyProvider has data, use it directly
+  if (companyCurrency != 'KZT' || ref.read(companyProvider) != null) {
+    return CurrencyNotifier._fromBackend(companyCurrency);
+  }
+  // Otherwise fall back to SharedPreferences cache
   return CurrencyNotifier();
 });
 
@@ -25,12 +28,13 @@ class CurrencyNotifier extends StateNotifier<String> {
   Future<void>? _loading;
 
   CurrencyNotifier() : super('KZT') {
-    load();
+    _loadFromCache();
   }
 
-  /// Loads the persisted currency once. Idempotent — repeated calls await the
-  /// same in-flight load, so callers (and tests) always observe the result.
-  Future<void> load() {
+  CurrencyNotifier._fromBackend(String currency) : super(currency);
+
+  /// Loads from SharedPreferences cache for fast cold-start UI.
+  Future<void> _loadFromCache() {
     return _loading ??= _doLoad();
   }
 
@@ -44,8 +48,8 @@ class CurrencyNotifier extends StateNotifier<String> {
     }
   }
 
-  /// Persists and applies [code]. Unsupported codes are ignored and the
-  /// state stays unchanged.
+  /// Updates the currency (e.g., after backend confirms a change).
+  /// Writes to SharedPreferences for offline caching.
   Future<void> setCurrency(String code) async {
     if (!CurrencyCatalog.isSupported(code)) return;
     try {
@@ -55,5 +59,16 @@ class CurrencyNotifier extends StateNotifier<String> {
       // Best-effort: apply the in-memory value even if persistence fails.
     }
     state = code;
+  }
+
+  /// Clears cache on logout.
+  Future<void> reset() async {
+    state = 'KZT';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(storageKey);
+    } catch (_) {
+      // Best-effort cleanup.
+    }
   }
 }

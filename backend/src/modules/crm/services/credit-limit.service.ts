@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { Prisma, Currency as PrismaCurrency } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreditLimitRepository } from '../repositories/credit-limit.repository';
@@ -12,6 +12,7 @@ import {
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { EventBus, EVENT_BUS } from '../../../common/events';
 import { CustomerCreditLimitChangedEvent } from '../events/customer-credit-limit-changed.event';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 @Injectable()
 export class CreditLimitService {
@@ -21,6 +22,7 @@ export class CreditLimitService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async create(
@@ -29,12 +31,17 @@ export class CreditLimitService {
     userId: string,
   ): Promise<CreditLimitEntity> {
     return this.prisma.$transaction(async (tx) => {
+      const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
       const data: Prisma.CreditLimitCreateInput = {
         amount: dto.amount,
-        currency: 'KZT',
+        currency: companyCurrency as PrismaCurrency,
         customer: { connect: { id: dto.customerId } },
       };
-      if (dto.currency) data.currency = dto.currency as PrismaCurrency;
+      if (dto.currency && dto.currency !== companyCurrency) {
+        throw new BadRequestException(
+          `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+        );
+      }
       const created = await this.repository.create(data, tx);
       await this.auditLog.log({
         companyId,

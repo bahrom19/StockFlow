@@ -6,6 +6,7 @@ import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/constants/app_constants.dart';
 import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:stockflow/core/currency/currency_provider.dart';
+import 'package:stockflow/core/company/company_provider.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/localization/locale_provider.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
@@ -153,10 +154,11 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  /// Currency picker (Phase 4) — all codes from the backend Currency enum.
+  /// Currency picker — shows current company currency (backend is source of truth).
+  /// Currency can only be changed before monetary data exists.
   Future<void> _showCurrencyDialog(BuildContext context, WidgetRef ref) async {
     final current = ref.read(currencyProvider);
-    final selected = await showDialog<String>(
+    await showDialog<String>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
         title: Text(dialogContext.l10n.currency),
@@ -165,13 +167,18 @@ class SettingsScreen extends ConsumerWidget {
             ListTile(
               title: Text(currencyDisplayNames[code] ?? code),
               trailing: code == current ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.of(dialogContext).pop(code),
+              onTap: code == current ? null : () => Navigator.of(dialogContext).pop(code),
             ),
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              dialogContext.l10n.currencyLocked,
+              style: dialogContext.textTheme.bodySmall,
+            ),
+          ),
         ],
       ),
     );
-    if (selected != null) {
-      await ref.read(currencyProvider.notifier).setCurrency(selected);
-    }
   }
 }

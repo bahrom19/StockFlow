@@ -20,6 +20,7 @@ import { PurchaseReturnEntity } from '../entities/purchase-return.entity';
 import { PurchaseReturnMapper } from '../mappers/purchase-order.mapper';
 import { PurchaseReturnRepository } from '../repositories/purchase-return.repository';
 import { PurchaseReturnedEvent } from '../events/purchase-returned.event';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 const VALID_RETURN_TRANSITIONS: Record<
   PurchaseReturnStatus,
@@ -45,6 +46,7 @@ export class PurchaseReturnService {
     private readonly purchaseReturnRepository: PurchaseReturnRepository,
     private readonly prismaService: PrismaService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async create(
@@ -69,6 +71,14 @@ export class PurchaseReturnService {
       if (!warehouse) {
         throw new NotFoundException(
           `Warehouse with id ${dto.warehouseId} not found`,
+        );
+      }
+
+      // Enforce document currency == Company.currency
+      const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+      if (dto.currency && dto.currency !== companyCurrency) {
+        throw new BadRequestException(
+          `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
         );
       }
 
@@ -121,7 +131,7 @@ export class PurchaseReturnService {
           discountAmount: totalDiscount,
           taxAmount: totalTax,
           grandTotal: subtotal.sub(totalDiscount).add(totalTax),
-          currency: (dto.currency ?? 'KZT') as Currency,
+          currency: companyCurrency as Currency,
           notes: dto.notes,
           company: { connect: { id: companyId } },
           supplier: { connect: { id: dto.supplierId } },
@@ -210,7 +220,15 @@ export class PurchaseReturnService {
       if (dto.warehouseId)
         updateData.warehouse = { connect: { id: dto.warehouseId } };
       if (dto.notes !== undefined) updateData.notes = dto.notes;
-      if (dto.currency) updateData.currency = dto.currency as Currency;
+      if (dto.currency) {
+        const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+        if (dto.currency !== companyCurrency) {
+          throw new BadRequestException(
+            `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+          );
+        }
+        updateData.currency = dto.currency as Currency;
+      }
 
       if (dto.items) {
         await tx.purchaseReturnItem.deleteMany({

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../common/prisma';
 import { SharedModule } from '../shared/shared.module';
 import { EventBusModule } from '../../common/events';
+import { CompaniesModule } from '../companies/companies.module';
 import {
   CustomerAddressController,
   ContactController,
@@ -48,7 +49,7 @@ import {
 } from './mappers';
 
 @Module({
-  imports: [PrismaModule, SharedModule, EventBusModule],
+  imports: [PrismaModule, SharedModule, EventBusModule, CompaniesModule],
   controllers: [
     CustomerAddressController,
     ContactController,

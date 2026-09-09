@@ -6,6 +6,7 @@ import { SalesRepository } from '../../repositories/sales.repository';
 import { CashShiftRepository } from '../../repositories/cash-shift.repository';
 import { PrismaService } from '../../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../../common/events';
+import { CompaniesService } from '../../../companies/services/companies.service';
 
 describe('SalesService — create payment validation (change/overpayment Phase 1)', () => {
   let service: SalesService;
@@ -56,6 +57,7 @@ describe('SalesService — create payment validation (change/overpayment Phase 1
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
         SalesService,
         { provide: SalesRepository, useValue: mockSalesRepo },
         { provide: CashShiftRepository, useValue: {} },

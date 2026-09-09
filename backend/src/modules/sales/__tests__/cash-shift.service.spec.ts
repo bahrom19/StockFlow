@@ -5,6 +5,7 @@ import { CashShiftService } from '../services/cash-shift.service';
 import { CashShiftRepository } from '../repositories/cash-shift.repository';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -62,6 +63,7 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
         CashShiftService,
         { provide: CashShiftRepository, useValue: repo },
         { provide: PrismaService, useValue: mockPrisma },
@@ -258,35 +260,28 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
       );
     });
 
-    it('openShift: saves USD when currency is provided', async () => {
+    it('openShift: rejects USD when company currency is KZT', async () => {
       repo.findOpenShift.mockResolvedValue(null);
-      const usdShift = { ...baseShift, currency: 'USD' } as any;
-      repo.create.mockResolvedValue(usdShift);
 
-      await service.openShift(
-        { warehouseId, openingBalance: 100, currency: 'USD' as any },
-        userId,
-        companyId,
-      );
-
-      expect(repo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: 'USD' }),
-        expect.anything(),
-      );
+      await expect(
+        service.openShift(
+          { warehouseId, openingBalance: 100, currency: 'USD' as any },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow('does not match company currency');
     });
 
-    it('openShift: currency persists in created shift', async () => {
+    it('openShift: rejects different currency in created shift', async () => {
       repo.findOpenShift.mockResolvedValue(null);
-      const usdShift = { ...baseShift, currency: 'USD' } as any;
-      repo.create.mockResolvedValue(usdShift);
 
-      const result = await service.openShift(
-        { warehouseId, openingBalance: 100, currency: 'USD' as any },
-        userId,
-        companyId,
-      );
-
-      expect(result.currency).toBe('USD');
+      await expect(
+        service.openShift(
+          { warehouseId, openingBalance: 100, currency: 'EUR' as any },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow('does not match company currency');
     });
 
     it('openShift: currency is immutable after creation (no update endpoint)', async () => {

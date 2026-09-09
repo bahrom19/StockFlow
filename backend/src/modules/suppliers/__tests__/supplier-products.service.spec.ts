@@ -4,6 +4,7 @@ import { SupplierProductsService } from '../services/supplier-products.service';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierProductsRepository } from '../repositories/supplier-products.repository';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 const companyId = 'comp-1';
 const supplierId = 'supplier-1';
@@ -78,6 +79,7 @@ describe('SupplierProductsService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
         SupplierProductsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: SuppliersRepository, useValue: mockSuppliersRepo },

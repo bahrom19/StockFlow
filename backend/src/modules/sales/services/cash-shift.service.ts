@@ -18,6 +18,7 @@ import {
   CloseShiftDto,
   CashInOutDto,
 } from '../dto/cash-shift.dto';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 @Injectable()
 export class CashShiftService {
@@ -25,6 +26,7 @@ export class CashShiftService {
     private readonly cashShiftRepository: CashShiftRepository,
     private readonly prismaService: PrismaService,
     private readonly idempotencyService: IdempotencyService,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   /**
@@ -54,13 +56,21 @@ export class CashShiftService {
         );
       }
 
+      // Enforce document currency == Company.currency
+      const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+      if (dto.currency && dto.currency !== companyCurrency) {
+        throw new BadRequestException(
+          `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+        );
+      }
+
       try {
         const shift = await this.cashShiftRepository.create(
           {
             openingBalance: new Decimal(dto.openingBalance),
             closingBalance: new Decimal(dto.openingBalance),
             expectedClosing: new Decimal(dto.openingBalance),
-            currency: (dto.currency ?? 'KZT') as Currency,
+            currency: companyCurrency as Currency,
             notes: dto.notes,
             company: { connect: { id: companyId } },
             warehouse: { connect: { id: dto.warehouseId } },

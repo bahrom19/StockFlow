@@ -1,6 +1,7 @@
 import { Inject, Module, OnModuleInit } from '@nestjs/common';
 import { PrismaModule } from '../../common/prisma';
 import { SharedModule } from '../shared/shared.module';
+import { CompaniesModule } from '../companies/companies.module';
 import { EventBus, EVENT_BUS } from '../../common/events';
 import { ChartOfAccountsController } from './controllers/chart-of-accounts.controller';
 import { BankAccountsController } from './controllers/bank-accounts.controller';
@@ -32,7 +33,7 @@ import { SaleCompletedEventHandler } from './events/sale-completed.handler';
 import { SaleRefundedEventHandler } from './events/sale-refunded.handler';
 
 @Module({
-  imports: [PrismaModule, SharedModule],
+  imports: [PrismaModule, SharedModule, CompaniesModule],
   controllers: [
     ChartOfAccountsController,
     BankAccountsController,

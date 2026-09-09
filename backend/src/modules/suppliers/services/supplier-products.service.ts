@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Currency, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierProductsRepository } from '../repositories/supplier-products.repository';
@@ -13,6 +13,7 @@ import { SupplierProductEntity } from '../entities/supplier-product.entity';
 import { CreateSupplierProductDto } from '../dto/create-supplier-product.dto';
 import { UpdateSupplierProductDto } from '../dto/update-supplier-product.dto';
 import { toSupplierProductEntity } from '../mappers/supplier-product.mapper';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 @Injectable()
 export class SupplierProductsService {
@@ -22,6 +23,7 @@ export class SupplierProductsService {
     private readonly prismaService: PrismaService,
     private readonly suppliersRepo: SuppliersRepository,
     private readonly supplierProductsRepo: SupplierProductsRepository,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -107,9 +109,12 @@ export class SupplierProductsService {
       throw new NotFoundException(`Product ${dto.productId} not found`);
     }
 
-    // 3. Validate currency (KZT only)
-    if (dto.currency && dto.currency !== 'KZT') {
-      throw new BadRequestException('Only KZT currency is supported');
+    // 3. Validate currency == Company.currency
+    const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+    if (dto.currency && dto.currency !== companyCurrency) {
+      throw new BadRequestException(
+        `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+      );
     }
 
     // 4. Validate purchasePrice
@@ -148,7 +153,7 @@ export class SupplierProductsService {
           product: { connect: { id: dto.productId } },
           supplierSku: dto.supplierSku ?? null,
           purchasePrice: dto.purchasePrice?.toString() ?? null,
-          currency: dto.currency ?? 'KZT',
+          currency: companyCurrency as Currency,
           isPreferred: dto.isPreferred ?? false,
           notes: dto.notes ?? null,
         },

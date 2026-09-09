@@ -7,6 +7,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { EVENT_BUS } from '../../../common/events';
 import { DocumentSequenceService } from '../../shared/services/document-sequence.service';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 const companyId = 'comp-1';
 const poId = 'po-1';
@@ -334,6 +335,7 @@ describe('PurchaseOrderService — updateStatusAfterReceipt (Blocker B1 fix)', (
           useValue: { nextNumber: jest.fn() },
         },
         { provide: EVENT_BUS, useValue: mockEventBus },
+        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
       ],
     }).compile();
 

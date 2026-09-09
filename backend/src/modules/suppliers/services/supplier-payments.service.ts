@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PurchaseInvoiceStatus } from '@prisma/client';
+import { Currency, Prisma, PurchaseInvoiceStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { DocumentSequenceService } from '../../shared/services/document-sequence.service';
@@ -17,6 +17,7 @@ import { SupplierFinanceSummaryEntity } from '../entities/supplier-finance-summa
 import { CreateSupplierPaymentDto } from '../dto/create-supplier-payment.dto';
 import { UpdateSupplierPaymentDto } from '../dto/update-supplier-payment.dto';
 import { toPaymentEntity } from '../mappers/supplier-payment.mapper';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 const ACCOUNT_CODES = {
   ACCOUNTS_PAYABLE: '2100',
@@ -37,6 +38,7 @@ export class SupplierPaymentsService {
     private readonly paymentsRepo: SupplierPaymentsRepository,
     private readonly glEngine: GlEngineService,
     private readonly documentSequenceService: DocumentSequenceService,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -61,9 +63,12 @@ export class SupplierPaymentsService {
       throw new BadRequestException('Payment amount must be greater than zero');
     }
 
-    // 3. Validate currency (KZT only for now)
-    if (dto.currency && dto.currency !== 'KZT') {
-      throw new BadRequestException('Only KZT currency is supported');
+    // 3. Validate currency == Company.currency
+    const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+    if (dto.currency && dto.currency !== companyCurrency) {
+      throw new BadRequestException(
+        `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+      );
     }
 
     // 4. Validate method + account combination
@@ -134,7 +139,7 @@ export class SupplierPaymentsService {
           paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
           amount: amount.toString(),
           method: dto.method,
-          currency: dto.currency ?? 'KZT',
+          currency: companyCurrency as Currency,
           reference: dto.reference ?? null,
           notes: dto.notes ?? null,
           ...(dto.cashAccountId

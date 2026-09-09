@@ -5,6 +5,7 @@ import { PrismaModule } from '../../common/prisma';
 import { IdempotencyModule } from '../../infrastructure/idempotency/idempotency.module';
 import { SharedModule } from '../shared/shared.module';
 import { FinanceModule } from '../finance/finance.module';
+import { CompaniesModule } from '../companies/companies.module';
 import { GoodsReceiptController } from './controllers/goods-receipt.controller';
 import { PurchaseOrderController } from './controllers/purchase-order.controller';
 import { PurchaseReturnController } from './controllers/purchase-return.controller';
@@ -27,7 +28,7 @@ import { PurchasingFinanceService } from './services/purchasing-finance.service'
 import { AuditLogService } from '../shared/services/audit-log.service';
 
 @Module({
-  imports: [PrismaModule, SharedModule, FinanceModule, IdempotencyModule],
+  imports: [PrismaModule, SharedModule, FinanceModule, IdempotencyModule, CompaniesModule],
   controllers: [
     PurchaseOrderController,
     GoodsReceiptController,

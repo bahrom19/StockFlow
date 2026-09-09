@@ -228,7 +228,7 @@
   "cashSales": "Продажи за наличные",
   "nonCash": "Безналичные",
   "cashOut": "Расход",
-  "expectedClosing": "Ожидаемое закрытие · {amount}",
+  "expectedClosing": "Ожидаемое",
   "shiftClosed": "Смена закрыта",
   "differenceZero": "Расхождение 0",
   "differenceAmount": "Расхождение {amount}",
@@ -715,7 +715,7 @@
   "purchasingSubtitle": "Заказы на закупку, приемка товаров и возвраты",
   "poSearchHint": "Поиск по номеру заказа…",
   "newOrder": "Новый заказ",
-  "items": "Позиции",
+  "items": "позиций",
   "grandTotal": "Общий итог",
   "order": "Заказ",
   "purchaseOrder": "Заказ на закупку",
@@ -918,17 +918,23 @@
   "outboxOfflineQueuedMessage": "Нет подключения к интернету. Изменения сохранены offline и будут отправлены автоматически.",
   "@outboxPendingItems": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "@outboxFailedItems": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "@outboxOfflineSaleQueued": {
     "placeholders": {
-      "number": { "type": "String" }
+      "number": {
+        "type": "String"
+      }
     }
   },
   "purchaseAnalytics": "Аналитика закупок",
@@ -1008,7 +1014,6 @@
   "received": "Получен",
   "recentOrders": "Последние заказы",
   "cancelled": "Отменён",
-
   "importCsv": "Импорт CSV",
   "importCsvProducts": "Импорт товаров из CSV",
   "importUploadTitle": "Загрузка CSV файла",
@@ -1059,15 +1064,12 @@
   "value": "Стоимость",
   "supplierName": "Поставщик",
   "purchaseOrders": "Закупки",
-  "lastPurchase": "Последняя закупка",
   "customerName": "Клиент",
   "openedAt": "Открыта",
-  "cashier": "Кассир",
   "totalSales": "Продажи",
-  "expectedClosing": "Ожидаемое",
   "difference": "Расхождение",
-  "items": "позиций",
   "productName": "Товар",
   "orders": "Заказы",
-  "averageReceipt": "Ср. чек"
+  "averageReceipt": "Ср. чек",
+  "currencyLocked": "Валюту можно изменить только до создания финансовых данных."
 }

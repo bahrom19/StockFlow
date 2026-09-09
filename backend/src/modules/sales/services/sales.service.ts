@@ -24,6 +24,7 @@ import { SaleEntity } from '../entities/sale.entity';
 import { SaleMapper } from '../mappers/sale.mapper';
 import { SaleCompletedEvent } from '../events/sale-completed.event';
 import { SaleRefundedEvent } from '../events/sale-refunded.event';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 const VALID_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {
   DRAFT: ['PENDING', 'CANCELLED', 'COMPLETED'],
@@ -49,6 +50,7 @@ export class SalesService {
     private readonly cashShiftRepository: CashShiftRepository,
     private readonly prismaService: PrismaService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async create(
@@ -144,11 +146,19 @@ export class SalesService {
         ? paidAmount.sub(total)
         : new Decimal(0);
 
+      // Enforce document currency == Company.currency
+      const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+      if (dto.currency && dto.currency !== companyCurrency) {
+        throw new BadRequestException(
+          `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+        );
+      }
+
       const sale = await this.salesRepository.create(
         {
           saleNumber,
           status: SaleStatus.DRAFT,
-          currency: (dto.currency ?? 'KZT') as Currency,
+          currency: companyCurrency as Currency,
           notes: dto.notes,
           subtotal,
           discount: totalDiscount,
@@ -526,8 +536,15 @@ export class SalesService {
 
       const updateData: Prisma.SaleUpdateInput = {};
       if (dto.notes !== undefined) updateData.notes = dto.notes;
-      if (dto.currency !== undefined)
+      if (dto.currency !== undefined) {
+        const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+        if (dto.currency !== companyCurrency) {
+          throw new BadRequestException(
+            `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+          );
+        }
         updateData.currency = dto.currency as Currency;
+      }
       if (dto.customerId !== undefined) {
         updateData.customer = dto.customerId
           ? { connect: { id: dto.customerId } }

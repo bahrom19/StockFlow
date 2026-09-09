@@ -228,7 +228,7 @@
   "cashSales": "Cash sales",
   "nonCash": "Non-cash",
   "cashOut": "Cash out",
-  "expectedClosing": "Expected closing · {amount}",
+  "expectedClosing": "Expected",
   "shiftClosed": "Shift closed",
   "differenceZero": "Difference 0",
   "differenceAmount": "Difference {amount}",
@@ -715,7 +715,7 @@
   "purchasingSubtitle": "Purchase orders, goods receipts and returns",
   "poSearchHint": "Search by order number…",
   "newOrder": "New Order",
-  "items": "Items",
+  "items": "items",
   "grandTotal": "Grand Total",
   "order": "Order",
   "purchaseOrder": "Purchase Order",
@@ -918,17 +918,23 @@
   "outboxOfflineQueuedMessage": "No internet connection. Your changes were saved offline and will sync automatically.",
   "@outboxPendingItems": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "@outboxFailedItems": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "@outboxOfflineSaleQueued": {
     "placeholders": {
-      "number": { "type": "String" }
+      "number": {
+        "type": "String"
+      }
     }
   },
   "purchaseAnalytics": "Purchase Analytics",
@@ -1008,7 +1014,6 @@
   "received": "Received",
   "recentOrders": "Recent orders",
   "cancelled": "Cancelled",
-
   "importCsv": "Import CSV",
   "importCsvProducts": "Import Products from CSV",
   "importUploadTitle": "Upload CSV File",
@@ -1059,15 +1064,12 @@
   "value": "Value",
   "supplierName": "Supplier",
   "purchaseOrders": "Purchase Orders",
-  "lastPurchase": "Last Purchase",
   "customerName": "Customer",
   "openedAt": "Opened",
-  "cashier": "Cashier",
   "totalSales": "Total Sales",
-  "expectedClosing": "Expected",
   "difference": "Difference",
-  "items": "items",
   "productName": "Product",
   "orders": "Orders",
-  "averageReceipt": "Avg. Receipt"
+  "averageReceipt": "Avg. Receipt",
+  "currencyLocked": "Currency can only be changed before any financial data is created."
 }

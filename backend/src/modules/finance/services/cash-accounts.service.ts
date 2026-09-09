@@ -13,6 +13,7 @@ import { CashAccountMapper } from '../mappers/cash-account.mapper';
 import { CashAccountsRepository } from '../repositories/cash-accounts.repository';
 import { PrismaService } from '../../../common/prisma';
 import { AuditLogService } from '../../shared/services/audit-log.service';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 @Injectable()
 export class CashAccountsService {
@@ -20,16 +21,23 @@ export class CashAccountsService {
     private readonly repository: CashAccountsRepository,
     private readonly prismaService: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async create(
     dto: CreateCashAccountDto,
     currentUser: JwtPayload,
   ): Promise<CashAccountEntity> {
+    const companyCurrency = await this.companiesService.getBaseCurrency(currentUser.companyId);
+    if (dto.currency && dto.currency !== companyCurrency) {
+      throw new BadRequestException(
+        `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+      );
+    }
     const data: Prisma.CashAccountCreateInput = {
       name: dto.name,
       type: (dto.type || 'REGISTER') as CashAccountType,
-      currency: (dto.currency || 'KZT') as Currency,
+      currency: companyCurrency as Currency,
       isActive: dto.isActive ?? true,
       description: dto.description || null,
       warehouse: dto.warehouseId

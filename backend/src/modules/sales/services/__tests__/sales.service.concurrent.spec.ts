@@ -7,6 +7,7 @@ import { CashShiftRepository } from '../../repositories/cash-shift.repository';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { EVENT_BUS } from '../../../../common/events';
 import { DocumentSequenceService } from '../../../shared/services/document-sequence.service';
+import { CompaniesService } from '../../../companies/services/companies.service';
 
 const companyId = 'comp-1';
 const saleId = 'sale-1';
@@ -80,6 +81,7 @@ describe('SalesRepository — Optimistic Locking', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
         SalesRepository,
         { provide: PrismaService, useValue: mockPrisma },
         {
@@ -324,6 +326,7 @@ describe('SalesService — Concurrent Completion (Optimistic Locking)', () => {
           useValue: { nextNumber: jest.fn() },
         },
         { provide: EVENT_BUS, useValue: mockEventBus },
+        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
       ],
     }).compile();
 

@@ -13,6 +13,7 @@ import { BankAccountMapper } from '../mappers/bank-account.mapper';
 import { BankAccountsRepository } from '../repositories/bank-accounts.repository';
 import { PrismaService } from '../../../common/prisma';
 import { AuditLogService } from '../../shared/services/audit-log.service';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 @Injectable()
 export class BankAccountsService {
@@ -20,19 +21,26 @@ export class BankAccountsService {
     private readonly repository: BankAccountsRepository,
     private readonly prismaService: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async create(
     dto: CreateBankAccountDto,
     currentUser: JwtPayload,
   ): Promise<BankAccountEntity> {
+    const companyCurrency = await this.companiesService.getBaseCurrency(currentUser.companyId);
+    if (dto.currency && dto.currency !== companyCurrency) {
+      throw new BadRequestException(
+        `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+      );
+    }
     const data: Prisma.BankAccountCreateInput = {
       bankName: dto.bankName,
       accountNumber: dto.accountNumber,
       accountName: dto.accountName || null,
       iban: dto.iban || null,
       bic: dto.bic || null,
-      currency: (dto.currency || 'KZT') as Currency,
+      currency: companyCurrency as Currency,
       isDefault: dto.isDefault ?? false,
       isActive: dto.isActive ?? true,
       description: dto.description || null,

@@ -19,6 +19,7 @@ import { FinancialTransactionMapper } from '../mappers/financial-transaction.map
 import { FinancialTransactionsRepository } from '../repositories/financial-transactions.repository';
 import { PrismaService } from '../../../common/prisma';
 import { AuditLogService } from '../../shared/services/audit-log.service';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 @Injectable()
 export class FinancialTransactionsService {
@@ -26,6 +27,7 @@ export class FinancialTransactionsService {
     private readonly repository: FinancialTransactionsRepository,
     private readonly prismaService: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async create(
@@ -34,6 +36,12 @@ export class FinancialTransactionsService {
   ): Promise<FinancialTransactionEntity> {
     const fee = dto.fee || '0';
     const netAmount = new Decimal(dto.amount).minus(new Decimal(fee));
+    const companyCurrency = await this.companiesService.getBaseCurrency(currentUser.companyId);
+    if (dto.currency && dto.currency !== companyCurrency) {
+      throw new BadRequestException(
+        `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+      );
+    }
 
     const data: Prisma.FinancialTransactionCreateInput = {
       type: dto.type as FinancialTransactionType,
@@ -41,7 +49,7 @@ export class FinancialTransactionsService {
       amount: dto.amount,
       fee: fee,
       netAmount: netAmount.toString(),
-      currency: (dto.currency || 'KZT') as Currency,
+      currency: (dto.currency || companyCurrency) as Currency,
       transactionDate: dto.transactionDate || new Date(),
       description: dto.description || null,
       referenceNumber: dto.referenceNumber || null,

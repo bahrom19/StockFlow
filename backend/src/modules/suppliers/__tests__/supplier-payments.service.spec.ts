@@ -8,6 +8,7 @@ import { SupplierPaymentsRepository } from '../repositories/supplier-payments.re
 import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { DocumentSequenceService } from '../../shared/services/document-sequence.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { CompaniesService } from '../../companies/services/companies.service';
 
 const companyId = 'comp-1';
 const supplierId = 'supplier-1';
@@ -115,6 +116,7 @@ describe('SupplierPaymentsService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
         SupplierPaymentsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: SuppliersRepository, useValue: mockSuppliersRepo },

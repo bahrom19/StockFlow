@@ -18,6 +18,7 @@ import { PurchaseOrderRepository } from '../repositories/purchase-order.reposito
 import { PurchaseOrderCreatedEvent } from '../events/purchase-order-created.event';
 import { PurchaseOrderApprovedEvent } from '../events/purchase-order-approved.event';
 import { PurchaseOrderStatusChangedEvent } from '../events/purchase-order-status-changed.event';
+import { CompaniesService } from '../../companies/services/companies.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import {
   DocumentSequenceService,
@@ -56,6 +57,7 @@ export class PurchaseOrderService {
     private readonly auditLog: AuditLogService,
     private readonly documentSequenceService: DocumentSequenceService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async create(
@@ -83,6 +85,14 @@ export class PurchaseOrderService {
       if (existing) {
         throw new BadRequestException(
           `Order number "${orderNumber}" already exists`,
+        );
+      }
+
+      // Enforce document currency == Company.currency
+      const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+      if (dto.currency && dto.currency !== companyCurrency) {
+        throw new BadRequestException(
+          `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
         );
       }
 
@@ -137,7 +147,7 @@ export class PurchaseOrderService {
           taxAmount: totalTax,
           grandTotal: subtotal.sub(totalDiscount).add(totalTax),
           paidAmount: new Decimal(0),
-          currency: (dto.currency ?? 'KZT') as Currency,
+          currency: companyCurrency as Currency,
           notes: dto.notes,
           company: { connect: { id: companyId } },
           supplier: { connect: { id: dto.supplierId } },
@@ -173,7 +183,7 @@ export class PurchaseOrderService {
             discountAmount: po.discountAmount.toString(),
             taxAmount: po.taxAmount.toString(),
             grandTotal: po.grandTotal.toString(),
-            currency: (dto.currency ?? 'KZT') as string,
+            currency: companyCurrency as string,
             items: dto.items.map((i) => ({
               productId: i.productId,
               quantity: i.quantity,
@@ -268,7 +278,15 @@ export class PurchaseOrderService {
       if (dto.expectedDate)
         updateData.expectedDate = new Date(dto.expectedDate);
       if (dto.notes !== undefined) updateData.notes = dto.notes;
-      if (dto.currency) updateData.currency = dto.currency as Currency;
+      if (dto.currency) {
+        const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+        if (dto.currency !== companyCurrency) {
+          throw new BadRequestException(
+            `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+          );
+        }
+        updateData.currency = dto.currency as Currency;
+      }
 
       if (dto.items) {
         // Delete old items and recreate
