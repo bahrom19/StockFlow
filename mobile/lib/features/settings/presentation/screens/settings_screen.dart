@@ -174,7 +174,7 @@ class SettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
               dialogContext.l10n.currencyLocked,
-              style: dialogContext.textTheme.bodySmall,
+              style: Theme.of(dialogContext).textTheme.bodySmall,
             ),
           ),
         ],
