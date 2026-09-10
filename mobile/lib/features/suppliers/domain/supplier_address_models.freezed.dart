@@ -27,6 +27,7 @@ mixin _$SupplierAddress {
   String? get street => throw _privateConstructorUsedError;
   String? get postalCode => throw _privateConstructorUsedError;
   bool get isDefault => throw _privateConstructorUsedError;
+  int get rowVersion => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get updatedAt => throw _privateConstructorUsedError;
   DateTime? get deletedAt => throw _privateConstructorUsedError;
@@ -55,6 +56,7 @@ abstract class $SupplierAddressCopyWith<$Res> {
       String? street,
       String? postalCode,
       bool isDefault,
+      int rowVersion,
       DateTime createdAt,
       DateTime updatedAt,
       DateTime? deletedAt});
@@ -82,6 +84,7 @@ class _$SupplierAddressCopyWithImpl<$Res, $Val extends SupplierAddress>
     Object? street = freezed,
     Object? postalCode = freezed,
     Object? isDefault = null,
+    Object? rowVersion = null,
     Object? createdAt = null,
     Object? updatedAt = null,
     Object? deletedAt = freezed,
@@ -115,6 +118,10 @@ class _$SupplierAddressCopyWithImpl<$Res, $Val extends SupplierAddress>
           ? _value.isDefault
           : isDefault // ignore: cast_nullable_to_non_nullable
               as bool,
+      rowVersion: null == rowVersion
+          ? _value.rowVersion
+          : rowVersion // ignore: cast_nullable_to_non_nullable
+              as int,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -147,6 +154,7 @@ abstract class _$$SupplierAddressImplCopyWith<$Res>
       String? street,
       String? postalCode,
       bool isDefault,
+      int rowVersion,
       DateTime createdAt,
       DateTime updatedAt,
       DateTime? deletedAt});
@@ -172,6 +180,7 @@ class __$$SupplierAddressImplCopyWithImpl<$Res>
     Object? street = freezed,
     Object? postalCode = freezed,
     Object? isDefault = null,
+    Object? rowVersion = null,
     Object? createdAt = null,
     Object? updatedAt = null,
     Object? deletedAt = freezed,
@@ -205,6 +214,10 @@ class __$$SupplierAddressImplCopyWithImpl<$Res>
           ? _value.isDefault
           : isDefault // ignore: cast_nullable_to_non_nullable
               as bool,
+      rowVersion: null == rowVersion
+          ? _value.rowVersion
+          : rowVersion // ignore: cast_nullable_to_non_nullable
+              as int,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -232,6 +245,7 @@ class _$SupplierAddressImpl extends _SupplierAddress {
       this.street,
       this.postalCode,
       this.isDefault = false,
+      this.rowVersion = 0,
       required this.createdAt,
       required this.updatedAt,
       this.deletedAt})
@@ -256,6 +270,9 @@ class _$SupplierAddressImpl extends _SupplierAddress {
   @JsonKey()
   final bool isDefault;
   @override
+  @JsonKey()
+  final int rowVersion;
+  @override
   final DateTime createdAt;
   @override
   final DateTime updatedAt;
@@ -264,7 +281,7 @@ class _$SupplierAddressImpl extends _SupplierAddress {
 
   @override
   String toString() {
-    return 'SupplierAddress(id: $id, supplierId: $supplierId, city: $city, country: $country, street: $street, postalCode: $postalCode, isDefault: $isDefault, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt)';
+    return 'SupplierAddress(id: $id, supplierId: $supplierId, city: $city, country: $country, street: $street, postalCode: $postalCode, isDefault: $isDefault, rowVersion: $rowVersion, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt)';
   }
 
   @override
@@ -282,6 +299,8 @@ class _$SupplierAddressImpl extends _SupplierAddress {
                 other.postalCode == postalCode) &&
             (identical(other.isDefault, isDefault) ||
                 other.isDefault == isDefault) &&
+            (identical(other.rowVersion, rowVersion) ||
+                other.rowVersion == rowVersion) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -292,8 +311,19 @@ class _$SupplierAddressImpl extends _SupplierAddress {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, id, supplierId, city, country,
-      street, postalCode, isDefault, createdAt, updatedAt, deletedAt);
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      supplierId,
+      city,
+      country,
+      street,
+      postalCode,
+      isDefault,
+      rowVersion,
+      createdAt,
+      updatedAt,
+      deletedAt);
 
   /// Create a copy of SupplierAddress
   /// with the given fields replaced by the non-null parameter values.
@@ -321,6 +351,7 @@ abstract class _SupplierAddress extends SupplierAddress {
       final String? street,
       final String? postalCode,
       final bool isDefault,
+      final int rowVersion,
       required final DateTime createdAt,
       required final DateTime updatedAt,
       final DateTime? deletedAt}) = _$SupplierAddressImpl;
@@ -343,6 +374,8 @@ abstract class _SupplierAddress extends SupplierAddress {
   String? get postalCode;
   @override
   bool get isDefault;
+  @override
+  int get rowVersion;
   @override
   DateTime get createdAt;
   @override

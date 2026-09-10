@@ -533,6 +533,7 @@ model SupplierAddress {
   street      String?   @db.VarChar(255)
   postalCode  String?   @db.VarChar(32)
   isDefault   Boolean   @default(false)
+  rowVersion  Int       @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?

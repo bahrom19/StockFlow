@@ -22,6 +22,9 @@ export class SupplierAddressEntity {
   @ApiProperty({ example: false })
   isDefault!: boolean;
 
+  @ApiProperty({ example: 0 })
+  rowVersion!: number;
+
   @ApiProperty({ example: '2026-07-08T00:00:00.000Z' })
   createdAt!: Date;
 

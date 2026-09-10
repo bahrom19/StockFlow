@@ -89,6 +89,18 @@ export class SupplierAddressesService {
     await this.suppliersService.findById(supplierId, currentUser);
 
     const updated = await this.prismaService.$transaction(async (tx) => {
+      // Get current address for rowVersion
+      const current = await this.addressesRepository.findById(
+        addressId,
+        supplierId,
+        tx,
+      );
+      if (!current) {
+        throw new NotFoundException(
+          `Supplier address with id ${addressId} not found`,
+        );
+      }
+
       // G2: If isDefault, clear existing default addresses
       if (dto.isDefault) {
         await this.addressesRepository.clearDefault(
@@ -108,6 +120,7 @@ export class SupplierAddressesService {
           postalCode: dto.postalCode,
           isDefault: dto.isDefault,
         } as Prisma.SupplierAddressUpdateInput,
+        current.rowVersion,
         tx,
       );
     });
@@ -123,7 +136,25 @@ export class SupplierAddressesService {
     // Verify supplier belongs to company
     await this.suppliersService.findById(supplierId, currentUser);
 
-    await this.addressesRepository.softDelete(addressId, supplierId);
+    await this.prismaService.$transaction(async (tx) => {
+      const current = await this.addressesRepository.findById(
+        addressId,
+        supplierId,
+        tx,
+      );
+      if (!current) {
+        throw new NotFoundException(
+          `Supplier address with id ${addressId} not found`,
+        );
+      }
+
+      await this.addressesRepository.softDelete(
+        addressId,
+        supplierId,
+        current.rowVersion,
+        tx,
+      );
+    });
   }
 
   private toEntity(address: SupplierAddress): SupplierAddressEntity {
@@ -135,6 +166,7 @@ export class SupplierAddressesService {
       street: address.street,
       postalCode: address.postalCode,
       isDefault: address.isDefault,
+      rowVersion: address.rowVersion,
       createdAt: address.createdAt,
       updatedAt: address.updatedAt,
       deletedAt: address.deletedAt,

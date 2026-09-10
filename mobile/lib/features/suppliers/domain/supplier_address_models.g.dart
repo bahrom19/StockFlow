@@ -16,6 +16,7 @@ _$SupplierAddressImpl _$$SupplierAddressImplFromJson(
       street: json['street'] as String?,
       postalCode: json['postalCode'] as String?,
       isDefault: json['isDefault'] as bool? ?? false,
+      rowVersion: (json['rowVersion'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       deletedAt: json['deletedAt'] == null
@@ -33,6 +34,7 @@ Map<String, dynamic> _$$SupplierAddressImplToJson(
       'street': instance.street,
       'postalCode': instance.postalCode,
       'isDefault': instance.isDefault,
+      'rowVersion': instance.rowVersion,
       'createdAt': instance.createdAt.toIso8601String(),
       'updatedAt': instance.updatedAt.toIso8601String(),
       'deletedAt': instance.deletedAt?.toIso8601String(),

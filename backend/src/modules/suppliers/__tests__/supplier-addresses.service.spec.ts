@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { SupplierAddressesService } from '../services/supplier-addresses.service';
 import { SupplierAddressesRepository } from '../repositories/supplier-addresses.repository';
 import { SuppliersService } from '../services/suppliers.service';
@@ -26,6 +26,7 @@ describe('SupplierAddressesService', () => {
     street: '123 Main St',
     postalCode: '050000',
     isDefault: false,
+    rowVersion: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
@@ -119,6 +120,7 @@ describe('SupplierAddressesService', () => {
 
   // ── UPDATE ─────────────────────────────────────────────
   it('should update an address', async () => {
+    mockAddressesRepo.findById.mockResolvedValue(baseAddress as any);
     mockAddressesRepo.update.mockResolvedValue({
       ...baseAddress,
       city: 'Astana',
@@ -133,6 +135,7 @@ describe('SupplierAddressesService', () => {
   });
 
   it('should clear default when updating to default', async () => {
+    mockAddressesRepo.findById.mockResolvedValue(baseAddress as any);
     await service.update(
       'supp-1',
       'addr-1',
@@ -146,13 +149,64 @@ describe('SupplierAddressesService', () => {
     );
   });
 
+  it('should use optimistic locking on update', async () => {
+    mockAddressesRepo.findById.mockResolvedValue({
+      ...baseAddress,
+      rowVersion: 5,
+    } as any);
+    await service.update(
+      'supp-1',
+      'addr-1',
+      { city: 'Astana' } as any,
+      currentUser,
+    );
+    expect(mockAddressesRepo.update).toHaveBeenCalledWith(
+      'addr-1',
+      'supp-1',
+      expect.anything(),
+      5,
+      expect.anything(),
+    );
+  });
+
+  it('should throw NotFoundException when updating missing address', async () => {
+    mockAddressesRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.update('supp-1', 'missing', { city: 'Astana' } as any, currentUser),
+    ).rejects.toThrow(NotFoundException);
+  });
+
   // ── SOFT DELETE ────────────────────────────────────────
   it('should soft delete an address', async () => {
+    mockAddressesRepo.findById.mockResolvedValue(baseAddress as any);
     await service.softDelete('supp-1', 'addr-1', currentUser);
     expect(mockAddressesRepo.softDelete).toHaveBeenCalledWith(
       'addr-1',
       'supp-1',
+      0,
+      expect.anything(),
     );
+  });
+
+  it('should use optimistic locking on soft delete', async () => {
+    mockAddressesRepo.findById.mockResolvedValue({
+      ...baseAddress,
+      rowVersion: 3,
+    } as any);
+    await service.softDelete('supp-1', 'addr-1', currentUser);
+    expect(mockAddressesRepo.softDelete).toHaveBeenCalledWith(
+      'addr-1',
+      'supp-1',
+      3,
+      expect.anything(),
+    );
+  });
+
+  it('should throw NotFoundException when deleting missing address', async () => {
+    mockAddressesRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.softDelete('supp-1', 'missing', currentUser),
+    ).rejects.toThrow(NotFoundException);
   });
 
   // ── CROSS-COMPANY ──────────────────────────────────────

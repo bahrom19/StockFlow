@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, SupplierAddress } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
@@ -41,34 +45,73 @@ export class SupplierAddressesRepository {
     id: string,
     supplierId: string,
     data: Prisma.SupplierAddressUpdateInput,
+    rowVersion?: number,
     tx?: Prisma.TransactionClient,
   ): Promise<SupplierAddress> {
     const client = this.getClient(tx);
-    const existing = await client.supplierAddress.findFirst({
-      where: { id, supplierId, deletedAt: null },
-    });
-    if (!existing) {
-      throw new NotFoundException(
-        `Supplier address with id ${id} not found`,
-      );
+
+    if (rowVersion !== undefined) {
+      const result = await client.supplierAddress.updateMany({
+        where: { id, supplierId, rowVersion, deletedAt: null },
+        data: { ...data, rowVersion: { increment: 1 } },
+      });
+
+      if (result.count === 0) {
+        const existing = await client.supplierAddress.findFirst({
+          where: { id, supplierId },
+        });
+        if (!existing) {
+          throw new NotFoundException(
+            `Supplier address with id ${id} not found`,
+          );
+        }
+        throw new ConflictException(
+          `Address ${id} was modified by another user. Please refresh and retry.`,
+        );
+      }
+
+      return client.supplierAddress.findUnique({
+        where: { id },
+      }) as unknown as SupplierAddress;
     }
+
     return client.supplierAddress.update({ where: { id }, data });
   }
 
   async softDelete(
     id: string,
     supplierId: string,
+    rowVersion?: number,
     tx?: Prisma.TransactionClient,
   ): Promise<SupplierAddress> {
     const client = this.getClient(tx);
-    const existing = await client.supplierAddress.findFirst({
-      where: { id, supplierId, deletedAt: null },
-    });
-    if (!existing) {
-      throw new NotFoundException(
-        `Supplier address with id ${id} not found`,
-      );
+
+    if (rowVersion !== undefined) {
+      const result = await client.supplierAddress.updateMany({
+        where: { id, supplierId, rowVersion, deletedAt: null },
+        data: {
+          deletedAt: new Date(),
+          rowVersion: { increment: 1 },
+        },
+      });
+      if (result.count === 0) {
+        const existing = await client.supplierAddress.findFirst({
+          where: { id, supplierId },
+        });
+        if (!existing) {
+          throw new NotFoundException(
+            `Supplier address with id ${id} not found`,
+          );
+        }
+        throw new ConflictException(
+          `Address ${id} was modified by another user. Please refresh and retry.`,
+        );
+      }
+      return client.supplierAddress.findUnique({
+        where: { id },
+      }) as unknown as SupplierAddress;
     }
+
     return client.supplierAddress.update({
       where: { id },
       data: { deletedAt: new Date() },

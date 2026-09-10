@@ -15,6 +15,7 @@ class SupplierAddress with _$SupplierAddress {
     String? street,
     String? postalCode,
     @Default(false) bool isDefault,
+    @Default(0) int rowVersion,
     required DateTime createdAt,
     required DateTime updatedAt,
     DateTime? deletedAt,
