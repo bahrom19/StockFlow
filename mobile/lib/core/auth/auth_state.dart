@@ -1,8 +1,10 @@
 import 'dart:async' show unawaited;
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
+import 'package:stockflow/core/company/company_provider.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
 import 'package:stockflow/core/outbox/outbox_controller.dart';
 import 'package:stockflow/features/auth/data/repositories/auth_repository.dart';
@@ -82,6 +84,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final result = await repo.refreshToken(refreshTokenValue: refreshTokenValue);
       if (result is ApiSuccess<RefreshResponse>) {
         state = AuthAuthenticated(result.data.user);
+        _loadCompanyData();
       } else {
         await storage.clearTokens();
         state = const AuthUnauthenticated();
@@ -90,6 +93,17 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       await storage.clearTokens();
       state = const AuthUnauthenticated();
     }
+  }
+
+  /// Fetches the company data (authoritative `Company.currency`) right after
+  /// the session is established. Fire-and-forget: while the request is in
+  /// flight, CurrencyProvider serves the SharedPreferences warm cache.
+  void _loadCompanyData() {
+    unawaited(
+      _ref
+          .read(companyProvider.notifier)
+          .load(_ref.read(apiClientProvider)),
+    );
   }
 
   Future<void> login({
@@ -111,6 +125,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
           refreshToken: result.data.refreshToken,
         );
         state = AuthAuthenticated(result.data.user);
+        _loadCompanyData();
       } else {
         final message = result is ApiFailure<LoginResponse>
             ? result.error.message

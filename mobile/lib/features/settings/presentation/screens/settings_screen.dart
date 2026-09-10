@@ -1,6 +1,8 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/constants/app_constants.dart';
@@ -158,7 +160,7 @@ class SettingsScreen extends ConsumerWidget {
   /// Currency can only be changed before monetary data exists.
   Future<void> _showCurrencyDialog(BuildContext context, WidgetRef ref) async {
     final current = ref.read(currencyProvider);
-    await showDialog<String>(
+    final selectedCode = await showDialog<String>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
         title: Text(dialogContext.l10n.currency),
@@ -180,5 +182,47 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+    if (selectedCode == null || selectedCode == current) return;
+    if (!context.mounted) return;
+    await _updateCompanyCurrency(context, ref, selectedCode);
+  }
+
+  /// Applies the selected currency via PATCH /companies/me. The backend
+  /// response is the authority: on success it is applied to CompanyProvider
+  /// (CurrencyProvider and the UI follow reactively) and mirrored into the
+  /// `app_currency` warm cache. On failure the state and the cache stay
+  /// untouched and an existing localized error message is shown.
+  Future<void> _updateCompanyCurrency(
+    BuildContext context,
+    WidgetRef ref,
+    String code,
+  ) async {
+    final l10n = context.l10n;
+    try {
+      final response = await ref
+          .read(apiClientProvider)
+          .patch('/companies/me', data: {'currency': code});
+      ref
+          .read(companyProvider.notifier)
+          .applyFromBackend(response.data as Map<String, dynamic>);
+      // Write-through to the warm/offline cache (existing mechanism).
+      await ref.read(currencyProvider.notifier).setCurrency(code);
+    } on DioException catch (e) {
+      if (!context.mounted) return;
+      final statusCode = e.response?.statusCode;
+      final message = statusCode == 400
+          ? l10n.currencyLocked
+          : statusCode == 403
+              ? l10n.errPermissionDenied
+              : l10n.errUnexpectedError;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.errUnexpectedError)),
+      );
+    }
   }
 }

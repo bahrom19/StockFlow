@@ -34,20 +34,26 @@ class CompanyNotifier extends StateNotifier<CompanyData?> {
   Future<void> load(ApiClient api) async {
     try {
       final response = await api.get('/companies/me');
-      final data = response.data as Map<String, dynamic>;
-      final currency = data['currency'] as String? ?? 'KZT';
-      final companyName = data['companyName'] as String? ?? '';
-      final companyId = data['companyId'] as String? ?? '';
-
-      state = CompanyData(
-        companyId: companyId,
-        currency: CurrencyCatalog.isSupported(currency) ? currency : 'KZT',
-        companyName: companyName,
-      );
+      applyFromBackend(response.data as Map<String, dynamic>);
     } catch (_) {
       // Backend unavailable — keep null state. CurrencyProvider
       // will fall back to SharedPreferences cache or KZT default.
     }
+  }
+
+  /// Applies an already-fetched backend payload (the response body of
+  /// GET/PATCH /companies/me) to the state without a second network
+  /// round-trip. Used by [load] and by the settings currency update flow.
+  void applyFromBackend(Map<String, dynamic> data) {
+    final currency = data['currency'] as String? ?? 'KZT';
+    final companyName = data['companyName'] as String? ?? '';
+    final companyId = data['companyId'] as String? ?? '';
+
+    state = CompanyData(
+      companyId: companyId,
+      currency: CurrencyCatalog.isSupported(currency) ? currency : 'KZT',
+      companyName: companyName,
+    );
   }
 
   /// Clears company data on logout.
