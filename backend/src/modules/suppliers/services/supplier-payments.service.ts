@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
@@ -8,7 +9,10 @@ import {
 import { Currency, Prisma, PurchaseInvoiceStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { GlEngineService } from '../../finance/services/gl-engine.service';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
+import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
 import { DocumentSequenceService } from '../../shared/services/document-sequence.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import { PrismaService } from '../../../common/prisma';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierPaymentsRepository } from '../repositories/supplier-payments.repository';
@@ -39,6 +43,8 @@ export class SupplierPaymentsService {
     private readonly glEngine: GlEngineService,
     private readonly documentSequenceService: DocumentSequenceService,
     private readonly companiesService: CompaniesService,
+    private readonly idempotencyService: IdempotencyService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -50,6 +56,7 @@ export class SupplierPaymentsService {
     dto: CreateSupplierPaymentDto,
     userId: string,
     companyId: string,
+    idempotencyKey?: string,
   ): Promise<SupplierPaymentEntity> {
     // 1. Verify supplier belongs to company
     const supplier = await this.suppliersRepo.findById(supplierId, companyId);
@@ -74,139 +81,220 @@ export class SupplierPaymentsService {
     // 4. Validate method + account combination
     this.validateMethodAccount(dto);
 
-    return this.prismaService.$transaction(async (tx) => {
-      // 5. Get invoice and validate
-      const invoice = await tx.purchaseInvoice.findFirst({
-        where: {
-          id: dto.purchaseInvoiceId,
-          companyId,
+    // 5. G3-1: keyed mutation. The IdempotencyRecord reservation, the payment
+    // row, the invoice paidAmount CAS, the GL journal and the audit log all
+    // commit (or roll back) inside ONE transaction — a payment can never be
+    // committed without its reservation, and a failure rolls the reservation
+    // back together with the payment. No key → legacy single-transaction
+    // behavior, unchanged.
+    const result = await runWithIdempotency({
+      prisma: this.prismaService,
+      idempotency: this.idempotencyService,
+      companyId,
+      idempotencyKey,
+      endpoint: 'supplier-payment-create',
+      requestHashPayload: { supplierId, ...dto, userId },
+      status: HttpStatus.CREATED,
+      work: (tx) =>
+        this.applyCreatePayment({
           supplierId,
-          deletedAt: null,
-        },
-      });
-
-      if (!invoice) {
-        throw new NotFoundException(
-          `Purchase invoice ${dto.purchaseInvoiceId} not found for this supplier`,
-        );
-      }
-
-      if (!ALLOWED_INVOICE_STATUSES.includes(invoice.status as PurchaseInvoiceStatus)) {
-        throw new BadRequestException(
-          `Cannot record payment for invoice with status ${invoice.status}. Only APPROVED or PAID invoices are accepted.`,
-        );
-      }
-
-      // 6. Check overpayment
-      const currentPaid = new Decimal(invoice.paidAmount);
-      const grandTotal = new Decimal(invoice.grandTotal);
-      const newPaid = currentPaid.add(amount);
-
-      if (newPaid.gt(grandTotal)) {
-        throw new BadRequestException(
-          `Payment of ${amount.toString()} exceeds outstanding amount. Current paid: ${currentPaid.toString()}, grand total: ${grandTotal.toString()}`,
-        );
-      }
-
-      // 7. Resolve GL accounts
-      const apAccountId = await this.getAccountsPayableAccountId(companyId, tx);
-      if (!apAccountId) {
-        throw new BadRequestException('Chart of Accounts not configured — Accounts Payable account (2100) not found');
-      }
-
-      const creditAccountId = await this.resolveCreditAccountId(dto, companyId, tx);
-
-      // 8. Determine new invoice status
-      const newStatus = newPaid.gte(grandTotal)
-        ? PurchaseInvoiceStatus.PAID
-        : invoice.status as PurchaseInvoiceStatus;
-
-      // 9. Generate payment number
-      const seq = await this.documentSequenceService.nextNumber(
-        companyId,
-        'SUPPLIER_PAYMENT',
-        tx,
-      );
-      const paymentNumber = `PAY-${String(seq).padStart(6, '0')}`;
-
-      // 10. Create payment record
-      const payment = await this.paymentsRepo.create(
-        {
-          company: { connect: { id: companyId } },
-          supplier: { connect: { id: supplierId } },
-          purchaseInvoice: { connect: { id: dto.purchaseInvoiceId } },
-          paymentNumber,
-          paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
-          amount: amount.toString(),
-          method: dto.method,
-          currency: companyCurrency as Currency,
-          reference: dto.reference ?? null,
-          notes: dto.notes ?? null,
-          ...(dto.cashAccountId
-            ? { cashAccount: { connect: { id: dto.cashAccountId } } }
-            : {}),
-          ...(dto.bankAccountId
-            ? { bankAccount: { connect: { id: dto.bankAccountId } } }
-            : {}),
-          createdByUser: { connect: { id: userId } },
-        },
-        tx,
-      );
-
-      // 11. Update invoice paidAmount + status with concurrency check
-      const updateResult = await tx.purchaseInvoice.updateMany({
-        where: {
-          id: dto.purchaseInvoiceId,
+          dto,
+          userId,
           companyId,
-          rowVersion: invoice.rowVersion,
-        },
-        data: {
-          paidAmount: newPaid.toString(),
-          rowVersion: { increment: 1 },
-          ...(newPaid.gte(grandTotal) ? { status: PurchaseInvoiceStatus.PAID } : {}),
-        },
-      });
-
-      if (updateResult.count === 0) {
-        throw new ConflictException(
-          'Invoice was modified by another user. Please refresh and retry.',
-        );
-      }
-
-      // 12. Create journal entry: Dr AP / Cr Cash|Bank
-      await this.glEngine.post(
-        {
-          companyId,
-          financialPeriodId: await this.getOpenPeriodId(tx, companyId),
-          entryDate: payment.paymentDate,
-          description: `Supplier payment: ${paymentNumber} to ${supplier.companyName}`,
-          referenceType: 'SUPPLIER_PAYMENT',
-          referenceId: payment.id,
-          createdBy: userId,
-          lines: [
-            {
-              accountId: apAccountId,
-              debit: amount.toString(),
-              credit: '0',
-              description: `Payment ${paymentNumber} — reduce AP`,
-            },
-            {
-              accountId: creditAccountId,
-              debit: '0',
-              credit: amount.toString(),
-              description: `Payment ${paymentNumber} — cash/bank outflow`,
-            },
-          ],
-        },
-        tx,
-      );
-
-      this.logger.log(
-        `Payment ${paymentNumber} created: ${amount.toString()} KZT for invoice ${invoice.invoiceNumber}`,
-      );
-
-      return toPaymentEntity(payment);
+          companyCurrency,
+          supplierName: supplier.companyName,
+          tx,
+        }),
     });
+    return result.body as SupplierPaymentEntity;
+  }
+
+  /**
+   * G3-1: atomic payment body. Runs inside the caller's transaction (the
+   * idempotency reservation or the legacy transaction) so the payment row,
+   * the invoice update, the GL journal and the audit log commit (or roll
+   * back) together.
+   */
+  private async applyCreatePayment(params: {
+    supplierId: string;
+    dto: CreateSupplierPaymentDto;
+    userId: string;
+    companyId: string;
+    companyCurrency: string;
+    supplierName: string;
+    tx: Prisma.TransactionClient;
+  }): Promise<SupplierPaymentEntity> {
+    const { supplierId, dto, userId, companyId, companyCurrency, supplierName, tx } = params;
+    const amount = new Decimal(dto.amount);
+
+    // 6. Get invoice and validate (tenant-scoped: id + companyId + supplierId)
+    const invoice = await tx.purchaseInvoice.findFirst({
+      where: {
+        id: dto.purchaseInvoiceId,
+        companyId,
+        supplierId,
+        deletedAt: null,
+      },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException(
+        `Purchase invoice ${dto.purchaseInvoiceId} not found for this supplier`,
+      );
+    }
+
+    if (!ALLOWED_INVOICE_STATUSES.includes(invoice.status as PurchaseInvoiceStatus)) {
+      throw new BadRequestException(
+        `Cannot record payment for invoice with status ${invoice.status}. Only APPROVED or PAID invoices are accepted.`,
+      );
+    }
+
+    // 7. G3-2: invoice currency must match the company base currency.
+    // The payment is always recorded in company currency — no FX, no
+    // conversion. A mismatch rejects before any write happens.
+    if (invoice.currency !== companyCurrency) {
+      throw new BadRequestException(
+        `Invoice currency ${invoice.currency} does not match company currency ${companyCurrency}`,
+      );
+    }
+
+    // 8. Check overpayment
+    const currentPaid = new Decimal(invoice.paidAmount);
+    const grandTotal = new Decimal(invoice.grandTotal);
+    const newPaid = currentPaid.add(amount);
+
+    if (newPaid.gt(grandTotal)) {
+      throw new BadRequestException(
+        `Payment of ${amount.toString()} exceeds outstanding amount. Current paid: ${currentPaid.toString()}, grand total: ${grandTotal.toString()}`,
+      );
+    }
+
+    // 9. Resolve GL accounts
+    const apAccountId = await this.getAccountsPayableAccountId(companyId, tx);
+    if (!apAccountId) {
+      throw new BadRequestException('Chart of Accounts not configured — Accounts Payable account (2100) not found');
+    }
+
+    const creditAccountId = await this.resolveCreditAccountId(dto, companyId, tx);
+
+    // 10. Determine new invoice status
+    const newStatus = newPaid.gte(grandTotal)
+      ? PurchaseInvoiceStatus.PAID
+      : invoice.status as PurchaseInvoiceStatus;
+
+    // 11. Generate payment number
+    const seq = await this.documentSequenceService.nextNumber(
+      companyId,
+      'SUPPLIER_PAYMENT',
+      tx,
+    );
+    const paymentNumber = `PAY-${String(seq).padStart(6, '0')}`;
+
+    // 12. Create payment record
+    const payment = await this.paymentsRepo.create(
+      {
+        company: { connect: { id: companyId } },
+        supplier: { connect: { id: supplierId } },
+        purchaseInvoice: { connect: { id: dto.purchaseInvoiceId } },
+        paymentNumber,
+        paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
+        amount: amount.toString(),
+        method: dto.method,
+        currency: companyCurrency as Currency,
+        reference: dto.reference ?? null,
+        notes: dto.notes ?? null,
+        ...(dto.cashAccountId
+          ? { cashAccount: { connect: { id: dto.cashAccountId } } }
+          : {}),
+        ...(dto.bankAccountId
+          ? { bankAccount: { connect: { id: dto.bankAccountId } } }
+          : {}),
+        createdByUser: { connect: { id: userId } },
+      },
+      tx,
+    );
+
+    // 13. Update invoice paidAmount + status with concurrency check
+    const updateResult = await tx.purchaseInvoice.updateMany({
+      where: {
+        id: dto.purchaseInvoiceId,
+        companyId,
+        rowVersion: invoice.rowVersion,
+      },
+      data: {
+        paidAmount: newPaid.toString(),
+        rowVersion: { increment: 1 },
+        ...(newPaid.gte(grandTotal) ? { status: PurchaseInvoiceStatus.PAID } : {}),
+      },
+    });
+
+    if (updateResult.count === 0) {
+      throw new ConflictException(
+        'Invoice was modified by another user. Please refresh and retry.',
+      );
+    }
+
+    // 14. Create journal entry: Dr AP / Cr Cash|Bank
+    await this.glEngine.post(
+      {
+        companyId,
+        financialPeriodId: await this.getOpenPeriodId(tx, companyId),
+        entryDate: payment.paymentDate,
+        description: `Supplier payment: ${paymentNumber} to ${supplierName}`,
+        referenceType: 'SUPPLIER_PAYMENT',
+        referenceId: payment.id,
+        createdBy: userId,
+        lines: [
+          {
+            accountId: apAccountId,
+            debit: amount.toString(),
+            credit: '0',
+            description: `Payment ${paymentNumber} — reduce AP`,
+          },
+          {
+            accountId: creditAccountId,
+            debit: '0',
+            credit: amount.toString(),
+            description: `Payment ${paymentNumber} — cash/bank outflow`,
+          },
+        ],
+      },
+      tx,
+    );
+
+    // 15. G3-3: audit log — same transaction as the payment row, the invoice
+    // update and the GL journal (rollback-safe: a failed payment leaves no
+    // audit trace).
+    await this.auditLogService.log(
+      {
+        companyId,
+        userId,
+        entityType: 'SupplierPayment',
+        entityId: payment.id,
+        action: 'CREATED',
+        before: null,
+        after: {
+          paymentNumber: payment.paymentNumber,
+          supplierId,
+          purchaseInvoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          amount: amount.toString(),
+          currency: companyCurrency,
+          method: payment.method,
+          cashAccountId: dto.cashAccountId ?? null,
+          bankAccountId: dto.bankAccountId ?? null,
+          reference: dto.reference ?? null,
+          paymentDate: payment.paymentDate,
+        },
+      },
+      tx,
+    );
+
+    this.logger.log(
+      `Payment ${paymentNumber} created: ${amount.toString()} ${companyCurrency} for invoice ${invoice.invoiceNumber}`,
+    );
+
+    return toPaymentEntity(payment);
   }
 
   // ─────────────────────────────────────────────
@@ -368,6 +456,35 @@ export class SupplierPaymentsService {
         tx,
       );
 
+      // 7. G3-3: audit log — same transaction as the soft delete, the invoice
+      // restore and the reversal journal (rollback-safe: a failed void leaves
+      // no audit trace).
+      await this.auditLogService.log(
+        {
+          companyId,
+          userId,
+          entityType: 'SupplierPayment',
+          entityId: payment.id,
+          action: 'VOIDED',
+          before: {
+            status: 'ACTIVE',
+            paymentNumber: payment.paymentNumber,
+            amount: payment.amount.toString(),
+            supplierId: payment.supplierId,
+            purchaseInvoiceId: payment.purchaseInvoiceId,
+            invoiceNumber: invoice.invoiceNumber,
+            paidAmountBefore: currentPaid.toString(),
+          },
+          after: {
+            status: 'VOIDED',
+            reversalReferenceType: 'SUPPLIER_PAYMENT_REVERSAL',
+            reversalReferenceId: payment.id,
+            paidAmountAfter: restoredPaid.toString(),
+          },
+        },
+        tx,
+      );
+
       this.logger.log(
         `Payment ${payment.paymentNumber} voided: reversal journal created`,
       );
@@ -393,10 +510,13 @@ export class SupplierPaymentsService {
       throw new NotFoundException(`Supplier payment ${paymentId} not found`);
     }
 
+    // G3-4: optimistic locking — CAS on the payment rowVersion. The repo
+    // throws ConflictException when the stored rowVersion no longer matches.
     const payment = await this.paymentsRepo.update(
       paymentId,
       supplierId,
       companyId,
+      dto.rowVersion,
       {
         ...(dto.reference !== undefined ? { reference: dto.reference } : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),

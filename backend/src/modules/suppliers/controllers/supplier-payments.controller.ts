@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -117,12 +118,14 @@ export class SupplierPaymentsController {
     @Param('supplierId') supplierId: string,
     @Body() dto: CreateSupplierPaymentDto,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.paymentsService.create(
       supplierId,
       dto,
       user.userId,
       user.companyId,
+      idempotencyKey,
     );
   }
 

@@ -1,5 +1,5 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 /**
  * Only notes and reference can be updated directly.
@@ -7,6 +7,11 @@ import { IsOptional, IsString, MaxLength } from 'class-validator';
  * require void (DELETE) + create (POST).
  */
 export class UpdateSupplierPaymentDto {
+  @ApiProperty({ example: 0, description: 'Current payment rowVersion for optimistic locking (G3-4)' })
+  @IsInt()
+  @Min(0)
+  rowVersion!: number;
+
   @ApiPropertyOptional({ example: 'REF-001' })
   @IsOptional()
   @IsString()

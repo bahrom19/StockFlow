@@ -67,16 +67,22 @@ export class SupplierPaymentsRepository {
     id: string,
     supplierId: string,
     companyId: string,
+    rowVersion: number,
     data: Prisma.SupplierPaymentUpdateInput,
     tx?: Prisma.TransactionClient,
   ): Promise<SupplierPayment> {
     const client = this.getClient(tx);
+    // G3-4: optimistic locking — CAS on (id, supplierId, companyId,
+    // rowVersion, deletedAt: null). The service-level findById already ruled
+    // out "not found", so a count of 0 here can only mean a stale rowVersion.
     const result = await client.supplierPayment.updateMany({
-      where: { id, supplierId, companyId, deletedAt: null },
-      data,
+      where: { id, supplierId, companyId, rowVersion, deletedAt: null },
+      data: { ...data, rowVersion: { increment: 1 } },
     });
     if (result.count === 0) {
-      throw new NotFoundException(`Supplier payment with id ${id} not found`);
+      throw new ConflictException(
+        'Supplier payment was modified by another user. Please refresh and retry.',
+      );
     }
     return client.supplierPayment.findUnique({
       where: { id },
