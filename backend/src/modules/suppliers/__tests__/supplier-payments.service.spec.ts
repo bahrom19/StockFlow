@@ -422,6 +422,9 @@ describe('SupplierPaymentsService', () => {
       expect(result).toHaveProperty('outstanding');
       expect(result).toHaveProperty('invoiceCount');
       expect(result).toHaveProperty('paymentCount');
+      // GAP-1: explicit company base currency label on the finance summary
+      expect(result).toHaveProperty('currency');
+      expect(result.currency).toBe('KZT');
     });
 
     it('should throw for non-existent supplier', async () => {

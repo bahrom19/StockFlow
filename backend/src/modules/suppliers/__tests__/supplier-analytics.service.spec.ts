@@ -1,6 +1,12 @@
 import { NotFoundException } from '@nestjs/common';
 import { SupplierAnalyticsService } from '../services/supplier-analytics.service';
 
+// Shared CompaniesService mock — currency is only resolved by getPurchaseSummary /
+// finance summary; other analytics methods never consume it.
+const mockCompaniesService: any = {
+  getBaseCurrency: jest.fn().mockResolvedValue('KZT'),
+};
+
 describe('SupplierAnalyticsService', () => {
   let service: SupplierAnalyticsService;
   let mockPrisma: any;
@@ -31,7 +37,7 @@ describe('SupplierAnalyticsService', () => {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
     };
 
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -122,6 +128,62 @@ describe('SupplierAnalyticsService', () => {
     expect(result.invoiceCount).toBe(5);
     expect(result.returnCount).toBe(1);
     expect(result.monthlySpend).toHaveLength(3);
+    expect(result.currentTotalPaid).toBe('600000');
+    expect(result.currentOutstanding).toBe('120000'); // 800000 - 600000 - 80000
+  });
+
+  it('should decode every purchase-summary field with explicit company currency (GAP-3)', async () => {
+    mockPrisma.purchaseInvoice.aggregate
+      .mockResolvedValueOnce({
+        _sum: { grandTotal: '500000' },
+        _count: { id: 5 },
+        _min: { invoiceDate: new Date('2026-01-15T00:00:00.000Z') },
+        _max: { invoiceDate: new Date('2026-08-20T00:00:00.000Z') },
+      })
+      .mockResolvedValueOnce({ _sum: { grandTotal: '800000' } });
+    mockPrisma.purchaseInvoiceItem.aggregate.mockResolvedValue({
+      _sum: { quantity: 250 },
+    });
+    mockPrisma.purchaseInvoiceItem.groupBy.mockResolvedValue([
+      { _sum: { quantity: 100, total: '300000' } },
+      { _sum: { quantity: 150, total: '200000' } },
+    ]);
+    mockPrisma.purchaseReturn.aggregate
+      .mockResolvedValueOnce({
+        _sum: { grandTotal: '50000' },
+        _count: { id: 1 },
+      })
+      .mockResolvedValueOnce({
+        _sum: { grandTotal: '80000' },
+      });
+    mockPrisma.supplierPayment.aggregate.mockResolvedValue({
+      _sum: { amount: '600000' },
+    });
+    mockPrisma.$queryRaw.mockResolvedValue([
+      { month: '2026-01', amount: '100000' },
+      { month: '2026-08', amount: '400000' },
+    ]);
+
+    const result = await service.getPurchaseSummary(supplierId, companyId);
+
+    // Currency comes from CompaniesService.getBaseCurrency — explicit label
+    // for the returned amounts, never inferred from the payment rows.
+    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(companyId);
+    expect(result.currency).toBe('KZT');
+    expect(result.totalInvoiced).toBe('500000');
+    expect(result.totalReturned).toBe('50000');
+    expect(result.netPurchaseSpend).toBe('450000');
+    expect(result.totalPurchasedQuantity).toBe(250);
+    // weighted average: (300000 + 200000) / (100 + 150) = 2000
+    expect(result.weightedAverageUnitCost).toBe('2000');
+    expect(result.invoiceCount).toBe(5);
+    expect(result.returnCount).toBe(1);
+    expect(result.firstPurchaseDate).toBe(new Date('2026-01-15T00:00:00.000Z').toISOString());
+    expect(result.lastPurchaseDate).toBe(new Date('2026-08-20T00:00:00.000Z').toISOString());
+    expect(result.monthlySpend).toEqual([
+      { month: '2026-01', amount: '100000' },
+      { month: '2026-08', amount: '400000' },
+    ]);
     expect(result.currentTotalPaid).toBe('600000');
     expect(result.currentOutstanding).toBe('120000'); // 800000 - 600000 - 80000
   });
@@ -293,7 +355,7 @@ describe('SupplierAnalyticsService.getProductPurchases', () => {
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -483,7 +545,7 @@ describe('SupplierAnalyticsService.getReliability', () => {
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -703,7 +765,7 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -838,7 +900,7 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -1005,7 +1067,7 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -1139,7 +1201,7 @@ describe('SupplierAnalyticsService.getPerformance', () => {
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
 
   afterEach(() => {
@@ -1162,6 +1224,7 @@ describe('SupplierAnalyticsService.getPerformance', () => {
       invoiceCount: 20, returnCount: 3,
       firstPurchaseDate: '2025-01-01', lastPurchaseDate: '2026-01-01',
       monthlySpend: [], currentTotalPaid: '7500000', currentOutstanding: '2500000',
+      currency: 'KZT',
     } as any);
     jest.spyOn(service, 'getReliability').mockResolvedValue({
       totalOrders: 10, totalReceipts: 8,
@@ -1215,6 +1278,7 @@ describe('SupplierAnalyticsService.getPerformance', () => {
       invoiceCount: 10, returnCount: 0,
       firstPurchaseDate: '2026-01-01', lastPurchaseDate: '2026-06-30',
       monthlySpend: [], currentTotalPaid: '5000000', currentOutstanding: '0',
+      currency: 'KZT',
     } as any);
     jest.spyOn(service, 'getReliability').mockResolvedValue({
       totalOrders: 5, totalReceipts: 5,
@@ -1310,7 +1374,7 @@ describe('SupplierAnalyticsService.getOrderPipeline', () => {
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo);
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
 
   afterEach(() => {

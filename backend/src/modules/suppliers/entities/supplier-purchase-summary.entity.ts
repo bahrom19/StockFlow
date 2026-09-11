@@ -9,6 +9,9 @@ export class MonthlySpendEntity {
 }
 
 export class SupplierPurchaseSummaryEntity {
+  @ApiProperty({ example: 'KZT' })
+  currency!: string;
+
   @ApiProperty({ example: '2025-09-04' })
   dateFrom!: string;
 

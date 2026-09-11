@@ -1107,13 +1107,20 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
             if (summary != null) ...[
               Row(
                 children: [
-                  _financeStat(context.l10n.totalInvoiced, summary.totalInvoiced,
-                      theme),
+                  Expanded(
+                    child: _financeStat(context.l10n.totalInvoiced,
+                        summary.totalInvoiced, theme),
+                  ),
                   const SizedBox(width: 16),
-                  _financeStat(context.l10n.totalPaid, summary.totalPaid, theme),
+                  Expanded(
+                    child: _financeStat(
+                        context.l10n.totalPaid, summary.totalPaid, theme),
+                  ),
                   const SizedBox(width: 16),
-                  _financeStat(context.l10n.outstanding, summary.outstanding,
-                      theme),
+                  Expanded(
+                    child: _financeStat(
+                        context.l10n.outstanding, summary.outstanding, theme),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -1215,19 +1222,21 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   }
 
   Widget _financeStat(String label, String value, ThemeData theme) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 2),
-          Text('₸$value',
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-        ],
-      ),
+    // Plain Column — this stat is used both inside Rows (wrapped in Expanded
+    // at the call sites) and inside Wraps, where Expanded/Flexible ParentData
+    // is invalid and crashes the build.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 2),
+        Text('₸$value',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+      ],
     );
   }
 

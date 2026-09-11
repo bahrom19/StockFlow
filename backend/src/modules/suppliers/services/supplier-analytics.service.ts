@@ -3,6 +3,7 @@ import { PurchaseInvoiceStatus, PurchaseReturnStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
+import { CompaniesService } from '../../companies/services/companies.service';
 import { SupplierPurchaseSummaryEntity, MonthlySpendEntity } from '../entities/supplier-purchase-summary.entity';
 import { SupplierProductPurchaseEntity, SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
 import { SupplierReliabilityEntity, RecentDeliveryEntity } from '../entities/supplier-reliability.entity';
@@ -29,6 +30,7 @@ export class SupplierAnalyticsService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly suppliersRepo: SuppliersRepository,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async getPurchaseSummary(
@@ -43,14 +45,17 @@ export class SupplierAnalyticsService {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
 
-    // 2. Determine date range — default to last 12 months
+    // 2. Company base currency — explicit label for the returned amounts
+    const currency = await this.companiesService.getBaseCurrency(companyId);
+
+    // 3. Determine date range — default to last 12 months
     const now = new Date();
     const effectiveDateTo = dateTo ? new Date(dateTo) : now;
     const effectiveDateFrom = dateFrom
       ? new Date(dateFrom)
       : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
 
-    // 3. Invoice aggregation (APPROVED + PAID only)
+    // 4. Invoice aggregation (APPROVED + PAID only)
     const invoiceWhere = {
       supplierId,
       companyId,
@@ -180,6 +185,7 @@ export class SupplierAnalyticsService {
     const currentOutstanding = currentInvoiced.sub(currentPaid).sub(currentReturned);
 
     return {
+      currency,
       dateFrom: effectiveDateFrom.toISOString(),
       dateTo: effectiveDateTo.toISOString(),
       totalInvoiced: totalInvoiced.toString(),

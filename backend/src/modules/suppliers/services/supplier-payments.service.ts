@@ -419,6 +419,9 @@ export class SupplierPaymentsService {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
 
+    // Company base currency — explicit label for the returned amounts
+    const currency = await this.companiesService.getBaseCurrency(companyId);
+
     // Total invoiced (APPROVED + PAID invoices, excluding CANCELLED)
     const invoiceAgg = await this.prismaService.purchaseInvoice.aggregate({
       where: {
@@ -471,6 +474,7 @@ export class SupplierPaymentsService {
 
     return {
       supplierId,
+      currency,
       totalInvoiced: totalInvoiced.toString(),
       totalPaid: totalPaid.toString(),
       totalReturned: totalReturned.toString(),

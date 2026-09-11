@@ -4,6 +4,9 @@ export class SupplierFinanceSummaryEntity {
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
   supplierId!: string;
 
+  @ApiProperty({ example: 'KZT' })
+  currency!: string;
+
   @ApiProperty({ example: '250000.0000' })
   totalInvoiced!: string;
 
