@@ -59,6 +59,12 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   String? _orderPipelineError;
   bool _isLoadingReliability = false;
   String? _reliabilityError;
+  // G5: Purchase Invoices
+  List<PurchaseInvoice> _invoices = [];
+  bool _isLoadingInvoices = false;
+  String? _invoicesError;
+  int _invoicePage = 1;
+  int _invoiceTotal = 0;
   bool _isLoading = true;
   String? _error;
 
@@ -156,6 +162,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     _loadReturnSummary();
     _loadPerformance();
     _loadOrderPipeline();
+    _loadInvoices();
   }
 
   Future<void> _loadProductPurchases() async {
@@ -295,6 +302,31 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     });
   }
 
+  // G5: Load purchase invoices for this supplier
+  Future<void> _loadInvoices() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingInvoices = true;
+      _invoicesError = null;
+    });
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getSupplierInvoiceList(
+      widget.supplierId,
+      page: _invoicePage,
+      limit: 10,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<PurchaseInvoiceListResponse>) {
+        _invoices = result.data.items;
+        _invoiceTotal = result.data.total;
+      } else if (result is SuppliersFailure<PurchaseInvoiceListResponse>) {
+        _invoicesError = result.error.message;
+      }
+      _isLoadingInvoices = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -373,6 +405,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
               // ── Finance Section ──────────────────────────────
               _buildFinanceSection(theme),
+              const SizedBox(height: 24),
+
+              // ── Purchase Invoices Section (G5) ──────────────
+              _buildInvoicesSection(theme),
               const SizedBox(height: 24),
 
               // ── Purchase Analytics Section ───────────────────
@@ -1313,6 +1349,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       repo.getFinanceSummary(widget.supplierId),
       repo.getPayments(widget.supplierId),
       repo.getPaymentAging(widget.supplierId),
+      repo.getSupplierInvoiceList(widget.supplierId, page: _invoicePage, limit: 10),
     ]);
     if (!mounted) return;
     setState(() {
@@ -1325,7 +1362,179 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       if (results[2] is SuppliersSuccess<SupplierPaymentAging>) {
         _paymentAging = (results[2] as SuppliersSuccess<SupplierPaymentAging>).data;
       }
+      if (results[3] is SuppliersSuccess<PurchaseInvoiceListResponse>) {
+        _invoices = (results[3] as SuppliersSuccess<PurchaseInvoiceListResponse>).data.items;
+        _invoiceTotal = (results[3] as SuppliersSuccess<PurchaseInvoiceListResponse>).data.total;
+      }
     });
+  }
+
+  // ── G5: Purchase Invoices Section ───────────────────────
+
+  Widget _buildInvoicesSection(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.receipt_long,
+                    size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(context.l10n.purchaseInvoices,
+                    style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_isLoadingInvoices)
+              const Center(child: CircularProgressIndicator(strokeWidth: 2))
+            else if (_invoicesError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    Text(_invoicesError!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.error),
+                      textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _loadInvoices,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(context.l10n.retry),
+                    ),
+                  ],
+                ),
+              )
+            else if (_invoices.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(context.l10n.noInvoices,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              )
+            else ...[
+              // Invoice list
+              ..._invoices.map((inv) {
+                final grandTotal = double.tryParse(inv.grandTotal) ?? 0;
+                final paid = double.tryParse(inv.paidAmount) ?? 0;
+                final outstanding = grandTotal - paid;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      // Invoice number + date
+                      Expanded(
+                        flex: 4,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(inv.invoiceNumber,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600)),
+                            Text(
+                              '${context.l10n.invoiceDate}: ${inv.invoiceDate.substring(0, 10)}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                            if (inv.dueDate != null)
+                              Text(
+                                '${context.l10n.dueDate}: ${inv.dueDate!.substring(0, 10)}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant),
+                              ),
+                          ],
+                        ),
+                      ),
+                      // Status badge
+                      Expanded(
+                        flex: 2,
+                        child: _invoiceStatusBadge(inv.status, theme),
+                      ),
+                      // Amounts
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              CurrencyCatalog.format(inv.grandTotal, code: inv.currency),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              '${context.l10n.paidAmount}: ${CurrencyCatalog.format(inv.paidAmount, code: inv.currency)}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            if (outstanding > 0)
+                              Text(
+                                '${context.l10n.outstanding}: ${CurrencyCatalog.format(outstanding.toStringAsFixed(4), code: inv.currency)}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.error),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              // Pagination
+              if (_invoices.length < _invoiceTotal)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Center(
+                    child: TextButton(
+                      onPressed: () {
+                        _invoicePage++;
+                        _loadInvoices();
+                      },
+                      child: Text(context.l10n.loadMore),
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _invoiceStatusBadge(String status, ThemeData theme) {
+    Color color;
+    String label;
+    switch (status) {
+      case 'DRAFT':
+        color = Colors.grey;
+        label = context.l10n.statusDraft;
+        break;
+      case 'APPROVED':
+        color = Colors.blue;
+        label = context.l10n.statusApproved;
+        break;
+      case 'PAID':
+        color = Colors.green;
+        label = context.l10n.statusPaid;
+        break;
+      case 'CANCELLED':
+        color = Colors.red;
+        label = context.l10n.statusCancelled;
+        break;
+      default:
+        color = Colors.grey;
+        label = status;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(label,
+          style: theme.textTheme.bodySmall?.copyWith(color: color)),
+    );
   }
 
   // ── Purchase Analytics Section ──────────────────────────

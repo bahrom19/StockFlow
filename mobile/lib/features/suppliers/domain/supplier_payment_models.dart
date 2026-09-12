@@ -124,3 +124,75 @@ class BankAccountLite with _$BankAccountLite {
   factory BankAccountLite.fromJson(Map<String, dynamic> json) =>
       _$BankAccountLiteFromJson(json);
 }
+
+// ── G5: Purchase Invoice models ──────────────────────────────
+
+/// Single line item inside a purchase invoice.
+@freezed
+class PurchaseInvoiceItem with _$PurchaseInvoiceItem {
+  const factory PurchaseInvoiceItem({
+    required String id,
+    required String purchaseInvoiceId,
+    required String productId,
+    String? purchaseOrderItemId,
+    required int quantity,
+    required String unitCost,
+    String? discountPercent,
+    required String discountAmount,
+    String? taxPercent,
+    required String taxAmount,
+    required String subtotal,
+    required String total,
+    String? notes,
+  }) = _PurchaseInvoiceItem;
+
+  factory PurchaseInvoiceItem.fromJson(Map<String, dynamic> json) =>
+      _$PurchaseInvoiceItemFromJson(json);
+}
+
+/// Full purchase invoice entity returned by the backend.
+@freezed
+class PurchaseInvoice with _$PurchaseInvoice {
+  const factory PurchaseInvoice({
+    required String id,
+    required String companyId,
+    required String purchaseOrderId,
+    required String supplierId,
+    required String invoiceNumber,
+    required String invoiceDate,
+    String? dueDate,
+    required String status,
+    required String subtotal,
+    required String discountAmount,
+    required String taxAmount,
+    required String grandTotal,
+    required String paidAmount,
+    required String currency,
+    String? notes,
+    String? approvedBy,
+    String? approvedAt,
+    String? cancelledBy,
+    String? cancelledAt,
+    required String createdAt,
+    required String updatedAt,
+    String? deletedAt,
+    @Default([]) List<PurchaseInvoiceItem> items,
+  }) = _PurchaseInvoice;
+
+  factory PurchaseInvoice.fromJson(Map<String, dynamic> json) =>
+      _$PurchaseInvoiceFromJson(json);
+}
+
+/// Paginated response from GET /purchasing/invoices.
+@freezed
+class PurchaseInvoiceListResponse with _$PurchaseInvoiceListResponse {
+  const factory PurchaseInvoiceListResponse({
+    required List<PurchaseInvoice> items,
+    required int total,
+    required int page,
+    required int limit,
+  }) = _PurchaseInvoiceListResponse;
+
+  factory PurchaseInvoiceListResponse.fromJson(Map<String, dynamic> json) =>
+      _$PurchaseInvoiceListResponseFromJson(json);
+}

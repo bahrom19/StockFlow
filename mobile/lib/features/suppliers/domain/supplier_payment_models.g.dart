@@ -195,3 +195,119 @@ Map<String, dynamic> _$$BankAccountLiteImplToJson(
       'accountName': instance.accountName,
       'currency': instance.currency,
     };
+
+_$PurchaseInvoiceItemImpl _$$PurchaseInvoiceItemImplFromJson(
+        Map<String, dynamic> json) =>
+    _$PurchaseInvoiceItemImpl(
+      id: json['id'] as String,
+      purchaseInvoiceId: json['purchaseInvoiceId'] as String,
+      productId: json['productId'] as String,
+      purchaseOrderItemId: json['purchaseOrderItemId'] as String?,
+      quantity: (json['quantity'] as num).toInt(),
+      unitCost: json['unitCost'] as String,
+      discountPercent: json['discountPercent'] as String?,
+      discountAmount: json['discountAmount'] as String,
+      taxPercent: json['taxPercent'] as String?,
+      taxAmount: json['taxAmount'] as String,
+      subtotal: json['subtotal'] as String,
+      total: json['total'] as String,
+      notes: json['notes'] as String?,
+    );
+
+Map<String, dynamic> _$$PurchaseInvoiceItemImplToJson(
+        _$PurchaseInvoiceItemImpl instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'purchaseInvoiceId': instance.purchaseInvoiceId,
+      'productId': instance.productId,
+      'purchaseOrderItemId': instance.purchaseOrderItemId,
+      'quantity': instance.quantity,
+      'unitCost': instance.unitCost,
+      'discountPercent': instance.discountPercent,
+      'discountAmount': instance.discountAmount,
+      'taxPercent': instance.taxPercent,
+      'taxAmount': instance.taxAmount,
+      'subtotal': instance.subtotal,
+      'total': instance.total,
+      'notes': instance.notes,
+    };
+
+_$PurchaseInvoiceImpl _$$PurchaseInvoiceImplFromJson(
+        Map<String, dynamic> json) =>
+    _$PurchaseInvoiceImpl(
+      id: json['id'] as String,
+      companyId: json['companyId'] as String,
+      purchaseOrderId: json['purchaseOrderId'] as String,
+      supplierId: json['supplierId'] as String,
+      invoiceNumber: json['invoiceNumber'] as String,
+      invoiceDate: json['invoiceDate'] as String,
+      dueDate: json['dueDate'] as String?,
+      status: json['status'] as String,
+      subtotal: json['subtotal'] as String,
+      discountAmount: json['discountAmount'] as String,
+      taxAmount: json['taxAmount'] as String,
+      grandTotal: json['grandTotal'] as String,
+      paidAmount: json['paidAmount'] as String,
+      currency: json['currency'] as String,
+      notes: json['notes'] as String?,
+      approvedBy: json['approvedBy'] as String?,
+      approvedAt: json['approvedAt'] as String?,
+      cancelledBy: json['cancelledBy'] as String?,
+      cancelledAt: json['cancelledAt'] as String?,
+      createdAt: json['createdAt'] as String,
+      updatedAt: json['updatedAt'] as String,
+      deletedAt: json['deletedAt'] as String?,
+      items: (json['items'] as List<dynamic>?)
+              ?.map((e) =>
+                  PurchaseInvoiceItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+
+Map<String, dynamic> _$$PurchaseInvoiceImplToJson(
+        _$PurchaseInvoiceImpl instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'companyId': instance.companyId,
+      'purchaseOrderId': instance.purchaseOrderId,
+      'supplierId': instance.supplierId,
+      'invoiceNumber': instance.invoiceNumber,
+      'invoiceDate': instance.invoiceDate,
+      'dueDate': instance.dueDate,
+      'status': instance.status,
+      'subtotal': instance.subtotal,
+      'discountAmount': instance.discountAmount,
+      'taxAmount': instance.taxAmount,
+      'grandTotal': instance.grandTotal,
+      'paidAmount': instance.paidAmount,
+      'currency': instance.currency,
+      'notes': instance.notes,
+      'approvedBy': instance.approvedBy,
+      'approvedAt': instance.approvedAt,
+      'cancelledBy': instance.cancelledBy,
+      'cancelledAt': instance.cancelledAt,
+      'createdAt': instance.createdAt,
+      'updatedAt': instance.updatedAt,
+      'deletedAt': instance.deletedAt,
+      'items': instance.items,
+    };
+
+_$PurchaseInvoiceListResponseImpl _$$PurchaseInvoiceListResponseImplFromJson(
+        Map<String, dynamic> json) =>
+    _$PurchaseInvoiceListResponseImpl(
+      items: (json['items'] as List<dynamic>)
+          .map((e) => PurchaseInvoice.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      total: (json['total'] as num).toInt(),
+      page: (json['page'] as num).toInt(),
+      limit: (json['limit'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$PurchaseInvoiceListResponseImplToJson(
+        _$PurchaseInvoiceListResponseImpl instance) =>
+    <String, dynamic>{
+      'items': instance.items,
+      'total': instance.total,
+      'page': instance.page,
+      'limit': instance.limit,
+    };

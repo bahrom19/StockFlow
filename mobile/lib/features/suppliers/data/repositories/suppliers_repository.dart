@@ -535,6 +535,34 @@ class SuppliersRepository {
       return SuppliersFailure(_errorHandler.handle(e));
     }
   }
+  // ── G5: Supplier Invoice List ──────────────────────────
+
+  /// Paginated supplier-scoped invoice list for the detail screen.
+  Future<SuppliersResult<PurchaseInvoiceListResponse>> getSupplierInvoiceList(
+    String supplierId, {
+    int page = 1,
+    int limit = 20,
+    String? status,
+  }) async {
+    try {
+      final params = <String, dynamic>{
+        'supplierId': supplierId,
+        'page': page,
+        'limit': limit,
+      };
+      if (status != null) params['status'] = status;
+      final response = await _api.get<Map<String, dynamic>>(
+        ApiEndpoints.purchaseInvoices,
+        queryParameters: params,
+      );
+      return SuppliersSuccess(
+        PurchaseInvoiceListResponse.fromJson(response.data!),
+      );
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
   // ── Supplier Products ────────────────────────────────
 
   Future<SuppliersResult<SupplierProductListResponse>> getSupplierProducts(

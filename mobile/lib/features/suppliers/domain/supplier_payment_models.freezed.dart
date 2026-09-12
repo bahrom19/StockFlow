@@ -2170,3 +2170,1289 @@ abstract class _BankAccountLite implements BankAccountLite {
   _$$BankAccountLiteImplCopyWith<_$BankAccountLiteImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
+
+PurchaseInvoiceItem _$PurchaseInvoiceItemFromJson(Map<String, dynamic> json) {
+  return _PurchaseInvoiceItem.fromJson(json);
+}
+
+/// @nodoc
+mixin _$PurchaseInvoiceItem {
+  String get id => throw _privateConstructorUsedError;
+  String get purchaseInvoiceId => throw _privateConstructorUsedError;
+  String get productId => throw _privateConstructorUsedError;
+  String? get purchaseOrderItemId => throw _privateConstructorUsedError;
+  int get quantity => throw _privateConstructorUsedError;
+  String get unitCost => throw _privateConstructorUsedError;
+  String? get discountPercent => throw _privateConstructorUsedError;
+  String get discountAmount => throw _privateConstructorUsedError;
+  String? get taxPercent => throw _privateConstructorUsedError;
+  String get taxAmount => throw _privateConstructorUsedError;
+  String get subtotal => throw _privateConstructorUsedError;
+  String get total => throw _privateConstructorUsedError;
+  String? get notes => throw _privateConstructorUsedError;
+
+  /// Serializes this PurchaseInvoiceItem to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of PurchaseInvoiceItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PurchaseInvoiceItemCopyWith<PurchaseInvoiceItem> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PurchaseInvoiceItemCopyWith<$Res> {
+  factory $PurchaseInvoiceItemCopyWith(
+          PurchaseInvoiceItem value, $Res Function(PurchaseInvoiceItem) then) =
+      _$PurchaseInvoiceItemCopyWithImpl<$Res, PurchaseInvoiceItem>;
+  @useResult
+  $Res call(
+      {String id,
+      String purchaseInvoiceId,
+      String productId,
+      String? purchaseOrderItemId,
+      int quantity,
+      String unitCost,
+      String? discountPercent,
+      String discountAmount,
+      String? taxPercent,
+      String taxAmount,
+      String subtotal,
+      String total,
+      String? notes});
+}
+
+/// @nodoc
+class _$PurchaseInvoiceItemCopyWithImpl<$Res, $Val extends PurchaseInvoiceItem>
+    implements $PurchaseInvoiceItemCopyWith<$Res> {
+  _$PurchaseInvoiceItemCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PurchaseInvoiceItem
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? purchaseInvoiceId = null,
+    Object? productId = null,
+    Object? purchaseOrderItemId = freezed,
+    Object? quantity = null,
+    Object? unitCost = null,
+    Object? discountPercent = freezed,
+    Object? discountAmount = null,
+    Object? taxPercent = freezed,
+    Object? taxAmount = null,
+    Object? subtotal = null,
+    Object? total = null,
+    Object? notes = freezed,
+  }) {
+    return _then(_value.copyWith(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      purchaseInvoiceId: null == purchaseInvoiceId
+          ? _value.purchaseInvoiceId
+          : purchaseInvoiceId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      purchaseOrderItemId: freezed == purchaseOrderItemId
+          ? _value.purchaseOrderItemId
+          : purchaseOrderItemId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      unitCost: null == unitCost
+          ? _value.unitCost
+          : unitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      discountPercent: freezed == discountPercent
+          ? _value.discountPercent
+          : discountPercent // ignore: cast_nullable_to_non_nullable
+              as String?,
+      discountAmount: null == discountAmount
+          ? _value.discountAmount
+          : discountAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      taxPercent: freezed == taxPercent
+          ? _value.taxPercent
+          : taxPercent // ignore: cast_nullable_to_non_nullable
+              as String?,
+      taxAmount: null == taxAmount
+          ? _value.taxAmount
+          : taxAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      subtotal: null == subtotal
+          ? _value.subtotal
+          : subtotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      total: null == total
+          ? _value.total
+          : total // ignore: cast_nullable_to_non_nullable
+              as String,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$PurchaseInvoiceItemImplCopyWith<$Res>
+    implements $PurchaseInvoiceItemCopyWith<$Res> {
+  factory _$$PurchaseInvoiceItemImplCopyWith(_$PurchaseInvoiceItemImpl value,
+          $Res Function(_$PurchaseInvoiceItemImpl) then) =
+      __$$PurchaseInvoiceItemImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String id,
+      String purchaseInvoiceId,
+      String productId,
+      String? purchaseOrderItemId,
+      int quantity,
+      String unitCost,
+      String? discountPercent,
+      String discountAmount,
+      String? taxPercent,
+      String taxAmount,
+      String subtotal,
+      String total,
+      String? notes});
+}
+
+/// @nodoc
+class __$$PurchaseInvoiceItemImplCopyWithImpl<$Res>
+    extends _$PurchaseInvoiceItemCopyWithImpl<$Res, _$PurchaseInvoiceItemImpl>
+    implements _$$PurchaseInvoiceItemImplCopyWith<$Res> {
+  __$$PurchaseInvoiceItemImplCopyWithImpl(_$PurchaseInvoiceItemImpl _value,
+      $Res Function(_$PurchaseInvoiceItemImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of PurchaseInvoiceItem
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? purchaseInvoiceId = null,
+    Object? productId = null,
+    Object? purchaseOrderItemId = freezed,
+    Object? quantity = null,
+    Object? unitCost = null,
+    Object? discountPercent = freezed,
+    Object? discountAmount = null,
+    Object? taxPercent = freezed,
+    Object? taxAmount = null,
+    Object? subtotal = null,
+    Object? total = null,
+    Object? notes = freezed,
+  }) {
+    return _then(_$PurchaseInvoiceItemImpl(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      purchaseInvoiceId: null == purchaseInvoiceId
+          ? _value.purchaseInvoiceId
+          : purchaseInvoiceId // ignore: cast_nullable_to_non_nullable
+              as String,
+      productId: null == productId
+          ? _value.productId
+          : productId // ignore: cast_nullable_to_non_nullable
+              as String,
+      purchaseOrderItemId: freezed == purchaseOrderItemId
+          ? _value.purchaseOrderItemId
+          : purchaseOrderItemId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+      unitCost: null == unitCost
+          ? _value.unitCost
+          : unitCost // ignore: cast_nullable_to_non_nullable
+              as String,
+      discountPercent: freezed == discountPercent
+          ? _value.discountPercent
+          : discountPercent // ignore: cast_nullable_to_non_nullable
+              as String?,
+      discountAmount: null == discountAmount
+          ? _value.discountAmount
+          : discountAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      taxPercent: freezed == taxPercent
+          ? _value.taxPercent
+          : taxPercent // ignore: cast_nullable_to_non_nullable
+              as String?,
+      taxAmount: null == taxAmount
+          ? _value.taxAmount
+          : taxAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      subtotal: null == subtotal
+          ? _value.subtotal
+          : subtotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      total: null == total
+          ? _value.total
+          : total // ignore: cast_nullable_to_non_nullable
+              as String,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$PurchaseInvoiceItemImpl implements _PurchaseInvoiceItem {
+  const _$PurchaseInvoiceItemImpl(
+      {required this.id,
+      required this.purchaseInvoiceId,
+      required this.productId,
+      this.purchaseOrderItemId,
+      required this.quantity,
+      required this.unitCost,
+      this.discountPercent,
+      required this.discountAmount,
+      this.taxPercent,
+      required this.taxAmount,
+      required this.subtotal,
+      required this.total,
+      this.notes});
+
+  factory _$PurchaseInvoiceItemImpl.fromJson(Map<String, dynamic> json) =>
+      _$$PurchaseInvoiceItemImplFromJson(json);
+
+  @override
+  final String id;
+  @override
+  final String purchaseInvoiceId;
+  @override
+  final String productId;
+  @override
+  final String? purchaseOrderItemId;
+  @override
+  final int quantity;
+  @override
+  final String unitCost;
+  @override
+  final String? discountPercent;
+  @override
+  final String discountAmount;
+  @override
+  final String? taxPercent;
+  @override
+  final String taxAmount;
+  @override
+  final String subtotal;
+  @override
+  final String total;
+  @override
+  final String? notes;
+
+  @override
+  String toString() {
+    return 'PurchaseInvoiceItem(id: $id, purchaseInvoiceId: $purchaseInvoiceId, productId: $productId, purchaseOrderItemId: $purchaseOrderItemId, quantity: $quantity, unitCost: $unitCost, discountPercent: $discountPercent, discountAmount: $discountAmount, taxPercent: $taxPercent, taxAmount: $taxAmount, subtotal: $subtotal, total: $total, notes: $notes)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PurchaseInvoiceItemImpl &&
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.purchaseInvoiceId, purchaseInvoiceId) ||
+                other.purchaseInvoiceId == purchaseInvoiceId) &&
+            (identical(other.productId, productId) ||
+                other.productId == productId) &&
+            (identical(other.purchaseOrderItemId, purchaseOrderItemId) ||
+                other.purchaseOrderItemId == purchaseOrderItemId) &&
+            (identical(other.quantity, quantity) ||
+                other.quantity == quantity) &&
+            (identical(other.unitCost, unitCost) ||
+                other.unitCost == unitCost) &&
+            (identical(other.discountPercent, discountPercent) ||
+                other.discountPercent == discountPercent) &&
+            (identical(other.discountAmount, discountAmount) ||
+                other.discountAmount == discountAmount) &&
+            (identical(other.taxPercent, taxPercent) ||
+                other.taxPercent == taxPercent) &&
+            (identical(other.taxAmount, taxAmount) ||
+                other.taxAmount == taxAmount) &&
+            (identical(other.subtotal, subtotal) ||
+                other.subtotal == subtotal) &&
+            (identical(other.total, total) || other.total == total) &&
+            (identical(other.notes, notes) || other.notes == notes));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      purchaseInvoiceId,
+      productId,
+      purchaseOrderItemId,
+      quantity,
+      unitCost,
+      discountPercent,
+      discountAmount,
+      taxPercent,
+      taxAmount,
+      subtotal,
+      total,
+      notes);
+
+  /// Create a copy of PurchaseInvoiceItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PurchaseInvoiceItemImplCopyWith<_$PurchaseInvoiceItemImpl> get copyWith =>
+      __$$PurchaseInvoiceItemImplCopyWithImpl<_$PurchaseInvoiceItemImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$PurchaseInvoiceItemImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _PurchaseInvoiceItem implements PurchaseInvoiceItem {
+  const factory _PurchaseInvoiceItem(
+      {required final String id,
+      required final String purchaseInvoiceId,
+      required final String productId,
+      final String? purchaseOrderItemId,
+      required final int quantity,
+      required final String unitCost,
+      final String? discountPercent,
+      required final String discountAmount,
+      final String? taxPercent,
+      required final String taxAmount,
+      required final String subtotal,
+      required final String total,
+      final String? notes}) = _$PurchaseInvoiceItemImpl;
+
+  factory _PurchaseInvoiceItem.fromJson(Map<String, dynamic> json) =
+      _$PurchaseInvoiceItemImpl.fromJson;
+
+  @override
+  String get id;
+  @override
+  String get purchaseInvoiceId;
+  @override
+  String get productId;
+  @override
+  String? get purchaseOrderItemId;
+  @override
+  int get quantity;
+  @override
+  String get unitCost;
+  @override
+  String? get discountPercent;
+  @override
+  String get discountAmount;
+  @override
+  String? get taxPercent;
+  @override
+  String get taxAmount;
+  @override
+  String get subtotal;
+  @override
+  String get total;
+  @override
+  String? get notes;
+
+  /// Create a copy of PurchaseInvoiceItem
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PurchaseInvoiceItemImplCopyWith<_$PurchaseInvoiceItemImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+PurchaseInvoice _$PurchaseInvoiceFromJson(Map<String, dynamic> json) {
+  return _PurchaseInvoice.fromJson(json);
+}
+
+/// @nodoc
+mixin _$PurchaseInvoice {
+  String get id => throw _privateConstructorUsedError;
+  String get companyId => throw _privateConstructorUsedError;
+  String get purchaseOrderId => throw _privateConstructorUsedError;
+  String get supplierId => throw _privateConstructorUsedError;
+  String get invoiceNumber => throw _privateConstructorUsedError;
+  String get invoiceDate => throw _privateConstructorUsedError;
+  String? get dueDate => throw _privateConstructorUsedError;
+  String get status => throw _privateConstructorUsedError;
+  String get subtotal => throw _privateConstructorUsedError;
+  String get discountAmount => throw _privateConstructorUsedError;
+  String get taxAmount => throw _privateConstructorUsedError;
+  String get grandTotal => throw _privateConstructorUsedError;
+  String get paidAmount => throw _privateConstructorUsedError;
+  String get currency => throw _privateConstructorUsedError;
+  String? get notes => throw _privateConstructorUsedError;
+  String? get approvedBy => throw _privateConstructorUsedError;
+  String? get approvedAt => throw _privateConstructorUsedError;
+  String? get cancelledBy => throw _privateConstructorUsedError;
+  String? get cancelledAt => throw _privateConstructorUsedError;
+  String get createdAt => throw _privateConstructorUsedError;
+  String get updatedAt => throw _privateConstructorUsedError;
+  String? get deletedAt => throw _privateConstructorUsedError;
+  List<PurchaseInvoiceItem> get items => throw _privateConstructorUsedError;
+
+  /// Serializes this PurchaseInvoice to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of PurchaseInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PurchaseInvoiceCopyWith<PurchaseInvoice> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PurchaseInvoiceCopyWith<$Res> {
+  factory $PurchaseInvoiceCopyWith(
+          PurchaseInvoice value, $Res Function(PurchaseInvoice) then) =
+      _$PurchaseInvoiceCopyWithImpl<$Res, PurchaseInvoice>;
+  @useResult
+  $Res call(
+      {String id,
+      String companyId,
+      String purchaseOrderId,
+      String supplierId,
+      String invoiceNumber,
+      String invoiceDate,
+      String? dueDate,
+      String status,
+      String subtotal,
+      String discountAmount,
+      String taxAmount,
+      String grandTotal,
+      String paidAmount,
+      String currency,
+      String? notes,
+      String? approvedBy,
+      String? approvedAt,
+      String? cancelledBy,
+      String? cancelledAt,
+      String createdAt,
+      String updatedAt,
+      String? deletedAt,
+      List<PurchaseInvoiceItem> items});
+}
+
+/// @nodoc
+class _$PurchaseInvoiceCopyWithImpl<$Res, $Val extends PurchaseInvoice>
+    implements $PurchaseInvoiceCopyWith<$Res> {
+  _$PurchaseInvoiceCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PurchaseInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? companyId = null,
+    Object? purchaseOrderId = null,
+    Object? supplierId = null,
+    Object? invoiceNumber = null,
+    Object? invoiceDate = null,
+    Object? dueDate = freezed,
+    Object? status = null,
+    Object? subtotal = null,
+    Object? discountAmount = null,
+    Object? taxAmount = null,
+    Object? grandTotal = null,
+    Object? paidAmount = null,
+    Object? currency = null,
+    Object? notes = freezed,
+    Object? approvedBy = freezed,
+    Object? approvedAt = freezed,
+    Object? cancelledBy = freezed,
+    Object? cancelledAt = freezed,
+    Object? createdAt = null,
+    Object? updatedAt = null,
+    Object? deletedAt = freezed,
+    Object? items = null,
+  }) {
+    return _then(_value.copyWith(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      companyId: null == companyId
+          ? _value.companyId
+          : companyId // ignore: cast_nullable_to_non_nullable
+              as String,
+      purchaseOrderId: null == purchaseOrderId
+          ? _value.purchaseOrderId
+          : purchaseOrderId // ignore: cast_nullable_to_non_nullable
+              as String,
+      supplierId: null == supplierId
+          ? _value.supplierId
+          : supplierId // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceNumber: null == invoiceNumber
+          ? _value.invoiceNumber
+          : invoiceNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceDate: null == invoiceDate
+          ? _value.invoiceDate
+          : invoiceDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      dueDate: freezed == dueDate
+          ? _value.dueDate
+          : dueDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      subtotal: null == subtotal
+          ? _value.subtotal
+          : subtotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      discountAmount: null == discountAmount
+          ? _value.discountAmount
+          : discountAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      taxAmount: null == taxAmount
+          ? _value.taxAmount
+          : taxAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      paidAmount: null == paidAmount
+          ? _value.paidAmount
+          : paidAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+      approvedBy: freezed == approvedBy
+          ? _value.approvedBy
+          : approvedBy // ignore: cast_nullable_to_non_nullable
+              as String?,
+      approvedAt: freezed == approvedAt
+          ? _value.approvedAt
+          : approvedAt // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cancelledBy: freezed == cancelledBy
+          ? _value.cancelledBy
+          : cancelledBy // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cancelledAt: freezed == cancelledAt
+          ? _value.cancelledAt
+          : cancelledAt // ignore: cast_nullable_to_non_nullable
+              as String?,
+      createdAt: null == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as String,
+      updatedAt: null == updatedAt
+          ? _value.updatedAt
+          : updatedAt // ignore: cast_nullable_to_non_nullable
+              as String,
+      deletedAt: freezed == deletedAt
+          ? _value.deletedAt
+          : deletedAt // ignore: cast_nullable_to_non_nullable
+              as String?,
+      items: null == items
+          ? _value.items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<PurchaseInvoiceItem>,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$PurchaseInvoiceImplCopyWith<$Res>
+    implements $PurchaseInvoiceCopyWith<$Res> {
+  factory _$$PurchaseInvoiceImplCopyWith(_$PurchaseInvoiceImpl value,
+          $Res Function(_$PurchaseInvoiceImpl) then) =
+      __$$PurchaseInvoiceImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String id,
+      String companyId,
+      String purchaseOrderId,
+      String supplierId,
+      String invoiceNumber,
+      String invoiceDate,
+      String? dueDate,
+      String status,
+      String subtotal,
+      String discountAmount,
+      String taxAmount,
+      String grandTotal,
+      String paidAmount,
+      String currency,
+      String? notes,
+      String? approvedBy,
+      String? approvedAt,
+      String? cancelledBy,
+      String? cancelledAt,
+      String createdAt,
+      String updatedAt,
+      String? deletedAt,
+      List<PurchaseInvoiceItem> items});
+}
+
+/// @nodoc
+class __$$PurchaseInvoiceImplCopyWithImpl<$Res>
+    extends _$PurchaseInvoiceCopyWithImpl<$Res, _$PurchaseInvoiceImpl>
+    implements _$$PurchaseInvoiceImplCopyWith<$Res> {
+  __$$PurchaseInvoiceImplCopyWithImpl(
+      _$PurchaseInvoiceImpl _value, $Res Function(_$PurchaseInvoiceImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of PurchaseInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? companyId = null,
+    Object? purchaseOrderId = null,
+    Object? supplierId = null,
+    Object? invoiceNumber = null,
+    Object? invoiceDate = null,
+    Object? dueDate = freezed,
+    Object? status = null,
+    Object? subtotal = null,
+    Object? discountAmount = null,
+    Object? taxAmount = null,
+    Object? grandTotal = null,
+    Object? paidAmount = null,
+    Object? currency = null,
+    Object? notes = freezed,
+    Object? approvedBy = freezed,
+    Object? approvedAt = freezed,
+    Object? cancelledBy = freezed,
+    Object? cancelledAt = freezed,
+    Object? createdAt = null,
+    Object? updatedAt = null,
+    Object? deletedAt = freezed,
+    Object? items = null,
+  }) {
+    return _then(_$PurchaseInvoiceImpl(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      companyId: null == companyId
+          ? _value.companyId
+          : companyId // ignore: cast_nullable_to_non_nullable
+              as String,
+      purchaseOrderId: null == purchaseOrderId
+          ? _value.purchaseOrderId
+          : purchaseOrderId // ignore: cast_nullable_to_non_nullable
+              as String,
+      supplierId: null == supplierId
+          ? _value.supplierId
+          : supplierId // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceNumber: null == invoiceNumber
+          ? _value.invoiceNumber
+          : invoiceNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceDate: null == invoiceDate
+          ? _value.invoiceDate
+          : invoiceDate // ignore: cast_nullable_to_non_nullable
+              as String,
+      dueDate: freezed == dueDate
+          ? _value.dueDate
+          : dueDate // ignore: cast_nullable_to_non_nullable
+              as String?,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      subtotal: null == subtotal
+          ? _value.subtotal
+          : subtotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      discountAmount: null == discountAmount
+          ? _value.discountAmount
+          : discountAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      taxAmount: null == taxAmount
+          ? _value.taxAmount
+          : taxAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      paidAmount: null == paidAmount
+          ? _value.paidAmount
+          : paidAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+      approvedBy: freezed == approvedBy
+          ? _value.approvedBy
+          : approvedBy // ignore: cast_nullable_to_non_nullable
+              as String?,
+      approvedAt: freezed == approvedAt
+          ? _value.approvedAt
+          : approvedAt // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cancelledBy: freezed == cancelledBy
+          ? _value.cancelledBy
+          : cancelledBy // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cancelledAt: freezed == cancelledAt
+          ? _value.cancelledAt
+          : cancelledAt // ignore: cast_nullable_to_non_nullable
+              as String?,
+      createdAt: null == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as String,
+      updatedAt: null == updatedAt
+          ? _value.updatedAt
+          : updatedAt // ignore: cast_nullable_to_non_nullable
+              as String,
+      deletedAt: freezed == deletedAt
+          ? _value.deletedAt
+          : deletedAt // ignore: cast_nullable_to_non_nullable
+              as String?,
+      items: null == items
+          ? _value._items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<PurchaseInvoiceItem>,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$PurchaseInvoiceImpl implements _PurchaseInvoice {
+  const _$PurchaseInvoiceImpl(
+      {required this.id,
+      required this.companyId,
+      required this.purchaseOrderId,
+      required this.supplierId,
+      required this.invoiceNumber,
+      required this.invoiceDate,
+      this.dueDate,
+      required this.status,
+      required this.subtotal,
+      required this.discountAmount,
+      required this.taxAmount,
+      required this.grandTotal,
+      required this.paidAmount,
+      required this.currency,
+      this.notes,
+      this.approvedBy,
+      this.approvedAt,
+      this.cancelledBy,
+      this.cancelledAt,
+      required this.createdAt,
+      required this.updatedAt,
+      this.deletedAt,
+      final List<PurchaseInvoiceItem> items = const []})
+      : _items = items;
+
+  factory _$PurchaseInvoiceImpl.fromJson(Map<String, dynamic> json) =>
+      _$$PurchaseInvoiceImplFromJson(json);
+
+  @override
+  final String id;
+  @override
+  final String companyId;
+  @override
+  final String purchaseOrderId;
+  @override
+  final String supplierId;
+  @override
+  final String invoiceNumber;
+  @override
+  final String invoiceDate;
+  @override
+  final String? dueDate;
+  @override
+  final String status;
+  @override
+  final String subtotal;
+  @override
+  final String discountAmount;
+  @override
+  final String taxAmount;
+  @override
+  final String grandTotal;
+  @override
+  final String paidAmount;
+  @override
+  final String currency;
+  @override
+  final String? notes;
+  @override
+  final String? approvedBy;
+  @override
+  final String? approvedAt;
+  @override
+  final String? cancelledBy;
+  @override
+  final String? cancelledAt;
+  @override
+  final String createdAt;
+  @override
+  final String updatedAt;
+  @override
+  final String? deletedAt;
+  final List<PurchaseInvoiceItem> _items;
+  @override
+  @JsonKey()
+  List<PurchaseInvoiceItem> get items {
+    if (_items is EqualUnmodifiableListView) return _items;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_items);
+  }
+
+  @override
+  String toString() {
+    return 'PurchaseInvoice(id: $id, companyId: $companyId, purchaseOrderId: $purchaseOrderId, supplierId: $supplierId, invoiceNumber: $invoiceNumber, invoiceDate: $invoiceDate, dueDate: $dueDate, status: $status, subtotal: $subtotal, discountAmount: $discountAmount, taxAmount: $taxAmount, grandTotal: $grandTotal, paidAmount: $paidAmount, currency: $currency, notes: $notes, approvedBy: $approvedBy, approvedAt: $approvedAt, cancelledBy: $cancelledBy, cancelledAt: $cancelledAt, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt, items: $items)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PurchaseInvoiceImpl &&
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.companyId, companyId) ||
+                other.companyId == companyId) &&
+            (identical(other.purchaseOrderId, purchaseOrderId) ||
+                other.purchaseOrderId == purchaseOrderId) &&
+            (identical(other.supplierId, supplierId) ||
+                other.supplierId == supplierId) &&
+            (identical(other.invoiceNumber, invoiceNumber) ||
+                other.invoiceNumber == invoiceNumber) &&
+            (identical(other.invoiceDate, invoiceDate) ||
+                other.invoiceDate == invoiceDate) &&
+            (identical(other.dueDate, dueDate) || other.dueDate == dueDate) &&
+            (identical(other.status, status) || other.status == status) &&
+            (identical(other.subtotal, subtotal) ||
+                other.subtotal == subtotal) &&
+            (identical(other.discountAmount, discountAmount) ||
+                other.discountAmount == discountAmount) &&
+            (identical(other.taxAmount, taxAmount) ||
+                other.taxAmount == taxAmount) &&
+            (identical(other.grandTotal, grandTotal) ||
+                other.grandTotal == grandTotal) &&
+            (identical(other.paidAmount, paidAmount) ||
+                other.paidAmount == paidAmount) &&
+            (identical(other.currency, currency) ||
+                other.currency == currency) &&
+            (identical(other.notes, notes) || other.notes == notes) &&
+            (identical(other.approvedBy, approvedBy) ||
+                other.approvedBy == approvedBy) &&
+            (identical(other.approvedAt, approvedAt) ||
+                other.approvedAt == approvedAt) &&
+            (identical(other.cancelledBy, cancelledBy) ||
+                other.cancelledBy == cancelledBy) &&
+            (identical(other.cancelledAt, cancelledAt) ||
+                other.cancelledAt == cancelledAt) &&
+            (identical(other.createdAt, createdAt) ||
+                other.createdAt == createdAt) &&
+            (identical(other.updatedAt, updatedAt) ||
+                other.updatedAt == updatedAt) &&
+            (identical(other.deletedAt, deletedAt) ||
+                other.deletedAt == deletedAt) &&
+            const DeepCollectionEquality().equals(other._items, _items));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hashAll([
+        runtimeType,
+        id,
+        companyId,
+        purchaseOrderId,
+        supplierId,
+        invoiceNumber,
+        invoiceDate,
+        dueDate,
+        status,
+        subtotal,
+        discountAmount,
+        taxAmount,
+        grandTotal,
+        paidAmount,
+        currency,
+        notes,
+        approvedBy,
+        approvedAt,
+        cancelledBy,
+        cancelledAt,
+        createdAt,
+        updatedAt,
+        deletedAt,
+        const DeepCollectionEquality().hash(_items)
+      ]);
+
+  /// Create a copy of PurchaseInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PurchaseInvoiceImplCopyWith<_$PurchaseInvoiceImpl> get copyWith =>
+      __$$PurchaseInvoiceImplCopyWithImpl<_$PurchaseInvoiceImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$PurchaseInvoiceImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _PurchaseInvoice implements PurchaseInvoice {
+  const factory _PurchaseInvoice(
+      {required final String id,
+      required final String companyId,
+      required final String purchaseOrderId,
+      required final String supplierId,
+      required final String invoiceNumber,
+      required final String invoiceDate,
+      final String? dueDate,
+      required final String status,
+      required final String subtotal,
+      required final String discountAmount,
+      required final String taxAmount,
+      required final String grandTotal,
+      required final String paidAmount,
+      required final String currency,
+      final String? notes,
+      final String? approvedBy,
+      final String? approvedAt,
+      final String? cancelledBy,
+      final String? cancelledAt,
+      required final String createdAt,
+      required final String updatedAt,
+      final String? deletedAt,
+      final List<PurchaseInvoiceItem> items}) = _$PurchaseInvoiceImpl;
+
+  factory _PurchaseInvoice.fromJson(Map<String, dynamic> json) =
+      _$PurchaseInvoiceImpl.fromJson;
+
+  @override
+  String get id;
+  @override
+  String get companyId;
+  @override
+  String get purchaseOrderId;
+  @override
+  String get supplierId;
+  @override
+  String get invoiceNumber;
+  @override
+  String get invoiceDate;
+  @override
+  String? get dueDate;
+  @override
+  String get status;
+  @override
+  String get subtotal;
+  @override
+  String get discountAmount;
+  @override
+  String get taxAmount;
+  @override
+  String get grandTotal;
+  @override
+  String get paidAmount;
+  @override
+  String get currency;
+  @override
+  String? get notes;
+  @override
+  String? get approvedBy;
+  @override
+  String? get approvedAt;
+  @override
+  String? get cancelledBy;
+  @override
+  String? get cancelledAt;
+  @override
+  String get createdAt;
+  @override
+  String get updatedAt;
+  @override
+  String? get deletedAt;
+  @override
+  List<PurchaseInvoiceItem> get items;
+
+  /// Create a copy of PurchaseInvoice
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PurchaseInvoiceImplCopyWith<_$PurchaseInvoiceImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+PurchaseInvoiceListResponse _$PurchaseInvoiceListResponseFromJson(
+    Map<String, dynamic> json) {
+  return _PurchaseInvoiceListResponse.fromJson(json);
+}
+
+/// @nodoc
+mixin _$PurchaseInvoiceListResponse {
+  List<PurchaseInvoice> get items => throw _privateConstructorUsedError;
+  int get total => throw _privateConstructorUsedError;
+  int get page => throw _privateConstructorUsedError;
+  int get limit => throw _privateConstructorUsedError;
+
+  /// Serializes this PurchaseInvoiceListResponse to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of PurchaseInvoiceListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PurchaseInvoiceListResponseCopyWith<PurchaseInvoiceListResponse>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PurchaseInvoiceListResponseCopyWith<$Res> {
+  factory $PurchaseInvoiceListResponseCopyWith(
+          PurchaseInvoiceListResponse value,
+          $Res Function(PurchaseInvoiceListResponse) then) =
+      _$PurchaseInvoiceListResponseCopyWithImpl<$Res,
+          PurchaseInvoiceListResponse>;
+  @useResult
+  $Res call({List<PurchaseInvoice> items, int total, int page, int limit});
+}
+
+/// @nodoc
+class _$PurchaseInvoiceListResponseCopyWithImpl<$Res,
+        $Val extends PurchaseInvoiceListResponse>
+    implements $PurchaseInvoiceListResponseCopyWith<$Res> {
+  _$PurchaseInvoiceListResponseCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PurchaseInvoiceListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? items = null,
+    Object? total = null,
+    Object? page = null,
+    Object? limit = null,
+  }) {
+    return _then(_value.copyWith(
+      items: null == items
+          ? _value.items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<PurchaseInvoice>,
+      total: null == total
+          ? _value.total
+          : total // ignore: cast_nullable_to_non_nullable
+              as int,
+      page: null == page
+          ? _value.page
+          : page // ignore: cast_nullable_to_non_nullable
+              as int,
+      limit: null == limit
+          ? _value.limit
+          : limit // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$PurchaseInvoiceListResponseImplCopyWith<$Res>
+    implements $PurchaseInvoiceListResponseCopyWith<$Res> {
+  factory _$$PurchaseInvoiceListResponseImplCopyWith(
+          _$PurchaseInvoiceListResponseImpl value,
+          $Res Function(_$PurchaseInvoiceListResponseImpl) then) =
+      __$$PurchaseInvoiceListResponseImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({List<PurchaseInvoice> items, int total, int page, int limit});
+}
+
+/// @nodoc
+class __$$PurchaseInvoiceListResponseImplCopyWithImpl<$Res>
+    extends _$PurchaseInvoiceListResponseCopyWithImpl<$Res,
+        _$PurchaseInvoiceListResponseImpl>
+    implements _$$PurchaseInvoiceListResponseImplCopyWith<$Res> {
+  __$$PurchaseInvoiceListResponseImplCopyWithImpl(
+      _$PurchaseInvoiceListResponseImpl _value,
+      $Res Function(_$PurchaseInvoiceListResponseImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of PurchaseInvoiceListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? items = null,
+    Object? total = null,
+    Object? page = null,
+    Object? limit = null,
+  }) {
+    return _then(_$PurchaseInvoiceListResponseImpl(
+      items: null == items
+          ? _value._items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<PurchaseInvoice>,
+      total: null == total
+          ? _value.total
+          : total // ignore: cast_nullable_to_non_nullable
+              as int,
+      page: null == page
+          ? _value.page
+          : page // ignore: cast_nullable_to_non_nullable
+              as int,
+      limit: null == limit
+          ? _value.limit
+          : limit // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$PurchaseInvoiceListResponseImpl
+    implements _PurchaseInvoiceListResponse {
+  const _$PurchaseInvoiceListResponseImpl(
+      {required final List<PurchaseInvoice> items,
+      required this.total,
+      required this.page,
+      required this.limit})
+      : _items = items;
+
+  factory _$PurchaseInvoiceListResponseImpl.fromJson(
+          Map<String, dynamic> json) =>
+      _$$PurchaseInvoiceListResponseImplFromJson(json);
+
+  final List<PurchaseInvoice> _items;
+  @override
+  List<PurchaseInvoice> get items {
+    if (_items is EqualUnmodifiableListView) return _items;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_items);
+  }
+
+  @override
+  final int total;
+  @override
+  final int page;
+  @override
+  final int limit;
+
+  @override
+  String toString() {
+    return 'PurchaseInvoiceListResponse(items: $items, total: $total, page: $page, limit: $limit)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PurchaseInvoiceListResponseImpl &&
+            const DeepCollectionEquality().equals(other._items, _items) &&
+            (identical(other.total, total) || other.total == total) &&
+            (identical(other.page, page) || other.page == page) &&
+            (identical(other.limit, limit) || other.limit == limit));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType,
+      const DeepCollectionEquality().hash(_items), total, page, limit);
+
+  /// Create a copy of PurchaseInvoiceListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PurchaseInvoiceListResponseImplCopyWith<_$PurchaseInvoiceListResponseImpl>
+      get copyWith => __$$PurchaseInvoiceListResponseImplCopyWithImpl<
+          _$PurchaseInvoiceListResponseImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$PurchaseInvoiceListResponseImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _PurchaseInvoiceListResponse
+    implements PurchaseInvoiceListResponse {
+  const factory _PurchaseInvoiceListResponse(
+      {required final List<PurchaseInvoice> items,
+      required final int total,
+      required final int page,
+      required final int limit}) = _$PurchaseInvoiceListResponseImpl;
+
+  factory _PurchaseInvoiceListResponse.fromJson(Map<String, dynamic> json) =
+      _$PurchaseInvoiceListResponseImpl.fromJson;
+
+  @override
+  List<PurchaseInvoice> get items;
+  @override
+  int get total;
+  @override
+  int get page;
+  @override
+  int get limit;
+
+  /// Create a copy of PurchaseInvoiceListResponse
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PurchaseInvoiceListResponseImplCopyWith<_$PurchaseInvoiceListResponseImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}

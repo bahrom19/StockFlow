@@ -330,6 +330,15 @@ class _FakeSuppliersRepo extends SuppliersRepository {
     calls.add('getOrderPipeline');
     return _success<SupplierOrderPipeline>(_orderPipelineFixture());
   }
+
+  @override
+  Future<SuppliersResult<PurchaseInvoiceListResponse>> getSupplierInvoiceList(
+      String supplierId, {int page = 1, int limit = 20, String? status}) async {
+    calls.add('getSupplierInvoiceList');
+    return _success<PurchaseInvoiceListResponse>(
+      const PurchaseInvoiceListResponse(items: [], total: 0, page: 1, limit: 20),
+    );
+  }
 }
 
 Future<_FakeSuppliersRepo> _pumpDetail(
@@ -448,6 +457,7 @@ void main() {
       'getReturnSummary',
       'getPerformance',
       'getOrderPipeline',
+      'getSupplierInvoiceList',
     ]) {
       expect(repo.calls, contains(expected), reason: '$expected was not called');
     }
