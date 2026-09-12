@@ -78,3 +78,49 @@ class SupplierFinanceSummary with _$SupplierFinanceSummary {
   factory SupplierFinanceSummary.fromJson(Map<String, dynamic> json) =>
       _$SupplierFinanceSummaryFromJson(json);
 }
+
+/// Lightweight supplier-scoped invoice projection used by Record Payment.
+@freezed
+class SupplierInvoiceLite with _$SupplierInvoiceLite {
+  const factory SupplierInvoiceLite({
+    required String id,
+    required String invoiceNumber,
+    required String grandTotal,
+    required String paidAmount,
+    required String status,
+    required String currency,
+    DateTime? dueDate,
+  }) = _SupplierInvoiceLite;
+
+  factory SupplierInvoiceLite.fromJson(Map<String, dynamic> json) =>
+      _$SupplierInvoiceLiteFromJson(json);
+}
+
+/// Cash account projection returned by GET /finance/cash-accounts.
+@freezed
+class CashAccountLite with _$CashAccountLite {
+  const factory CashAccountLite({
+    required String id,
+    required String name,
+    required String currency,
+    String? type,
+  }) = _CashAccountLite;
+
+  factory CashAccountLite.fromJson(Map<String, dynamic> json) =>
+      _$CashAccountLiteFromJson(json);
+}
+
+/// Bank account projection returned by GET /finance/bank-accounts.
+@freezed
+class BankAccountLite with _$BankAccountLite {
+  const factory BankAccountLite({
+    required String id,
+    required String bankName,
+    required String accountNumber,
+    String? accountName,
+    required String currency,
+  }) = _BankAccountLite;
+
+  factory BankAccountLite.fromJson(Map<String, dynamic> json) =>
+      _$BankAccountLiteFromJson(json);
+}

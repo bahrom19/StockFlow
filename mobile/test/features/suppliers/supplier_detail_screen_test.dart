@@ -417,19 +417,21 @@ void main() {
     expect(find.text('Abay Ave 1, Almaty, Kazakhstan, 050000'), findsOneWidget);
 
     // ── Finance summary / payments ──
-    expect(find.textContaining('550000'), findsWidgets);
-    expect(find.textContaining('300000'), findsWidgets);
-    expect(find.textContaining('200000'), findsWidgets);
+    // CurrencyCatalog.format adds commas/decimals (₸550,000.00)
+    expect(find.textContaining('550'), findsWidgets); // totalInvoiced
+    expect(find.textContaining('300'), findsWidgets); // totalPaid
+    expect(find.textContaining('200'), findsWidgets); // outstanding
     expect(find.textContaining('SP-0001'), findsWidgets);
 
     // ── Purchase analytics ──
-    expect(find.textContaining('450000'), findsWidgets);
+    expect(find.textContaining('450'), findsWidgets); // netPurchaseSpend
     expect(find.textContaining('Milk 1L'), findsWidgets);
     expect(find.textContaining('87.5'), findsWidgets);
 
     // ── Order pipeline ──
     expect(find.textContaining('PO-1001'), findsWidgets);
-    expect(find.textContaining('5000000'), findsWidgets);
+    expect(find.textContaining('5000000'), findsWidgets); // totalOrderValue (hardcoded ₸ format)
+
 
     // ── All repository calls issued by the screen ──
     for (final expected in [

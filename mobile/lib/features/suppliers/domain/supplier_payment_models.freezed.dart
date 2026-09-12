@@ -1445,3 +1445,728 @@ abstract class _SupplierFinanceSummary implements SupplierFinanceSummary {
   _$$SupplierFinanceSummaryImplCopyWith<_$SupplierFinanceSummaryImpl>
       get copyWith => throw _privateConstructorUsedError;
 }
+
+SupplierInvoiceLite _$SupplierInvoiceLiteFromJson(Map<String, dynamic> json) {
+  return _SupplierInvoiceLite.fromJson(json);
+}
+
+/// @nodoc
+mixin _$SupplierInvoiceLite {
+  String get id => throw _privateConstructorUsedError;
+  String get invoiceNumber => throw _privateConstructorUsedError;
+  String get grandTotal => throw _privateConstructorUsedError;
+  String get paidAmount => throw _privateConstructorUsedError;
+  String get status => throw _privateConstructorUsedError;
+  String get currency => throw _privateConstructorUsedError;
+  DateTime? get dueDate => throw _privateConstructorUsedError;
+
+  /// Serializes this SupplierInvoiceLite to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of SupplierInvoiceLite
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $SupplierInvoiceLiteCopyWith<SupplierInvoiceLite> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $SupplierInvoiceLiteCopyWith<$Res> {
+  factory $SupplierInvoiceLiteCopyWith(
+          SupplierInvoiceLite value, $Res Function(SupplierInvoiceLite) then) =
+      _$SupplierInvoiceLiteCopyWithImpl<$Res, SupplierInvoiceLite>;
+  @useResult
+  $Res call(
+      {String id,
+      String invoiceNumber,
+      String grandTotal,
+      String paidAmount,
+      String status,
+      String currency,
+      DateTime? dueDate});
+}
+
+/// @nodoc
+class _$SupplierInvoiceLiteCopyWithImpl<$Res, $Val extends SupplierInvoiceLite>
+    implements $SupplierInvoiceLiteCopyWith<$Res> {
+  _$SupplierInvoiceLiteCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of SupplierInvoiceLite
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? invoiceNumber = null,
+    Object? grandTotal = null,
+    Object? paidAmount = null,
+    Object? status = null,
+    Object? currency = null,
+    Object? dueDate = freezed,
+  }) {
+    return _then(_value.copyWith(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceNumber: null == invoiceNumber
+          ? _value.invoiceNumber
+          : invoiceNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      paidAmount: null == paidAmount
+          ? _value.paidAmount
+          : paidAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      dueDate: freezed == dueDate
+          ? _value.dueDate
+          : dueDate // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$SupplierInvoiceLiteImplCopyWith<$Res>
+    implements $SupplierInvoiceLiteCopyWith<$Res> {
+  factory _$$SupplierInvoiceLiteImplCopyWith(_$SupplierInvoiceLiteImpl value,
+          $Res Function(_$SupplierInvoiceLiteImpl) then) =
+      __$$SupplierInvoiceLiteImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String id,
+      String invoiceNumber,
+      String grandTotal,
+      String paidAmount,
+      String status,
+      String currency,
+      DateTime? dueDate});
+}
+
+/// @nodoc
+class __$$SupplierInvoiceLiteImplCopyWithImpl<$Res>
+    extends _$SupplierInvoiceLiteCopyWithImpl<$Res, _$SupplierInvoiceLiteImpl>
+    implements _$$SupplierInvoiceLiteImplCopyWith<$Res> {
+  __$$SupplierInvoiceLiteImplCopyWithImpl(_$SupplierInvoiceLiteImpl _value,
+      $Res Function(_$SupplierInvoiceLiteImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of SupplierInvoiceLite
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? invoiceNumber = null,
+    Object? grandTotal = null,
+    Object? paidAmount = null,
+    Object? status = null,
+    Object? currency = null,
+    Object? dueDate = freezed,
+  }) {
+    return _then(_$SupplierInvoiceLiteImpl(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      invoiceNumber: null == invoiceNumber
+          ? _value.invoiceNumber
+          : invoiceNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      grandTotal: null == grandTotal
+          ? _value.grandTotal
+          : grandTotal // ignore: cast_nullable_to_non_nullable
+              as String,
+      paidAmount: null == paidAmount
+          ? _value.paidAmount
+          : paidAmount // ignore: cast_nullable_to_non_nullable
+              as String,
+      status: null == status
+          ? _value.status
+          : status // ignore: cast_nullable_to_non_nullable
+              as String,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      dueDate: freezed == dueDate
+          ? _value.dueDate
+          : dueDate // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$SupplierInvoiceLiteImpl implements _SupplierInvoiceLite {
+  const _$SupplierInvoiceLiteImpl(
+      {required this.id,
+      required this.invoiceNumber,
+      required this.grandTotal,
+      required this.paidAmount,
+      required this.status,
+      required this.currency,
+      this.dueDate});
+
+  factory _$SupplierInvoiceLiteImpl.fromJson(Map<String, dynamic> json) =>
+      _$$SupplierInvoiceLiteImplFromJson(json);
+
+  @override
+  final String id;
+  @override
+  final String invoiceNumber;
+  @override
+  final String grandTotal;
+  @override
+  final String paidAmount;
+  @override
+  final String status;
+  @override
+  final String currency;
+  @override
+  final DateTime? dueDate;
+
+  @override
+  String toString() {
+    return 'SupplierInvoiceLite(id: $id, invoiceNumber: $invoiceNumber, grandTotal: $grandTotal, paidAmount: $paidAmount, status: $status, currency: $currency, dueDate: $dueDate)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$SupplierInvoiceLiteImpl &&
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.invoiceNumber, invoiceNumber) ||
+                other.invoiceNumber == invoiceNumber) &&
+            (identical(other.grandTotal, grandTotal) ||
+                other.grandTotal == grandTotal) &&
+            (identical(other.paidAmount, paidAmount) ||
+                other.paidAmount == paidAmount) &&
+            (identical(other.status, status) || other.status == status) &&
+            (identical(other.currency, currency) ||
+                other.currency == currency) &&
+            (identical(other.dueDate, dueDate) || other.dueDate == dueDate));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, id, invoiceNumber, grandTotal,
+      paidAmount, status, currency, dueDate);
+
+  /// Create a copy of SupplierInvoiceLite
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$SupplierInvoiceLiteImplCopyWith<_$SupplierInvoiceLiteImpl> get copyWith =>
+      __$$SupplierInvoiceLiteImplCopyWithImpl<_$SupplierInvoiceLiteImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$SupplierInvoiceLiteImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _SupplierInvoiceLite implements SupplierInvoiceLite {
+  const factory _SupplierInvoiceLite(
+      {required final String id,
+      required final String invoiceNumber,
+      required final String grandTotal,
+      required final String paidAmount,
+      required final String status,
+      required final String currency,
+      final DateTime? dueDate}) = _$SupplierInvoiceLiteImpl;
+
+  factory _SupplierInvoiceLite.fromJson(Map<String, dynamic> json) =
+      _$SupplierInvoiceLiteImpl.fromJson;
+
+  @override
+  String get id;
+  @override
+  String get invoiceNumber;
+  @override
+  String get grandTotal;
+  @override
+  String get paidAmount;
+  @override
+  String get status;
+  @override
+  String get currency;
+  @override
+  DateTime? get dueDate;
+
+  /// Create a copy of SupplierInvoiceLite
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$SupplierInvoiceLiteImplCopyWith<_$SupplierInvoiceLiteImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+CashAccountLite _$CashAccountLiteFromJson(Map<String, dynamic> json) {
+  return _CashAccountLite.fromJson(json);
+}
+
+/// @nodoc
+mixin _$CashAccountLite {
+  String get id => throw _privateConstructorUsedError;
+  String get name => throw _privateConstructorUsedError;
+  String get currency => throw _privateConstructorUsedError;
+  String? get type => throw _privateConstructorUsedError;
+
+  /// Serializes this CashAccountLite to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of CashAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $CashAccountLiteCopyWith<CashAccountLite> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $CashAccountLiteCopyWith<$Res> {
+  factory $CashAccountLiteCopyWith(
+          CashAccountLite value, $Res Function(CashAccountLite) then) =
+      _$CashAccountLiteCopyWithImpl<$Res, CashAccountLite>;
+  @useResult
+  $Res call({String id, String name, String currency, String? type});
+}
+
+/// @nodoc
+class _$CashAccountLiteCopyWithImpl<$Res, $Val extends CashAccountLite>
+    implements $CashAccountLiteCopyWith<$Res> {
+  _$CashAccountLiteCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of CashAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? name = null,
+    Object? currency = null,
+    Object? type = freezed,
+  }) {
+    return _then(_value.copyWith(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      type: freezed == type
+          ? _value.type
+          : type // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$CashAccountLiteImplCopyWith<$Res>
+    implements $CashAccountLiteCopyWith<$Res> {
+  factory _$$CashAccountLiteImplCopyWith(_$CashAccountLiteImpl value,
+          $Res Function(_$CashAccountLiteImpl) then) =
+      __$$CashAccountLiteImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({String id, String name, String currency, String? type});
+}
+
+/// @nodoc
+class __$$CashAccountLiteImplCopyWithImpl<$Res>
+    extends _$CashAccountLiteCopyWithImpl<$Res, _$CashAccountLiteImpl>
+    implements _$$CashAccountLiteImplCopyWith<$Res> {
+  __$$CashAccountLiteImplCopyWithImpl(
+      _$CashAccountLiteImpl _value, $Res Function(_$CashAccountLiteImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of CashAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? name = null,
+    Object? currency = null,
+    Object? type = freezed,
+  }) {
+    return _then(_$CashAccountLiteImpl(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      type: freezed == type
+          ? _value.type
+          : type // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$CashAccountLiteImpl implements _CashAccountLite {
+  const _$CashAccountLiteImpl(
+      {required this.id,
+      required this.name,
+      required this.currency,
+      this.type});
+
+  factory _$CashAccountLiteImpl.fromJson(Map<String, dynamic> json) =>
+      _$$CashAccountLiteImplFromJson(json);
+
+  @override
+  final String id;
+  @override
+  final String name;
+  @override
+  final String currency;
+  @override
+  final String? type;
+
+  @override
+  String toString() {
+    return 'CashAccountLite(id: $id, name: $name, currency: $currency, type: $type)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$CashAccountLiteImpl &&
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.name, name) || other.name == name) &&
+            (identical(other.currency, currency) ||
+                other.currency == currency) &&
+            (identical(other.type, type) || other.type == type));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, id, name, currency, type);
+
+  /// Create a copy of CashAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$CashAccountLiteImplCopyWith<_$CashAccountLiteImpl> get copyWith =>
+      __$$CashAccountLiteImplCopyWithImpl<_$CashAccountLiteImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$CashAccountLiteImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _CashAccountLite implements CashAccountLite {
+  const factory _CashAccountLite(
+      {required final String id,
+      required final String name,
+      required final String currency,
+      final String? type}) = _$CashAccountLiteImpl;
+
+  factory _CashAccountLite.fromJson(Map<String, dynamic> json) =
+      _$CashAccountLiteImpl.fromJson;
+
+  @override
+  String get id;
+  @override
+  String get name;
+  @override
+  String get currency;
+  @override
+  String? get type;
+
+  /// Create a copy of CashAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$CashAccountLiteImplCopyWith<_$CashAccountLiteImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+BankAccountLite _$BankAccountLiteFromJson(Map<String, dynamic> json) {
+  return _BankAccountLite.fromJson(json);
+}
+
+/// @nodoc
+mixin _$BankAccountLite {
+  String get id => throw _privateConstructorUsedError;
+  String get bankName => throw _privateConstructorUsedError;
+  String get accountNumber => throw _privateConstructorUsedError;
+  String? get accountName => throw _privateConstructorUsedError;
+  String get currency => throw _privateConstructorUsedError;
+
+  /// Serializes this BankAccountLite to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of BankAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $BankAccountLiteCopyWith<BankAccountLite> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $BankAccountLiteCopyWith<$Res> {
+  factory $BankAccountLiteCopyWith(
+          BankAccountLite value, $Res Function(BankAccountLite) then) =
+      _$BankAccountLiteCopyWithImpl<$Res, BankAccountLite>;
+  @useResult
+  $Res call(
+      {String id,
+      String bankName,
+      String accountNumber,
+      String? accountName,
+      String currency});
+}
+
+/// @nodoc
+class _$BankAccountLiteCopyWithImpl<$Res, $Val extends BankAccountLite>
+    implements $BankAccountLiteCopyWith<$Res> {
+  _$BankAccountLiteCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of BankAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? bankName = null,
+    Object? accountNumber = null,
+    Object? accountName = freezed,
+    Object? currency = null,
+  }) {
+    return _then(_value.copyWith(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      bankName: null == bankName
+          ? _value.bankName
+          : bankName // ignore: cast_nullable_to_non_nullable
+              as String,
+      accountNumber: null == accountNumber
+          ? _value.accountNumber
+          : accountNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      accountName: freezed == accountName
+          ? _value.accountName
+          : accountName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$BankAccountLiteImplCopyWith<$Res>
+    implements $BankAccountLiteCopyWith<$Res> {
+  factory _$$BankAccountLiteImplCopyWith(_$BankAccountLiteImpl value,
+          $Res Function(_$BankAccountLiteImpl) then) =
+      __$$BankAccountLiteImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String id,
+      String bankName,
+      String accountNumber,
+      String? accountName,
+      String currency});
+}
+
+/// @nodoc
+class __$$BankAccountLiteImplCopyWithImpl<$Res>
+    extends _$BankAccountLiteCopyWithImpl<$Res, _$BankAccountLiteImpl>
+    implements _$$BankAccountLiteImplCopyWith<$Res> {
+  __$$BankAccountLiteImplCopyWithImpl(
+      _$BankAccountLiteImpl _value, $Res Function(_$BankAccountLiteImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of BankAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? bankName = null,
+    Object? accountNumber = null,
+    Object? accountName = freezed,
+    Object? currency = null,
+  }) {
+    return _then(_$BankAccountLiteImpl(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      bankName: null == bankName
+          ? _value.bankName
+          : bankName // ignore: cast_nullable_to_non_nullable
+              as String,
+      accountNumber: null == accountNumber
+          ? _value.accountNumber
+          : accountNumber // ignore: cast_nullable_to_non_nullable
+              as String,
+      accountName: freezed == accountName
+          ? _value.accountName
+          : accountName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$BankAccountLiteImpl implements _BankAccountLite {
+  const _$BankAccountLiteImpl(
+      {required this.id,
+      required this.bankName,
+      required this.accountNumber,
+      this.accountName,
+      required this.currency});
+
+  factory _$BankAccountLiteImpl.fromJson(Map<String, dynamic> json) =>
+      _$$BankAccountLiteImplFromJson(json);
+
+  @override
+  final String id;
+  @override
+  final String bankName;
+  @override
+  final String accountNumber;
+  @override
+  final String? accountName;
+  @override
+  final String currency;
+
+  @override
+  String toString() {
+    return 'BankAccountLite(id: $id, bankName: $bankName, accountNumber: $accountNumber, accountName: $accountName, currency: $currency)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$BankAccountLiteImpl &&
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.bankName, bankName) ||
+                other.bankName == bankName) &&
+            (identical(other.accountNumber, accountNumber) ||
+                other.accountNumber == accountNumber) &&
+            (identical(other.accountName, accountName) ||
+                other.accountName == accountName) &&
+            (identical(other.currency, currency) ||
+                other.currency == currency));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+      runtimeType, id, bankName, accountNumber, accountName, currency);
+
+  /// Create a copy of BankAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$BankAccountLiteImplCopyWith<_$BankAccountLiteImpl> get copyWith =>
+      __$$BankAccountLiteImplCopyWithImpl<_$BankAccountLiteImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$BankAccountLiteImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _BankAccountLite implements BankAccountLite {
+  const factory _BankAccountLite(
+      {required final String id,
+      required final String bankName,
+      required final String accountNumber,
+      final String? accountName,
+      required final String currency}) = _$BankAccountLiteImpl;
+
+  factory _BankAccountLite.fromJson(Map<String, dynamic> json) =
+      _$BankAccountLiteImpl.fromJson;
+
+  @override
+  String get id;
+  @override
+  String get bankName;
+  @override
+  String get accountNumber;
+  @override
+  String? get accountName;
+  @override
+  String get currency;
+
+  /// Create a copy of BankAccountLite
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$BankAccountLiteImplCopyWith<_$BankAccountLiteImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}

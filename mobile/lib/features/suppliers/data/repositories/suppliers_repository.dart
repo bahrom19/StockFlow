@@ -1,5 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/api/api_client.dart';
+import 'package:stockflow/core/api/api_endpoints.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
@@ -236,20 +238,6 @@ class SuppliersRepository {
     }
   }
 
-  Future<SuppliersResult<SupplierPayment>> createPayment(
-      String supplierId, CreateSupplierPaymentRequest request) async {
-    try {
-      final response = await _api.post<Map<String, dynamic>>(
-        '/suppliers/$supplierId/payments',
-        data: request.toJson(),
-      );
-      return SuppliersSuccess(
-          SupplierPayment.fromJson(response.data!));
-    } catch (e) {
-      return SuppliersFailure(_errorHandler.handle(e));
-    }
-  }
-
   Future<SuppliersResult<void>> deletePayment(
       String supplierId, String paymentId) async {
     try {
@@ -432,6 +420,121 @@ class SuppliersRepository {
     }
   }
 
+  // ── Supplier Payments ────────────────────────────────
+  // G4 addition: full payment lifecycle on top of G3 backend.
+
+  /// Record a supplier payment against an invoice.
+  ///
+  /// `idempotencyKey` MUST be a fresh UUID generated per logical payment
+  /// attempt and reused on network retries so the backend idempotency layer
+  /// can dedupe without side effects.
+  Future<SuppliersResult<SupplierPayment>> createPayment({
+    required String supplierId,
+    required String idempotencyKey,
+    required CreateSupplierPaymentRequest request,
+  }) async {
+    try {
+      final headers = <String, String>{
+        'Idempotency-Key': idempotencyKey,
+      };
+      final response = await _api.post<Map<String, dynamic>>(
+        '/suppliers/$supplierId/payments',
+        data: request.toJson(),
+        options: Options(headers: headers),
+      );
+      return SuppliersSuccess(
+        SupplierPayment.fromJson(response.data!),
+      );
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  /// Soft-delete (void) a supplier payment.
+  Future<SuppliersResult<void>> voidPayment(
+      String supplierId, String paymentId) async {
+    try {
+      await _api.delete<dynamic>(
+        '/suppliers/$supplierId/payments/$paymentId',
+      );
+      return const SuppliersSuccess(null);
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+
+  /// Supplier-scoped invoice list used by the Record Payment invoice picker.
+  Future<SuppliersResult<List<SupplierInvoiceLite>>> getSupplierInvoices(
+    String supplierId, {
+    String? status,
+  }) async {
+    try {
+      final params = <String, dynamic>{
+        'supplierId': supplierId,
+        'page': 1,
+        'limit': 100,
+      };
+      if (status != null) params['status'] = status;
+      final response = await _api.get<Map<String, dynamic>>(
+        ApiEndpoints.purchaseInvoices,
+        queryParameters: params,
+      );
+      final rawItems = response.data?['items'];
+      if (rawItems is! List) {
+        return const SuppliersSuccess(<SupplierInvoiceLite>[]);
+      }
+      final items = rawItems
+          .map((item) => SupplierInvoiceLite.fromJson(
+              Map<String, dynamic>.from(item as Map)))
+          .toList();
+      return SuppliersSuccess(items);
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  /// Cash accounts for the CASH payment method.
+  Future<SuppliersResult<List<CashAccountLite>>> getCashAccounts() async {
+    try {
+      final response = await _api.get<Map<String, dynamic>>(
+        ApiEndpoints.cashAccounts,
+        queryParameters: const {'page': 1, 'limit': 100, 'isActive': true},
+      );
+      final rawItems = response.data?['items'];
+      if (rawItems is! List) {
+        return const SuppliersSuccess(<CashAccountLite>[]);
+      }
+      final items = rawItems
+          .map((item) => CashAccountLite.fromJson(
+              Map<String, dynamic>.from(item as Map)))
+          .toList();
+      return SuppliersSuccess(items);
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  /// Bank accounts for the BANK_TRANSFER payment method.
+  Future<SuppliersResult<List<BankAccountLite>>> getBankAccounts() async {
+    try {
+      final response = await _api.get<Map<String, dynamic>>(
+        ApiEndpoints.bankAccounts,
+        queryParameters: const {'page': 1, 'limit': 100, 'isActive': true},
+      );
+      final rawItems = response.data?['items'];
+      if (rawItems is! List) {
+        return const SuppliersSuccess(<BankAccountLite>[]);
+      }
+      final items = rawItems
+          .map((item) => BankAccountLite.fromJson(
+              Map<String, dynamic>.from(item as Map)))
+          .toList();
+      return SuppliersSuccess(items);
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
   // ── Supplier Products ────────────────────────────────
 
   Future<SuppliersResult<SupplierProductListResponse>> getSupplierProducts(

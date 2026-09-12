@@ -131,3 +131,67 @@ Map<String, dynamic> _$$SupplierFinanceSummaryImplToJson(
       'lastPaymentDate': instance.lastPaymentDate?.toIso8601String(),
       'lastPaymentAmount': instance.lastPaymentAmount,
     };
+
+_$SupplierInvoiceLiteImpl _$$SupplierInvoiceLiteImplFromJson(
+        Map<String, dynamic> json) =>
+    _$SupplierInvoiceLiteImpl(
+      id: json['id'] as String,
+      invoiceNumber: json['invoiceNumber'] as String,
+      grandTotal: json['grandTotal'] as String,
+      paidAmount: json['paidAmount'] as String,
+      status: json['status'] as String,
+      currency: json['currency'] as String,
+      dueDate: json['dueDate'] == null
+          ? null
+          : DateTime.parse(json['dueDate'] as String),
+    );
+
+Map<String, dynamic> _$$SupplierInvoiceLiteImplToJson(
+        _$SupplierInvoiceLiteImpl instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'invoiceNumber': instance.invoiceNumber,
+      'grandTotal': instance.grandTotal,
+      'paidAmount': instance.paidAmount,
+      'status': instance.status,
+      'currency': instance.currency,
+      'dueDate': instance.dueDate?.toIso8601String(),
+    };
+
+_$CashAccountLiteImpl _$$CashAccountLiteImplFromJson(
+        Map<String, dynamic> json) =>
+    _$CashAccountLiteImpl(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      currency: json['currency'] as String,
+      type: json['type'] as String?,
+    );
+
+Map<String, dynamic> _$$CashAccountLiteImplToJson(
+        _$CashAccountLiteImpl instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'name': instance.name,
+      'currency': instance.currency,
+      'type': instance.type,
+    };
+
+_$BankAccountLiteImpl _$$BankAccountLiteImplFromJson(
+        Map<String, dynamic> json) =>
+    _$BankAccountLiteImpl(
+      id: json['id'] as String,
+      bankName: json['bankName'] as String,
+      accountNumber: json['accountNumber'] as String,
+      accountName: json['accountName'] as String?,
+      currency: json['currency'] as String,
+    );
+
+Map<String, dynamic> _$$BankAccountLiteImplToJson(
+        _$BankAccountLiteImpl instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'bankName': instance.bankName,
+      'accountNumber': instance.accountNumber,
+      'accountName': instance.accountName,
+      'currency': instance.currency,
+    };

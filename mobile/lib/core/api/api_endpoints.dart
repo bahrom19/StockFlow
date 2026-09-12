@@ -55,6 +55,7 @@ class ApiEndpoints {
   // Purchasing
   // ──────────────────────────────────
   static const String purchaseOrders = '/purchasing/purchase-orders';
+  static const String purchaseInvoices = '/purchasing/invoices';
   static const String goodsReceipt = '/purchasing/goods-receipts';
   static const String purchaseReturns = '/purchasing/purchase-returns';
 
@@ -73,6 +74,7 @@ class ApiEndpoints {
   static const String journalEntries = '/finance/journal-entries';
   static const String financialPeriods = '/finance/financial-periods';
   static const String cashAccounts = '/finance/cash-accounts';
+  static const String bankAccounts = '/finance/bank-accounts';
 
   // ──────────────────────────────────
   // Reports

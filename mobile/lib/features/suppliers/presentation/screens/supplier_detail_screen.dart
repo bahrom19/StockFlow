@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/company/company_provider.dart';
+import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
@@ -11,6 +13,7 @@ import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart
 import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_purchase_summary_models.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/record_supplier_payment_sheet.dart';
 import 'package:stockflow/features/products/data/repositories/products_repository.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 
@@ -1145,16 +1148,16 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                 spacing: 12,
                 runSpacing: 4,
                 children: [
-                  _financeStat(context.l10n.current, '₸${_paymentAging!.aging.current}', theme),
-                  _financeStat(context.l10n.days1To30, '₸${_paymentAging!.aging.days1To30}', theme),
-                  _financeStat(context.l10n.days31To60, '₸${_paymentAging!.aging.days31To60}', theme),
-                  _financeStat(context.l10n.days61To90, '₸${_paymentAging!.aging.days61To90}', theme),
-                  _financeStat(context.l10n.overdue90Plus, '₸${_paymentAging!.aging.overdue90Plus}', theme),
+                  _financeStat(context.l10n.current, '${_paymentAging!.aging.current}', theme),
+                  _financeStat(context.l10n.days1To30, '${_paymentAging!.aging.days1To30}', theme),
+                  _financeStat(context.l10n.days31To60, '${_paymentAging!.aging.days31To60}', theme),
+                  _financeStat(context.l10n.days61To90, '${_paymentAging!.aging.days61To90}', theme),
+                  _financeStat(context.l10n.overdue90Plus, '${_paymentAging!.aging.overdue90Plus}', theme),
                 ],
               ),
               if (_paymentAging!.overdueInvoices.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text('${context.l10n.overdueInvoices} (${_paymentAging!.overdueCount})',
+                Text('${_paymentAging!.overdueCount})',
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.error)),
                 const SizedBox(height: 4),
@@ -1209,10 +1212,26 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                     subtitle: Text(
                       '${p.paymentDate.toString().substring(0, 10)} • ${p.method}',
                     ),
-                    trailing: Text(
-                      '+₸${p.amount}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '+${CurrencyCatalog.format(p.amount, code: p.currency)}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600),
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (v) {
+                            if (v == 'void') _voidPayment(p);
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: 'void',
+                              child: Text(context.l10n.voidPayment),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   )),
           ],
@@ -1233,19 +1252,80 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
-        Text('₸$value',
+        Text(CurrencyCatalog.format(value, code: ref.read(companyCurrencyProvider)),
             style: theme.textTheme.bodyMedium
                 ?.copyWith(fontWeight: FontWeight.w600)),
       ],
     );
   }
 
+
   Future<void> _showAddPaymentDialog() async {
-    // TODO: implement payment dialog in future iteration
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.addPayment)),
+    if (!mounted || _supplier == null) return;
+    final payment = await RecordSupplierPaymentSheet.show(
+      context: context,
+      supplierId: widget.supplierId,
+      companyCurrency: ref.read(companyCurrencyProvider),
     );
+    if (payment != null && mounted) {
+      await _refreshFinanceData();
+    }
+  }
+
+  Future<void> _voidPayment(SupplierPayment payment) async {
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.l10n.voidPayment),
+        content: Text(context.l10n.voidPaymentConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.l10n.voidPayment),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.voidPayment(widget.supplierId, payment.id);
+    if (!mounted) return;
+    if (result is SuppliersFailure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text((result as SuppliersFailure).error.message)),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.paymentVoided)),
+      );
+      _refreshFinanceData();
+    }
+  }
+
+  Future<void> _refreshFinanceData() async {
+    final repo = ref.read(suppliersRepositoryProvider);
+    final results = await Future.wait([
+      repo.getFinanceSummary(widget.supplierId),
+      repo.getPayments(widget.supplierId),
+      repo.getPaymentAging(widget.supplierId),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      if (results[0] is SuppliersSuccess<SupplierFinanceSummary>) {
+        _financeSummary = (results[0] as SuppliersSuccess<SupplierFinanceSummary>).data;
+      }
+      if (results[1] is SuppliersSuccess<SupplierPaymentListResponse>) {
+        _payments = (results[1] as SuppliersSuccess<SupplierPaymentListResponse>).data.items;
+      }
+      if (results[2] is SuppliersSuccess<SupplierPaymentAging>) {
+        _paymentAging = (results[2] as SuppliersSuccess<SupplierPaymentAging>).data;
+      }
+    });
   }
 
   // ── Purchase Analytics Section ──────────────────────────
@@ -1592,7 +1672,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
-        Text(value,
+        Text(CurrencyCatalog.format(value, code: ref.read(companyCurrencyProvider)),
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: highlighted ? FontWeight.w700 : FontWeight.w600,
               color: highlighted ? theme.colorScheme.primary : null,
