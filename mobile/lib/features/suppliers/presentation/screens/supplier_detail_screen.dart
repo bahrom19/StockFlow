@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/core/localization/error_labels.dart';
-import 'package:stockflow/core/widgets/status_badge.dart';
 import 'package:stockflow/features/suppliers/data/repositories/suppliers_repository.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_contact_models.dart';
@@ -14,6 +13,17 @@ import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart
 import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_purchase_summary_models.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/record_supplier_payment_sheet.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_header_card.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_contacts_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_addresses_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_performance_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_finance_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_invoices_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_purchase_analytics_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_order_pipeline_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_reliability_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_return_summary_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_products_section.dart';
 import 'package:stockflow/features/products/data/repositories/products_repository.dart';
 import 'package:stockflow/features/products/domain/product_models.dart';
 
@@ -388,47 +398,125 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Header / General Info ─────────────────────────
-              _buildHeader(supplier, theme),
+              SupplierHeaderCard(supplier: supplier),
               const SizedBox(height: 24),
 
               // ── Contacts Section ──────────────────────────────
-              _buildContactsSection(theme),
+              SupplierContactsSection(
+                contacts: _contacts,
+                onAdd: () => _showContactDialog(),
+                onEdit: (c) => _showContactDialog(contact: c),
+                onDelete: _deleteContact,
+              ),
               const SizedBox(height: 24),
 
               // ── Addresses Section ─────────────────────────────
-              _buildAddressesSection(theme),
+              SupplierAddressesSection(
+                addresses: _addresses,
+                onAdd: () => _showAddressDialog(),
+                onEdit: (a) => _showAddressDialog(address: a),
+                onDelete: _deleteAddress,
+              ),
               const SizedBox(height: 24),
 
               // ── Performance Overview ──────────────────────────
-              _buildPerformanceSection(theme),
+              SupplierPerformanceSection(
+                performance: _performance,
+                isLoading: _isLoadingPerformance,
+                error: _performanceError,
+                onRetry: _loadPerformance,
+              ),
               const SizedBox(height: 24),
 
               // ── Finance Section ──────────────────────────────
-              _buildFinanceSection(theme),
+              SupplierFinanceSection(
+                financeSummary: _financeSummary,
+                payments: _payments,
+                paymentAging: _paymentAging,
+                isLoadingPaymentAging: _isLoadingPaymentAging,
+                companyCurrency: ref.read(companyCurrencyProvider),
+                onAddPayment: () => _showAddPaymentDialog(),
+                onVoidPayment: _voidPayment,
+              ),
               const SizedBox(height: 24),
 
               // ── Purchase Invoices Section (G5) ──────────────
-              _buildInvoicesSection(theme),
+              SupplierInvoicesSection(
+                invoices: _invoices,
+                isLoading: _isLoadingInvoices,
+                error: _invoicesError,
+                invoicePage: _invoicePage,
+                invoiceTotal: _invoiceTotal,
+                onRetry: _loadInvoices,
+                onLoadMore: () {
+                  _invoicePage++;
+                  _loadInvoices();
+                },
+              ),
               const SizedBox(height: 24),
 
               // ── Purchase Analytics Section ───────────────────
-              _buildPurchaseAnalyticsSection(theme),
+              SupplierPurchaseAnalyticsSection(
+                purchaseSummary: _purchaseSummary,
+                isLoading: _isLoadingPurchaseSummary,
+                error: _purchaseSummaryError,
+                productPurchases: _productPurchases,
+                isLoadingProductPurchases: _isLoadingProductPurchases,
+                productPurchasesError: _productPurchasesError,
+                productPurchaseTotal: _productPurchaseTotal,
+                companyCurrency: ref.read(companyCurrencyProvider),
+                onRetry: _loadPurchaseSummary,
+                onRetryProducts: _loadProductPurchases,
+                onPeriodChanged: _onPeriodChanged,
+                onSearchChanged: (value) {
+                  _productPurchaseSearch = value.isEmpty ? null : value;
+                  _productPurchasePage = 1;
+                  _loadProductPurchases();
+                },
+                onLoadMoreProducts: () {
+                  _productPurchasePage++;
+                  _loadProductPurchases();
+                },
+                onShowPriceHistory: _showPriceHistoryDialog,
+              ),
               const SizedBox(height: 24),
 
               // ── Order Pipeline Section ──────────────────────
-              _buildOrderPipelineSection(theme),
+              SupplierOrderPipelineSection(
+                orderPipeline: _orderPipeline,
+                isLoading: _isLoadingOrderPipeline,
+                error: _orderPipelineError,
+                onRetry: _loadOrderPipeline,
+              ),
               const SizedBox(height: 24),
 
               // ── Supplier Reliability Section ────────────────
-              _buildReliabilitySection(theme),
+              SupplierReliabilitySection(
+                reliability: _reliability,
+                isLoading: _isLoadingReliability,
+                error: _reliabilityError,
+                companyCurrency: ref.read(companyCurrencyProvider),
+                onRetry: _loadReliability,
+              ),
               const SizedBox(height: 24),
 
               // ── Return Analysis Section ───────────────────────
-              _buildReturnSummarySection(theme),
+              SupplierReturnSummarySection(
+                returnSummary: _returnSummary,
+                isLoading: _isLoadingReturnSummary,
+                error: _returnSummaryError,
+                companyCurrency: ref.read(companyCurrencyProvider),
+                onRetry: _loadReturnSummary,
+              ),
               const SizedBox(height: 24),
 
               // ── Products Section ─────────────────────────────
-              _buildProductsSection(theme),
+              SupplierProductsSection(
+                products: _supplierProducts,
+                onAdd: () => _showAddProductDialog(),
+                onEdit: _showEditProductDialog,
+                onDelete: _confirmDeleteProduct,
+              ),
 
               // ── Notes ─────────────────────────────────────────
               if (supplier.notes != null && supplier.notes!.isNotEmpty) ...[
@@ -439,219 +527,6 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(Supplier supplier, ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    supplier.companyName,
-                    style: theme.textTheme.headlineSmall,
-                  ),
-                ),
-                StatusBadge(
-                  status: supplier.isActive ? 'ACTIVE' : 'INACTIVE',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (supplier.bin != null && supplier.bin!.isNotEmpty)
-              _infoRow(Icons.numbers, context.l10n.bin, supplier.bin!, theme),
-            if (supplier.email != null && supplier.email!.isNotEmpty)
-              _infoRow(
-                  Icons.email_outlined, context.l10n.email, supplier.email!, theme),
-            if (supplier.phone != null && supplier.phone!.isNotEmpty)
-              _infoRow(
-                  Icons.phone_outlined, context.l10n.phone, supplier.phone!, theme),
-            if (supplier.website != null && supplier.website!.isNotEmpty)
-              _infoRow(Icons.language, context.l10n.website, supplier.website!,
-                  theme),
-            const Divider(height: 24),
-            _infoRow(
-              Icons.access_time,
-              context.l10n.createdAt,
-              supplier.createdAt.toString().substring(0, 10),
-              theme,
-            ),
-            _infoRow(
-              Icons.update,
-              context.l10n.updatedAt,
-              supplier.updatedAt.toString().substring(0, 10),
-              theme,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _infoRow(IconData icon, String label, String value, ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: theme.colorScheme.outline),
-          const SizedBox(width: 8),
-          Text('$label: ', style: theme.textTheme.bodySmall),
-          Expanded(
-            child: Text(value, style: theme.textTheme.bodyMedium),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContactsSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.people_outline,
-                    size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.contacts, style: theme.textTheme.titleMedium),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.add, size: 20),
-                  tooltip: context.l10n.newContact,
-                  onPressed: () => _showContactDialog(),
-                ),
-              ],
-            ),
-            if (_contacts.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  context.l10n.noContacts,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline),
-                ),
-              )
-            else
-              ..._contacts.map((c) => ListTile(
-                    dense: true,
-                    leading: CircleAvatar(
-                      radius: 16,
-                      child: Text(
-                        (c.firstName ?? c.email ?? '?')[0].toUpperCase(),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    title: Text(c.displayName),
-                    subtitle: Text(
-                      [c.position, c.phone ?? c.email]
-                          .where((e) => e != null && e.isNotEmpty)
-                          .join(' · '),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (c.isPrimary)
-                          Chip(
-                            label: Text(context.l10n.primaryContact,
-                                style: const TextStyle(fontSize: 10)),
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                          ),
-                        PopupMenuButton<String>(
-                          onSelected: (v) {
-                            if (v == 'edit') _showContactDialog(contact: c);
-                            if (v == 'delete') _deleteContact(c);
-                          },
-                          itemBuilder: (_) => [
-                            PopupMenuItem(
-                                value: 'edit', child: Text(context.l10n.edit)),
-                            PopupMenuItem(
-                                value: 'delete',
-                                child: Text(context.l10n.delete)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddressesSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.location_on_outlined,
-                    size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.addresses, style: theme.textTheme.titleMedium),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.add, size: 20),
-                  tooltip: context.l10n.newAddress,
-                  onPressed: () => _showAddressDialog(),
-                ),
-              ],
-            ),
-            if (_addresses.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  context.l10n.noAddresses,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline),
-                ),
-              )
-            else
-              ..._addresses.map((a) => ListTile(
-                    dense: true,
-                    leading: Icon(Icons.location_on,
-                        size: 20, color: theme.colorScheme.outline),
-                    title: Text(a.displayAddress),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (a.isDefault)
-                          Chip(
-                            label: Text(context.l10n.defaultAddress,
-                                style: const TextStyle(fontSize: 10)),
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                          ),
-                        PopupMenuButton<String>(
-                          onSelected: (v) {
-                            if (v == 'edit') _showAddressDialog(address: a);
-                            if (v == 'delete') _deleteAddress(a);
-                          },
-                          itemBuilder: (_) => [
-                            PopupMenuItem(
-                                value: 'edit', child: Text(context.l10n.edit)),
-                            PopupMenuItem(
-                                value: 'delete',
-                                child: Text(context.l10n.delete)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  )),
-          ],
         ),
       ),
     );
@@ -854,447 +729,15 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     _loadContactsAndAddresses();
   }
 
-  // ── Performance Overview (G5-B7) ───────────────────────
+  // ── Order Pipeline section → extracted to SupplierOrderPipelineSection
+  // ── Finance section → extracted to SupplierFinanceSection
+  // ── Invoices section → extracted to SupplierInvoicesSection
+  // ── Purchase Analytics section → extracted to SupplierPurchaseAnalyticsSection
+  // ── Reliability section → extracted to SupplierReliabilitySection
+  // ── Return Summary section → extracted to SupplierReturnSummarySection
+  // ── Products section → extracted to SupplierProductsSection
 
-  Widget _buildPerformanceSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.analytics_outlined, size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.performanceOverview, style: theme.textTheme.titleMedium),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(context.l10n.periodBased, style: theme.textTheme.bodySmall),
-            const SizedBox(height: 12),
-            if (_isLoadingPerformance)
-              const Center(child: CircularProgressIndicator())
-            else if (_performanceError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: [
-                    Text(
-                      _performanceError!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.error),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: _loadPerformance,
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: Text(context.l10n.retry),
-                    ),
-                  ],
-                ),
-              )
-            else if (_performance == null)
-              Text(context.l10n.noData, style: theme.textTheme.bodyMedium)
-            else ...[
-              // 2×2 KPI grid
-              Row(
-                children: [
-                  Expanded(child: _buildPerformanceCard(
-                    context.l10n.purchasePerformance,
-                    [
-                      '${context.l10n.netPurchase}: ₸${_performance!.purchase.netPurchaseSpend}',
-                      '${context.l10n.purchasedQuantity}: ${_performance!.purchase.totalPurchasedQuantity}',
-                      '${context.l10n.invoiceCount}: ${_performance!.purchase.invoiceCount}',
-                    ],
-                    theme,
-                  )),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildPerformanceCard(
-                    context.l10n.deliveryPerformance,
-                    [
-                      '${context.l10n.onTimeRate}: ${_performance!.delivery.onTimeDeliveryRate}%',
-                      '${context.l10n.avgLeadTime}: ${_performance!.delivery.averageLeadTimeDays} ${context.l10n.days}',
-                      '${context.l10n.cancellationRate}: ${_performance!.delivery.cancellationRate}%',
-                    ],
-                    theme,
-                    deliveryRate: _performance!.delivery.onTimeDeliveryRate,
-                  )),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: _buildPerformanceCard(
-                    context.l10n.returnPerformance,
-                    [
-                      '${context.l10n.amountReturnRate}: ${_performance!.returns.amountReturnRate}%',
-                      '${context.l10n.qtyReturnRate}: ${_performance!.returns.quantityReturnRate}%',
-                      '${context.l10n.returnCount}: ${_performance!.returns.returnCount}',
-                    ],
-                    theme,
-                    returnRate: _performance!.returns.amountReturnRate,
-                  )),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildPerformanceCard(
-                    context.l10n.financialRisk,
-                    [
-                      '${context.l10n.totalOutstanding}: ₸${_performance!.financialRisk.totalOutstanding}',
-                      '${context.l10n.overdueCount}: ${_performance!.financialRisk.overdueCount}',
-                      '${context.l10n.overdue90Plus}: ₸${_performance!.financialRisk.overdue90plus}',
-                    ],
-                    theme,
-                    financialRisk: _performance!.financialRisk.overdue90plus,
-                  )),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPerformanceCard(
-    String title,
-    List<String> lines,
-    ThemeData theme, {
-    double? deliveryRate,
-    double? returnRate,
-    String? financialRisk,
-  }) {
-    // Determine card color signal
-    Color? borderColor;
-    if (deliveryRate != null) {
-      if (deliveryRate >= 90) {
-        borderColor = Colors.green.shade300;
-      } else if (deliveryRate >= 70) {
-        borderColor = Colors.orange.shade300;
-      } else {
-        borderColor = Colors.red.shade300;
-      }
-    } else if (returnRate != null) {
-      if (returnRate < 5) {
-        borderColor = Colors.green.shade300;
-      } else if (returnRate < 15) {
-        borderColor = Colors.orange.shade300;
-      } else {
-        borderColor = Colors.red.shade300;
-      }
-    } else if (financialRisk != null) {
-      final riskVal = double.tryParse(financialRisk) ?? 0;
-      borderColor = riskVal > 0 ? Colors.orange.shade300 : Colors.green.shade300;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: borderColor != null ? Border.all(color: borderColor, width: 1.5) : null,
-        borderRadius: BorderRadius.circular(8),
-        color: theme.colorScheme.surface,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-          )),
-          const SizedBox(height: 8),
-          ...lines.map((line) => Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(line, style: theme.textTheme.bodySmall),
-          )),
-        ],
-      ),
-    );
-  }
-
-  // ── Order Pipeline (G5-B8) ──────────────────────────────
-
-  Widget _buildOrderPipelineSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.reorder, size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.orderPipeline, style: theme.textTheme.titleMedium),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_isLoadingOrderPipeline)
-              const Center(child: CircularProgressIndicator())
-            else if (_orderPipelineError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: [
-                    Text(_orderPipelineError!,
-                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
-                      textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: _loadOrderPipeline,
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: Text(context.l10n.retry),
-                    ),
-                  ],
-                ),
-              )
-            else if (_orderPipeline == null)
-              Text(context.l10n.noData, style: theme.textTheme.bodyMedium)
-            else ...[
-              // Summary
-              Text('${context.l10n.totalOrders}: ${_orderPipeline!.summary.totalOrders}',
-                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              Text('${context.l10n.totalOrderValue}: ₸${_orderPipeline!.summary.totalOrderValue}',
-                style: theme.textTheme.bodyMedium),
-              const SizedBox(height: 8),
-              // Status chips
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  if (_orderPipeline!.summary.draftCount > 0)
-                    _statusChip(context.l10n.draft, _orderPipeline!.summary.draftCount, Colors.grey, theme),
-                  if (_orderPipeline!.summary.pendingCount > 0)
-                    _statusChip(context.l10n.pending, _orderPipeline!.summary.pendingCount, Colors.orange, theme),
-                  if (_orderPipeline!.summary.approvedCount > 0)
-                    _statusChip(context.l10n.approved, _orderPipeline!.summary.approvedCount, Colors.blue, theme),
-                  if (_orderPipeline!.summary.orderedCount > 0)
-                    _statusChip(context.l10n.ordered, _orderPipeline!.summary.orderedCount, Colors.indigo, theme),
-                  if (_orderPipeline!.summary.partiallyReceivedCount > 0)
-                    _statusChip(context.l10n.partiallyReceived, _orderPipeline!.summary.partiallyReceivedCount, Colors.teal, theme),
-                  if (_orderPipeline!.summary.receivedCount > 0)
-                    _statusChip(context.l10n.received, _orderPipeline!.summary.receivedCount, Colors.green, theme),
-                  if (_orderPipeline!.summary.cancelledCount > 0)
-                    _statusChip(context.l10n.cancelled, _orderPipeline!.summary.cancelledCount, Colors.red, theme),
-                ],
-              ),
-              // Recent orders
-              if (_orderPipeline!.recentOrders.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Divider(color: theme.colorScheme.outlineVariant),
-                const SizedBox(height: 8),
-                Text(context.l10n.recentOrders, style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 4),
-                ..._orderPipeline!.recentOrders.map((order) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      Expanded(flex: 3, child: Text(order.orderNumber, style: theme.textTheme.bodySmall)),
-                      Expanded(flex: 2, child: Text(order.orderDate.substring(0, 10), style: theme.textTheme.bodySmall)),
-                      Expanded(flex: 2, child: Text(order.expectedDate?.substring(0, 10) ?? '-', style: theme.textTheme.bodySmall)),
-                      Expanded(flex: 2, child: Text(order.status, style: theme.textTheme.bodySmall?.copyWith(
-                        color: order.status == 'CANCELLED' ? theme.colorScheme.error : null))),
-                      Expanded(flex: 2, child: Text('₸${order.grandTotal}', style: theme.textTheme.bodySmall, textAlign: TextAlign.end)),
-                    ],
-                  ),
-                )),
-              ],
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statusChip(String label, int count, Color color, ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text('$label ($count)', style: theme.textTheme.bodySmall?.copyWith(color: color)),
-    );
-  }
-
-  // ── Finance Section ────────────────────────────────────────
-
-  Widget _buildFinanceSection(ThemeData theme) {
-    final summary = _financeSummary;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.account_balance_wallet,
-                    size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.financeSummary,
-                    style: theme.textTheme.titleSmall),
-                const Spacer(),
-                FilledButton.tonalIcon(
-                  onPressed: () => _showAddPaymentDialog(),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: Text(context.l10n.addPayment),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (summary != null) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: _financeStat(context.l10n.totalInvoiced,
-                        summary.totalInvoiced, theme),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _financeStat(
-                        context.l10n.totalPaid, summary.totalPaid, theme),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _financeStat(
-                        context.l10n.outstanding, summary.outstanding, theme),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
-            // Payment Aging
-            if (_isLoadingPaymentAging)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: SizedBox(
-                  width: 20, height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else if (_paymentAging != null && _paymentAging!.invoiceCount > 0) ...[
-              Divider(color: theme.colorScheme.outlineVariant),
-              const SizedBox(height: 8),
-              Text(context.l10n.paymentAging,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 4,
-                children: [
-                  _financeStat(context.l10n.current, '${_paymentAging!.aging.current}', theme),
-                  _financeStat(context.l10n.days1To30, '${_paymentAging!.aging.days1To30}', theme),
-                  _financeStat(context.l10n.days31To60, '${_paymentAging!.aging.days31To60}', theme),
-                  _financeStat(context.l10n.days61To90, '${_paymentAging!.aging.days61To90}', theme),
-                  _financeStat(context.l10n.overdue90Plus, '${_paymentAging!.aging.overdue90Plus}', theme),
-                ],
-              ),
-              if (_paymentAging!.overdueInvoices.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text('${_paymentAging!.overdueCount})',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.error)),
-                const SizedBox(height: 4),
-                ..._paymentAging!.overdueInvoices.take(5).map((inv) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(inv.invoiceNumber,
-                            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
-                      ),
-                      SizedBox(
-                        width: 80,
-                        child: Text(inv.dueDate != null ? inv.dueDate!.substring(0, 10) : '—',
-                            style: theme.textTheme.bodySmall),
-                      ),
-                      SizedBox(
-                        width: 90,
-                        child: Text('₸${inv.outstanding}',
-                            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-                            textAlign: TextAlign.end),
-                      ),
-                      SizedBox(
-                        width: 40,
-                        child: Text('${inv.daysOverdue}d',
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
-                            textAlign: TextAlign.end),
-                      ),
-                    ],
-                  ),
-                )),
-              ],
-            ],
-            if (_payments.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(context.l10n.noPayments,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              )
-            else
-              ..._payments.map((p) => ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      p.method == 'CASH'
-                          ? Icons.money
-                          : Icons.account_balance,
-                      size: 20,
-                    ),
-                    title: Text(p.paymentNumber),
-                    subtitle: Text(
-                      '${p.paymentDate.toString().substring(0, 10)} • ${p.method}',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '+${CurrencyCatalog.format(p.amount, code: p.currency)}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600),
-                        ),
-                        PopupMenuButton<String>(
-                          onSelected: (v) {
-                            if (v == 'void') _voidPayment(p);
-                          },
-                          itemBuilder: (_) => [
-                            PopupMenuItem(
-                              value: 'void',
-                              child: Text(context.l10n.voidPayment),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _financeStat(String label, String value, ThemeData theme) {
-    // Plain Column — this stat is used both inside Rows (wrapped in Expanded
-    // at the call sites) and inside Wraps, where Expanded/Flexible ParentData
-    // is invalid and crashes the build.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label,
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 2),
-        Text(CurrencyCatalog.format(value, code: ref.read(companyCurrencyProvider)),
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w600)),
-      ],
-    );
-  }
-
+  // ── Payment actions ────────────────────────────────────
 
   Future<void> _showAddPaymentDialog() async {
     if (!mounted || _supplier == null) return;
@@ -1369,507 +812,48 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     });
   }
 
-  // ── G5: Purchase Invoices Section ───────────────────────
-
-  Widget _buildInvoicesSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.receipt_long,
-                    size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.purchaseInvoices,
-                    style: theme.textTheme.titleMedium),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_isLoadingInvoices)
-              const Center(child: CircularProgressIndicator(strokeWidth: 2))
-            else if (_invoicesError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: [
-                    Text(_invoicesError!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.error),
-                      textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: _loadInvoices,
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: Text(context.l10n.retry),
-                    ),
-                  ],
-                ),
-              )
-            else if (_invoices.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(context.l10n.noInvoices,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              )
-            else ...[
-              // Invoice list
-              ..._invoices.map((inv) {
-                final grandTotal = double.tryParse(inv.grandTotal) ?? 0;
-                final paid = double.tryParse(inv.paidAmount) ?? 0;
-                final outstanding = grandTotal - paid;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      // Invoice number + date
-                      Expanded(
-                        flex: 4,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(inv.invoiceNumber,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w600)),
-                            Text(
-                              '${context.l10n.invoiceDate}: ${inv.invoiceDate.substring(0, 10)}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant),
-                            ),
-                            if (inv.dueDate != null)
-                              Text(
-                                '${context.l10n.dueDate}: ${inv.dueDate!.substring(0, 10)}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant),
-                              ),
-                          ],
-                        ),
-                      ),
-                      // Status badge
-                      Expanded(
-                        flex: 2,
-                        child: _invoiceStatusBadge(inv.status, theme),
-                      ),
-                      // Amounts
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              CurrencyCatalog.format(inv.grandTotal, code: inv.currency),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600),
-                            ),
-                            Text(
-                              '${context.l10n.paidAmount}: ${CurrencyCatalog.format(inv.paidAmount, code: inv.currency)}',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                            if (outstanding > 0)
-                              Text(
-                                '${context.l10n.outstanding}: ${CurrencyCatalog.format(outstanding.toStringAsFixed(4), code: inv.currency)}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.error),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              // Pagination
-              if (_invoices.length < _invoiceTotal)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Center(
-                    child: TextButton(
-                      onPressed: () {
-                        _invoicePage++;
-                        _loadInvoices();
-                      },
-                      child: Text(context.l10n.loadMore),
-                    ),
-                  ),
-                ),
-            ],
-          ],
-        ),
-      ),
-    );
+  void _onPeriodChanged(String? value) {
+    final now = DateTime.now();
+    setState(() {
+      if (value == null) {
+        _purchaseDateFrom = null;
+        _purchaseDateTo = null;
+      } else if (value == '3m') {
+        _purchaseDateFrom = DateTime(now.year, now.month - 3, now.day).toIso8601String().substring(0, 10);
+        _purchaseDateTo = null;
+      } else if (value == '6m') {
+        _purchaseDateFrom = DateTime(now.year, now.month - 6, now.day).toIso8601String().substring(0, 10);
+        _purchaseDateTo = null;
+      } else if (value == '1y') {
+        _purchaseDateFrom = DateTime(now.year - 1, now.month, now.day).toIso8601String().substring(0, 10);
+        _purchaseDateTo = null;
+      } else if (value == 'ytd') {
+        _purchaseDateFrom = DateTime(now.year, 1, 1).toIso8601String().substring(0, 10);
+        _purchaseDateTo = null;
+      }
+    });
+    _productPurchasePage = 1;
+    _loadPurchaseSummary();
+    _loadProductPurchases();
+    _loadReliability();
+    _loadReturnSummary();
   }
 
-  Widget _invoiceStatusBadge(String status, ThemeData theme) {
-    Color color;
-    String label;
-    switch (status) {
-      case 'DRAFT':
-        color = Colors.grey;
-        label = context.l10n.statusDraft;
-        break;
-      case 'APPROVED':
-        color = Colors.blue;
-        label = context.l10n.statusApproved;
-        break;
-      case 'PAID':
-        color = Colors.green;
-        label = context.l10n.statusPaid;
-        break;
-      case 'CANCELLED':
-        color = Colors.red;
-        label = context.l10n.statusCancelled;
-        break;
-      default:
-        color = Colors.grey;
-        label = status;
+  // ── Price History Dialog ──────────────────────────────
+
+  Future<void> _showPriceHistoryDialog(String productId, String productName) async {
+    if (!mounted) return;
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getPriceHistory(widget.supplierId, productId,
+        dateFrom: _purchaseDateFrom, dateTo: _purchaseDateTo);
+    if (!mounted) return;
+    if (result is SuppliersSuccess<SupplierPriceHistory>) {
+      _showPriceHistoryDialogContent(result.data);
+    } else if (result is SuppliersFailure<SupplierPriceHistory>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error.message)),
+      );
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(label,
-          style: theme.textTheme.bodySmall?.copyWith(color: color)),
-    );
-  }
-
-  // ── Purchase Analytics Section ──────────────────────────
-
-  Widget _buildPurchaseAnalyticsSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.analytics_outlined,
-                    size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.purchaseAnalytics,
-                    style: theme.textTheme.titleSmall),
-                const Spacer(),
-                // Period selector
-                PopupMenuButton<String?>(
-                  icon: Icon(Icons.date_range,
-                      size: 20, color: theme.colorScheme.onSurfaceVariant),
-                  onSelected: (value) {
-                    final now = DateTime.now();
-                    setState(() {
-                      if (value == null) {
-                        _purchaseDateFrom = null;
-                        _purchaseDateTo = null;
-                      } else if (value == '3m') {
-                        _purchaseDateFrom = DateTime(now.year, now.month - 3, now.day).toIso8601String().substring(0, 10);
-                        _purchaseDateTo = null;
-                      } else if (value == '6m') {
-                        _purchaseDateFrom = DateTime(now.year, now.month - 6, now.day).toIso8601String().substring(0, 10);
-                        _purchaseDateTo = null;
-                      } else if (value == '1y') {
-                        _purchaseDateFrom = DateTime(now.year - 1, now.month, now.day).toIso8601String().substring(0, 10);
-                        _purchaseDateTo = null;
-                      } else if (value == 'ytd') {
-                        _purchaseDateFrom = DateTime(now.year, 1, 1).toIso8601String().substring(0, 10);
-                        _purchaseDateTo = null;
-                      }
-                    });
-                    _productPurchasePage = 1;
-                    _loadPurchaseSummary();
-                    _loadProductPurchases();
-                    _loadReliability();
-                    _loadReturnSummary();
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(value: null, child: Text(context.l10n.periodAllTime)),
-                    PopupMenuItem(value: '3m', child: Text(context.l10n.periodLast3Months)),
-                    PopupMenuItem(value: '6m', child: Text(context.l10n.periodLast6Months)),
-                    PopupMenuItem(value: '1y', child: Text(context.l10n.periodLastYear)),
-                    PopupMenuItem(value: 'ytd', child: Text(context.l10n.periodYearToDate)),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Loading state
-            if (_isLoadingPurchaseSummary)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              )
-            // Error state
-            else if (_purchaseSummaryError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: [
-                    Text(
-                      _purchaseSummaryError!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.error),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: _loadPurchaseSummary,
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: Text(context.l10n.retry),
-                    ),
-                  ],
-                ),
-              )
-            // Data state
-            else if (_purchaseSummary != null) ...[
-              // Summary stats
-              Wrap(
-                spacing: 16,
-                runSpacing: 12,
-                children: [
-                  _analyticsStat(context.l10n.totalInvoiced, '₸${_purchaseSummary!.totalInvoiced}', theme),
-                  _analyticsStat(context.l10n.returned, '₸${_purchaseSummary!.totalReturned}', theme),
-                  _analyticsStat(context.l10n.netPurchaseSpend, '₸${_purchaseSummary!.netPurchaseSpend}', theme, highlighted: true),
-                  _analyticsStat(context.l10n.purchasedQuantity, '${_purchaseSummary!.totalPurchasedQuantity}', theme),
-                  _analyticsStat(context.l10n.weightedAvgCost, '₸${_purchaseSummary!.weightedAverageUnitCost}', theme),
-                  _analyticsStat(context.l10n.invoices, '${_purchaseSummary!.invoiceCount}', theme),
-                  _analyticsStat(context.l10n.returned, '${_purchaseSummary!.returnCount}', theme),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Current financials
-              Divider(color: theme.colorScheme.outlineVariant),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _analyticsStat(context.l10n.currentPaid, '₸${_purchaseSummary!.currentTotalPaid}', theme),
-                  const SizedBox(width: 24),
-                  _analyticsStat(context.l10n.outstanding, '₸${_purchaseSummary!.currentOutstanding}', theme),
-                ],
-              ),
-              if (_purchaseSummary!.firstPurchaseDate != null || _purchaseSummary!.lastPurchaseDate != null) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    if (_purchaseSummary!.firstPurchaseDate != null)
-                      _analyticsStat(context.l10n.firstPurchase, _purchaseSummary!.firstPurchaseDate!.substring(0, 10), theme),
-                    if (_purchaseSummary!.firstPurchaseDate != null && _purchaseSummary!.lastPurchaseDate != null)
-                      const SizedBox(width: 24),
-                    if (_purchaseSummary!.lastPurchaseDate != null)
-                      _analyticsStat(context.l10n.lastPurchase, _purchaseSummary!.lastPurchaseDate!.substring(0, 10), theme),
-                  ],
-                ),
-              ],
-              // Monthly spend
-              if (_purchaseSummary!.monthlySpend.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Divider(color: theme.colorScheme.outlineVariant),
-                const SizedBox(height: 12),
-                Text(context.l10n.monthlySpend, style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 8),
-                ..._purchaseSummary!.monthlySpend.map((m) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 70,
-                        child: Text(m.month, style: theme.textTheme.bodySmall),
-                      ),
-                      Expanded(
-                        child: LinearProgressIndicator(
-                          value: _maxMonthlySpend > 0
-                              ? (double.tryParse(m.amount) ?? 0) / _maxMonthlySpend
-                              : 0,
-                          minHeight: 14,
-                          borderRadius: BorderRadius.circular(4),
-                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 90,
-                        child: Text(
-                          '₸${m.amount}',
-                          style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
-                          textAlign: TextAlign.end,
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-              ],
-              // ── Product Purchase Detail ───────────────
-              const SizedBox(height: 16),
-              Divider(color: theme.colorScheme.outlineVariant),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(Icons.shopping_cart_outlined,
-                      size: 18, color: theme.colorScheme.primary),
-                  const SizedBox(width: 6),
-                  Text(context.l10n.productPurchaseDetail,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Search field
-              SizedBox(
-                height: 36,
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: context.l10n.searchProducts,
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onChanged: (value) {
-                    _productPurchaseSearch = value.isEmpty ? null : value;
-                    _productPurchasePage = 1;
-                    _loadProductPurchases();
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Product purchase list
-              if (_isLoadingProductPurchases)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: SizedBox(
-                      width: 24, height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                )
-              else if (_productPurchasesError != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
-                    children: [
-                      Text(_productPurchasesError!,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.error)),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: _loadProductPurchases,
-                        icon: const Icon(Icons.refresh, size: 16),
-                        label: Text(context.l10n.retry),
-                      ),
-                    ],
-                  ),
-                )
-              else if (_productPurchases.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(context.l10n.noProductPurchases,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                )
-              else ...[
-                ..._productPurchases.map((p) => InkWell(
-                  onTap: () => _showPriceHistoryDialog(p.productId, p.productName),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(p.productName,
-                                        style: theme.textTheme.bodyMedium?.copyWith(
-                                            fontWeight: FontWeight.w600)),
-                                    if (p.sku != null && p.sku!.isNotEmpty)
-                                      Text('SKU: ${p.sku}',
-                                          style: theme.textTheme.bodySmall?.copyWith(
-                                              color: theme.colorScheme.onSurfaceVariant)),
-                                  ],
-                                ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text('₸${p.netPurchaseSpend}',
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                          fontWeight: FontWeight.w700)),
-                                  Text('${context.l10n.netQty}: ${p.netPurchasedQuantity}',
-                                      style: theme.textTheme.bodySmall),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 4,
-                            children: [
-                              _analyticsStat(context.l10n.totalSpend, '₸${p.totalPurchaseSpend}', theme),
-                              _analyticsStat(context.l10n.qtyReturned, '${p.totalReturnedQuantity}', theme),
-                              _analyticsStat(context.l10n.avgCost, '₸${p.weightedAverageUnitCost}', theme),
-                              _analyticsStat(context.l10n.minMaxCost, '₸${p.minUnitCost} / ₸${p.maxUnitCost}', theme),
-                              _analyticsStat(context.l10n.invoices, '${p.invoiceCount}', theme),
-                              if (p.lastPurchaseDate != null)
-                                _analyticsStat(context.l10n.lastPurchase, p.lastPurchaseDate!.substring(0, 10), theme),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )),
-                // Load more / pagination
-                if (_productPurchases.length < _productPurchaseTotal)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Center(
-                      child: TextButton(
-                        onPressed: () {
-                          _productPurchasePage++;
-                          _loadProductPurchases();
-                        },
-                        child: Text(context.l10n.loadMore),
-                      ),
-                    ),
-                  ),
-              ],
-            ]
-            // Empty state
-            else
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(context.l10n.noPurchaseData,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  double get _maxMonthlySpend {
-    if (_purchaseSummary == null || _purchaseSummary!.monthlySpend.isEmpty) return 0;
-    return _purchaseSummary!.monthlySpend
-        .map((m) => double.tryParse(m.amount) ?? 0)
-        .reduce((a, b) => a > b ? a : b);
   }
 
   Widget _analyticsStat(String label, String value, ThemeData theme, {bool highlighted = false}) {
@@ -1888,23 +872,6 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
             )),
       ],
     );
-  }
-
-  // ── Price History Dialog ──────────────────────────────
-
-  Future<void> _showPriceHistoryDialog(String productId, String productName) async {
-    if (!mounted) return;
-    final repo = ref.read(suppliersRepositoryProvider);
-    final result = await repo.getPriceHistory(widget.supplierId, productId,
-        dateFrom: _purchaseDateFrom, dateTo: _purchaseDateTo);
-    if (!mounted) return;
-    if (result is SuppliersSuccess<SupplierPriceHistory>) {
-      _showPriceHistoryDialogContent(result.data);
-    } else if (result is SuppliersFailure<SupplierPriceHistory>) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.error.message)),
-      );
-    }
   }
 
   void _showPriceHistoryDialogContent(SupplierPriceHistory history) {
@@ -1985,324 +952,6 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
             child: Text(context.l10n.close),
           ),
         ],
-      ),
-    );
-  }
-
-  // ── Supplier Reliability Section ──────────────────────
-
-  Widget _buildReliabilitySection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.local_shipping_outlined,
-                    size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.supplierReliability,
-                    style: theme.textTheme.titleSmall),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_isLoadingReliability)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              )
-            else if (_reliabilityError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: [
-                    Text(
-                      _reliabilityError!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.error),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: _loadReliability,
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: Text(context.l10n.retry),
-                    ),
-                  ],
-                ),
-              )
-            else if (_reliability != null) ...[
-              // On-time delivery rate
-              Row(
-                children: [
-                  _analyticsStat(context.l10n.onTimeDeliveryRate, '${_reliability!.onTimeDeliveryRate}%', theme),
-                  const SizedBox(width: 16),
-                  _analyticsStat(context.l10n.avgLeadTime, '${_reliability!.averageLeadTimeDays} ${context.l10n.days}', theme),
-                ],
-              ),
-              if (_reliability!.minLeadTimeDays != null || _reliability!.maxLeadTimeDays != null) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    if (_reliability!.minLeadTimeDays != null)
-                      _analyticsStat(context.l10n.minLeadTime, '${_reliability!.minLeadTimeDays} ${context.l10n.days}', theme),
-                    if (_reliability!.minLeadTimeDays != null && _reliability!.maxLeadTimeDays != null)
-                      const SizedBox(width: 16),
-                    if (_reliability!.maxLeadTimeDays != null)
-                      _analyticsStat(context.l10n.maxLeadTime, '${_reliability!.maxLeadTimeDays} ${context.l10n.days}', theme),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 12),
-              Divider(color: theme.colorScheme.outlineVariant),
-              const SizedBox(height: 12),
-              // Order status breakdown
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  _analyticsStat(context.l10n.ordersReceived, '${_reliability!.ordersReceived}', theme),
-                  _analyticsStat(context.l10n.ordersPartiallyReceived, '${_reliability!.ordersPartiallyReceived}', theme),
-                  _analyticsStat(context.l10n.ordersCancelled, '${_reliability!.ordersCancelled}', theme),
-                  _analyticsStat(context.l10n.cancellationRate, '${_reliability!.cancellationRate}%', theme),
-                ],
-              ),
-              // Recent deliveries
-              if (_reliability!.recentDeliveries.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Divider(color: theme.colorScheme.outlineVariant),
-                const SizedBox(height: 12),
-                Text(context.l10n.recentDeliveries,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 8),
-                ..._reliability!.recentDeliveries.map((d) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Text(d.orderNumber,
-                            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          d.receiptDate != null ? d.receiptDate!.substring(0, 10) : '—',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                      SizedBox(
-                        width: 50,
-                        child: d.leadTimeDays != null
-                            ? Text('${d.leadTimeDays}d', style: theme.textTheme.bodySmall)
-                            : Text('—', style: theme.textTheme.bodySmall),
-                      ),
-                      SizedBox(
-                        width: 24,
-                        child: d.onTime == true
-                            ? const Icon(Icons.check_circle, size: 16, color: Colors.green)
-                            : d.onTime == false
-                                ? const Icon(Icons.cancel, size: 16, color: Colors.red)
-                                : const Icon(Icons.help_outline, size: 16, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                )),
-              ],
-            ]
-            else
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(context.l10n.noOrderData,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Return Analysis Section ──────────────────────────
-
-  Widget _buildReturnSummarySection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.assignment_return,
-                    size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.returnAnalysis,
-                    style: theme.textTheme.titleSmall),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_isLoadingReturnSummary)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              )
-            else if (_returnSummaryError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: [
-                    Text(
-                      _returnSummaryError!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.error),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: _loadReturnSummary,
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: Text(context.l10n.retry),
-                    ),
-                  ],
-                ),
-              )
-            else if (_returnSummary != null) ...[
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  _analyticsStat(context.l10n.returnedAmount, '₸${_returnSummary!.totalReturnedAmount}', theme),
-                  _analyticsStat(context.l10n.returnedQty, '${_returnSummary!.totalReturnedQuantity}', theme),
-                  _analyticsStat(context.l10n.amountReturnRate, '${_returnSummary!.amountReturnRate}%', theme),
-                  _analyticsStat(context.l10n.qtyReturnRate, '${_returnSummary!.quantityReturnRate}%', theme),
-                  _analyticsStat(context.l10n.returnCount, '${_returnSummary!.returnCount}', theme),
-                ],
-              ),
-              if (_returnSummary!.topReturnedProducts.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Divider(color: theme.colorScheme.outlineVariant),
-                const SizedBox(height: 8),
-                Text(context.l10n.topReturnedProducts,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 8),
-                ..._returnSummary!.topReturnedProducts.map((p) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Text(p.productName,
-                            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
-                      ),
-                      SizedBox(
-                        width: 50,
-                        child: Text('×${p.returnedQuantity}',
-                            style: theme.textTheme.bodySmall, textAlign: TextAlign.end),
-                      ),
-                      SizedBox(
-                        width: 90,
-                        child: Text('₸${p.returnedAmount}',
-                            style: theme.textTheme.bodySmall, textAlign: TextAlign.end),
-                      ),
-                    ],
-                  ),
-                )),
-              ],
-            ]
-            else
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(context.l10n.noReturns,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Products Section ────────────────────────────────────
-
-  Widget _buildProductsSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.inventory_2, size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(context.l10n.supplierProducts, style: theme.textTheme.titleSmall),
-                const Spacer(),
-                FilledButton.tonalIcon(
-                  onPressed: () => _showAddProductDialog(),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: Text(context.l10n.addProduct),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_supplierProducts.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(context.l10n.noProducts,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              )
-            else
-              ..._supplierProducts.map((sp) => ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: sp.isPreferred
-                        ? const Icon(Icons.star, size: 20, color: Colors.amber)
-                        : Icon(Icons.inventory_2, size: 20, color: theme.colorScheme.onSurfaceVariant),
-                    title: Text(sp.product.name),
-                    subtitle: Text([
-                      if (sp.product.sku != null) 'SKU: ${sp.product.sku}',
-                      if (sp.supplierSku != null) 'Sup: ${sp.supplierSku}',
-                    ].join(' • ')),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (sp.purchasePrice != null)
-                          Text('₸${sp.purchasePrice}',
-                              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                        const SizedBox(width: 8),
-                        PopupMenuButton<String>(
-                          onSelected: (value) {
-                            if (value == 'edit') _showEditProductDialog(sp);
-                            if (value == 'delete') _confirmDeleteProduct(sp);
-                          },
-                          itemBuilder: (context) => [
-                            PopupMenuItem(value: 'edit', child: Text(context.l10n.edit)),
-                            PopupMenuItem(value: 'delete', child: Text(context.l10n.delete)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  )),
-          ],
-        ),
       ),
     );
   }
