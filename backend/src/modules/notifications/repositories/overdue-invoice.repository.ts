@@ -20,10 +20,14 @@ export interface OverdueInvoiceRow {
  * Company-wide overdue purchase-invoice read model for Notifications V1.
  *
  * Criteria mirror SupplierAnalyticsService.getPaymentAging() exactly
- * (status IN (APPROVED, PAID), grandTotal - paidAmount > 0, deletedAt IS NULL,
- * dueDate < start of day) — the analytics service itself stays untouched.
- * Column-vs-column comparison (grandTotal - paidAmount > 0) is not expressible
- * in a Prisma `where`, hence the raw query, same as in the analytics service.
+ * (status IN (APPROVED, PAID), grandTotal - SUM(active allocations) > 0,
+ * deletedAt IS NULL, dueDate IS NOT NULL, daysOverdue >= 1) — the analytics
+ * service itself stays untouched. Payment coverage uses the canonical
+ * G9-B1 allocation source: SUM(SupplierPaymentAllocation.amount) where
+ * deletedAt IS NULL — NOT the legacy PurchaseInvoice.paidAmount cache.
+ * Column-vs-column comparison (grandTotal - allocatedAmount > 0) is not
+ * expressible in a Prisma `where`, hence the raw query, same as in the
+ * analytics service.
  */
 @Injectable()
 export class OverdueInvoiceRepository {
@@ -42,18 +46,28 @@ export class OverdueInvoiceRepository {
         s."name" AS "supplierName",
         pi."dueDate",
         pi."currency",
-        (pi."grandTotal" - pi."paidAmount")::text AS "outstanding",
+        (pi."grandTotal" - COALESCE(spa."allocatedAmount", 0))::text AS "outstanding",
         FLOOR(
           EXTRACT(EPOCH FROM (${startOfToday}::timestamp - pi."dueDate")) / 86400
         )::int AS "daysOverdue"
       FROM "PurchaseInvoice" pi
+      LEFT JOIN (
+        SELECT
+          "purchaseInvoiceId",
+          SUM(amount) AS "allocatedAmount"
+        FROM "SupplierPaymentAllocation"
+        WHERE "deletedAt" IS NULL
+        GROUP BY "purchaseInvoiceId"
+      ) spa ON spa."purchaseInvoiceId" = pi.id
       JOIN "Supplier" s ON s."id" = pi."supplierId"
       WHERE pi."companyId" = ${companyId}
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
-        AND (pi."grandTotal" - pi."paidAmount") > 0
+        AND (pi."grandTotal" - COALESCE(spa."allocatedAmount", 0)) > 0
         AND pi."dueDate" IS NOT NULL
-        AND pi."dueDate" < ${startOfToday}
+        AND FLOOR(
+          EXTRACT(EPOCH FROM (${startOfToday}::timestamp - pi."dueDate")) / 86400
+        )::int >= 1
       ORDER BY pi."dueDate" ASC
     `;
   }
