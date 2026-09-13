@@ -12,6 +12,7 @@ import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart
 import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_purchase_summary_models.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_credit_summary_models.dart';
 // ProductPurchaseListResponse is in the same file
 
 sealed class SuppliersResult<T> {
@@ -359,6 +360,21 @@ class SuppliersRepository {
       );
       return SuppliersSuccess(
           SupplierPaymentAging.fromJson(response.data!));
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  // ── G9-D1: Credit Summary (read-only, base currency) ──────
+
+  Future<SuppliersResult<SupplierCreditSummary>> getCreditSummary(
+      String supplierId) async {
+    try {
+      final response = await _api.get<Map<String, dynamic>>(
+        '/suppliers/$supplierId/credit-summary',
+      );
+      return SuppliersSuccess(
+          SupplierCreditSummary.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }

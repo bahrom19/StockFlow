@@ -1097,5 +1097,15 @@
   "productName": "Тауар",
   "orders": "Тапсырыстар",
   "averageReceipt": "Орташа чек",
-  "currencyLocked": "Валютаны қаржылық деректер жасалғанға дейін ғана өзгертуге болады."
+  "currencyLocked": "Валютаны қаржылық деректер жасалғанға дейін ғана өзгертуге болады.",
+  "creditSummary": "Кредиттік жиынтық",
+  "creditLimitLabel": "Кредит лимиті",
+  "availableCredit": "Қолжетімді кредит",
+  "utilizationPercent": "Пайдалану",
+  "creditSummaryCurrencyNote": "Барлық сомалар {currency} (компанияның базалық валютасы). Тек көру.",
+  "@creditSummaryCurrencyNote": {
+    "placeholders": {
+      "currency": {}
+    }
+  }
 }

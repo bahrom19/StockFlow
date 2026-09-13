@@ -12,12 +12,14 @@ import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart
 import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_purchase_summary_models.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_credit_summary_models.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/record_supplier_payment_sheet.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/supplier_header_card.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/supplier_contacts_section.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/supplier_addresses_section.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/supplier_performance_section.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/supplier_finance_section.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_credit_summary_section.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/supplier_invoices_section.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/supplier_purchase_analytics_section.dart';
 import 'package:stockflow/features/suppliers/presentation/widgets/supplier_order_pipeline_section.dart';
@@ -41,6 +43,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   List<SupplierContact> _contacts = [];
   List<SupplierAddress> _addresses = [];
   SupplierFinanceSummary? _financeSummary;
+  // G9-D1: read-only credit summary (base currency, no enforcement).
+  SupplierCreditSummary? _creditSummary;
+  bool _isLoadingCreditSummary = false;
+  String? _creditSummaryError;
   List<SupplierPayment> _payments = [];
   List<SupplierProduct> _supplierProducts = [];
   SupplierPurchaseSummary? _purchaseSummary;
@@ -173,6 +179,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     _loadPerformance();
     _loadOrderPipeline();
     _loadInvoices();
+    _loadCreditSummary();
   }
 
   Future<void> _loadProductPurchases() async {
@@ -312,6 +319,25 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     });
   }
 
+  Future<void> _loadCreditSummary() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingCreditSummary = true;
+      _creditSummaryError = null;
+    });
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.getCreditSummary(widget.supplierId);
+    if (!mounted) return;
+    setState(() {
+      if (result is SuppliersSuccess<SupplierCreditSummary>) {
+        _creditSummary = result.data;
+      } else if (result is SuppliersFailure<SupplierCreditSummary>) {
+        _creditSummaryError = result.error.message;
+      }
+      _isLoadingCreditSummary = false;
+    });
+  }
+
   // G5: Load purchase invoices for this supplier
   Future<void> _loadInvoices() async {
     if (!mounted) return;
@@ -437,6 +463,15 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                 companyCurrency: ref.read(companyCurrencyProvider),
                 onAddPayment: () => _showAddPaymentDialog(),
                 onVoidPayment: _voidPayment,
+              ),
+              const SizedBox(height: 24),
+
+              // ── G9-D1: Credit Summary (read-only) ────────────
+              SupplierCreditSummarySection(
+                creditSummary: _creditSummary,
+                isLoading: _isLoadingCreditSummary,
+                error: _creditSummaryError,
+                onRetry: _loadCreditSummary,
               ),
               const SizedBox(height: 24),
 
@@ -793,6 +828,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       repo.getPayments(widget.supplierId),
       repo.getPaymentAging(widget.supplierId),
       repo.getSupplierInvoiceList(widget.supplierId, page: _invoicePage, limit: 10),
+      repo.getCreditSummary(widget.supplierId),
     ]);
     if (!mounted) return;
     setState(() {
@@ -808,6 +844,10 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       if (results[3] is SuppliersSuccess<PurchaseInvoiceListResponse>) {
         _invoices = (results[3] as SuppliersSuccess<PurchaseInvoiceListResponse>).data.items;
         _invoiceTotal = (results[3] as SuppliersSuccess<PurchaseInvoiceListResponse>).data.total;
+      }
+      // G9-D1: keep the read-only credit summary in sync after payments.
+      if (results[4] is SuppliersSuccess<SupplierCreditSummary>) {
+        _creditSummary = (results[4] as SuppliersSuccess<SupplierCreditSummary>).data;
       }
     });
   }

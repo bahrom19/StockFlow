@@ -13,6 +13,8 @@ import 'package:stockflow/features/suppliers/domain/supplier_address_models.dart
 import 'package:stockflow/features/suppliers/domain/supplier_payment_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_product_models.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_purchase_summary_models.dart';
+import 'package:stockflow/features/suppliers/domain/supplier_credit_summary_models.dart';
+import 'package:stockflow/features/suppliers/presentation/widgets/supplier_credit_summary_section.dart';
 import 'package:stockflow/features/suppliers/presentation/screens/supplier_detail_screen.dart';
 
 /// G2 — SupplierDetailScreen widget/regression tests.
@@ -207,6 +209,16 @@ class _FakeSuppliersRepo extends SuppliersRepository {
   SuppliersResult<T> _failure<T>() =>
       SuppliersFailure<T>(const ServerFailure(message: 'backend exploded'));
 
+      // G9-D1: read-only credit summary fixture for the detail screen fake repo.
+  SupplierCreditSummary _creditSummaryFixture() => const SupplierCreditSummary(
+        supplierId: _supplierId,
+        creditLimit: '1000000',
+        outstandingAP: '150000',
+        availableCredit: '850000',
+        utilizationPercent: '15.00',
+        currency: 'KZT',
+      );
+
   @override
   Future<SuppliersResult<Supplier>> getById(String id) async {
     calls.add('getById');
@@ -214,6 +226,14 @@ class _FakeSuppliersRepo extends SuppliersRepository {
       await Future<void>.delayed(getByIdDelay!);
     }
     return getByIdFails ? _failure<Supplier>() : _success(_supplierFixture());
+  }
+
+  // G9-D1: avoid hitting the real network on the credit-summary call.
+  @override
+  Future<SuppliersResult<SupplierCreditSummary>> getCreditSummary(
+      String supplierId) async {
+    calls.add('getCreditSummary');
+    return _success<SupplierCreditSummary>(_creditSummaryFixture());
   }
 
   @override
@@ -437,10 +457,14 @@ void main() {
     expect(find.textContaining('Milk 1L'), findsWidgets);
     expect(find.textContaining('87.5'), findsWidgets);
 
-    // ── Order pipeline ──
+        // ── Order pipeline ──
     expect(find.textContaining('PO-1001'), findsWidgets);
     expect(find.textContaining('5000000'), findsWidgets); // totalOrderValue (hardcoded ₸ format)
 
+    // ── G9-D1: credit summary (read-only observability) ──
+    expect(find.textContaining('15.00'), findsWidgets); // utilizationPercent
+    expect(find.textContaining('850'), findsWidgets); // availableCredit
+    expect(find.byType(SupplierCreditSummarySection), findsWidgets);
 
     // ── All repository calls issued by the screen ──
     for (final expected in [
@@ -458,6 +482,7 @@ void main() {
       'getPerformance',
       'getOrderPipeline',
       'getSupplierInvoiceList',
+      'getCreditSummary',
     ]) {
       expect(repo.calls, contains(expected), reason: '$expected was not called');
     }

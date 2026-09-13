@@ -1097,5 +1097,15 @@
   "productName": "Товар",
   "orders": "Заказы",
   "averageReceipt": "Ср. чек",
-  "currencyLocked": "Валюту можно изменить только до создания финансовых данных."
+  "currencyLocked": "Валюту можно изменить только до создания финансовых данных.",
+  "creditSummary": "Кредитная сводка",
+  "creditLimitLabel": "Кредитный лимит",
+  "availableCredit": "Доступный кредит",
+  "utilizationPercent": "Использование",
+  "creditSummaryCurrencyNote": "Все суммы в {currency} (базовая валюта компании). Только просмотр.",
+  "@creditSummaryCurrencyNote": {
+    "placeholders": {
+      "currency": {}
+    }
+  }
 }

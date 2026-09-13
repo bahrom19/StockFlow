@@ -1097,5 +1097,15 @@
   "productName": "Product",
   "orders": "Orders",
   "averageReceipt": "Avg. Receipt",
-  "currencyLocked": "Currency can only be changed before any financial data is created."
+  "currencyLocked": "Currency can only be changed before any financial data is created.",
+  "creditSummary": "Credit Summary",
+  "creditLimitLabel": "Credit Limit",
+  "availableCredit": "Available Credit",
+  "utilizationPercent": "Utilization",
+  "creditSummaryCurrencyNote": "All amounts in {currency} (company base currency). Read-only.",
+  "@creditSummaryCurrencyNote": {
+    "placeholders": {
+      "currency": {}
+    }
+  }
 }
