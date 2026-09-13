@@ -3,18 +3,21 @@ import { SuppliersController } from './controllers/suppliers.controller';
 import { SupplierContactsController } from './controllers/supplier-contacts.controller';
 import { SupplierAddressesController } from './controllers/supplier-addresses.controller';
 import { SupplierPaymentsController } from './controllers/supplier-payments.controller';
+import { SupplierPaymentAllocationsController } from './controllers/supplier-payment-allocations.controller';
 import { SupplierProductsController } from './controllers/supplier-products.controller';
 import { SupplierAnalyticsController } from './controllers/supplier-analytics.controller';
 import { SuppliersService } from './services/suppliers.service';
 import { SupplierContactsService } from './services/supplier-contacts.service';
 import { SupplierAddressesService } from './services/supplier-addresses.service';
 import { SupplierPaymentsService } from './services/supplier-payments.service';
+import { SupplierPaymentAllocationsService } from './services/supplier-payment-allocations.service';
 import { SupplierProductsService } from './services/supplier-products.service';
 import { SupplierAnalyticsService } from './services/supplier-analytics.service';
 import { SuppliersRepository } from './repositories/suppliers.repository';
 import { SupplierContactsRepository } from './repositories/supplier-contacts.repository';
 import { SupplierAddressesRepository } from './repositories/supplier-addresses.repository';
 import { SupplierPaymentsRepository } from './repositories/supplier-payments.repository';
+import { SupplierPaymentAllocationsRepository } from './repositories/supplier-payment-allocations.repository';
 import { SupplierProductsRepository } from './repositories/supplier-products.repository';
 import { FinanceModule } from '../finance/finance.module';
 import { SharedModule } from '../shared/shared.module';
@@ -27,6 +30,7 @@ import { CompaniesModule } from '../companies/companies.module';
     SupplierContactsController,
     SupplierAddressesController,
     SupplierPaymentsController,
+    SupplierPaymentAllocationsController,
     SupplierProductsController,
     SupplierAnalyticsController,
   ],
@@ -39,10 +43,12 @@ import { CompaniesModule } from '../companies/companies.module';
     SupplierAddressesRepository,
     SupplierPaymentsService,
     SupplierPaymentsRepository,
+    SupplierPaymentAllocationsService,
+    SupplierPaymentAllocationsRepository,
     SupplierProductsService,
     SupplierProductsRepository,
     SupplierAnalyticsService,
   ],
-  exports: [SuppliersService],
+  exports: [SuppliersService, SupplierPaymentAllocationsService],
 })
 export class SuppliersModule {}

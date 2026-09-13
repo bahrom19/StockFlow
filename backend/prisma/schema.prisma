@@ -152,6 +152,7 @@ model Company {
   purchaseInvoices      PurchaseInvoice[]
   creditNotes           PurchaseCreditNote[]
   supplierPayments      SupplierPayment[]
+  supplierPaymentAllocations SupplierPaymentAllocation[]
   supplierProducts      SupplierProduct[]
   rfqs                  RFQ[]
   quotations            SupplierQuotation[]
@@ -492,6 +493,7 @@ model Supplier {
   purchaseInvoices   PurchaseInvoice[]
   quotations         SupplierQuotation[]
   payments           SupplierPayment[]
+  allocations        SupplierPaymentAllocation[]
   supplierProducts   SupplierProduct[]
 
   @@index([companyId])
@@ -1265,6 +1267,7 @@ model PurchaseInvoice {
   items           PurchaseInvoiceItem[]
   creditNotes     PurchaseCreditNote[]
   payments        SupplierPayment[]
+  allocations     SupplierPaymentAllocation[]
 
   @@index([companyId])
   @@index([purchaseOrderId])
@@ -1331,7 +1334,7 @@ model SupplierPayment {
   id                String         @id @default(uuid()) @db.Uuid
   companyId         String         @db.Uuid
   supplierId        String         @db.Uuid
-  purchaseInvoiceId String         @db.Uuid
+  purchaseInvoiceId String?        @db.Uuid
   paymentNumber     String         @db.VarChar(100)
   paymentDate       DateTime       @default(now())
   amount            Decimal        @db.Decimal(18, 4)
@@ -1348,10 +1351,11 @@ model SupplierPayment {
   deletedAt         DateTime?
   company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   supplier          Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
+  purchaseInvoice   PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
   cashAccount       CashAccount?   @relation(fields: [cashAccountId], references: [id], onDelete: SetNull)
   bankAccount       BankAccount?   @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
   createdByUser     User?          @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  allocations       SupplierPaymentAllocation[]
 
   @@index([companyId])
   @@index([supplierId])
@@ -1359,6 +1363,29 @@ model SupplierPayment {
   @@index([paymentDate])
   @@index([companyId, deletedAt])
   @@unique([companyId, paymentNumber])
+}
+
+model SupplierPaymentAllocation {
+  id                String    @id @default(uuid()) @db.Uuid
+  companyId         String    @db.Uuid
+  supplierId        String    @db.Uuid
+  paymentId         String    @db.Uuid
+  purchaseInvoiceId String?   @db.Uuid
+  amount            Decimal   @db.Decimal(18, 4)
+  rowVersion        Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplier          Supplier  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  payment           SupplierPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  purchaseInvoice   PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([supplierId])
+  @@index([paymentId])
+  @@index([purchaseInvoiceId])
+  @@index([companyId, deletedAt])
 }
 
 model SupplierProduct {

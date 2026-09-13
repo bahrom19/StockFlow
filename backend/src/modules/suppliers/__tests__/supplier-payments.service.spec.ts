@@ -5,6 +5,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { SupplierPaymentsService } from '../services/supplier-payments.service';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierPaymentsRepository } from '../repositories/supplier-payments.repository';
+import { SupplierPaymentAllocationsRepository } from '../repositories/supplier-payment-allocations.repository';
 import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { DocumentSequenceService } from '../../shared/services/document-sequence.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
@@ -80,6 +81,7 @@ describe('SupplierPaymentsService', () => {
   let mockPrisma: any;
   let mockSuppliersRepo: any;
   let mockPaymentsRepo: any;
+  let mockAllocationsRepo: any;
   let mockGlEngine: any;
   let mockDocSeq: any;
   let mockCompanies: any;
@@ -103,6 +105,24 @@ describe('SupplierPaymentsService', () => {
           _count: { id: 0 },
         }),
         findFirst: jest.fn().mockResolvedValue(null),
+      },
+      supplierPaymentAllocation: {
+        create: jest.fn().mockResolvedValue({
+          id: 'alloc-1',
+          companyId,
+          supplierId,
+          paymentId,
+          purchaseInvoiceId: invoiceId,
+          amount: new Decimal('50000'),
+          rowVersion: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+        }),
+        aggregate: jest.fn().mockResolvedValue({
+          _sum: { amount: new Decimal('0') },
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       purchaseReturn: {
         aggregate: jest.fn().mockResolvedValue({
@@ -155,6 +175,28 @@ describe('SupplierPaymentsService', () => {
       softDelete: jest.fn().mockResolvedValue({}),
     };
 
+    // G9-A: allocation repo mock.
+    mockAllocationsRepo = {
+      create: jest.fn().mockResolvedValue({
+        id: 'alloc-1',
+        companyId,
+        supplierId,
+        paymentId,
+        purchaseInvoiceId: invoiceId,
+        amount: new Decimal('50000'),
+        rowVersion: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      }),
+      findByPayment: jest.fn().mockResolvedValue([]),
+      findByInvoice: jest.fn().mockResolvedValue([]),
+      sumAllocatedByPayment: jest.fn().mockResolvedValue(0),
+      sumAllocatedByInvoice: jest.fn().mockResolvedValue(0),
+      softDeleteByPayment: jest.fn().mockResolvedValue(0),
+      findById: jest.fn().mockResolvedValue(null),
+    };
+
     mockGlEngine = {
       post: jest.fn().mockResolvedValue({ id: 'journal-1', entryNumber: 1, status: 'POSTED', totalDebit: '50000', totalCredit: '50000' }),
     };
@@ -189,6 +231,7 @@ describe('SupplierPaymentsService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: SuppliersRepository, useValue: mockSuppliersRepo },
         { provide: SupplierPaymentsRepository, useValue: mockPaymentsRepo },
+        { provide: SupplierPaymentAllocationsRepository, useValue: mockAllocationsRepo },
         { provide: GlEngineService, useValue: mockGlEngine },
         { provide: DocumentSequenceService, useValue: mockDocSeq },
         { provide: AuditLogService, useValue: mockAuditLog },
