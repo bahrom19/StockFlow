@@ -27,6 +27,8 @@ describe('SuppliersService', () => {
     website: null,
     notes: null,
     isActive: true,
+    defaultDueDays: null,
+    creditLimit: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
@@ -237,5 +239,136 @@ describe('SuppliersService', () => {
     expect(mockRepo.findAll).toHaveBeenCalledWith(
       expect.objectContaining({ companyId: 'comp-1' }),
     );
+  });
+
+  // ─────────────────────────────────────────────
+  // G9-C: SUPPLIER TERMS & CREDIT FOUNDATION
+  // ─────────────────────────────────────────────
+  describe('G9-C supplier terms (defaultDueDays / creditLimit)', () => {
+    it('creates a supplier with defaultDueDays and creditLimit', async () => {
+      mockRepo.create.mockResolvedValue({
+        ...baseSupplier,
+        defaultDueDays: 30,
+        creditLimit: new Prisma.Decimal('1000000'),
+      } as any);
+
+      const result = await service.create(
+        {
+          companyName: 'Terms Co',
+          defaultDueDays: 30,
+          creditLimit: 1000000,
+        } as any,
+        currentUser,
+      );
+
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          defaultDueDays: 30,
+          creditLimit: 1000000,
+        }),
+        mockTx,
+      );
+      expect(result.defaultDueDays).toBe(30);
+      expect(result.creditLimit).toBe('1000000');
+    });
+
+    it('creates a supplier without terms (no implicit defaults)', async () => {
+      mockRepo.create.mockResolvedValue(baseSupplier as any);
+
+      const result = await service.create(
+        { companyName: 'Plain Co' } as any,
+        currentUser,
+      );
+
+      const data = mockRepo.create.mock.calls[0]?.[0] as any;
+      expect(data.defaultDueDays).toBeUndefined();
+      expect(data.creditLimit).toBeUndefined();
+      expect(result.defaultDueDays).toBeNull();
+      expect(result.creditLimit).toBeNull();
+    });
+
+    it('updates defaultDueDays and creditLimit', async () => {
+      mockRepo.findById.mockResolvedValue(baseSupplier as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseSupplier,
+        defaultDueDays: 45,
+        creditLimit: new Prisma.Decimal('250000.5'),
+      } as any);
+
+      const result = await service.update(
+        'supp-1',
+        { defaultDueDays: 45, creditLimit: 250000.5 } as any,
+        currentUser,
+      );
+
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'supp-1',
+        expect.objectContaining({
+          defaultDueDays: 45,
+          creditLimit: 250000.5,
+        }),
+        'comp-1',
+        0,
+        mockTx,
+      );
+      expect(result.defaultDueDays).toBe(45);
+      expect(result.creditLimit).toBe('250000.5');
+    });
+
+    it('does not touch terms when they are not provided on update', async () => {
+      mockRepo.findById.mockResolvedValue(baseSupplier as any);
+      mockRepo.update.mockResolvedValue(baseSupplier as any);
+
+      await service.update('supp-1', { notes: 'x' } as any, currentUser);
+
+      const data = mockRepo.update.mock.calls[0]?.[1] as any;
+      expect(data.defaultDueDays).toBeUndefined();
+      expect(data.creditLimit).toBeUndefined();
+    });
+
+    it('keeps tenant isolation on terms updates', async () => {
+      mockRepo.findById.mockResolvedValue(null);
+      await expect(
+        service.update(
+          'supp-1',
+          { defaultDueDays: 30 } as any,
+          { ...currentUser, companyId: 'other-comp' },
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    describe('DTO validation', () => {
+      const plainToInstance = require('class-transformer').plainToInstance;
+      const { validate } = require('class-validator');
+      const { CreateSupplierDto } = require('../dto/create-supplier.dto');
+
+      async function validateDto(body: Record<string, unknown>) {
+        const dto = plainToInstance(CreateSupplierDto, body);
+        return validate(dto, { skipMissingProperties: true });
+      }
+
+      it('accepts defaultDueDays = 0 and positive integers', async () => {
+        expect(await validateDto({ defaultDueDays: 0 })).toHaveLength(0);
+        expect(await validateDto({ defaultDueDays: 30 })).toHaveLength(0);
+      });
+
+      it('rejects negative and non-integer defaultDueDays', async () => {
+        expect(await validateDto({ defaultDueDays: -1 })).not.toHaveLength(0);
+        expect(await validateDto({ defaultDueDays: 1.5 })).not.toHaveLength(0);
+      });
+
+      it('accepts creditLimit = 0 and positive decimals', async () => {
+        expect(await validateDto({ creditLimit: 0 })).toHaveLength(0);
+        expect(await validateDto({ creditLimit: 1000000.5 })).toHaveLength(0);
+      });
+
+      it('rejects negative creditLimit', async () => {
+        expect(await validateDto({ creditLimit: -1 })).not.toHaveLength(0);
+      });
+
+      it('allows both fields to be omitted', async () => {
+        expect(await validateDto({ companyName: 'X' })).toHaveLength(0);
+      });
+    });
   });
 });

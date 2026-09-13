@@ -1,11 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
+  Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateSupplierDto {
   /**
@@ -52,6 +56,29 @@ export class CreateSupplierDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  /**
+   * G9-C: default payment term (in whole days) used ONLY when creating a
+   * NEW PurchaseInvoice without an explicit dueDate
+   * (dueDate = invoiceDate + defaultDueDays). Never applied retroactively.
+   */
+  @ApiPropertyOptional({ example: 30 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  defaultDueDays?: number;
+
+  /**
+   * G9-C: maximum outstanding AP exposure. Data-only in G9-C v1 —
+   * stored and returned, but not enforced anywhere.
+   */
+  @ApiPropertyOptional({ example: '1000000.0000' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  creditLimit?: number;
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()

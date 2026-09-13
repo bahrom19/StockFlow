@@ -25,6 +25,21 @@ export class SupplierEntity {
   @ApiPropertyOptional({ example: 'Preferred supplier' })
   notes!: string | null;
 
+  @ApiPropertyOptional({
+    example: 30,
+    description:
+      'Default payment term in days for NEW purchase invoices (G9-C). ' +
+      'Applied only at invoice creation when no explicit dueDate is given; never retroactive.',
+  })
+  defaultDueDays!: number | null;
+
+  @ApiPropertyOptional({
+    example: '1000000.0000',
+    description:
+      'Maximum outstanding AP exposure. Data-only in G9-C v1 (no enforcement).',
+  })
+  creditLimit!: string | null;
+
   @ApiProperty({ example: true })
   isActive!: boolean;
 

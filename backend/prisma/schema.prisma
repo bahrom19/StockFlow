@@ -481,6 +481,13 @@ model Supplier {
   website       String?           @db.VarChar(255)
   notes         String?           @db.Text
   isActive      Boolean           @default(true)
+  // G9-C: supplier terms & credit foundation (data-only, no enforcement).
+  // defaultDueDays: default number of days until payment for NEW purchase
+  // invoices (dueDate = invoiceDate + defaultDueDays) when no explicit
+  // dueDate is provided. Never applied retroactively.
+  defaultDueDays Int?
+  // creditLimit: maximum outstanding AP exposure (informational in G9-C v1).
+  creditLimit   Decimal?          @db.Decimal(18, 4)
   rowVersion    Int               @default(0)
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt

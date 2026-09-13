@@ -13,6 +13,8 @@ export class SupplierMapper {
       website: supplier.website,
       notes: supplier.notes,
       isActive: supplier.isActive,
+      defaultDueDays: supplier.defaultDueDays,
+      creditLimit: supplier.creditLimit?.toString() ?? null,
       createdAt: supplier.createdAt,
       updatedAt: supplier.updatedAt,
       deletedAt: supplier.deletedAt,

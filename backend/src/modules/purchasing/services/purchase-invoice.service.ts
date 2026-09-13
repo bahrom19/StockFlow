@@ -75,6 +75,26 @@ export class PurchaseInvoiceService {
         );
       }
 
+      // G9-C: supplier terms & credit foundation.
+      // Resolve the due date with explicit precedence rules:
+      //   1. An explicitly provided dto.dueDate ALWAYS wins.
+      //   2. Otherwise fall back to supplier.defaultDueDays:
+      //      dueDate = invoiceDate + defaultDueDays days.
+      //   3. Otherwise the invoice stays undated (dueDate = null) and keeps
+      //      landing in the G9-B2.1 `undated` aging bucket.
+      // supplier.defaultDueDays is a write-time default only: changing it
+      // never mutates already-created invoices (no retroactive recalc).
+      const invoiceDate = dto.invoiceDate ? new Date(dto.invoiceDate) : new Date();
+      const supplier = await tx.supplier.findFirst({
+        where: { id: dto.supplierId, companyId, deletedAt: null },
+        select: { defaultDueDays: true },
+      });
+      let dueDate: Date | null = dto.dueDate ? new Date(dto.dueDate) : null;
+      if (dueDate === null && supplier?.defaultDueDays != null) {
+        dueDate = new Date(invoiceDate.getTime());
+        dueDate.setUTCDate(dueDate.getUTCDate() + supplier.defaultDueDays);
+      }
+
       let subtotal = new Decimal(0);
       let totalDiscount = new Decimal(0);
       let totalTax = new Decimal(0);
@@ -115,8 +135,8 @@ export class PurchaseInvoiceService {
       const invoice = await this.repository.create(
         {
           invoiceNumber,
-          invoiceDate: dto.invoiceDate ? new Date(dto.invoiceDate) : new Date(),
-          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+          invoiceDate,
+          dueDate,
           status: PurchaseInvoiceStatus.DRAFT,
           subtotal,
           discountAmount: totalDiscount,

@@ -81,6 +81,13 @@ export class SuppliersService {
           website: createSupplierDto.website,
           notes: createSupplierDto.notes,
           isActive: createSupplierDto.isActive ?? true,
+          // G9-C: supplier terms & credit foundation (data-only).
+          defaultDueDays: createSupplierDto.defaultDueDays,
+          creditLimit: createSupplierDto.creditLimit as
+            | Prisma.Decimal
+            | string
+            | number
+            | undefined,
         } as Prisma.SupplierCreateInput,
         tx,
       );
@@ -199,6 +206,14 @@ export class SuppliersService {
             website: updateSupplierDto.website,
             notes: updateSupplierDto.notes,
             isActive: updateSupplierDto.isActive,
+            // G9-C: undefined = leave unchanged; null clears the value.
+            defaultDueDays: updateSupplierDto.defaultDueDays,
+            creditLimit: updateSupplierDto.creditLimit as
+              | Prisma.Decimal
+              | string
+              | number
+              | null
+              | undefined,
           } as Prisma.SupplierUpdateInput,
           currentUser.companyId,
           rowVer,
@@ -245,6 +260,9 @@ export class SuppliersService {
       phone: supplier.phone,
       website: supplier.website,
       notes: supplier.notes,
+      // G9-C: supplier terms & credit foundation (read-model mapping).
+      defaultDueDays: supplier.defaultDueDays,
+      creditLimit: supplier.creditLimit?.toString() ?? null,
       isActive: supplier.isActive,
       createdAt: supplier.createdAt,
       updatedAt: supplier.updatedAt,

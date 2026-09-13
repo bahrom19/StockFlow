@@ -113,7 +113,10 @@ describe('PurchaseInvoiceService', () => {
     };
 
     it('should create invoice from purchase order', async () => {
-      const mockTx = { purchaseInvoiceItem: { create: jest.fn() } };
+      const mockTx = {
+        purchaseInvoiceItem: { create: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(basePo as any);
       mockRepo.create.mockResolvedValue(baseInvoice as any);
@@ -194,7 +197,10 @@ describe('PurchaseInvoiceService', () => {
 
     it('should default to KZT when creating invoice from PO without specifying currency', async () => {
       const poWithUsd = { ...basePo, currency: 'USD' };
-      const mockTx = { purchaseInvoiceItem: { create: jest.fn() } };
+      const mockTx = {
+        purchaseInvoiceItem: { create: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
       mockRepo.create.mockResolvedValue({ ...baseInvoice, currency: 'USD' } as any);
@@ -209,7 +215,10 @@ describe('PurchaseInvoiceService', () => {
 
     it('should use PO currency when invoice currency matches PO', async () => {
       const poWithUsd = { ...basePo, currency: 'USD' };
-      const mockTx = { purchaseInvoiceItem: { create: jest.fn() } };
+      const mockTx = {
+        purchaseInvoiceItem: { create: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
       mockRepo.create.mockResolvedValue({ ...baseInvoice, currency: 'USD' } as any);
@@ -228,7 +237,10 @@ describe('PurchaseInvoiceService', () => {
 
     it('should reject when invoice currency mismatches PO currency', async () => {
       const poWithUsd = { ...basePo, currency: 'USD' };
-      const mockTx = { purchaseInvoiceItem: { create: jest.fn() } };
+      const mockTx = {
+        purchaseInvoiceItem: { create: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
 
@@ -245,7 +257,10 @@ describe('PurchaseInvoiceService', () => {
 
     it('should reject when KZT PO gets USD invoice', async () => {
       const poWithKzt = { ...basePo, currency: 'KZT' };
-      const mockTx = { purchaseInvoiceItem: { create: jest.fn() } };
+      const mockTx = {
+        purchaseInvoiceItem: { create: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithKzt as any);
 
@@ -381,6 +396,101 @@ describe('PurchaseInvoiceService', () => {
           companyId,
         ),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ── G9-C: SUPPLIER TERMS (defaultDueDays) ─────────────────────
+  describe('dueDate resolution (G9-C supplier terms)', () => {
+    const dueDto: CreatePurchaseInvoiceDto = {
+      purchaseOrderId: poId,
+      supplierId,
+      invoiceDate: '2026-09-01T00:00:00.000Z',
+      items: [{ productId, quantity: 10, unitCost: 50.0, taxPercent: 12 }],
+    };
+
+    function txWithSupplier(defaultDueDays: number | null) {
+      return {
+        purchaseInvoiceItem: { create: jest.fn() },
+        supplier: {
+          findFirst: jest
+            .fn()
+            .mockResolvedValue(
+              defaultDueDays === null ? null : { defaultDueDays },
+            ),
+        },
+      };
+    }
+
+    function baseCreate() {
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockRepo.create.mockResolvedValue(baseInvoice as any);
+    }
+
+    it('uses explicit dto.dueDate verbatim and ignores supplier.defaultDueDays', async () => {
+      const mockTx = txWithSupplier(30);
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      baseCreate();
+
+      await service.create(
+        { ...dueDto, dueDate: '2026-09-15T00:00:00.000Z' },
+        userId,
+        companyId,
+      );
+
+      const data = mockRepo.create.mock.calls[0]?.[0] as any;
+      expect(data.dueDate).toEqual(new Date('2026-09-15T00:00:00.000Z'));
+    });
+
+    it('calculates dueDate = invoiceDate + defaultDueDays when dto.dueDate is absent', async () => {
+      const mockTx = txWithSupplier(30);
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      baseCreate();
+
+      await service.create(dueDto, userId, companyId);
+
+      const data = mockRepo.create.mock.calls[0]?.[0] as any;
+      expect(data.invoiceDate).toEqual(new Date('2026-09-01T00:00:00.000Z'));
+      expect(data.dueDate).toEqual(new Date('2026-10-01T00:00:00.000Z'));
+    });
+
+    it('keeps dueDate null when dto.dueDate is absent and supplier has no defaultDueDays', async () => {
+      const mockTx = txWithSupplier(null);
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      baseCreate();
+
+      await service.create(dueDto, userId, companyId);
+
+      const data = mockRepo.create.mock.calls[0]?.[0] as any;
+      expect(data.dueDate).toBeNull();
+    });
+
+    it('scopes the supplier lookup to the authenticated company', async () => {
+      const mockTx = {
+        purchaseInvoiceItem: { create: jest.fn() },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ defaultDueDays: 30 }),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      baseCreate();
+
+      await service.create(dueDto, userId, companyId);
+
+      expect(mockTx.supplier.findFirst).toHaveBeenCalledWith({
+        where: { id: supplierId, companyId, deletedAt: null },
+        select: { defaultDueDays: true },
+      });
+    });
+
+    it('treats defaultDueDays = 0 as same-day dueDate (not a null fallback)', async () => {
+      const mockTx = txWithSupplier(0);
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      baseCreate();
+
+      await service.create(dueDto, userId, companyId);
+
+      const data = mockRepo.create.mock.calls[0]?.[0] as any;
+      expect(data.dueDate).toEqual(new Date('2026-09-01T00:00:00.000Z'));
     });
   });
 });
