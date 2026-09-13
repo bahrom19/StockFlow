@@ -6,6 +6,7 @@ import { SupplierPaymentsController } from './controllers/supplier-payments.cont
 import { SupplierPaymentAllocationsController } from './controllers/supplier-payment-allocations.controller';
 import { SupplierProductsController } from './controllers/supplier-products.controller';
 import { SupplierAnalyticsController } from './controllers/supplier-analytics.controller';
+import { SupplierStatementController } from './controllers/supplier-statement.controller';
 import { SuppliersService } from './services/suppliers.service';
 import { SupplierContactsService } from './services/supplier-contacts.service';
 import { SupplierAddressesService } from './services/supplier-addresses.service';
@@ -13,6 +14,8 @@ import { SupplierPaymentsService } from './services/supplier-payments.service';
 import { SupplierPaymentAllocationsService } from './services/supplier-payment-allocations.service';
 import { SupplierProductsService } from './services/supplier-products.service';
 import { SupplierAnalyticsService } from './services/supplier-analytics.service';
+import { SupplierStatementService } from './services/supplier-statement.service';
+import { SupplierStatementRepository } from './repositories/supplier-statement.repository';
 import { SuppliersRepository } from './repositories/suppliers.repository';
 import { SupplierContactsRepository } from './repositories/supplier-contacts.repository';
 import { SupplierAddressesRepository } from './repositories/supplier-addresses.repository';
@@ -33,6 +36,7 @@ import { CompaniesModule } from '../companies/companies.module';
     SupplierPaymentAllocationsController,
     SupplierProductsController,
     SupplierAnalyticsController,
+    SupplierStatementController,
   ],
   providers: [
     SuppliersService,
@@ -48,6 +52,8 @@ import { CompaniesModule } from '../companies/companies.module';
     SupplierProductsService,
     SupplierProductsRepository,
     SupplierAnalyticsService,
+    SupplierStatementService,
+    SupplierStatementRepository,
   ],
   exports: [SuppliersService, SupplierPaymentAllocationsService],
 })
