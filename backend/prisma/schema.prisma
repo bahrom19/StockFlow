@@ -1035,7 +1035,7 @@ model PurchaseOrder {
   id              String              @id @default(uuid()) @db.Uuid
   companyId       String              @db.Uuid
   supplierId      String              @db.Uuid
-  orderNumber     String              @unique @db.VarChar(100)
+  orderNumber     String              @db.VarChar(100)
   orderDate       DateTime            @default(now())
   expectedDate    DateTime?
   status          PurchaseOrderStatus @default(DRAFT)
@@ -1070,6 +1070,7 @@ model PurchaseOrder {
   @@index([companyId, status])
   @@index([companyId, orderDate])
   @@index([supplierId, companyId])
+  @@unique([companyId, orderNumber])
 }
 
 model PurchaseOrderItem {
@@ -1100,7 +1101,7 @@ model GoodsReceipt {
   id              String            @id @default(uuid()) @db.Uuid
   companyId       String            @db.Uuid
   purchaseOrderId String            @db.Uuid
-  receiptNumber   String            @unique @db.VarChar(100)
+  receiptNumber   String            @db.VarChar(100)
   receiptDate     DateTime          @default(now())
   warehouseId     String            @db.Uuid
   status          GoodsReceiptStatus @default(DRAFT)
@@ -1125,6 +1126,7 @@ model GoodsReceipt {
   @@index([companyId, deletedAt])
   @@index([companyId, status])
   @@index([companyId, receiptDate])
+  @@unique([companyId, receiptNumber])
 }
 
 model GoodsReceiptItem {
@@ -1151,7 +1153,7 @@ model PurchaseReturn {
   id              String              @id @default(uuid()) @db.Uuid
   companyId       String              @db.Uuid
   supplierId      String              @db.Uuid
-  returnNumber    String              @unique @db.VarChar(100)
+  returnNumber    String              @db.VarChar(100)
   returnDate      DateTime            @default(now())
   warehouseId     String              @db.Uuid
   status          PurchaseReturnStatus @default(DRAFT)
@@ -1184,6 +1186,7 @@ model PurchaseReturn {
   @@index([companyId, deletedAt])
   @@index([companyId, status])
   @@index([companyId, returnDate])
+  @@unique([companyId, returnNumber])
 }
 
 model PurchaseReturnItem {
@@ -1237,7 +1240,7 @@ model PurchaseInvoice {
   companyId       String                 @db.Uuid
   purchaseOrderId String                 @db.Uuid
   supplierId      String                 @db.Uuid
-  invoiceNumber   String                 @unique @db.VarChar(100)
+  invoiceNumber   String                 @db.VarChar(100)
   invoiceDate     DateTime               @default(now())
   dueDate         DateTime?
   status          PurchaseInvoiceStatus  @default(DRAFT)
@@ -1273,6 +1276,7 @@ model PurchaseInvoice {
   @@index([companyId, deletedAt])
   @@index([companyId, status])
   @@index([companyId, invoiceDate])
+  @@unique([companyId, invoiceNumber])
 }
 
 model PurchaseInvoiceItem {
@@ -1303,7 +1307,7 @@ model PurchaseCreditNote {
   id                String    @id @default(uuid()) @db.Uuid
   companyId         String    @db.Uuid
   purchaseInvoiceId String    @db.Uuid
-  creditNoteNumber  String    @unique @db.VarChar(100)
+  creditNoteNumber  String    @db.VarChar(100)
   creditNoteDate    DateTime  @default(now())
   amount            Decimal   @db.Decimal(18, 4)
   reason            String?   @db.Text
@@ -1328,7 +1332,7 @@ model SupplierPayment {
   companyId         String         @db.Uuid
   supplierId        String         @db.Uuid
   purchaseInvoiceId String         @db.Uuid
-  paymentNumber     String         @unique @db.VarChar(100)
+  paymentNumber     String         @db.VarChar(100)
   paymentDate       DateTime       @default(now())
   amount            Decimal        @db.Decimal(18, 4)
   method            PaymentMethod
@@ -1354,6 +1358,7 @@ model SupplierPayment {
   @@index([purchaseInvoiceId])
   @@index([paymentDate])
   @@index([companyId, deletedAt])
+  @@unique([companyId, paymentNumber])
 }
 
 model SupplierProduct {
@@ -1385,7 +1390,7 @@ model SupplierProduct {
 model RFQ {
   id              String    @id @default(uuid()) @db.Uuid
   companyId       String    @db.Uuid
-  rfqNumber       String    @unique @db.VarChar(100)
+  rfqNumber       String    @db.VarChar(100)
   rfqDate         DateTime  @default(now())
   expectedDate    DateTime?
   status          RFQStatus @default(DRAFT)
@@ -1406,6 +1411,7 @@ model RFQ {
   @@index([status])
   @@index([createdAt])
   @@index([companyId, deletedAt])
+  @@unique([companyId, rfqNumber])
   @@index([companyId, status])
 }
 
@@ -1430,7 +1436,7 @@ model SupplierQuotation {
   companyId       String          @db.Uuid
   rfqId           String          @db.Uuid
   supplierId      String          @db.Uuid
-  quotationNumber String          @unique @db.VarChar(100)
+  quotationNumber String          @db.VarChar(100)
   quotationDate   DateTime        @default(now())
   validUntil      DateTime?
   status          QuotationStatus @default(DRAFT)
@@ -1459,6 +1465,7 @@ model SupplierQuotation {
   @@index([createdAt])
   @@index([companyId, deletedAt])
   @@index([companyId, status])
+  @@unique([companyId, quotationNumber])
 }
 
 model SupplierQuotationItem {

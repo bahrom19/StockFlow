@@ -110,6 +110,22 @@ describe('GlobalExceptionFilter', () => {
     expect(body.message).toBe('A supplier with this BIN already exists');
   });
 
+  it('P2002 with supplier paymentNumber target → 409 (G8 composite unique)', () => {
+    const { host, statusMock, jsonMock } = createHost();
+    filter.catch(
+      p2002({ target: ['companyId', 'paymentNumber'] }),
+      host,
+    );
+
+    expect(statusMock).toHaveBeenCalledWith(409);
+    const body = jsonMock.mock.calls[0][0];
+    expect(body.statusCode).toBe(409);
+    expect(body.success).toBe(false);
+    expect(body.message).toBe(
+      'A record with the same unique value already exists',
+    );
+  });
+
   it('P2002 with unknown target → generic message', () => {
     const { host, jsonMock } = createHost();
     filter.catch(
