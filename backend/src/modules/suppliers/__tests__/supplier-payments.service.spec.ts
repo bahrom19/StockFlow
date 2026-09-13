@@ -104,6 +104,7 @@ describe('SupplierPaymentsService', () => {
           _sum: { amount: new Decimal('0') },
           _count: { id: 0 },
         }),
+        count: jest.fn().mockResolvedValue(0),
         findFirst: jest.fn().mockResolvedValue(null),
       },
       supplierPaymentAllocation: {
@@ -1003,6 +1004,98 @@ describe('SupplierPaymentsService', () => {
       await expect(
         service.getFinanceSummary(supplierId, companyId),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    // ─────────────────────────────────────────────
+    // F-1: Return status filtering
+    // ─────────────────────────────────────────────
+
+    it('should NOT reduce AP for DRAFT returns (F-1)', async () => {
+      // Invoice = 100,000, allocation = 40,000, return = 20,000 DRAFT
+      // Expected: AP = 60,000 (DRAFT return does not reduce AP)
+      mockPrisma.purchaseInvoice.aggregate.mockResolvedValue({
+        _sum: { grandTotal: new Decimal('100000') },
+        _count: { id: 1 },
+      });
+      mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal('40000') },
+      });
+      mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+        _sum: { grandTotal: new Decimal('0') }, // DRAFT not counted
+      });
+
+      const result = await service.getFinanceSummary(supplierId, companyId);
+
+      expect(result.totalInvoiced).toBe('100000');
+      expect(result.totalPaid).toBe('40000');
+      expect(result.totalReturned).toBe('0'); // DRAFT return NOT counted
+      expect(result.outstanding).toBe('60000');
+    });
+
+    it('should reduce AP for APPROVED returns (F-1)', async () => {
+      // Invoice = 100,000, allocation = 40,000, return = 20,000 APPROVED
+      // Expected: AP = 40,000
+      mockPrisma.purchaseInvoice.aggregate.mockResolvedValue({
+        _sum: { grandTotal: new Decimal('100000') },
+        _count: { id: 1 },
+      });
+      mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal('40000') },
+      });
+      mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+        _sum: { grandTotal: new Decimal('20000') }, // APPROVED counted
+      });
+
+      const result = await service.getFinanceSummary(supplierId, companyId);
+
+      expect(result.totalInvoiced).toBe('100000');
+      expect(result.totalPaid).toBe('40000');
+      expect(result.totalReturned).toBe('20000');
+      expect(result.outstanding).toBe('40000');
+    });
+
+    it('should reduce AP for COMPLETED returns (F-1)', async () => {
+      // Invoice = 100,000, allocation = 40,000, return = 20,000 COMPLETED
+      // Expected: AP = 40,000
+      mockPrisma.purchaseInvoice.aggregate.mockResolvedValue({
+        _sum: { grandTotal: new Decimal('100000') },
+        _count: { id: 1 },
+      });
+      mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal('40000') },
+      });
+      mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+        _sum: { grandTotal: new Decimal('20000') }, // COMPLETED counted
+      });
+
+      const result = await service.getFinanceSummary(supplierId, companyId);
+
+      expect(result.totalInvoiced).toBe('100000');
+      expect(result.totalPaid).toBe('40000');
+      expect(result.totalReturned).toBe('20000');
+      expect(result.outstanding).toBe('40000');
+    });
+
+    it('should NOT reduce AP for CANCELLED returns (F-1)', async () => {
+      // Invoice = 100,000, allocation = 40,000, return = 20,000 CANCELLED
+      // Expected: AP = 60,000
+      mockPrisma.purchaseInvoice.aggregate.mockResolvedValue({
+        _sum: { grandTotal: new Decimal('100000') },
+        _count: { id: 1 },
+      });
+      mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal('40000') },
+      });
+      mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+        _sum: { grandTotal: new Decimal('0') }, // CANCELLED not counted
+      });
+
+      const result = await service.getFinanceSummary(supplierId, companyId);
+
+      expect(result.totalInvoiced).toBe('100000');
+      expect(result.totalPaid).toBe('40000');
+      expect(result.totalReturned).toBe('0'); // CANCELLED return NOT counted
+      expect(result.outstanding).toBe('60000');
     });
   });
 });

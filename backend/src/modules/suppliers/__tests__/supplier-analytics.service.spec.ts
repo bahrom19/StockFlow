@@ -30,6 +30,9 @@ describe('SupplierAnalyticsService', () => {
       supplierPayment: {
         aggregate: jest.fn(),
       },
+      supplierPaymentAllocation: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
+      },
       $queryRaw: jest.fn(),
     };
 
@@ -107,8 +110,8 @@ describe('SupplierAnalyticsService', () => {
         _sum: { grandTotal: '80000' },
       });
 
-    mockPrisma.supplierPayment.aggregate.mockResolvedValue({
-      _sum: { amount: '600000' },
+    mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+      _sum: { amount: '600000' }, // G9-B1: uses allocations
     });
 
     mockPrisma.$queryRaw.mockResolvedValue([
@@ -156,8 +159,8 @@ describe('SupplierAnalyticsService', () => {
       .mockResolvedValueOnce({
         _sum: { grandTotal: '80000' },
       });
-    mockPrisma.supplierPayment.aggregate.mockResolvedValue({
-      _sum: { amount: '600000' },
+    mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+      _sum: { amount: '600000' }, // G9-B1: uses allocations
     });
     mockPrisma.$queryRaw.mockResolvedValue([
       { month: '2026-01', amount: '100000' },
@@ -930,7 +933,7 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
       invoiceDate: new Date('2026-01-01'),
       dueDate: futureDate,
       grandTotal: '100000',
-      paidAmount: '0',
+      allocatedAmount: '0', // G9-B1: uses allocations
     }]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
@@ -949,7 +952,7 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
       invoiceDate: new Date('2026-01-01'),
       dueDate: pastDate,
       grandTotal: '200000',
-      paidAmount: '50000',
+      allocatedAmount: '50000', // G9-B1: uses allocations
     }]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
@@ -967,7 +970,7 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
       invoiceDate: new Date('2026-01-01'),
       dueDate: new Date('2026-06-01'),
       grandTotal: '100000',
-      paidAmount: '100000',
+      allocatedAmount: '100000', // G9-B1: uses allocations
     }]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
@@ -988,7 +991,7 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
         invoiceDate: new Date('2026-01-01'),
         dueDate: futureDate,
         grandTotal: '100000',
-        paidAmount: '0',
+        allocatedAmount: '0', // G9-B1: uses allocations
       },
       {
         id: 'inv-2',
@@ -996,7 +999,7 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
         invoiceDate: new Date('2026-02-01'),
         dueDate: pastDate,
         grandTotal: '300000',
-        paidAmount: '100000',
+        allocatedAmount: '100000', // G9-B1: uses allocations
       },
     ]);
 
@@ -1016,7 +1019,7 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
       invoiceDate: new Date('2026-01-01'),
       dueDate: null,
       grandTotal: '100000',
-      paidAmount: '0',
+      allocatedAmount: '0', // G9-B1: uses allocations
     }]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
@@ -1034,11 +1037,11 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
     mockPrisma.$queryRaw.mockResolvedValue([
       {
         id: 'inv-1', invoiceNumber: 'INV-001', invoiceDate: new Date(),
-        dueDate: d1, grandTotal: '100000', paidAmount: '0',
+        dueDate: d1, grandTotal: '100000', allocatedAmount: '0', // G9-B1: uses allocations
       },
       {
         id: 'inv-2', invoiceNumber: 'INV-002', invoiceDate: new Date(),
-        dueDate: d2, grandTotal: '200000', paidAmount: '0',
+        dueDate: d2, grandTotal: '200000', allocatedAmount: '0', // G9-B1: uses allocations
       },
     ]);
 

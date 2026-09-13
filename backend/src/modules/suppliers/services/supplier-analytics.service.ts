@@ -107,12 +107,12 @@ export class SupplierAnalyticsService {
         ? totalItemSpend.div(totalItemQty)
         : new Decimal(0);
 
-    // 5. Returns aggregation (non-CANCELLED)
+    // 5. Returns aggregation (only APPROVED/COMPLETED — DRAFT must not reduce AP)
     const returnWhere = {
       supplierId,
       companyId,
       deletedAt: null,
-      status: { not: PurchaseReturnStatus.CANCELLED },
+      status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
       returnDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
     };
 
@@ -156,7 +156,8 @@ export class SupplierAnalyticsService {
       _sum: { grandTotal: true },
     });
 
-    const currentPaymentAgg = await this.prismaService.supplierPayment.aggregate({
+    // G9-B1: Use allocations as canonical payment coverage
+    const currentAllocationAgg = await this.prismaService.supplierPaymentAllocation.aggregate({
       where: {
         supplierId,
         companyId,
@@ -170,7 +171,7 @@ export class SupplierAnalyticsService {
         supplierId,
         companyId,
         deletedAt: null,
-        status: { not: PurchaseReturnStatus.CANCELLED },
+        status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
       },
       _sum: { grandTotal: true },
     });
@@ -180,7 +181,8 @@ export class SupplierAnalyticsService {
     const netPurchaseSpend = totalInvoiced.sub(totalReturned);
 
     const currentInvoiced = new Decimal(currentInvoiceAgg._sum.grandTotal ?? 0);
-    const currentPaid = new Decimal(currentPaymentAgg._sum.amount ?? 0);
+    // G9-B1: Canonical payment coverage = SUM of active allocations
+    const currentPaid = new Decimal(currentAllocationAgg._sum.amount ?? 0);
     const currentReturned = new Decimal(currentReturnAgg._sum.grandTotal ?? 0);
     const currentOutstanding = currentInvoiced.sub(currentPaid).sub(currentReturned);
 
@@ -677,6 +679,7 @@ export class SupplierAnalyticsService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // G9-B1: Get invoices with their allocation sums
     const invoiceRows = await this.prismaService.$queryRaw<
       Array<{
         id: string;
@@ -684,7 +687,7 @@ export class SupplierAnalyticsService {
         invoiceDate: Date;
         dueDate: Date | null;
         grandTotal: Decimal;
-        paidAmount: Decimal;
+        allocatedAmount: Decimal;
       }>
     >`
       SELECT
@@ -693,13 +696,21 @@ export class SupplierAnalyticsService {
         pi."invoiceDate",
         pi."dueDate",
         pi."grandTotal",
-        pi."paidAmount"
+        COALESCE(spa."allocatedAmount", 0) AS "allocatedAmount"
       FROM "PurchaseInvoice" pi
+      LEFT JOIN (
+        SELECT
+          "purchaseInvoiceId",
+          SUM(amount) AS "allocatedAmount"
+        FROM "SupplierPaymentAllocation"
+        WHERE "deletedAt" IS NULL
+        GROUP BY "purchaseInvoiceId"
+      ) spa ON spa."purchaseInvoiceId" = pi.id
       WHERE pi."supplierId" = ${supplierId}
         AND pi."companyId" = ${companyId}
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
-        AND (pi."grandTotal" - pi."paidAmount") > 0
+        AND (pi."grandTotal" - COALESCE(spa."allocatedAmount", 0)) > 0
       ORDER BY pi."dueDate" ASC NULLS LAST, pi."invoiceDate" ASC
     `;
 
@@ -718,8 +729,9 @@ export class SupplierAnalyticsService {
 
     for (const row of invoiceRows) {
       const grandTotal = new Decimal(row.grandTotal?.toString() ?? '0');
-      const paidAmount = new Decimal(row.paidAmount?.toString() ?? '0');
-      const outstanding = grandTotal.sub(paidAmount);
+      // G9-B1: Use allocations as canonical payment coverage
+      const allocatedAmount = new Decimal(row.allocatedAmount?.toString() ?? '0');
+      const outstanding = grandTotal.sub(allocatedAmount);
 
       if (outstanding.lte(0)) continue; // fully paid
 
@@ -757,7 +769,7 @@ export class SupplierAnalyticsService {
           invoiceDate: new Date(row.invoiceDate).toISOString(),
           dueDate: dueDate.toISOString(),
           grandTotal: grandTotal.toString(),
-          paidAmount: paidAmount.toString(),
+          paidAmount: allocatedAmount.toString(), // G9-B1: allocation is canonical
           outstanding: outstanding.toString(),
           daysOverdue,
         });
@@ -771,10 +783,11 @@ export class SupplierAnalyticsService {
       return new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime();
     });
 
+    // G9-B1: Total outstanding uses allocations
     const totalOutstanding = invoiceRows.reduce(
       (sum, row) => sum.plus(
         new Decimal(row.grandTotal?.toString() ?? '0').sub(
-          new Decimal(row.paidAmount?.toString() ?? '0'),
+          new Decimal(row.allocatedAmount?.toString() ?? '0'),
         ),
       ),
       new Decimal(0),

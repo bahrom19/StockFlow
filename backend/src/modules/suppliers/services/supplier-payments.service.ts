@@ -617,24 +617,34 @@ export class SupplierPaymentsService {
       _count: { id: true },
     });
 
-    // Total paid
-    const paymentAgg = await this.prismaService.supplierPayment.aggregate({
+    // G9-B1: Use allocations as canonical payment coverage
+    // Allocations represent the actual distribution of payments to invoices
+    const allocationAgg = await this.prismaService.supplierPaymentAllocation.aggregate({
       where: {
         supplierId,
         companyId,
         deletedAt: null,
       },
       _sum: { amount: true },
-      _count: { id: true },
     });
 
-    // Total returned
+    // Count payments for display purposes
+    const paymentCount = await this.prismaService.supplierPayment.count({
+      where: {
+        supplierId,
+        companyId,
+        deletedAt: null,
+      },
+    });
+
+    // Total returned (supplier-level, not invoice-level)
+    // Only APPROVED/COMPLETED returns reduce AP — DRAFT must not reduce AP
     const returnAgg = await this.prismaService.purchaseReturn.aggregate({
       where: {
         supplierId,
         companyId,
         deletedAt: null,
-        status: { not: 'CANCELLED' },
+        status: { in: ['APPROVED', 'COMPLETED'] },
       },
       _sum: { grandTotal: true },
     });
@@ -651,7 +661,8 @@ export class SupplierPaymentsService {
     });
 
     const totalInvoiced = new Decimal(invoiceAgg._sum.grandTotal ?? 0);
-    const totalPaid = new Decimal(paymentAgg._sum.amount ?? 0);
+    // G9-B1: Canonical payment coverage = SUM of active allocations
+    const totalPaid = new Decimal(allocationAgg._sum.amount ?? 0);
     const totalReturned = new Decimal(returnAgg._sum.grandTotal ?? 0);
     const outstanding = totalInvoiced.sub(totalPaid).sub(totalReturned);
 
@@ -663,7 +674,7 @@ export class SupplierPaymentsService {
       totalReturned: totalReturned.toString(),
       outstanding: outstanding.toString(),
       invoiceCount: invoiceAgg._count.id,
-      paymentCount: paymentAgg._count.id,
+      paymentCount: paymentCount,
       lastPaymentDate: lastPayment?.paymentDate ?? null,
       lastPaymentAmount: lastPayment?.amount?.toString() ?? null,
     };
