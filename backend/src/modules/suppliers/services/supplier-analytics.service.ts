@@ -721,6 +721,7 @@ export class SupplierAnalyticsService {
       days31_60: new Decimal(0),
       days61_90: new Decimal(0),
       overdue90plus: new Decimal(0),
+      undated: new Decimal(0), // G9-B2.1: dueDate = null && outstanding > 0
     };
 
     const overdueInvoices: OverdueInvoiceEntity[] = [];
@@ -739,8 +740,9 @@ export class SupplierAnalyticsService {
       const dueDate = row.dueDate ? new Date(row.dueDate) : null;
 
       if (!dueDate) {
-        // No due date — don't include in aging buckets
-        // But still count as outstanding
+        // G9-B2.1: No due date — explicit UNDATED bucket (not overdue).
+        // Keeps invariant: sum(all buckets) == totalOutstanding.
+        agingBuckets.undated = agingBuckets.undated.add(outstanding);
         continue;
       }
 
@@ -801,6 +803,7 @@ export class SupplierAnalyticsService {
         days31_60: agingBuckets.days31_60.toString(),
         days61_90: agingBuckets.days61_90.toString(),
         overdue90plus: agingBuckets.overdue90plus.toString(),
+        undated: agingBuckets.undated.toString(), // G9-B2.1
       },
       overdueInvoices,
       invoiceCount,

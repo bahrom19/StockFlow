@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { Decimal } from '@prisma/client/runtime/library';
 import { SupplierAnalyticsService } from '../services/supplier-analytics.service';
 
 // Shared CompaniesService mock — currency is only resolved by getPurchaseSummary /
@@ -1012,7 +1013,7 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
     expect(result.invoiceCount).toBe(2);
   });
 
-  it('should handle null dueDate by excluding from aging buckets', async () => {
+  it('should handle null dueDate with explicit undated bucket (G9-B2.1)', async () => {
     mockPrisma.$queryRaw.mockResolvedValue([{
       id: 'inv-1',
       invoiceNumber: 'INV-001',
@@ -1024,11 +1025,65 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
 
     const result = await service.getPaymentAging(supplierId, companyId);
 
-    // Invoice counted but not in any aging bucket
+    // G9-B2.1: invoice counted, contributes to totalOutstanding AND undated bucket
     expect(result.invoiceCount).toBe(1);
     expect(result.totalOutstanding).toBe('100000');
+    expect(result.aging.undated).toBe('100000');
+    // Does not leak into other buckets
     expect(result.aging.current).toBe('0');
+    expect(result.aging.days1_30).toBe('0');
+    expect(result.aging.days31_60).toBe('0');
+    expect(result.aging.days61_90).toBe('0');
+    expect(result.aging.overdue90plus).toBe('0');
     expect(result.overdueCount).toBe(0);
+  });
+
+  it('should satisfy bucket sum invariant: all buckets sum to totalOutstanding (G9-B2.1)', async () => {
+    const dMinus15 = new Date(); dMinus15.setDate(dMinus15.getDate() - 15);
+    const dMinus45 = new Date(); dMinus45.setDate(dMinus45.getDate() - 45);
+    const dMinus75 = new Date(); dMinus75.setDate(dMinus75.getDate() - 75);
+    const dMinus100 = new Date(); dMinus100.setDate(dMinus100.getDate() - 100);
+    const dPlus10 = new Date(); dPlus10.setDate(dPlus10.getDate() + 10);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      { id: 'inv-1', invoiceNumber: 'INV-001', invoiceDate: new Date(), dueDate: dPlus10, grandTotal: '100000', allocatedAmount: '0' },
+      { id: 'inv-2', invoiceNumber: 'INV-002', invoiceDate: new Date(), dueDate: dMinus15, grandTotal: '150000', allocatedAmount: '0' },
+      { id: 'inv-3', invoiceNumber: 'INV-003', invoiceDate: new Date(), dueDate: dMinus45, grandTotal: '200000', allocatedAmount: '0' },
+      { id: 'inv-4', invoiceNumber: 'INV-004', invoiceDate: new Date(), dueDate: dMinus75, grandTotal: '250000', allocatedAmount: '0' },
+      { id: 'inv-5', invoiceNumber: 'INV-005', invoiceDate: new Date(), dueDate: dMinus100, grandTotal: '50000', allocatedAmount: '0' },
+      { id: 'inv-6', invoiceNumber: 'INV-006', invoiceDate: new Date(), dueDate: null, grandTotal: '70000', allocatedAmount: '0' },
+    ]);
+
+    const result = await service.getPaymentAging(supplierId, companyId);
+
+    const total = [result.aging.current, result.aging.days1_30, result.aging.days31_60, result.aging.days61_90, result.aging.overdue90plus, result.aging.undated]
+      .reduce((sum: Decimal, v) => sum.plus(new Decimal(v)), new Decimal(0));
+    expect(total.toString()).toBe(result.totalOutstanding);
+    expect(result.invoiceCount).toBe(6);
+    expect(result.aging.undated).toBe('70000');
+  });
+
+  it.each([
+    [0, 'current'],
+    [1, 'days1_30'],
+    [30, 'days1_30'],
+    [31, 'days31_60'],
+    [60, 'days31_60'],
+    [61, 'days61_90'],
+    [90, 'days61_90'],
+    [91, 'overdue90plus'],
+  ])('bucket boundary: %i day(s) overdue lands in %s', async (days, bucket) => {
+    // Service floors (todayMidnight - dueDate)/day, so construct dueDate at
+    // local midnight minus N days to get an exact day count.
+    const due = new Date();
+    due.setHours(0, 0, 0, 0);
+    due.setDate(due.getDate() - days);
+    mockPrisma.$queryRaw.mockResolvedValue([{
+      id: 'inv-b', invoiceNumber: 'INV-B', invoiceDate: new Date(), dueDate: due,
+      grandTotal: '100000', allocatedAmount: '0',
+    }]);
+
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.aging[bucket as keyof typeof result.aging]).toBe('100000');
   });
 
   it('should sort overdue invoices by daysOverdue DESC', async () => {

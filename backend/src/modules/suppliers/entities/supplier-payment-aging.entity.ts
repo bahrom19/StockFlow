@@ -41,6 +41,13 @@ export class PaymentAgingBucketsEntity {
 
   @ApiProperty({ example: '50000.0000' })
   overdue90plus!: string;
+
+  /**
+   * G9-B2.1: Invoices with dueDate = null and outstanding > 0.
+   * Explicit computed bucket — guarantees sum(all buckets) == totalOutstanding.
+   */
+  @ApiProperty({ example: '0.0000' })
+  undated!: string;
 }
 
 export class SupplierPaymentAgingEntity {
