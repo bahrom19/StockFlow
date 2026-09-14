@@ -8,6 +8,7 @@ import { SupplierProductsController } from './controllers/supplier-products.cont
 import { SupplierAnalyticsController } from './controllers/supplier-analytics.controller';
 import { SupplierStatementController } from './controllers/supplier-statement.controller';
 import { SupplierCreditSummaryController } from './controllers/supplier-credit-summary.controller';
+import { SupplierExposureController } from './controllers/supplier-exposure.controller';
 import { SuppliersService } from './services/suppliers.service';
 import { SupplierContactsService } from './services/supplier-contacts.service';
 import { SupplierAddressesService } from './services/supplier-addresses.service';
@@ -17,8 +18,10 @@ import { SupplierProductsService } from './services/supplier-products.service';
 import { SupplierAnalyticsService } from './services/supplier-analytics.service';
 import { SupplierStatementService } from './services/supplier-statement.service';
 import { SupplierCreditSummaryService } from './services/supplier-credit-summary.service';
+import { SupplierExposureService } from './services/supplier-exposure.service';
 import { SupplierStatementRepository } from './repositories/supplier-statement.repository';
 import { SupplierCreditSummaryRepository } from './repositories/supplier-credit-summary.repository';
+import { SupplierExposureRepository } from './repositories/supplier-exposure.repository';
 import { SuppliersRepository } from './repositories/suppliers.repository';
 import { SupplierContactsRepository } from './repositories/supplier-contacts.repository';
 import { SupplierAddressesRepository } from './repositories/supplier-addresses.repository';
@@ -41,6 +44,7 @@ import { CompaniesModule } from '../companies/companies.module';
     SupplierAnalyticsController,
     SupplierStatementController,
     SupplierCreditSummaryController,
+    SupplierExposureController,
   ],
   providers: [
     SuppliersService,
@@ -60,6 +64,8 @@ import { CompaniesModule } from '../companies/companies.module';
     SupplierStatementRepository,
     SupplierCreditSummaryRepository,
     SupplierCreditSummaryService,
+    SupplierExposureRepository,
+    SupplierExposureService,
   ],
   exports: [SuppliersService, SupplierPaymentAllocationsService],
 })
