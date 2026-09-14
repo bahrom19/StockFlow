@@ -76,6 +76,27 @@ export class PurchaseReturnService {
         );
       }
 
+      // G9-E2: tenant-scoped supplier validation. The raw Prisma `connect`
+      // only guarantees FK existence — never tenant ownership — so a
+      // foreign-tenant or soft-deleted supplierId would otherwise be
+      // accepted and a nonexistent one would surface as P2025/500. Missing,
+      // foreign-tenant and soft-deleted suppliers are indistinguishable
+      // 404s (no tenant-existence oracle) — same semantics as the
+      // purchase-invoice create path.
+      const supplier = await tx.supplier.findFirst({
+        where: {
+          id: dto.supplierId,
+          companyId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!supplier) {
+        throw new NotFoundException(
+          `Supplier with id ${dto.supplierId} not found`,
+        );
+      }
+
       // Enforce document currency == Company.currency
       const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
       if (dto.currency && dto.currency !== companyCurrency) {
@@ -87,6 +108,30 @@ export class PurchaseReturnService {
       let subtotal = new Decimal(0);
       let totalDiscount = new Decimal(0);
       let totalTax = new Decimal(0);
+
+      // G9-E2: tenant-scoped product validation. PurchaseReturnItem.productId
+      // has no FK in the schema, so invalid product references would
+      // otherwise be silently accepted. One batched lookup (not N+1) covers
+      // all items: missing, foreign-tenant and soft-deleted products are
+      // indistinguishable 404s — same semantics as the supplier check.
+      const requestedProductIds = [...new Set(dto.items.map((i) => i.productId))];
+      const foundProducts = await tx.product.findMany({
+        where: {
+          id: { in: requestedProductIds },
+          companyId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      const foundProductIds = new Set(foundProducts.map((p) => p.id));
+      const missingProductId = requestedProductIds.find(
+        (id) => !foundProductIds.has(id),
+      );
+      if (missingProductId !== undefined) {
+        throw new NotFoundException(
+          `Product with id ${missingProductId} not found`,
+        );
+      }
 
       const itemsData: Prisma.PurchaseReturnItemCreateWithoutPurchaseReturnInput[] =
         [];

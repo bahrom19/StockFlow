@@ -107,17 +107,26 @@ describe('PurchaseReturnService', () => {
       items: [{ productId, quantity: 5, unitCost: 20.0 }],
     };
 
+    // G9-E2: tenant-scoped supplier + batched product lookups are part of
+    // every successful create; fixtures provide tenant-resolved rows.
+    const tenantTx = (over: Record<string, unknown> = {}) => ({
+      warehouse: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: warehouseId,
+          companyId,
+          deletedAt: null,
+          isActive: true,
+        }),
+      },
+      supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+      product: {
+        findMany: jest.fn().mockResolvedValue([{ id: productId }]),
+      },
+      ...over,
+    } as any);
+
     it('should create a purchase return', async () => {
-      const mockTx = {
-        warehouse: {
-          findFirst: jest.fn().mockResolvedValue({
-            id: warehouseId,
-            companyId,
-            deletedAt: null,
-            isActive: true,
-          }),
-        },
-      };
+      const mockTx = tenantTx();
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockRepo.create.mockResolvedValue(baseReturn as any);
 
@@ -138,10 +147,152 @@ describe('PurchaseReturnService', () => {
     it('should throw NotFoundException when warehouse does not exist', async () => {
       const mockTx = {
         warehouse: { findFirst: jest.fn().mockResolvedValue(null) },
-      };
+        supplier: { findFirst: jest.fn() },
+        product: { findMany: jest.fn() },
+      } as any;
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
         NotFoundException,
+      );
+    });
+
+    // ── G9-E2: tenant validation hardening ──────────────────────────────
+
+    // Test 1 — own supplier (regression protection): the lookup must run
+    // tenant-scoped and a tenant-resolved supplier lets CREATE proceed.
+    it('resolves the own-company supplier with a tenant-scoped lookup and creates the return', async () => {
+      const mockTx = tenantTx();
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue(baseReturn as any);
+
+      const result = await service.create(validDto, userId, companyId);
+
+      expect(result).toBeDefined();
+      expect(mockTx.supplier.findFirst).toHaveBeenCalledWith({
+        where: { id: supplierId, companyId, deletedAt: null },
+        select: { id: true },
+      });
+      expect(mockRepo.create).toHaveBeenCalled();
+    });
+
+    // Test 2 — nonexistent supplier → 404, no creation (P2025/500 eliminated)
+    it('throws NotFoundException for a nonexistent supplier and does NOT create', async () => {
+      const mockTx = tenantTx({
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      });
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+
+      await expect(
+        service.create(validDto, userId, companyId),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // Test 3 — foreign-tenant supplier: the WHERE carries companyId, so a
+    // supplier of another company is invisible → 404 (no 403, no oracle).
+    it('throws NotFoundException for a foreign-tenant supplier (companyId in lookup) and does NOT create', async () => {
+      const mockTx = tenantTx({
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      });
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+
+      await expect(
+        service.create(validDto, userId, companyId),
+      ).rejects.toThrow(NotFoundException);
+      // Tenant boundary is enforced in the query shape itself
+      expect(mockTx.supplier.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ companyId, deletedAt: null }),
+        }),
+      );
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // Test 4 — soft-deleted supplier: deletedAt: null excludes the row → 404
+    it('throws NotFoundException for a soft-deleted supplier (deletedAt filter) and does NOT create', async () => {
+      const mockTx = tenantTx({
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      });
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+
+      await expect(
+        service.create(validDto, userId, companyId),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockTx.supplier.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ deletedAt: null }),
+        }),
+      );
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // Test 5 — foreign-tenant product: batched lookup is companyId-scoped;
+    // a product of another company is invisible → 404, no creation.
+    it('throws NotFoundException for a foreign-tenant product (companyId in batched lookup) and does NOT create', async () => {
+      const mockTx = tenantTx({
+        product: {
+          findMany: jest.fn().mockResolvedValue([]),
+        } as any,
+      });
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+
+      await expect(
+        service.create(validDto, userId, companyId),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockTx.product.findMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: [productId] },
+          companyId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // Test 6 — nonexistent product: absent from the batched result → 404
+    it('throws NotFoundException for a nonexistent product and does NOT create', async () => {
+      const mockTx = tenantTx({
+        product: { findMany: jest.fn().mockResolvedValue([]) },
+      });
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+
+      await expect(
+        service.create(validDto, userId, companyId),
+      ).rejects.toThrow(/Product with id/);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // N+1 safety: N item productIds (with duplicates) → exactly ONE findMany
+    it('validates all item products with a single batched lookup (N product IDs → 1 findMany)', async () => {
+      const multiItemDto: CreatePurchaseReturnDto = {
+        supplierId,
+        warehouseId,
+        items: [
+          { productId, quantity: 1, unitCost: 1 },
+          { productId: 'prod-2', quantity: 2, unitCost: 2 },
+          { productId, quantity: 3, unitCost: 3 }, // duplicate → deduped
+        ],
+      };
+      const mockTx = tenantTx({
+        product: {
+          findMany: jest
+            .fn()
+            .mockResolvedValue([{ id: productId }, { id: 'prod-2' }]),
+        },
+      });
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue(baseReturn as any);
+
+      await service.create(multiItemDto, userId, companyId);
+
+      expect(mockTx.product.findMany).toHaveBeenCalledTimes(1);
+      expect(mockTx.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: { in: [productId, 'prod-2'] },
+          }),
+        }),
       );
     });
   });
@@ -432,6 +583,8 @@ describe('PurchaseReturnService', () => {
             isActive: true,
           }),
         },
+        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        product: { findMany: jest.fn().mockResolvedValue([{ id: productId }]) },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockRepo.create.mockResolvedValue(baseReturn as any);
@@ -445,6 +598,19 @@ describe('PurchaseReturnService', () => {
     });
 
     it('should reject USD when company currency is KZT', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: warehouseId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          }),
+        },
+        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        product: { findMany: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       await expect(
         service.create(
           { ...validDto, currency: 'USD' as any },
