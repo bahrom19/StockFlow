@@ -146,4 +146,35 @@ export class PurchaseReturnRepository {
   ): Promise<PurchaseReturn> {
     return this.update(id, { status }, companyId, tx);
   }
+
+  /**
+   * G9-E1: status-conditional CAS for the APPROVED → COMPLETED transition.
+   *
+   * Atomically flips the return to COMPLETED only while it is still
+   * APPROVED, tenant-scoped and not soft-deleted. Returns the number of
+   * affected rows: 0 means the return is no longer APPROVED (already
+   * COMPLETED/CANCELLED, or concurrently transitioned) and the caller must
+   * perform NO stock mutation, StockMovement, GL journal or event publish.
+   *
+   * Used instead of the unchecked find-then-update pattern so two
+   * concurrent COMPLETED requests cannot both pass the status check and
+   * double-decrement stock. Runs inside the caller's transaction — losing
+   * the CAS (or any later step failing) rolls the whole transition back.
+   */
+  async completeIfApproved(
+    id: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await this.getClient(tx).purchaseReturn.updateMany({
+      where: {
+        id,
+        companyId,
+        deletedAt: null,
+        status: PurchaseReturnStatus.APPROVED,
+      },
+      data: { status: PurchaseReturnStatus.COMPLETED },
+    });
+    return result.count;
+  }
 }

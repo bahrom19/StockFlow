@@ -21,6 +21,7 @@ import { PurchaseReturnMapper } from '../mappers/purchase-order.mapper';
 import { PurchaseReturnRepository } from '../repositories/purchase-return.repository';
 import { PurchaseReturnedEvent } from '../events/purchase-returned.event';
 import { CompaniesService } from '../../companies/services/companies.service';
+import { PurchasingFinanceService } from './purchasing-finance.service';
 
 const VALID_RETURN_TRANSITIONS: Record<
   PurchaseReturnStatus,
@@ -47,6 +48,7 @@ export class PurchaseReturnService {
     private readonly prismaService: PrismaService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
     private readonly companiesService: CompaniesService,
+    private readonly purchasingFinanceService: PurchasingFinanceService,
   ) {}
 
   async create(
@@ -327,6 +329,33 @@ export class PurchaseReturnService {
         updateData.cancelledAt = new Date();
       }
 
+      // G9-E1: APPROVED → COMPLETED is made atomic/idempotent with a
+      // status-conditional CAS. The CAS write must WIN before any side
+      // effects (stock mutation, StockMovement, GL journal, event) run, so
+      // two concurrent COMPLETED requests can never both pass the status
+      // check and double-decrement stock / double-post the journal. The CAS
+      // and every side effect share the same $transaction below — a failure
+      // in any later step rolls the transition (and the status write) back.
+      let completedTransition = false;
+      if (newStatus === PurchaseReturnStatus.COMPLETED) {
+        const casCount = await this.purchaseReturnRepository.completeIfApproved(
+          id,
+          companyId,
+          tx,
+        );
+        if (casCount === 0) {
+          // Lost the race: the return is no longer APPROVED (already
+          // COMPLETED/CANCELLED, or concurrently transitioned by another
+          // request). No stock mutation, no StockMovement, no GL journal,
+          // no event — surface the same business conflict the transition
+          // validation above would produce.
+          throw new BadRequestException(
+            `Cannot transition from ${current} to ${newStatus}. Allowed: ${(allowed ?? []).join(', ') || 'none'}`,
+          );
+        }
+        completedTransition = true;
+      }
+
       // When COMPLETED, decrease stock
       if (newStatus === PurchaseReturnStatus.COMPLETED) {
         const items = await tx.purchaseReturnItem.findMany({
@@ -391,6 +420,30 @@ export class PurchaseReturnService {
         }
       }
 
+      // G9-E1: post the purchase-return GL journal (Dr AP / Cr Inventory —
+      // Accounting Model C) inside the same transaction, only after the CAS
+      // win. A journal failure rolls back the stock mutation, movements and
+      // the status transition.
+      if (completedTransition) {
+        const journalItems = await tx.purchaseReturnItem.findMany({
+          where: { purchaseReturnId: id },
+        });
+        await this.purchasingFinanceService.createPurchaseReturnJournal(
+          {
+            companyId,
+            returnNumber: ret.returnNumber,
+            returnDate: ret.returnDate,
+            items: journalItems.map((i) => ({
+              productId: i.productId,
+              quantity: i.quantity,
+              unitCost: i.unitCost.toString(),
+            })),
+            createdBy: userId,
+          },
+          tx,
+        );
+      }
+
       // Publish purchase.returned event
       if (newStatus === PurchaseReturnStatus.COMPLETED) {
         try {
@@ -418,13 +471,26 @@ export class PurchaseReturnService {
         }
       }
 
-      const updated = await this.purchaseReturnRepository.update(
+      // G9-E1: the COMPLETED status write already happened via the CAS
+      // (completeIfApproved) — skip the redundant generic status update so
+      // the final update only carries audit fields (and so CANCELLED/
+      // APPROVED transitions keep the previous behavior unchanged).
+      if (!completedTransition) {
+        const updated = await this.purchaseReturnRepository.update(
+          id,
+          updateData,
+          companyId,
+          tx,
+        );
+        return PurchaseReturnMapper.toEntity(updated);
+      }
+
+      const completed = await this.purchaseReturnRepository.findById(
         id,
-        updateData,
         companyId,
         tx,
       );
-      return PurchaseReturnMapper.toEntity(updated);
+      return PurchaseReturnMapper.toEntity(completed!);
     });
   }
 

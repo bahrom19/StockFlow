@@ -13,6 +13,7 @@ import { CreatePurchaseReturnDto } from '../dto/create-purchase-return.dto';
 import { UpdatePurchaseReturnDto } from '../dto/update-purchase-return.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { CompaniesService } from '../../companies/services/companies.service';
+import { PurchasingFinanceService } from '../services/purchasing-finance.service';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -67,6 +68,7 @@ describe('PurchaseReturnService', () => {
   let mockRepo: jest.Mocked<PurchaseReturnRepository>;
   let mockPrisma: Record<string, jest.Mock>;
   let mockEventBus: { publish: jest.Mock };
+  let mockFinance: { createPurchaseReturnJournal: jest.Mock };
   const mockTransaction = jest.fn();
 
   beforeEach(async () => {
@@ -77,8 +79,10 @@ describe('PurchaseReturnService', () => {
       update: jest.fn(),
       softDelete: jest.fn(),
       findByReturnNumber: jest.fn(),
+      completeIfApproved: jest.fn().mockResolvedValue(1),
     } as any;
     mockEventBus = { publish: jest.fn().mockResolvedValue(undefined) };
+    mockFinance = { createPurchaseReturnJournal: jest.fn().mockResolvedValue(undefined) };
     mockPrisma = { $transaction: mockTransaction };
 
     const mod = await Test.createTestingModule({
@@ -88,6 +92,7 @@ describe('PurchaseReturnService', () => {
         { provide: PurchaseReturnRepository, useValue: mockRepo },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: EVENT_BUS, useValue: mockEventBus },
+        { provide: PurchasingFinanceService, useValue: mockFinance },
       ],
     }).compile();
     service = mod.get(PurchaseReturnService);
@@ -480,6 +485,195 @@ describe('PurchaseReturnService', () => {
           companyId,
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ── G9-E1: atomic/idempotent APPROVED → COMPLETED (CAS + GL journal) ──
+  describe('transitionStatus — G9-E1 CAS & GL journal', () => {
+    const approved = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
+
+    function baseCompleteTx() {
+      const mockTx = {
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(baseReturn.items),
+        },
+        stock: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 's-1',
+            quantity: 50,
+            reservedQuantity: 0,
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        stockMovement: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      return mockTx;
+    }
+
+    // A. Normal completion: CAS win → stock + movement + journal + event
+    it('on CAS win: decrements stock, creates movement, posts GL journal, publishes event, does NOT double-update status', async () => {
+      const mockTx = baseCompleteTx();
+      mockRepo.findById.mockResolvedValue(approved as any);
+      mockRepo.completeIfApproved.mockResolvedValue(1);
+      mockRepo.findById
+        .mockResolvedValueOnce(approved as any)
+        .mockResolvedValueOnce({
+          ...approved,
+          status: PurchaseReturnStatus.COMPLETED,
+        } as any);
+
+      const result = await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.COMPLETED,
+        userId,
+        companyId,
+      );
+
+      expect(result.status).toBe(PurchaseReturnStatus.COMPLETED);
+      expect(mockRepo.completeIfApproved).toHaveBeenCalledWith(
+        'pr-1',
+        companyId,
+        mockTx,
+      );
+      expect(mockTx.stock.updateMany).toHaveBeenCalled();
+      expect(mockTx.stockMovement.create).toHaveBeenCalled();
+      expect(mockFinance.createPurchaseReturnJournal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId,
+          returnNumber: 'PR-TEST-0001',
+          items: [
+            expect.objectContaining({ productId, quantity: 5, unitCost: '20' }),
+          ],
+          createdBy: userId,
+        }),
+        mockTx,
+      );
+      expect(mockEventBus.publish).toHaveBeenCalledTimes(1);
+      // Status was written by the CAS — the generic update must not run again
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // B. Transaction rollback: journal failure → BadRequest propagates;
+    //    status write happened via CAS inside the same tx, so the real DB
+    //    rolls back status + stock + movement together (verified by tx sharing).
+    it('rolls back the whole transition when the GL journal fails (single shared transaction)', async () => {
+      const mockTx = baseCompleteTx();
+      mockRepo.findById.mockResolvedValue(approved as any);
+      mockFinance.createPurchaseReturnJournal.mockRejectedValue(
+        new Error('GL engine down'),
+      );
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow('GL engine down');
+
+      // Stock was mutated inside the SAME tx that the journal failed in —
+      // the real $transaction would roll everything back together.
+      expect(mockTx.stock.updateMany).toHaveBeenCalled();
+      expect(mockFinance.createPurchaseReturnJournal).toHaveBeenCalledWith(
+        expect.anything(),
+        mockTx,
+      );
+      // Event must NOT be published when the journal failed
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    // C. Duplicate completion: CAS loses → no stock/movement/journal/event
+    it('rejects a duplicate COMPLETED with no stock mutation, no movement, no journal, no event', async () => {
+      const mockTx = baseCompleteTx();
+      mockRepo.findById.mockResolvedValue(approved as any);
+      mockRepo.completeIfApproved.mockResolvedValue(0);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockTx.stock.updateMany).not.toHaveBeenCalled();
+      expect(mockTx.stockMovement.create).not.toHaveBeenCalled();
+      expect(mockFinance.createPurchaseReturnJournal).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    // D. Wrong concurrent state: CAS sees the row no longer APPROVED
+    it('stops before any side effects when CAS finds status no longer APPROVED', async () => {
+      const mockTx = baseCompleteTx();
+      mockRepo.findById.mockResolvedValue(approved as any);
+      mockRepo.completeIfApproved.mockResolvedValue(0);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(/no longer APPROVED|Allowed:/);
+
+      expect(mockTx.stock.findFirst).not.toHaveBeenCalled();
+      expect(mockTx.stock.updateMany).not.toHaveBeenCalled();
+      expect(mockTx.stockMovement.create).not.toHaveBeenCalled();
+      expect(mockFinance.createPurchaseReturnJournal).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    // E/F. Existing guards & lifecycle preserved
+    it('keeps the strict-stock guard ordering after the CAS win', async () => {
+      const mockTx = baseCompleteTx();
+      mockTx.stock.findFirst.mockResolvedValue({
+        id: 's-1',
+        quantity: 3,
+        reservedQuantity: 1,
+      });
+      mockRepo.findById.mockResolvedValue(approved as any);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow('Insufficient stock');
+
+      // CAS ran (won) but no journal/event after the stock guard failed
+      expect(mockRepo.completeIfApproved).toHaveBeenCalled();
+      expect(mockTx.stock.updateMany).not.toHaveBeenCalled();
+      expect(mockFinance.createPurchaseReturnJournal).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('does not invoke CAS or the GL journal for non-COMPLETED transitions', async () => {
+      const mockTx = {
+        purchaseReturnItem: { findMany: jest.fn().mockResolvedValue([]) },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseReturn,
+        status: PurchaseReturnStatus.APPROVED,
+      } as any);
+
+      await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.APPROVED,
+        userId,
+        companyId,
+      );
+
+      expect(mockRepo.completeIfApproved).not.toHaveBeenCalled();
+      expect(mockFinance.createPurchaseReturnJournal).not.toHaveBeenCalled();
+      expect(mockRepo.update).toHaveBeenCalled();
     });
   });
 
