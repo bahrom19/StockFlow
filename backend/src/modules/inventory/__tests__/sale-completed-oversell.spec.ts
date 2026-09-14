@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { StockMovementType } from '@prisma/client';
 import { SaleCompletedEventHandler } from '../events/sale-completed.handler';
 import { InventoryRepository } from '../repositories/inventory.repository';
+import { CostingService } from '../services/costing.service';
 import { PrismaService } from '../../../common/prisma';
 
 /**
@@ -15,12 +16,17 @@ import { PrismaService } from '../../../common/prisma';
  * - no stock record -> rejected;
  * - a concurrent race that leaves insufficient stock (updateMany count 0)
  *   -> rejected with 'Insufficient stock'.
+ *
+ * G9-F2.1: the handler now also consumes FIFO cost layers per item; the
+ * costing collaborator is mocked here — full costing coverage lives in
+ * sale-completed-fifo.spec.ts and costing-foundation.spec.ts.
  */
 describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
   let handler: SaleCompletedEventHandler;
   let repo: {
     findStockByProductAndWarehouse: jest.Mock;
   };
+  let costing: { consumeFifoLayers: jest.Mock };
   let updateMany: jest.Mock;
   let createMovement: jest.Mock;
 
@@ -49,8 +55,14 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
     repo = {
       findStockByProductAndWarehouse: jest.fn(),
     };
+    costing = {
+      consumeFifoLayers: jest
+        .fn()
+        .mockResolvedValue({ totalCost: 0, layers: [], fallbackCost: 0 }),
+    };
     handler = new SaleCompletedEventHandler(
       repo as unknown as InventoryRepository,
+      costing as unknown as CostingService,
       {} as PrismaService,
     );
   });

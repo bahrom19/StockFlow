@@ -3,6 +3,7 @@ import { StockMovementType } from '@prisma/client';
 import { EventHandler } from '../../../common/events';
 import { SaleCompletedEvent } from '../../sales/events/sale-completed.event';
 import { InventoryRepository } from '../repositories/inventory.repository';
+import { CostingService } from '../services/costing.service';
 import { PrismaService } from '../../../common/prisma';
 
 /**
@@ -10,11 +11,19 @@ import { PrismaService } from '../../../common/prisma';
  *
  * This handler replaces the direct stock manipulation in SalesService.completeSale().
  * It runs inside the originating transaction via `context.transactionClient`.
+ *
+ * G9-F2.1: after each item's stock decrement + StockMovement, the item's cost
+ * is consumed from the FIFO CostLayer pool via {@link CostingService.consumeFifoLayers}
+ * (referenceType='SALE', referenceId=saleId), which also persists the immutable
+ * OUT summary layer — all within the SAME transaction. Costing errors
+ * (CAS ConflictException, no cost basis, ...) are deliberately NOT swallowed:
+ * they propagate to the publisher so the whole sale transaction rolls back.
  */
 @Injectable()
 export class SaleCompletedEventHandler implements EventHandler<SaleCompletedEvent> {
   constructor(
     private readonly inventoryRepository: InventoryRepository,
+    private readonly costingService: CostingService,
     private readonly prismaService: PrismaService,
   ) {}
 
@@ -81,6 +90,20 @@ export class SaleCompletedEventHandler implements EventHandler<SaleCompletedEven
           createdBy: event.payload.cashierId,
         },
       });
+
+      // G9-F2.1: consume the actual FIFO cost for this item AFTER the stock
+      // decrement and movement succeeded. Uses the same transaction client so
+      // layer consumption (CAS-guarded) and the OUT summary layer commit or
+      // roll back together with the sale. Errors propagate — no adjustment-path
+      // soft failure here: a sale must never complete with unconsumed cost.
+      await this.costingService.consumeFifoLayers(
+        item.productId,
+        event.payload.companyId,
+        item.quantity,
+        'SALE',
+        event.payload.saleId,
+        tx,
+      );
     }
   }
 }
