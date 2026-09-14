@@ -306,6 +306,28 @@ export class InventoryRepository {
     return result.count > 0;
   }
 
+  /**
+   * G9-F1: find the immutable historical costing record (direction OUT) for a
+   * consuming document, e.g. a sale's FIFO summary layer. Company-scoped;
+   * earliest record first. Pure data access — no domain logic.
+   */
+  async findOutLayerByReference(
+    companyId: string,
+    referenceType: string,
+    referenceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CostLayer | null> {
+    return this.prisma(tx).costLayer.findFirst({
+      where: {
+        companyId,
+        direction: 'OUT',
+        referenceType,
+        referenceId,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   // ════════════════════════════════════════
   // INVENTORY COUNT
   // ════════════════════════════════════════
