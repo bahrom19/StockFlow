@@ -263,6 +263,25 @@ export class PurchaseOrderRepository {
     });
   }
 
+  // G9-D2 (P1): pessimistic row-level lock on the PurchaseOrder row used to
+  // serialize concurrent invoice creates/approvals for the same PO. Prisma
+  // findUnique cannot express FOR UPDATE, so we use a tenant-scoped raw
+  // SELECT ... FOR UPDATE inside the caller's transaction. The lock is held
+  // until that transaction commits/rolls back, which prevents the TOCTOU
+  // window where two transactions both pass the cumulative overrun check.
+  async lockById(
+    id: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const rows = await this.getClient(tx).$queryRaw<
+      Array<{ id: string }>
+    >`SELECT id FROM "PurchaseOrder" WHERE id = ${id} AND "companyId" = ${companyId} AND "deletedAt" IS NULL FOR UPDATE`;
+    if (!rows || rows.length === 0) {
+      throw new NotFoundException(`Purchase order with id ${id} not found`);
+    }
+  }
+
   async updateStatus(
     id: string,
     status: PurchaseOrderStatus,

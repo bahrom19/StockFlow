@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PurchaseOrderStatus, StockMovementType, Currency } from '@prisma/client';
+import { Prisma, PurchaseOrderStatus, PurchaseInvoiceStatus, StockMovementType, Currency } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
@@ -404,6 +404,51 @@ export class PurchaseOrderService {
       }
 
       const updateData: Prisma.PurchaseOrderUpdateInput = { status: newStatus };
+
+      // G9-D2 (P2-2): never cancel a PO that has active dependent documents.
+      // Checks run inside the same transaction and are tenant-scoped.
+      if (newStatus === PurchaseOrderStatus.CANCELLED) {
+        const activeInvoiceCount = await tx.purchaseInvoice.count({
+          where: {
+            purchaseOrderId: id,
+            companyId,
+            deletedAt: null,
+            status: {
+              in: [
+                PurchaseInvoiceStatus.APPROVED,
+                PurchaseInvoiceStatus.PAID,
+              ],
+            },
+          },
+        });
+        if (activeInvoiceCount > 0) {
+          throw new BadRequestException(
+            `Cannot cancel purchase order ${order.orderNumber}: it has ${activeInvoiceCount} active approved/paid invoice(s)`,
+          );
+        }
+
+        const receiptCount = await tx.goodsReceipt.count({
+          where: {
+            purchaseOrderId: id,
+            companyId,
+            deletedAt: null,
+          },
+        });
+        const receivedItemCount = await tx.purchaseOrderItem.count({
+          where: {
+            purchaseOrderId: id,
+            receivedQuantity: { gt: 0 },
+          },
+        });
+        if (receiptCount > 0 || receivedItemCount > 0) {
+          throw new BadRequestException(
+            `Cannot cancel purchase order ${order.orderNumber}: goods have already been received`,
+          );
+        }
+        // NOTE (G9-D2): PurchaseReturn is NOT linked to a purchase order in
+        // the current model (CreatePurchaseReturnDto has no purchaseOrderId),
+        // so returns intentionally do NOT block cancellation.
+      }
 
       if (newStatus === PurchaseOrderStatus.APPROVED) {
         updateData.approvedBy = userId;

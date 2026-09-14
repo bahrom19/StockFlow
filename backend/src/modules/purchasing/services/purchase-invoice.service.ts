@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PurchaseInvoiceStatus, Currency } from '@prisma/client';
+import { Prisma, PurchaseInvoiceStatus, PurchaseOrderStatus, Currency } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
@@ -75,6 +75,23 @@ export class PurchaseInvoiceService {
         );
       }
 
+      // G9-D2 (P2-1): an invoice must never be created against a CANCELLED PO.
+      if (po.status === PurchaseOrderStatus.CANCELLED) {
+        throw new BadRequestException(
+          `Cannot create invoice for purchase order in status CANCELLED`,
+        );
+      }
+
+      // G9-D2 (P1-1): serialize concurrent invoice creates for the same PO.
+      // Without a row lock, two parallel creates could both pass the
+      // cumulative overrun check below (TOCTOU). The lock is held until the
+      // transaction commits, so the second create re-reads a fresh state.
+      await this.purchaseOrderRepository.lockById(
+        dto.purchaseOrderId,
+        companyId,
+        tx,
+      );
+
       // G9-C: supplier terms & credit foundation.
       // Resolve the due date with explicit precedence rules:
       //   1. An explicitly provided dto.dueDate ALWAYS wins.
@@ -132,6 +149,33 @@ export class PurchaseInvoiceService {
         };
       });
 
+      const proposedGrandTotal = subtotal.sub(totalDiscount).add(totalTax);
+
+      // G9-D2 (P1-1): cumulative invoice-overrun guard on CREATE.
+      // SUM(active APPROVED/PAID invoices for this PO) + proposed invoice
+      // grandTotal must not exceed PO.grandTotal. DRAFT/CANCELLED invoices
+      // and soft-deleted invoices do NOT reduce the available PO amount.
+      // The PO row was locked (FOR UPDATE) above, so concurrent creates for
+      // the same PO serialize — the second one sees the committed state of
+      // the first and cannot both pass this check.
+      const existingApprovedPaid = await this.repository.sumActiveApprovedPaidByPo(
+        dto.purchaseOrderId,
+        companyId,
+        invoiceCurrency,
+        tx,
+      );
+      if (
+        existingApprovedPaid
+          .add(proposedGrandTotal)
+          .gt(new Decimal(po.grandTotal))
+      ) {
+        throw new BadRequestException(
+          `Invoice total ${proposedGrandTotal.toString()} exceeds remaining purchase order amount. ` +
+            `PO total: ${new Decimal(po.grandTotal).toString()}, ` +
+            `already invoiced (approved/paid): ${existingApprovedPaid.toString()}`,
+        );
+      }
+
       const invoice = await this.repository.create(
         {
           invoiceNumber,
@@ -141,7 +185,7 @@ export class PurchaseInvoiceService {
           subtotal,
           discountAmount: totalDiscount,
           taxAmount: totalTax,
-          grandTotal: subtotal.sub(totalDiscount).add(totalTax),
+          grandTotal: proposedGrandTotal,
           paidAmount: new Decimal(0),
           currency: invoiceCurrency,
           notes: dto.notes,
@@ -252,6 +296,49 @@ export class PurchaseInvoiceService {
         throw new BadRequestException(
           `Cannot transition from ${current} to ${newStatus}`,
         );
+      }
+
+      // G9-D2 (P1-2): cumulative invoice-overrun guard on APPROVE.
+      // Lock the linked PO row BEFORE the cumulative SUM so two concurrent
+      // approvals for the same PO serialize and only one can pass. The
+      // current DRAFT invoice is naturally excluded from the approval sum
+      // (only APPROVED/PAID siblings are counted).
+      if (newStatus === PurchaseInvoiceStatus.APPROVED) {
+        await this.purchaseOrderRepository.lockById(
+          invoice.purchaseOrderId,
+          companyId,
+          tx,
+        );
+        const po = await this.purchaseOrderRepository.findById(
+          invoice.purchaseOrderId,
+          companyId,
+          tx,
+        );
+        if (!po) {
+          throw new NotFoundException(
+            `Purchase order ${invoice.purchaseOrderId} not found`,
+          );
+        }
+
+        const existingApprovedPaid = await this.repository.sumActiveApprovedPaidByPo(
+          invoice.purchaseOrderId,
+          companyId,
+          invoice.currency,
+          tx,
+        );
+        const currentGrandTotal = new Decimal(invoice.grandTotal);
+        if (
+          existingApprovedPaid
+            .add(currentGrandTotal)
+            .gt(new Decimal(po.grandTotal))
+        ) {
+          throw new BadRequestException(
+            `Cannot approve invoice ${invoice.invoiceNumber}: total approved/paid amount for purchase order ${po.orderNumber} would exceed its total. ` +
+              `PO total: ${new Decimal(po.grandTotal).toString()}, ` +
+              `approved/paid: ${existingApprovedPaid.toString()}, ` +
+              `proposed: ${currentGrandTotal.toString()}`,
+          );
+        }
       }
 
       const updateData: Prisma.PurchaseInvoiceUpdateInput = {

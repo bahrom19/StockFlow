@@ -425,7 +425,12 @@ describe('PurchaseOrderService', () => {
 
     it('should cancel DRAFT order', async () => {
       const mockTx = {
-        purchaseOrderItem: { findMany: jest.fn().mockResolvedValue([]) },
+        purchaseOrderItem: {
+          findMany: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+        },
+        purchaseInvoice: { count: jest.fn().mockResolvedValue(0) },
+        goodsReceipt: { count: jest.fn().mockResolvedValue(0) },
       };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(basePo as any);
@@ -452,6 +457,84 @@ describe('PurchaseOrderService', () => {
         expect.any(Number),
         mockTx,
       );
+    });
+
+    it('rejects cancellation when an APPROVED/PAID invoice exists (tenant-scoped count)', async () => {
+      const mockTx = {
+        purchaseOrderItem: {
+          findMany: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+        },
+        purchaseInvoice: { count: jest.fn().mockResolvedValue(1) },
+        goodsReceipt: { count: jest.fn().mockResolvedValue(0) },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(
+        service.transitionStatus(
+          'po-1',
+          PurchaseOrderStatus.CANCELLED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+      // tenant + status scoping on the invoice count
+      expect(mockTx.purchaseInvoice.count).toHaveBeenCalledWith({
+        where: {
+          purchaseOrderId: 'po-1',
+          companyId,
+          deletedAt: null,
+          status: { in: ['APPROVED', 'PAID'] },
+        },
+      });
+    });
+
+    it('rejects cancellation when goods receipts / received quantities exist', async () => {
+      const mockTx = {
+        purchaseOrderItem: {
+          findMany: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(2), // receivedQuantity > 0
+        },
+        purchaseInvoice: { count: jest.fn().mockResolvedValue(0) },
+        goodsReceipt: { count: jest.fn().mockResolvedValue(0) },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(
+        service.transitionStatus(
+          'po-1',
+          PurchaseOrderStatus.CANCELLED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects cancellation when a goods receipt record exists', async () => {
+      const mockTx = {
+        purchaseOrderItem: {
+          findMany: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+        },
+        purchaseInvoice: { count: jest.fn().mockResolvedValue(0) },
+        goodsReceipt: { count: jest.fn().mockResolvedValue(1) },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(
+        service.transitionStatus(
+          'po-1',
+          PurchaseOrderStatus.CANCELLED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
     });
 
     it('should throw BadRequestException for invalid transition (DRAFT→RECEIVED)', async () => {

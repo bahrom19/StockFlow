@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, PurchaseInvoice, PurchaseInvoiceStatus } from '@prisma/client';
+import { Currency, Prisma, PurchaseInvoice, PurchaseInvoiceStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
 @Injectable()
@@ -137,5 +137,32 @@ export class PurchaseInvoiceRepository {
     tx?: Prisma.TransactionClient,
   ): Promise<PurchaseInvoice> {
     return this.update(id, { status }, companyId, tx);
+  }
+
+  // G9-D2 (P1): cumulative SUM of APPROVED/PAID.active (deletedAt IS NULL)
+  // invoices for a purchase order — used by the invoice overrun guard.
+  // DRAFT/CANCELLED invoices intentionally do NOT reduce the available PO
+  // amount. The optional currency filter keeps the comparison consistent
+  // with the PO currency (every invoice must already match the PO currency
+  // at creation, this is a defensive extra guard).
+  async sumActiveApprovedPaidByPo(
+    purchaseOrderId: string,
+    companyId: string,
+    currency: Currency | string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Prisma.Decimal> {
+    const agg = await this.getClient(tx).purchaseInvoice.aggregate({
+      where: {
+        purchaseOrderId,
+        companyId,
+        deletedAt: null,
+        status: {
+          in: [PurchaseInvoiceStatus.APPROVED, PurchaseInvoiceStatus.PAID],
+        },
+        currency: currency as Currency,
+      },
+      _sum: { grandTotal: true },
+    });
+    return (agg._sum?.grandTotal as Prisma.Decimal) ?? new Prisma.Decimal(0);
   }
 }

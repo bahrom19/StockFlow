@@ -64,6 +64,8 @@ const basePo = {
   supplierId,
   orderNumber: 'PO-001',
   status: 'RECEIVED',
+  currency: 'KZT',
+  grandTotal: new Prisma.Decimal('1000'),
 };
 
 describe('PurchaseInvoiceService', () => {
@@ -83,8 +85,9 @@ describe('PurchaseInvoiceService', () => {
       update: jest.fn(),
       softDelete: jest.fn(),
       findByInvoiceNumber: jest.fn(),
+      sumActiveApprovedPaidByPo: jest.fn(),
     } as any;
-    mockPoRepo = { findById: jest.fn() } as any;
+    mockPoRepo = { findById: jest.fn(), lockById: jest.fn() } as any;
     mockAuditLog = { log: jest.fn().mockResolvedValue(undefined) } as any;
     mockEventBus = { publish: jest.fn().mockResolvedValue(undefined) };
     mockPrisma = { $transaction: mockTransaction };
@@ -101,6 +104,8 @@ describe('PurchaseInvoiceService', () => {
     }).compile();
     service = mod.get(PurchaseInvoiceService);
     mockRepo.findByInvoiceNumber.mockResolvedValue(null);
+    mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(new Prisma.Decimal('0'));
+    mockPoRepo.lockById.mockResolvedValue(undefined);
   });
 
   afterEach(() => jest.clearAllMocks());
@@ -309,6 +314,7 @@ describe('PurchaseInvoiceService', () => {
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(baseInvoice as any);
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
       mockRepo.update.mockResolvedValue({
         ...baseInvoice,
         status: PurchaseInvoiceStatus.APPROVED,
@@ -491,6 +497,273 @@ describe('PurchaseInvoiceService', () => {
 
       const data = mockRepo.create.mock.calls[0]?.[0] as any;
       expect(data.dueDate).toEqual(new Date('2026-09-01T00:00:00.000Z'));
+    });
+  });
+
+  // ── G9-D2: INVOICE OVERRUN GUARD (CREATE) ─────────────────────
+  describe('create — G9-D2 cumulative overrun guard', () => {
+    // invoice grandTotal == unitCost * quantity (taxPercent 0)
+    function dtoWithTotal(total: number): CreatePurchaseInvoiceDto {
+      return {
+        purchaseOrderId: poId,
+        supplierId,
+        items: [{ productId, quantity: 1, unitCost: total }],
+      };
+    }
+
+    function baseCreateWithSum(existing: string) {
+      const mockTx = {
+        purchaseInvoiceItem: { create: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockPoRepo.lockById.mockResolvedValue(undefined);
+      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(
+        new Prisma.Decimal(existing),
+      );
+      mockRepo.create.mockResolvedValue(baseInvoice as any);
+      return mockTx;
+    }
+
+    it('allows creation when proposed invoice is within the PO total', async () => {
+      baseCreateWithSum('0');
+      await service.create(dtoWithTotal(700), userId, companyId);
+      expect(mockRepo.create).toHaveBeenCalled();
+    });
+
+    it('allows creation when approved 700 + proposed 300 == PO 1000', async () => {
+      baseCreateWithSum('700');
+      await service.create(dtoWithTotal(300), userId, companyId);
+      expect(mockRepo.create).toHaveBeenCalled();
+    });
+
+    it('rejects creation when approved 700 + proposed 301 > PO 1000', async () => {
+      baseCreateWithSum('700');
+      await expect(
+        service.create(dtoWithTotal(301), userId, companyId),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('excludes DRAFT siblings and scopes sum by PO/company/currency', async () => {
+      const mockTx = {
+        purchaseInvoiceItem: { create: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockPoRepo.lockById.mockResolvedValue(undefined);
+      // DRAFT sibling (700) is NOT in the sum -> only the proposed 300 counts
+      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(
+        new Prisma.Decimal('0'),
+      );
+      mockRepo.create.mockResolvedValue(baseInvoice as any);
+
+      await service.create(dtoWithTotal(300), userId, companyId);
+      expect(mockRepo.create).toHaveBeenCalled();
+      expect(mockRepo.sumActiveApprovedPaidByPo).toHaveBeenCalledWith(
+        poId,
+        companyId,
+        'KZT',
+        mockTx,
+      );
+    });
+
+    it('includes PAID siblings in the counted total (700 + 400 > 1000)', async () => {
+      baseCreateWithSum('700');
+      await expect(
+        service.create(dtoWithTotal(400), userId, companyId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects creation for a CANCELLED purchase order', async () => {
+      const mockTx = {};
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue({
+        ...basePo,
+        status: 'CANCELLED',
+      } as any);
+      await expect(
+        service.create(dtoWithTotal(100), userId, companyId),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          message: expect.stringContaining('CANCELLED'),
+        }),
+      );
+      expect(mockPoRepo.lockById).not.toHaveBeenCalled();
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps rejecting a currency mismatch before any overrun guard', async () => {
+      const mockTx = {};
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue({ ...basePo, currency: 'USD' } as any);
+      await expect(
+        service.create(
+          { ...dtoWithTotal(100), currency: 'EUR' as any },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPoRepo.lockById).not.toHaveBeenCalled();
+    });
+
+    it('locks the PO row before the cumulative sum on create', async () => {
+      baseCreateWithSum('0');
+      await service.create(dtoWithTotal(100), userId, companyId);
+      const lockOrder = mockPoRepo.lockById.mock.invocationCallOrder[0] ?? 0;
+      const sumOrder =
+        mockRepo.sumActiveApprovedPaidByPo.mock.invocationCallOrder[0] ?? 0;
+      expect(lockOrder).toBeGreaterThan(0);
+      expect(sumOrder).toBeGreaterThan(lockOrder);
+    });
+  });
+
+  // ── G9-D2: INVOICE OVERRUN GUARD (APPROVE) ───────────────────
+  describe('transitionStatus — G9-D2 cumulative overrun guard', () => {
+    function baseApprove(existing: string) {
+      const mockTx = {
+        purchaseInvoiceItem: {
+          findMany: jest.fn().mockResolvedValue(baseInvoice.items),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseInvoice as any); // current DRAFT (560)
+      mockPoRepo.findById.mockResolvedValue(basePo as any); // PO 1000
+      mockPoRepo.lockById.mockResolvedValue(undefined);
+      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(
+        new Prisma.Decimal(existing),
+      );
+      mockRepo.update.mockResolvedValue({
+        ...baseInvoice,
+        status: PurchaseInvoiceStatus.APPROVED,
+        approvedBy: userId,
+      } as any);
+      return mockTx;
+    }
+
+    it('allows approval when the current DRAFT (560) fits the PO (1000)', async () => {
+      baseApprove('0');
+      await service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.APPROVED,
+        userId,
+        companyId,
+      );
+      expect(mockRepo.update).toHaveBeenCalled();
+    });
+
+    it('allows approval when approved sibling 700 + current DRAFT 300 == PO 1000', async () => {
+      baseApprove('700');
+      mockRepo.findById.mockResolvedValue({
+        ...baseInvoice,
+        grandTotal: new Prisma.Decimal('300'),
+      } as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseInvoice,
+        grandTotal: new Prisma.Decimal('300'),
+        status: PurchaseInvoiceStatus.APPROVED,
+      } as any);
+      await service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.APPROVED,
+        userId,
+        companyId,
+      );
+      expect(mockRepo.update).toHaveBeenCalled();
+    });
+
+    it('rejects approval when approved sibling 700 + current DRAFT 301 > PO 1000', async () => {
+      baseApprove('700');
+      mockRepo.findById.mockResolvedValue({
+        ...baseInvoice,
+        grandTotal: new Prisma.Decimal('301'),
+      } as any);
+      await expect(
+        service.transitionStatus(
+          'inv-1',
+          PurchaseInvoiceStatus.APPROVED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('leaves the invoice DRAFT (no update) on rejected approval', async () => {
+      baseApprove('700');
+      mockRepo.findById.mockResolvedValue({
+        ...baseInvoice,
+        grandTotal: new Prisma.Decimal('301'),
+      } as any);
+      await expect(
+        service.transitionStatus(
+          'inv-1',
+          PurchaseInvoiceStatus.APPROVED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('does not publish the approval event on rejected approval', async () => {
+      baseApprove('700');
+      mockRepo.findById.mockResolvedValue({
+        ...baseInvoice,
+        grandTotal: new Prisma.Decimal('301'),
+      } as any);
+      await expect(
+        service.transitionStatus(
+          'inv-1',
+          PurchaseInvoiceStatus.APPROVED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('includes PAID siblings in the counted total during approval', async () => {
+      baseApprove('700');
+      mockRepo.findById.mockResolvedValue({
+        ...baseInvoice,
+        grandTotal: new Prisma.Decimal('301'),
+      } as any);
+      await expect(
+        service.transitionStatus(
+          'inv-1',
+          PurchaseInvoiceStatus.APPROVED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('excludes cancelled/deleted siblings (only the current 560 counts)', async () => {
+      baseApprove('0');
+      await service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.APPROVED,
+        userId,
+        companyId,
+      );
+      expect(mockRepo.update).toHaveBeenCalled();
+    });
+
+    it('locks the PO row before the cumulative sum on approval', async () => {
+      baseApprove('0');
+      await service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.APPROVED,
+        userId,
+        companyId,
+      );
+      const lockOrder = mockPoRepo.lockById.mock.invocationCallOrder[0] ?? 0;
+      const sumOrder =
+        mockRepo.sumActiveApprovedPaidByPo.mock.invocationCallOrder[0] ?? 0;
+      expect(lockOrder).toBeGreaterThan(0);
+      expect(sumOrder).toBeGreaterThan(lockOrder);
     });
   });
 });
