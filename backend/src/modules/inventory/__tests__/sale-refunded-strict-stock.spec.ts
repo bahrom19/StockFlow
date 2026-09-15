@@ -1,6 +1,7 @@
 import { StockMovementType } from '@prisma/client';
 import { SaleRefundedEventHandler } from '../events/sale-refunded.handler';
 import { InventoryRepository } from '../repositories/inventory.repository';
+import { CostingService } from '../services/costing.service';
 import { PrismaService } from '../../../common/prisma';
 
 /**
@@ -17,6 +18,7 @@ describe('SaleRefundedEventHandler — exact restore (strict stock)', () => {
     updateStock: jest.Mock;
     createStock: jest.Mock;
   };
+  let costing: { findOutLayersByReferenceAndProduct: jest.Mock; restoreLayer: jest.Mock };
   let updateStock: jest.Mock;
   let createStock: jest.Mock;
   let createMovement: jest.Mock;
@@ -49,8 +51,16 @@ describe('SaleRefundedEventHandler — exact restore (strict stock)', () => {
       updateStock,
       createStock,
     };
+    // G9-F3: the refund handler now restores FIFO cost via CostingService.
+    // These stock-ledger tests inject a mock whose lookups return no OUT
+    // layers (legacy-sale path), so the restore branch stays a no-op here.
+    costing = {
+      findOutLayersByReferenceAndProduct: jest.fn().mockResolvedValue([]),
+      restoreLayer: jest.fn(),
+    };
     handler = new SaleRefundedEventHandler(
       repo as unknown as InventoryRepository,
+      costing as unknown as CostingService,
       {} as PrismaService,
     );
   });

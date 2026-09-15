@@ -314,3 +314,216 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
     expect(lines.some((l: { accountId: string }) => l.accountId === 'acc-revenue')).toBe(true);
   });
 });
+
+/**
+ * G9-F3 — Refund Cost Integrity: the refund COGS reversal uses the SAME
+ * canonical FIFO/legacy ladder as sale completion (resolveSaleCogs).
+ *
+ * Approved policy under test:
+ * - FULL OUT coverage  → reversal = SUM(OUT.totalCost); legacy costPrice
+ *   basis must NOT appear anywhere in the journal;
+ * - NO OUT layers      → legacy sale: reversal = Σ(item.costPrice × qty),
+ *   warn-logged (existing fallback preserved);
+ * - PARTIAL coverage   → anomaly: error-logged + FULL legacy basis — FIFO and
+ *   legacy amounts are never mixed;
+ * - journal architecture unchanged (Dr Inventory / Cr COGS; revenue/cash
+ *   reversal untouched; referenceType='REFUND', referenceId=saleId).
+ */
+describe('FinanceIntegrationService.onSaleRefunded — G9-F3 FIFO COGS reversal', () => {
+  let service: FinanceIntegrationService;
+  let periods: { findCurrent: jest.Mock };
+  let gl: { post: jest.Mock };
+  let tx: {
+    chartOfAccount: { findMany: jest.Mock };
+    costLayer: { findMany: jest.Mock };
+  };
+  let warnSpy: jest.Mock;
+  let errorSpy: jest.Mock;
+
+  const accounts = [
+    { id: 'acc-cash', code: '1010' },
+    { id: 'acc-bank', code: '1020' },
+    { id: 'acc-ar', code: '1200' },
+    { id: 'acc-revenue', code: '4000' },
+    { id: 'acc-cogs', code: '5000' },
+    { id: 'acc-inventory', code: '1300' },
+  ];
+
+  const refundPayload = (
+    items: Array<{ productId: string; quantity: number; costPrice: string }>,
+  ) => ({
+    saleId: 'sale-1',
+    companyId: 'comp-1',
+    warehouseId: 'wh-1',
+    cashierId: 'user-1',
+    saleNumber: 'SALE-001',
+    total: '100',
+    currency: 'KZT',
+    items: items.map((i) => ({
+      productId: i.productId,
+      quantity: i.quantity,
+      unitPrice: '100',
+      costPrice: i.costPrice,
+      discount: '0',
+      subtotal: new Decimal('100').mul(i.quantity).toString(),
+      total: new Decimal('100').mul(i.quantity).toString(),
+      margin: '0',
+    })),
+    payments: [{ method: 'CASH', amount: '100' }],
+  });
+
+  const outLayer = (totalCost: string) => ({
+    id: `out-${totalCost}`,
+    totalCost: new Decimal(totalCost),
+  });
+
+  const postedLines = () => {
+    expect(gl.post.mock.calls.length).toBeGreaterThanOrEqual(1);
+    return gl.post.mock.calls[0][0].lines as Array<{
+      accountId: string;
+      debit: string;
+      credit: string;
+      description: string;
+    }>;
+  };
+
+  beforeEach(() => {
+    periods = { findCurrent: jest.fn().mockResolvedValue({ id: 'fp-1' }) };
+    gl = {
+      post: jest.fn().mockResolvedValue({ id: 'je-1', entryNumber: 1 }),
+    };
+    tx = {
+      chartOfAccount: { findMany: jest.fn().mockResolvedValue(accounts) },
+      costLayer: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    warnSpy = jest.fn();
+    errorSpy = jest.fn();
+    service = new FinanceIntegrationService(
+      periods as never,
+      gl as never,
+    );
+    (service as unknown as { logger: unknown }).logger = {
+      warn: warnSpy,
+      error: errorSpy,
+    };
+  });
+
+  it('uses SUM(OUT.totalCost) as the COGS reversal under full FIFO coverage and never the legacy basis', async () => {
+    tx.costLayer.findMany.mockResolvedValue([
+      outLayer('100.25'),
+      outLayer('50.75'),
+    ]);
+
+    await service.onSaleRefunded(
+      refundPayload([
+        { productId: 'prod-a', quantity: 1, costPrice: '999' },
+        { productId: 'prod-b', quantity: 1, costPrice: '999' },
+      ]),
+      tx as never,
+    );
+
+    expect(tx.costLayer.findMany).toHaveBeenCalledWith({
+      where: {
+        companyId: 'comp-1',
+        direction: 'OUT',
+        referenceType: 'SALE',
+        referenceId: 'sale-1',
+      },
+    });
+    const lines = postedLines();
+    const inventoryDebit = lines.find(
+      (l) => l.accountId === 'acc-inventory' && new Decimal(l.debit).gt(0),
+    );
+    const cogsCredit = lines.find(
+      (l) => l.accountId === 'acc-cogs' && new Decimal(l.credit).gt(0),
+    );
+    expect(inventoryDebit).toBeDefined();
+    expect(cogsCredit).toBeDefined();
+    expect(new Decimal(inventoryDebit!.debit).toString()).toBe('151');
+    expect(new Decimal(cogsCredit!.credit).toString()).toBe('151');
+    // legacy basis (999 × 2 = 1998) must appear nowhere in the journal
+    for (const l of lines) {
+      expect(new Decimal(l.debit).toString()).not.toBe('1998');
+      expect(new Decimal(l.credit).toString()).not.toBe('1998');
+    }
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the legacy costPrice basis when no OUT layers exist (legacy sale), with a warning', async () => {
+    tx.costLayer.findMany.mockResolvedValue([]);
+
+    await service.onSaleRefunded(
+      refundPayload([{ productId: 'prod-a', quantity: 2, costPrice: '30' }]),
+      tx as never,
+    );
+
+    const lines = postedLines();
+    const inventoryDebit = lines.find(
+      (l) => l.accountId === 'acc-inventory' && new Decimal(l.debit).gt(0),
+    );
+    expect(inventoryDebit).toBeDefined();
+    expect(new Decimal(inventoryDebit!.debit).toString()).toBe('60');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('fallback'));
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('uses the FULL legacy basis (no mixing) when OUT coverage is partial, with an error', async () => {
+    // 2 sale items but only 1 OUT layer → partial coverage anomaly
+    tx.costLayer.findMany.mockResolvedValue([outLayer('40')]);
+
+    await service.onSaleRefunded(
+      refundPayload([
+        { productId: 'prod-a', quantity: 1, costPrice: '30' },
+        { productId: 'prod-b', quantity: 1, costPrice: '30' },
+      ]),
+      tx as never,
+    );
+
+    const lines = postedLines();
+    const inventoryDebit = lines.find(
+      (l) => l.accountId === 'acc-inventory' && new Decimal(l.debit).gt(0),
+    );
+    expect(inventoryDebit).toBeDefined();
+    // full legacy basis: 30 + 30 = 60 (never the mixed 40)
+    expect(new Decimal(inventoryDebit!.debit).toString()).toBe('60');
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('anomaly'));
+  });
+
+  it('keeps the journal architecture unchanged: revenue/cash reversal and REFUND reference', async () => {
+    tx.costLayer.findMany.mockResolvedValue([outLayer('151')]);
+
+    await service.onSaleRefunded(
+      refundPayload([{ productId: 'prod-a', quantity: 1, costPrice: '30' }]),
+      tx as never,
+    );
+
+    const posted = gl.post.mock.calls[0][0];
+    expect(posted.referenceType).toBe('REFUND');
+    expect(posted.referenceId).toBe('sale-1');
+    expect(posted.companyId).toBe('comp-1');
+    const lines = postedLines();
+    const revDebit = lines.find(
+      (l) => l.accountId === 'acc-revenue' && new Decimal(l.debit).gt(0),
+    );
+    const cashCredit = lines.find(
+      (l) => l.accountId === 'acc-cash' && new Decimal(l.credit).gt(0),
+    );
+    expect(revDebit).toBeDefined();
+    expect(new Decimal(revDebit!.debit).toString()).toBe('100');
+    expect(cashCredit).toBeDefined();
+    expect(new Decimal(cashCredit!.credit).toString()).toBe('100');
+    // total debit == total credit
+    const totalDebit = lines.reduce(
+      (acc, l) => acc.plus(new Decimal(l.debit ?? '0')),
+      new Decimal(0),
+    );
+    const totalCredit = lines.reduce(
+      (acc, l) => acc.plus(new Decimal(l.credit ?? '0')),
+      new Decimal(0),
+    );
+    expect(totalDebit.toString()).toBe(totalCredit.toString());
+    // same transaction client reaches glEngine.post untouched
+    expect(gl.post).toHaveBeenCalledWith(expect.any(Object), tx);
+  });
+});

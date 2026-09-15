@@ -261,7 +261,7 @@ export class FinanceIntegrationService {
    *                    roll back with the sale); surfaced for ops follow-up.
    */
   private resolveSaleCogs(
-    event: SaleCompletedEventPayload,
+    event: Pick<SaleCompletedEventPayload, 'saleId' | 'items'>,
     outCostLayers: Array<{ totalCost: Decimal }>,
   ): { totalCost: Decimal; source: 'FIFO_OUT' | 'LEGACY_COST_PRICE' } {
     const legacyTotal = (): Decimal => {
@@ -360,10 +360,23 @@ export class FinanceIntegrationService {
     }
 
     // Reverse COGS: Debit Inventory, Credit COGS
-    let totalCost = new Decimal(0);
-    for (const item of event.items) {
-      totalCost = totalCost.add(new Decimal(item.costPrice).mul(item.quantity));
-    }
+    //
+    // G9-F3: the reversal uses the SAME canonical costing ladder as sale
+    // completion (resolveSaleCogs): when the sale's OUT CostLayers fully
+    // cover the sale items, the reversal is priced at SUM(OUT.totalCost) —
+    // the exact value the Inventory refund handler restores through IN
+    // layers. Otherwise (legacy sale with no OUT layers, or partial-coverage
+    // anomaly) the full legacy Σ(item.costPrice × quantity) basis is used;
+    // FIFO and legacy amounts are never mixed.
+    const outCostLayers = await tx.costLayer.findMany({
+      where: {
+        companyId: event.companyId,
+        direction: 'OUT',
+        referenceType: 'SALE',
+        referenceId: event.saleId,
+      },
+    });
+    const { totalCost } = this.resolveSaleCogs(event, outCostLayers);
 
     if (totalCost.gt(0) && cogsAccountId && inventoryAccountId) {
       lines.push({

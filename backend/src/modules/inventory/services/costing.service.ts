@@ -268,6 +268,31 @@ export class CostingService {
     );
   }
 
+  /**
+   * G9-F3: find ALL immutable OUT costing records for a consuming document
+   * and a specific product (a multi-item sale can contain the same product
+   * in several items, producing multiple OUT layers with identical
+   * references). Callers aggregate quantity and totalCost across the rows —
+   * never rely on the earliest row alone. Company-scoped, read-only,
+   * deterministic ordering; the existing findOutLayerByReference contract is
+   * untouched.
+   */
+  async findOutLayersByReferenceAndProduct(
+    companyId: string,
+    referenceType: string,
+    referenceId: string,
+    productId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CostLayer[]> {
+    return this.inventoryRepository.findOutLayersByReferenceAndProduct(
+      companyId,
+      referenceType,
+      referenceId,
+      productId,
+      tx,
+    );
+  }
+
   async getValuation(companyId: string): Promise<any[]> {
     const stock = await this.inventoryRepository.findAllStock(companyId);
     const valuations: any[] = [];

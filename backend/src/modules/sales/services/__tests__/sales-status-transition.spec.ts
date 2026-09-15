@@ -228,6 +228,23 @@ describe('SalesService — transitionStatus (D1 regression)', () => {
         ),
       ).rejects.toThrow(BadRequestException);
     });
+
+    // G9-F3: REFUNDED is terminal — a duplicate refund transition must be
+    // rejected, so no second restore/journal can ever be produced.
+    it('should reject REFUNDED → REFUNDED (duplicate refund, terminal state)', async () => {
+      const mockSale = createMockSale(SaleStatus.REFUNDED);
+      mockSalesRepo.findById.mockResolvedValue(mockSale);
+
+      await expect(
+        service.transitionStatus(
+          'sale-1',
+          SaleStatus.REFUNDED,
+          'user-1',
+          'company-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockSalesRepo.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('Sale not found', () => {

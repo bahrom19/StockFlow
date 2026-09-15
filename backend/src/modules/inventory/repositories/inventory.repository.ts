@@ -328,6 +328,34 @@ export class InventoryRepository {
     });
   }
 
+  /**
+   * G9-F3: find ALL immutable OUT costing records (direction OUT) for a
+   * consuming document AND a specific product. A multi-item sale can contain
+   * the same product in several items, producing multiple OUT layers with
+   * identical (companyId, referenceType, referenceId, productId) — callers
+   * must aggregate quantity and totalCost across the rows instead of relying
+   * on the earliest row alone. Company-scoped, read-only, deterministic
+   * ordering (createdAt, then id as a stable tiebreaker).
+   */
+  async findOutLayersByReferenceAndProduct(
+    companyId: string,
+    referenceType: string,
+    referenceId: string,
+    productId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CostLayer[]> {
+    return this.prisma(tx).costLayer.findMany({
+      where: {
+        companyId,
+        productId,
+        direction: 'OUT',
+        referenceType,
+        referenceId,
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   // ════════════════════════════════════════
   // INVENTORY COUNT
   // ════════════════════════════════════════
