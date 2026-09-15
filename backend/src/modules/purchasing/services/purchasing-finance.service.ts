@@ -97,8 +97,19 @@ export class PurchasingFinanceService {
   /**
    * Create journal entries for a purchase return.
    *
-   * Debit:  Accounts Payable (liability decrease)
-   * Credit: Inventory (asset decrease)
+   * Debit:  Accounts Payable (liability decrease at the DECLARED supplier
+   *         return value)
+   * Credit: Inventory (asset decrease at the ACTUAL FIFO consumed cost)
+   * Dr/Cr:  Purchase Discounts and Write-Offs (explicit cost-variance leg
+   *         when declared AP value ≠ FIFO cost: credit when the supplier
+   *         return value exceeds the FIFO cost — the excess supplier credit
+   *         reduces purchase cost — and debit when the FIFO cost exceeds the
+   *         supplier credit — a write-off)
+   *
+   * G9-F4: `fifoCostItems` carries the canonical Inventory relief (the sum
+   * returned by CostingService.consumeFifoLayers for the same return, same
+   * transaction). When omitted, the declared item cost basis is used so
+   * legacy/non-costed flows keep their historical journal shape.
    */
   async createPurchaseReturnJournal(
     params: {
@@ -106,6 +117,11 @@ export class PurchasingFinanceService {
       returnNumber: string;
       returnDate: Date;
       items: Array<{ productId: string; quantity: number; unitCost: string }>;
+      fifoCostItems?: Array<{
+        productId: string;
+        quantity: number;
+        totalCost: string;
+      }>;
       createdBy: string;
     },
     tx: Prisma.TransactionClient,
@@ -113,13 +129,61 @@ export class PurchasingFinanceService {
     const accounts = await this.getAccountIds(params.companyId, tx);
     if (!accounts) return;
 
-    const totalAmount = params.items.reduce((sum, item) => {
+    const declaredTotal = params.items.reduce((sum, item) => {
       return sum.add(new Decimal(item.unitCost).mul(item.quantity));
     }, new Decimal(0));
 
-    if (totalAmount.isZero()) return;
+    // G9-F4: canonical Inventory relief = actual FIFO consumed cost when a
+    // FIFO basis is provided; otherwise the declared basis (legacy shape).
+    let inventoryCredit: Decimal;
+    if (params.fifoCostItems && params.fifoCostItems.length > 0) {
+      inventoryCredit = params.fifoCostItems.reduce(
+        (sum, item) => sum.add(new Decimal(item.totalCost)),
+        new Decimal(0),
+      );
+    } else {
+      inventoryCredit = declaredTotal;
+    }
+    const variance = declaredTotal.sub(inventoryCredit);
+
+    if (declaredTotal.isZero() && inventoryCredit.isZero()) return;
 
     const description = `Purchase return: ${params.returnNumber}`;
+
+    const lines: Array<{
+      accountId: string;
+      debit: string;
+      credit: string;
+      description?: string;
+    }> = [
+      {
+        accountId: accounts.accountsPayable,
+        debit: declaredTotal.toString(),
+        credit: '0',
+        description: `Return to supplier: ${params.returnNumber}`,
+      },
+    ];
+    if (!inventoryCredit.isZero()) {
+      lines.push({
+        accountId: accounts.inventory,
+        debit: '0',
+        credit: inventoryCredit.toString(),
+        description: `Inventory decrease (FIFO cost): ${params.returnNumber}`,
+      });
+    }
+    // Explicit cost-variance leg on the approved variance account (5200).
+    // Balance identity: Dr AP(declared) = Cr Inventory(FIFO) + variance
+    //   => variance > 0 (declared > FIFO) → CREDIT (excess supplier credit
+    //      reduces purchase cost); variance < 0 → DEBIT (write-off).
+    // Skipped when the two bases agree (current G10-A zero-line convention).
+    if (!variance.isZero()) {
+      lines.push({
+        accountId: accounts.purchaseDiscount,
+        debit: variance.lt(0) ? variance.abs().toString() : '0',
+        credit: variance.gt(0) ? variance.toString() : '0',
+        description: `Purchase return cost variance: ${params.returnNumber}`,
+      });
+    }
 
     await this.glEngine.post(
       {
@@ -130,20 +194,7 @@ export class PurchasingFinanceService {
         referenceType: 'PURCHASE_RETURN',
         referenceId: params.returnNumber,
         createdBy: params.createdBy,
-        lines: [
-          {
-            accountId: accounts.accountsPayable,
-            debit: totalAmount.toString(),
-            credit: '0',
-            description: `Return to supplier: ${params.returnNumber}`,
-          },
-          {
-            accountId: accounts.inventory,
-            debit: '0',
-            credit: totalAmount.toString(),
-            description: `Inventory decrease: ${params.returnNumber}`,
-          },
-        ],
+        lines,
       },
       tx,
     );

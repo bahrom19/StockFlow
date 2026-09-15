@@ -14,6 +14,7 @@ import { UpdatePurchaseReturnDto } from '../dto/update-purchase-return.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { CompaniesService } from '../../companies/services/companies.service';
 import { PurchasingFinanceService } from '../services/purchasing-finance.service';
+import { CostingService } from '../../inventory/services/costing.service';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -69,6 +70,7 @@ describe('PurchaseReturnService', () => {
   let mockPrisma: Record<string, jest.Mock>;
   let mockEventBus: { publish: jest.Mock };
   let mockFinance: { createPurchaseReturnJournal: jest.Mock };
+  let mockCosting: { consumeFifoLayers: jest.Mock };
   const mockTransaction = jest.fn();
 
   beforeEach(async () => {
@@ -83,6 +85,17 @@ describe('PurchaseReturnService', () => {
     } as any;
     mockEventBus = { publish: jest.fn().mockResolvedValue(undefined) };
     mockFinance = { createPurchaseReturnJournal: jest.fn().mockResolvedValue(undefined) };
+    mockCosting = {
+      // G9-F4: default FIFO basis covers the fixture item exactly
+      // (5 × 20 = 100), so legacy journal expectations stay unchanged.
+      consumeFifoLayers: jest
+        .fn()
+        .mockResolvedValue({
+          totalCost: new Decimal('100'),
+          layers: [],
+          fallbackCost: new Decimal('0'),
+        }),
+    };
     mockPrisma = { $transaction: mockTransaction };
 
     const mod = await Test.createTestingModule({
@@ -93,6 +106,7 @@ describe('PurchaseReturnService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: EVENT_BUS, useValue: mockEventBus },
         { provide: PurchasingFinanceService, useValue: mockFinance },
+        { provide: CostingService, useValue: mockCosting },
       ],
     }).compile();
     service = mod.get(PurchaseReturnService);
@@ -840,6 +854,172 @@ describe('PurchaseReturnService', () => {
       expect(mockRepo.completeIfApproved).not.toHaveBeenCalled();
       expect(mockFinance.createPurchaseReturnJournal).not.toHaveBeenCalled();
       expect(mockRepo.update).toHaveBeenCalled();
+    });
+  });
+
+  // ── G9-F4: FIFO cost integrity on COMPLETE ──────────────────────────────
+  describe('transitionStatus — G9-F4 FIFO cost consumption', () => {
+    const approved = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
+
+    function fifoCompleteTx() {
+      const mockTx = {
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(baseReturn.items),
+        },
+        stock: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 's-1',
+            quantity: 50,
+            reservedQuantity: 0,
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        stockMovement: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      return mockTx;
+    }
+
+    it('consumes FIFO for each item with the return reference inside the same transaction', async () => {
+      const mockTx = fifoCompleteTx();
+      mockRepo.findById.mockResolvedValue(approved as any);
+      mockRepo.findById
+        .mockResolvedValueOnce(approved as any)
+        .mockResolvedValueOnce({
+          ...approved,
+          status: PurchaseReturnStatus.COMPLETED,
+        } as any);
+
+      await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.COMPLETED,
+        userId,
+        companyId,
+      );
+
+      expect(mockCosting.consumeFifoLayers).toHaveBeenCalledTimes(1);
+      expect(mockCosting.consumeFifoLayers).toHaveBeenCalledWith(
+        productId,
+        companyId,
+        5,
+        'PURCHASE_RETURN',
+        'pr-1',
+        mockTx,
+      );
+    });
+
+    it('passes the FIFO totalCost to the journal as the Inventory relief', async () => {
+      const mockTx = fifoCompleteTx();
+      mockCosting.consumeFifoLayers.mockResolvedValue({
+        totalCost: new Decimal('85'),
+        layers: [],
+        fallbackCost: new Decimal('0'),
+      });
+      mockRepo.findById.mockResolvedValue(approved as any);
+
+      await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.COMPLETED,
+        userId,
+        companyId,
+      );
+
+      expect(mockFinance.createPurchaseReturnJournal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [expect.objectContaining({ productId, quantity: 5, unitCost: '20' })],
+          fifoCostItems: [
+            { productId, quantity: 5, totalCost: '85' },
+          ],
+        }),
+        mockTx,
+      );
+    });
+
+    it('consumes FIFO for every item of a multi-item return', async () => {
+      const twoItems = {
+        ...approved,
+        items: [
+          { ...baseReturn.items[0], id: 'pri-1', productId: 'prod-1' },
+          {
+            ...baseReturn.items[0],
+            id: 'pri-2',
+            productId: 'prod-2',
+            quantity: 3,
+            unitCost: new Prisma.Decimal('10'),
+          },
+        ],
+      };
+      mockRepo.findById.mockResolvedValue(twoItems as any);
+      const mockTx = fifoCompleteTx();
+      mockTx.purchaseReturnItem.findMany.mockResolvedValue(twoItems.items);
+
+      await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.COMPLETED,
+        userId,
+        companyId,
+      );
+
+      expect(mockCosting.consumeFifoLayers).toHaveBeenCalledTimes(2);
+      expect(mockCosting.consumeFifoLayers).toHaveBeenCalledWith(
+        'prod-1', companyId, 5, 'PURCHASE_RETURN', 'pr-1', mockTx,
+      );
+      expect(mockCosting.consumeFifoLayers).toHaveBeenCalledWith(
+        'prod-2', companyId, 3, 'PURCHASE_RETURN', 'pr-1', mockTx,
+      );
+      expect(mockFinance.createPurchaseReturnJournal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fifoCostItems: [
+            expect.objectContaining({ productId: 'prod-1', totalCost: '100' }),
+            expect.objectContaining({ productId: 'prod-2', totalCost: '100' }),
+          ],
+        }),
+        mockTx,
+      );
+    });
+
+    it('rolls back the whole return when FIFO consumption fails (no basis)', async () => {
+      const mockTx = fifoCompleteTx();
+      mockCosting.consumeFifoLayers.mockRejectedValue(
+        new Error('No FIFO basis available'),
+      );
+      mockRepo.findById.mockResolvedValue(approved as any);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow('No FIFO basis available');
+
+      // FIFO ran after the stock mutation in the same tx — a real $transaction
+      // rolls stock + movement + status back together.
+      expect(mockTx.stock.updateMany).toHaveBeenCalled();
+      expect(mockFinance.createPurchaseReturnJournal).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('performs no FIFO consumption for non-COMPLETED transitions', async () => {
+      const mockTx = {
+        purchaseReturnItem: { findMany: jest.fn().mockResolvedValue([]) },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseReturn,
+        status: PurchaseReturnStatus.APPROVED,
+      } as any);
+
+      await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.APPROVED,
+        userId,
+        companyId,
+      );
+
+      expect(mockCosting.consumeFifoLayers).not.toHaveBeenCalled();
     });
   });
 

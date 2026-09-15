@@ -22,6 +22,7 @@ import { PurchaseReturnRepository } from '../repositories/purchase-return.reposi
 import { PurchaseReturnedEvent } from '../events/purchase-returned.event';
 import { CompaniesService } from '../../companies/services/companies.service';
 import { PurchasingFinanceService } from './purchasing-finance.service';
+import { CostingService } from '../../inventory/services/costing.service';
 
 const VALID_RETURN_TRANSITIONS: Record<
   PurchaseReturnStatus,
@@ -49,6 +50,7 @@ export class PurchaseReturnService {
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
     private readonly companiesService: CompaniesService,
     private readonly purchasingFinanceService: PurchasingFinanceService,
+    private readonly costingService: CostingService,
   ) {}
 
   async create(
@@ -469,10 +471,42 @@ export class PurchaseReturnService {
       // Accounting Model C) inside the same transaction, only after the CAS
       // win. A journal failure rolls back the stock mutation, movements and
       // the status transition.
+      //
+      // G9-F4: the Inventory relief is priced at the ACTUAL FIFO consumed
+      // cost — for each item, consume the same quantity the stock decrement
+      // removed from the canonical FIFO pool (referenceType='PURCHASE_RETURN',
+      // referenceId=return id), then hand Σ totalCost to the journal as the
+      // canonical Inventory credit. The declared supplier return value (Dr AP)
+      // stays untouched; any difference posts as an explicit 5200 variance
+      // leg. Consumption runs strictly after the stock guard/decrement and
+      // inside the same transaction, so a FIFO failure rolls back the whole
+      // COMPLETE transition. Shortfalls ride the existing G9-F1 FALLBACK B
+      // (tenant-scoped product.costPrice, folded into totalCost, warn-logged);
+      // no cost basis at all throws per the existing contract.
       if (completedTransition) {
         const journalItems = await tx.purchaseReturnItem.findMany({
           where: { purchaseReturnId: id },
         });
+        const fifoCostItems: Array<{
+          productId: string;
+          quantity: number;
+          totalCost: string;
+        }> = [];
+        for (const item of journalItems) {
+          const consumed = await this.costingService.consumeFifoLayers(
+            item.productId,
+            companyId,
+            item.quantity,
+            'PURCHASE_RETURN',
+            id,
+            tx,
+          );
+          fifoCostItems.push({
+            productId: item.productId,
+            quantity: item.quantity,
+            totalCost: consumed.totalCost.toString(),
+          });
+        }
         await this.purchasingFinanceService.createPurchaseReturnJournal(
           {
             companyId,
@@ -483,6 +517,7 @@ export class PurchaseReturnService {
               quantity: i.quantity,
               unitCost: i.unitCost.toString(),
             })),
+            fifoCostItems,
             createdBy: userId,
           },
           tx,

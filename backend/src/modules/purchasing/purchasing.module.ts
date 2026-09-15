@@ -26,9 +26,10 @@ import { RFQService } from './services/rfq.service';
 import { SupplierQuotationService } from './services/supplier-quotation.service';
 import { PurchasingFinanceService } from './services/purchasing-finance.service';
 import { AuditLogService } from '../shared/services/audit-log.service';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [PrismaModule, SharedModule, FinanceModule, IdempotencyModule, CompaniesModule],
+  imports: [PrismaModule, SharedModule, FinanceModule, IdempotencyModule, CompaniesModule, InventoryModule],
   controllers: [
     PurchaseOrderController,
     GoodsReceiptController,
