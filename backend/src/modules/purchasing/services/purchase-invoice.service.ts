@@ -5,7 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PurchaseInvoiceStatus, PurchaseOrderStatus, Currency } from '@prisma/client';
+import {
+  Prisma,
+  PurchaseInvoice,
+  PurchaseInvoiceStatus,
+  PurchaseOrderStatus,
+  Currency,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
@@ -15,6 +21,7 @@ import { PurchaseInvoiceEntity } from '../entities/purchase-invoice.entity';
 import { PurchaseInvoiceMapper } from '../mappers/purchase-invoice.mapper';
 import { PurchaseInvoiceRepository } from '../repositories/purchase-invoice.repository';
 import { PurchaseOrderRepository } from '../repositories/purchase-order.repository';
+import { PurchasingFinanceService } from './purchasing-finance.service';
 import { PurchaseInvoicePostedEvent } from '../events/purchase-invoice-posted.event';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 
@@ -35,6 +42,7 @@ export class PurchaseInvoiceService {
     private readonly purchaseOrderRepository: PurchaseOrderRepository,
     private readonly prismaService: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly purchasingFinanceService: PurchasingFinanceService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
 
@@ -341,27 +349,41 @@ export class PurchaseInvoiceService {
         }
       }
 
-      const updateData: Prisma.PurchaseInvoiceUpdateInput = {
-        status: newStatus,
-      };
-      if (newStatus === PurchaseInvoiceStatus.APPROVED) {
-        updateData.approvedBy = userId;
-        updateData.approvedAt = new Date();
-      }
-      if (newStatus === PurchaseInvoiceStatus.CANCELLED) {
-        updateData.cancelledBy = userId;
-        updateData.cancelledAt = new Date();
-      }
+      let updated: PurchaseInvoice;
 
-      const updated = await this.repository.update(
-        id,
-        updateData,
-        companyId,
-        tx,
-      );
-
-      // Publish event on approval
       if (newStatus === PurchaseInvoiceStatus.APPROVED) {
+        // G10-A: atomic CAS approval (rowVersion + status = DRAFT guard).
+        // A concurrent duplicate approval loses the CAS and gets 409 BEFORE
+        // any journal posting or event publication — no duplicate GL entry,
+        // no duplicate purchase.invoice.posted event.
+        updated = await this.repository.approveWithCas(
+          id,
+          companyId,
+          invoice.rowVersion,
+          userId,
+          tx,
+        );
+
+        // G10-A: post the GRNI settlement journal inside the SAME
+        // transaction, only after the CAS win. Failure here rolls back the
+        // entire approval (no APPROVED invoice without its journal).
+        // Phase 7 decision: direct in-transaction GL posting — no EventBus
+        // subscriber; the event below remains an audit/future hook.
+        await this.purchasingFinanceService.createInvoiceJournal(
+          {
+            companyId,
+            invoiceNumber: updated.invoiceNumber,
+            invoiceDate: updated.invoiceDate,
+            subtotal: updated.subtotal.toString(),
+            discountAmount: updated.discountAmount.toString(),
+            taxAmount: updated.taxAmount.toString(),
+            grandTotal: updated.grandTotal.toString(),
+            createdBy: userId,
+          },
+          tx,
+        );
+
+        // Publish event on approval (after successful accounting/state flow).
         const items = await tx.purchaseInvoiceItem.findMany({
           where: { purchaseInvoiceId: id },
         });
@@ -385,6 +407,21 @@ export class PurchaseInvoiceService {
             })),
           }),
           { context: { transactionClient: tx } },
+        );
+      } else {
+        const updateData: Prisma.PurchaseInvoiceUpdateInput = {
+          status: newStatus,
+        };
+        if (newStatus === PurchaseInvoiceStatus.CANCELLED) {
+          updateData.cancelledBy = userId;
+          updateData.cancelledAt = new Date();
+        }
+
+        updated = await this.repository.update(
+          id,
+          updateData,
+          companyId,
+          tx,
         );
       }
 

@@ -15,6 +15,7 @@ import { PurchaseOrderRepository } from '../repositories/purchase-order.reposito
 import { PurchaseOrderService } from '../services/purchase-order.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { PurchasingFinanceService } from '../services/purchasing-finance.service';
+import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { EVENT_BUS } from '../../../common/events';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { CreateGoodsReceiptDto } from '../dto/create-goods-receipt.dto';
@@ -551,6 +552,110 @@ describe('GoodsReceiptService', () => {
       await expect(service.softDelete('x', companyId)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // G10-A: goods-receipt GRNI accounting (real PurchasingFinanceService)
+  // ─────────────────────────────────────────────────────────────
+  describe('G10-A goods receipt GRNI accounting', () => {
+    const glEngine = { post: jest.fn().mockResolvedValue({ id: 'je-1' }) };
+    let financeService: PurchasingFinanceService;
+
+    beforeEach(async () => {
+      glEngine.post.mockClear();
+      const mod = await Test.createTestingModule({
+        providers: [
+          PurchasingFinanceService,
+          { provide: GlEngineService, useValue: glEngine },
+        ],
+      }).compile();
+      financeService = mod.get(PurchasingFinanceService);
+    });
+
+    function coaTx() {
+      return {
+        chartOfAccount: {
+          findMany: jest.fn().mockResolvedValue([
+            { id: 'acct-1300', code: '1300' },
+            { id: 'acct-2110', code: '2110' },
+            { id: 'acct-2100', code: '2100' },
+            { id: 'acct-5200', code: '5200' },
+          ]),
+        },
+        financialPeriod: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'period-1' }),
+        },
+      } as any;
+    }
+
+    it('posts Dr Inventory 1300 / Cr GRNI 2110 with the receipt total', async () => {
+      await financeService.createGoodsReceiptJournal(
+        {
+          companyId,
+          warehouseId,
+          receiptNumber: 'GR-001',
+          receiptDate: new Date(),
+          items: [
+            { productId, quantity: 10, unitCost: '10' },
+            { productId, quantity: 5, unitCost: '4.5' },
+          ],
+          createdBy: userId,
+        },
+        coaTx(),
+      );
+
+      const call = glEngine.post.mock.calls[0][0];
+      expect(call.referenceType).toBe('GOODS_RECEIPT');
+      expect(call.referenceId).toBe('GR-001');
+      expect(call.companyId).toBe(companyId);
+      const lines = call.lines;
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toMatchObject({ accountId: 'acct-1300', debit: '122.5', credit: '0' });
+      expect(lines[1]).toMatchObject({ accountId: 'acct-2110', debit: '0', credit: '122.5' });
+      // total = 10×10 + 5×4.5 = 122.5 (Decimal-exact)
+      expect(new Prisma.Decimal(lines[0].debit).equals(new Prisma.Decimal('122.5'))).toBe(true);
+    });
+
+    it('skips journaling gracefully when GRNI 2110 is missing (pre-backfill tenant)', async () => {
+      const tx = coaTx();
+      tx.chartOfAccount.findMany.mockResolvedValue([
+        { id: 'acct-1300', code: '1300' },
+        { id: 'acct-2100', code: '2100' },
+      ]);
+      await financeService.createGoodsReceiptJournal(
+        {
+          companyId,
+          warehouseId,
+          receiptNumber: 'GR-002',
+          receiptDate: new Date(),
+          items: [{ productId, quantity: 1, unitCost: '10' }],
+          createdBy: userId,
+        },
+        tx,
+      );
+      expect(glEngine.post).not.toHaveBeenCalled();
+    });
+
+    it('tenant isolation: CoA lookup is company-scoped (companyId carried into the where clause)', async () => {
+      const tx = coaTx();
+      await financeService.createGoodsReceiptJournal(
+        {
+          companyId: 'other-company',
+          warehouseId,
+          receiptNumber: 'GR-003',
+          receiptDate: new Date(),
+          items: [{ productId, quantity: 1, unitCost: '10' }],
+          createdBy: userId,
+        },
+        tx,
+      );
+      expect(tx.chartOfAccount.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ companyId: 'other-company' }),
+        }),
+      );
+      expect(glEngine.post.mock.calls[0][0].companyId).toBe('other-company');
     });
   });
 });

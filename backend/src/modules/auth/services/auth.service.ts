@@ -739,13 +739,22 @@ export class AuthService {
         sortOrder: 5,
       },
       {
+        code: '2110',
+        name: 'Goods Received Not Invoiced',
+        description: 'Accrual for goods received but not yet invoiced (G10-A)',
+        accountType: AccountType.LIABILITY,
+        normalBalance: NormalBalance.CREDIT,
+        isSystem: true,
+        sortOrder: 6,
+      },
+      {
         code: '4000',
         name: 'Sales Revenue',
         description: 'Revenue from sales',
         accountType: AccountType.REVENUE,
         normalBalance: NormalBalance.CREDIT,
         isSystem: true,
-        sortOrder: 6,
+        sortOrder: 7,
       },
       {
         code: '5000',
@@ -754,7 +763,7 @@ export class AuthService {
         accountType: AccountType.EXPENSE,
         normalBalance: NormalBalance.DEBIT,
         isSystem: true,
-        sortOrder: 7,
+        sortOrder: 8,
       },
       {
         code: '5100',
@@ -763,7 +772,7 @@ export class AuthService {
         accountType: AccountType.EXPENSE,
         normalBalance: NormalBalance.DEBIT,
         isSystem: true,
-        sortOrder: 8,
+        sortOrder: 9,
       },
       {
         code: '5200',
@@ -772,7 +781,7 @@ export class AuthService {
         accountType: AccountType.EXPENSE,
         normalBalance: NormalBalance.DEBIT,
         isSystem: true,
-        sortOrder: 9,
+        sortOrder: 10,
       },
     ];
 

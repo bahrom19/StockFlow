@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Currency, Prisma, PurchaseInvoice, PurchaseInvoiceStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
@@ -137,6 +141,47 @@ export class PurchaseInvoiceRepository {
     tx?: Prisma.TransactionClient,
   ): Promise<PurchaseInvoice> {
     return this.update(id, { status }, companyId, tx);
+  }
+
+  // G10-A: atomic DRAFT → APPROVED transition. The WHERE clause carries
+  // id + companyId + rowVersion + status = DRAFT, so exactly one concurrent
+  // approval can win; the loser gets count = 0 → ConflictException. Mirrors
+  // the CAS updateMany pattern used by supplier payments and stock.
+  async approveWithCas(
+    id: string,
+    companyId: string,
+    expectedRowVersion: number,
+    approvedBy: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<PurchaseInvoice> {
+    const result = await this.getClient(tx).purchaseInvoice.updateMany({
+      where: {
+        id,
+        companyId,
+        rowVersion: expectedRowVersion,
+        status: PurchaseInvoiceStatus.DRAFT,
+      },
+      data: {
+        status: PurchaseInvoiceStatus.APPROVED,
+        approvedBy,
+        approvedAt: new Date(),
+        rowVersion: { increment: 1 },
+      },
+    });
+
+    if (result.count === 0) {
+      throw new ConflictException(
+        'Invoice was modified or approved by another user. Please refresh and retry.',
+      );
+    }
+
+    // Re-read the authoritative row inside the same transaction for the
+    // journal/event payload.
+    const approved = await this.findById(id, companyId, tx);
+    if (!approved) {
+      throw new NotFoundException(`Purchase invoice with id ${id} not found`);
+    }
+    return approved;
   }
 
   // G9-D2 (P1): cumulative SUM of APPROVED/PAID.active (deletedAt IS NULL)

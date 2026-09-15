@@ -10,6 +10,7 @@ import { GlEngineService } from '../../finance/services/gl-engine.service';
 const ACCOUNT_CODES = {
   INVENTORY: '1300',
   ACCOUNTS_PAYABLE: '2100',
+  GRNI: '2110',
   PURCHASE_DISCOUNT: '5200',
   COGS: '5000',
   INVENTORY_ADJUSTMENT: '5100',
@@ -61,6 +62,10 @@ export class PurchasingFinanceService {
 
     const description = `Goods receipt: ${params.receiptNumber}`;
 
+    // G10-A: receipts accrue against GRNI (Goods Received Not Invoiced),
+    // NOT against AP. AP is credited only when the purchase invoice is
+    // approved (createInvoiceJournal), keeping GL AP invoice-based and
+    // aligned with the G9 operational AP definition.
     await this.glEngine.post(
       {
         companyId: params.companyId,
@@ -78,7 +83,7 @@ export class PurchasingFinanceService {
             description: `Inventory increase: ${params.receiptNumber}`,
           },
           {
-            accountId: accounts.accountsPayable,
+            accountId: accounts.grni,
             debit: '0',
             credit: totalAmount.toString(),
             description: `Goods received not invoiced: ${params.receiptNumber}`,
@@ -145,10 +150,22 @@ export class PurchasingFinanceService {
   }
 
   /**
-   * Create journal entries for a purchase invoice.
+   * Create journal entries for purchase invoice approval (G10-A).
    *
-   * Debit:  Goods Received Not Invoiced (accrual reversal)
-   * Credit: Accounts Payable (liability)
+   * Debit:  GRNI (settle the goods-received accrual at invoice subtotal)
+   * Debit:  Purchase Discounts & Write-Offs (purchase tax — expense;
+   *         dedicated tax subsystem is deferred)
+   * Credit: Purchase Discounts & Write-Offs (purchase discount recognized;
+   *         credit reduces the debit-normal expense account)
+   * Credit: Accounts Payable (grandTotal — GL AP becomes invoice-based)
+   *
+   * Balanced by the invoice identity:
+   *   grandTotal = subtotal - discountAmount + taxAmount
+   *   => subtotal + taxAmount = grandTotal + discountAmount
+   *
+   * Zero-value lines are skipped. If the invoice total exceeds the received
+   * value, GRNI goes negative (accepted, visible overbilling accrual); the
+   * reverse leaves a positive GRNI residue until further receipts/invoices.
    */
   async createInvoiceJournal(
     params: {
@@ -156,6 +173,7 @@ export class PurchasingFinanceService {
       invoiceNumber: string;
       invoiceDate: Date;
       subtotal: string;
+      discountAmount: string;
       taxAmount: string;
       grandTotal: string;
       createdBy: string;
@@ -165,8 +183,12 @@ export class PurchasingFinanceService {
     const accounts = await this.getAccountIds(params.companyId, tx);
     if (!accounts) return;
 
-    const total = new Decimal(params.grandTotal);
-    if (total.isZero()) return;
+    const subtotal = new Decimal(params.subtotal);
+    const discountAmount = new Decimal(params.discountAmount);
+    const taxAmount = new Decimal(params.taxAmount);
+    const grandTotal = new Decimal(params.grandTotal);
+
+    if (grandTotal.isZero()) return;
 
     const description = `Purchase invoice: ${params.invoiceNumber}`;
 
@@ -175,23 +197,38 @@ export class PurchasingFinanceService {
       debit: string;
       credit: string;
       description?: string;
-    }> = [
-      {
-        accountId: accounts.accountsPayable,
-        debit: '0',
-        credit: total.toString(),
-        description: `Supplier invoice: ${params.invoiceNumber}`,
-      },
-    ];
+    }> = [];
 
-    if (!new Decimal(params.taxAmount).isZero()) {
+    if (!subtotal.isZero()) {
       lines.push({
-        accountId: accounts.inventory,
-        debit: new Decimal(params.subtotal).toString(),
+        accountId: accounts.grni,
+        debit: subtotal.toString(),
         credit: '0',
-        description: `Inventory clearance: ${params.invoiceNumber}`,
+        description: `GRNI settlement: ${params.invoiceNumber}`,
       });
     }
+    if (!taxAmount.isZero()) {
+      lines.push({
+        accountId: accounts.purchaseDiscount,
+        debit: taxAmount.toString(),
+        credit: '0',
+        description: `Purchase tax: ${params.invoiceNumber}`,
+      });
+    }
+    if (!discountAmount.isZero()) {
+      lines.push({
+        accountId: accounts.purchaseDiscount,
+        debit: '0',
+        credit: discountAmount.toString(),
+        description: `Purchase discount: ${params.invoiceNumber}`,
+      });
+    }
+    lines.push({
+      accountId: accounts.accountsPayable,
+      debit: '0',
+      credit: grandTotal.toString(),
+      description: `Supplier invoice: ${params.invoiceNumber}`,
+    });
 
     await this.glEngine.post(
       {
@@ -211,11 +248,23 @@ export class PurchasingFinanceService {
   private async getAccountIds(
     companyId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ inventory: string; accountsPayable: string } | null> {
+  ): Promise<{
+    inventory: string;
+    grni: string;
+    accountsPayable: string;
+    purchaseDiscount: string;
+  } | null> {
     const accounts = await tx.chartOfAccount.findMany({
       where: {
         companyId,
-        code: { in: [ACCOUNT_CODES.INVENTORY, ACCOUNT_CODES.ACCOUNTS_PAYABLE] },
+        code: {
+          in: [
+            ACCOUNT_CODES.INVENTORY,
+            ACCOUNT_CODES.ACCOUNTS_PAYABLE,
+            ACCOUNT_CODES.GRNI,
+            ACCOUNT_CODES.PURCHASE_DISCOUNT,
+          ],
+        },
         isActive: true,
         deletedAt: null,
       },
@@ -224,15 +273,17 @@ export class PurchasingFinanceService {
     const map = new Map(accounts.map((a) => [a.code, a.id]));
     const inventory = map.get(ACCOUNT_CODES.INVENTORY);
     const accountsPayable = map.get(ACCOUNT_CODES.ACCOUNTS_PAYABLE);
+    const grni = map.get(ACCOUNT_CODES.GRNI);
+    const purchaseDiscount = map.get(ACCOUNT_CODES.PURCHASE_DISCOUNT);
 
-    if (!inventory || !accountsPayable) {
+    if (!inventory || !accountsPayable || !grni || !purchaseDiscount) {
       this.logger.warn(
         `Chart of Accounts not configured for company ${companyId} — skipping journal`,
       );
       return null;
     }
 
-    return { inventory, accountsPayable };
+    return { inventory, grni, accountsPayable, purchaseDiscount };
   }
 
   private async getOpenPeriodId(
