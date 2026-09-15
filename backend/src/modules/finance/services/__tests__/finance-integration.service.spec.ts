@@ -151,6 +151,14 @@ describe('FinanceIntegrationService', () => {
       chartOfAccount: {
         findMany: jest.fn().mockResolvedValue(mockAccounts),
       },
+      // G9-F2.2.1: canonical COGS is read from OUT CostLayers
+      // (referenceType='SALE', referenceId=saleId). These tests exercise the
+      // legacy compatibility path (no OUT layers → Σ item.costPrice × quantity),
+      // so the mock returns an empty layer set; dedicated FIFO COGS coverage
+      // lives in finance-integration.sale-cogs.spec.ts.
+      costLayer: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
 
     mockPeriodsRepo.findCurrent.mockResolvedValue({ id: periodId } as any);

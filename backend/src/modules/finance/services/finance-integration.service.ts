@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import {
@@ -23,6 +27,8 @@ const DEFAULT_ACCOUNT_CODES = {
 
 @Injectable()
 export class FinanceIntegrationService {
+  private readonly logger = new Logger(FinanceIntegrationService.name);
+
   constructor(
     private readonly periodsRepository: FinancialPeriodsRepository,
     private readonly glEngine: GlEngineService,
@@ -183,11 +189,23 @@ export class FinanceIntegrationService {
     }
 
     // 2. Cost of Goods Sold: Debit COGS, Credit Inventory
-    let totalCost = new Decimal(0);
-    for (const item of event.items) {
-      const itemCost = new Decimal(item.costPrice).mul(item.quantity);
-      totalCost = totalCost.add(itemCost);
-    }
+    //
+    // G9-F2.2.1: canonical COGS comes from the immutable OUT CostLayers that
+    // the Inventory sale-completed handler wrote in the SAME transaction
+    // (referenceType='SALE', referenceId=saleId). Their totalCost already
+    // includes the G9-F1 FALLBACK B, so it is the final accounting figure —
+    // never recalculated here. Legacy SaleItem.costPrice is only a
+    // compatibility fallback; FIFO and legacy amounts are never mixed.
+    const outCostLayers = await tx.costLayer.findMany({
+      where: {
+        companyId: event.companyId,
+        direction: 'OUT',
+        referenceType: 'SALE',
+        referenceId: event.saleId,
+      },
+    });
+
+    const { totalCost } = this.resolveSaleCogs(event, outCostLayers);
 
     if (totalCost.gt(0) && cogsAccountId && inventoryAccountId) {
       lines.push({
@@ -223,6 +241,56 @@ export class FinanceIntegrationService {
       },
       tx,
     );
+  }
+
+  /**
+   * G9-F2.2.1 (approved architecture): resolve the canonical COGS amount for a
+   * completed sale.
+   *
+   * Primary source — the OUT CostLayers the Inventory handler created in the
+   * SAME transaction (referenceType='SALE', referenceId=saleId). A multi-item
+   * sale legitimately produces N layers (one per item), so layer count is
+   * compared against the SaleItem count:
+   *
+   * - no OUT layers  → legacy compatibility fallback:
+   *                    Σ(item.costPrice × quantity), warn-logged;
+   * - full coverage  → SUM(OUT.totalCost) exclusively (FIFO only);
+   * - partial (0 < found < expected) → anomaly: error-logged and FULL legacy
+   *                    basis used — FIFO and legacy amounts are NEVER mixed.
+   *                    Impossible under G9-F2.1 atomicity (all layers commit or
+   *                    roll back with the sale); surfaced for ops follow-up.
+   */
+  private resolveSaleCogs(
+    event: SaleCompletedEventPayload,
+    outCostLayers: Array<{ totalCost: Decimal }>,
+  ): { totalCost: Decimal; source: 'FIFO_OUT' | 'LEGACY_COST_PRICE' } {
+    const legacyTotal = (): Decimal => {
+      let total = new Decimal(0);
+      for (const item of event.items) {
+        total = total.add(new Decimal(item.costPrice).mul(item.quantity));
+      }
+      return total;
+    };
+
+    if (outCostLayers.length === 0) {
+      this.logger.warn(
+        `FIFO COGS fallback for sale ${event.saleId}: reason="no OUT cost layers" — using legacy SaleItem.costPrice basis`,
+      );
+      return { totalCost: legacyTotal(), source: 'LEGACY_COST_PRICE' };
+    }
+
+    if (outCostLayers.length < event.items.length) {
+      this.logger.error(
+        `FIFO COGS anomaly for sale ${event.saleId}: foundOutLayers=${outCostLayers.length}, expectedSaleItems=${event.items.length} — partial OUT coverage. Using FULL legacy SaleItem.costPrice basis; FIFO and legacy are never mixed.`,
+      );
+      return { totalCost: legacyTotal(), source: 'LEGACY_COST_PRICE' };
+    }
+
+    let total = new Decimal(0);
+    for (const layer of outCostLayers) {
+      total = total.add(new Decimal(layer.totalCost.toString()));
+    }
+    return { totalCost: total, source: 'FIFO_OUT' };
   }
 
   /**
