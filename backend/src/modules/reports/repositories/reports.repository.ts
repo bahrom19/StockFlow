@@ -120,10 +120,59 @@ export class ReportsRepository {
     return this.prismaService.sale.findMany({
       where,
       select: {
+        // id is the CostLayer.referenceId join key for canonical FIFO COGS.
+        id: true,
         total: true,
         items: { select: { costPrice: true, quantity: true } },
       },
     });
+  }
+
+  // ── Canonical FIFO COGS (G11-B) ─────────────────────────────────
+
+  /**
+   * Batched canonical COGS read for a report dataset: ONE grouped CostLayer
+   * query — never a query per sale (no N+1).
+   *
+   * The where-clause fetches exactly the rows the Finance GL reads in
+   * onSaleCompleted/onSaleRefunded (companyId + direction 'OUT' +
+   * referenceType 'SALE' + referenceId = saleId), so per-sale coverage and
+   * totals are semantically equivalent to Finance's resolveSaleCogs input.
+   *
+   * Returns Map<saleId, { totalCost: Σ OUT.totalCost, layerCount }>.
+   * A sale absent from the map has zero OUT layers (legacy fallback case).
+   */
+  async saleFifoCosts(
+    companyId: string,
+    saleIds: string[],
+  ): Promise<Map<string, { totalCost: Prisma.Decimal; layerCount: number }>> {
+    const costs = new Map<
+      string,
+      { totalCost: Prisma.Decimal; layerCount: number }
+    >();
+    if (saleIds.length === 0) return costs;
+
+    const outLayers = await this.prismaService.costLayer.findMany({
+      where: {
+        companyId,
+        direction: 'OUT',
+        referenceType: 'SALE',
+        referenceId: { in: saleIds },
+      },
+      select: { referenceId: true, totalCost: true },
+    });
+
+    for (const layer of outLayers) {
+      const saleId = layer.referenceId ?? '';
+      const existing = costs.get(saleId);
+      costs.set(saleId, {
+        totalCost: (existing?.totalCost ?? new Prisma.Decimal(0)).add(
+          layer.totalCost,
+        ),
+        layerCount: (existing?.layerCount ?? 0) + 1,
+      });
+    }
+    return costs;
   }
 
   // ── Sales Report ────────────────────────────────────────────────

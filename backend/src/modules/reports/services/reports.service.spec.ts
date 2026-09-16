@@ -49,6 +49,8 @@ describe('ReportsService — net refunds (P1)', () => {
       profitReportData: jest.fn(),
       grossProfitData: jest.fn(),
       salesReportData: jest.fn(),
+      // G11-B: default no OUT layers → legacy costPrice fallback.
+      saleFifoCosts: jest.fn().mockResolvedValue(new Map()),
       dashboardSummary: jest.fn(),
       completedSaleIds: jest.fn(),
       topProductsData: jest.fn(),
@@ -561,5 +563,200 @@ describe('ReportsService — net refunds (P1)', () => {
       undefined,
       'KZT',
     );
+  });
+
+  // ── Canonical FIFO COGS (G11-B) ─────────────────────────────────
+
+  const fifoSale = (
+    id: string,
+    total: string,
+    items: { cost: string; qty: number }[],
+  ) => ({
+    ...completedSale(id, total, items),
+    items: items.map((i) => ({
+      costPrice: dec(i.cost),
+      quantity: i.qty,
+    })),
+  });
+
+  const fifoMock = (layers: Record<string, string[]>) => {
+    // Map<saleId, layer totals[]> → repo.saleFifoCosts contract shape.
+    repo.saleFifoCosts.mockImplementation(
+      (
+        _companyId: string,
+        saleIds: string[],
+      ): Map<string, { totalCost: Prisma.Decimal; layerCount: number }> => {
+        const map = new Map<
+          string,
+          { totalCost: Prisma.Decimal; layerCount: number }
+        >();
+        for (const saleId of saleIds) {
+          const totals = layers[saleId];
+          if (!totals?.length) continue;
+          map.set(saleId, {
+            totalCost: totals
+              .map((t) => dec(t))
+              .reduce((a, t) => a.add(t), dec(0)),
+            layerCount: totals.length,
+          });
+        }
+        return map;
+      },
+    );
+  };
+
+  it('canonical COGS: full FIFO coverage overrides declared costPrice (TEST 1)', async () => {
+    // Declared cost 100, FIFO OUT 70 → COGS 70, not 100.
+    fifoMock({ s1: ['70'] });
+    repo.profitReportData.mockResolvedValue([
+      fifoSale('s1', '1500.0000', [{ cost: '100.0000', qty: 1 }]),
+    ]);
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(result.summary.cost).toBe('70');
+    expect(result.summary.profit).toBe('1430');
+  });
+
+  it('canonical COGS: multiple OUT layers are summed, not first-layer-only (TEST 2)', async () => {
+    fifoMock({ s1: ['40', '60'] });
+    repo.profitReportData.mockResolvedValue([
+      fifoSale('s1', '1500.0000', [{ cost: '100.0000', qty: 2 }]),
+    ]);
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(result.summary.cost).toBe('100');
+  });
+
+  it('canonical COGS: no OUT layers → legacy SaleItem.costPrice fallback (TEST 3)', async () => {
+    fifoMock({});
+    repo.profitReportData.mockResolvedValue([
+      fifoSale('s1', '1500.0000', [
+        { cost: '100.0000', qty: 1 },
+        { cost: '50.0000', qty: 2 },
+      ]),
+    ]);
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(result.summary.cost).toBe('200');
+  });
+
+  it('canonical COGS: partial OUT coverage → FULL legacy fallback, never mixed (TEST 4)', async () => {
+    // 2 sale items but only 1 OUT layer → full legacy basis (100+50×2=200),
+    // NOT FIFO 70 + legacy 100 mixed.
+    fifoMock({ s1: ['70'] });
+    repo.profitReportData.mockResolvedValue([
+      fifoSale('s1', '1500.0000', [
+        { cost: '100.0000', qty: 1 },
+        { cost: '50.0000', qty: 2 },
+      ]),
+    ]);
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(result.summary.cost).toBe('200');
+  });
+
+  it('canonical COGS: profit buckets (daily) carry FIFO cost, structure unchanged (TEST 7/8)', async () => {
+    fifoMock({ s1: ['70'] });
+    repo.profitReportData.mockResolvedValue([
+      fifoSale('s1', '1500.0000', [{ cost: '100.0000', qty: 1 }]),
+    ]);
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(Object.keys(result.daily)).toHaveLength(1);
+    expect(result.daily[0]!.revenue).toBe('1500');
+    expect(result.daily[0]!.cost).toBe('70');
+    expect(result.daily[0]!.profit).toBe('1430');
+    expect(result.summary.cost).toBe('70');
+  });
+
+  it('canonical COGS: sales report profit and margin flow from FIFO cost (TEST 6)', async () => {
+    fifoMock({ s1: ['70'] });
+    repo.salesReportData.mockResolvedValue([
+      [
+        {
+          id: 's1',
+          saleNumber: 'S-1',
+          createdAt: new Date(),
+          status: 'COMPLETED',
+          total: dec('1500.0000'),
+          paidAmount: dec('1500.0000'),
+          items: [
+            {
+              costPrice: dec('100.0000'),
+              quantity: 1,
+              total: dec('1500.0000'),
+              productId: 'p1',
+            },
+          ],
+          payments: [],
+        },
+      ],
+      {
+        _sum: {
+          total: dec('1500.0000'),
+          subtotal: dec('1500.0000'),
+          paidAmount: dec('1500.0000'),
+          discount: dec('0'),
+        },
+        _count: { id: 1 },
+        _avg: { total: dec('1500.0000') },
+      },
+      { _sum: { quantity: 1, costPrice: dec('100.0000') } },
+    ]);
+    const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
+    expect(result.summary.profit).toBe('1430');
+    // margin = 1430/1500 × 100 = 95.33…
+    expect(parseFloat(result.summary.margin)).toBeCloseTo(95.33, 2);
+    // FIFO resolution was requested for the current page's sale ids.
+    expect(repo.saleFifoCosts).toHaveBeenCalledWith('comp-1', ['s1']);
+  });
+
+  it('canonical COGS: dashboard gross profit uses FIFO basis, revenue filter preserved (TEST 5)', async () => {
+    fifoMock({ s1: ['70'] });
+    repo.dashboardSummary.mockResolvedValue([
+      { _sum: { total: null }, _count: { id: 0 } },
+      { _sum: { total: null }, _count: { id: 0 } },
+      { _sum: { total: null }, _count: { id: 0 } },
+      0,
+      [],
+      0,
+      0,
+      { _sum: { grandTotal: null } },
+    ]);
+    repo.grossProfitData.mockResolvedValue([
+      fifoSale('s1', '1500.0000', [{ cost: '100.0000', qty: 1 }]),
+    ]);
+    const dashboard = await service.getDashboard(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(dashboard.grossRevenue).toBe('1500');
+    expect(dashboard.grossProfit).toBe('1430');
+    // Revenue/status filter unchanged (G11-B touches COGS source only).
+    expect(repo.grossProfitData).toHaveBeenCalledWith('comp-1', 'KZT');
+    expect(repo.saleFifoCosts).toHaveBeenCalledWith('comp-1', ['s1']);
+  });
+
+  it('canonical COGS: multi-product sale resolves each sale by its own OUT layers (TEST 5/7 adjacent)', async () => {
+    fifoMock({ s1: ['70'], s2: ['200', '30'] });
+    repo.profitReportData.mockResolvedValue([
+      fifoSale('s1', '1500.0000', [{ cost: '100.0000', qty: 1 }]),
+      fifoSale('s2', '3000.0000', [{ cost: '250.0000', qty: 2 }]),
+    ]);
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(result.summary.cost).toBe('300');
   });
 });

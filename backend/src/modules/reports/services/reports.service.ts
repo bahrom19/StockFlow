@@ -10,6 +10,38 @@ import {
 export class ReportsService {
   constructor(private readonly repo: ReportsRepository) {}
 
+  /**
+   * G11-B: canonical per-sale COGS for reports — mirrors Finance's
+   * resolveSaleCogs ladder exactly (same coverage semantics, no second
+   * costing algorithm):
+   *
+   * - full OUT coverage (layer count == SaleItem count) → Σ OUT.totalCost;
+   * - no OUT layers → legacy Σ(SaleItem.costPrice × quantity);
+   * - partial coverage (0 < layers < items) → FULL legacy basis — FIFO and
+   *   legacy are never mixed (same anomaly rule as Finance).
+   */
+  private canonicalSaleCost(
+    sale: {
+      id: string;
+      items: { costPrice: Prisma.Decimal | string; quantity: number }[];
+    },
+    fifo: { totalCost: Prisma.Decimal; layerCount: number } | undefined,
+  ): Prisma.Decimal {
+    const legacyTotal = () => {
+      let total = new Prisma.Decimal(0);
+      for (const item of sale.items) {
+        total = total.add(
+          new Prisma.Decimal(item.costPrice.toString()).mul(item.quantity),
+        );
+      }
+      return total;
+    };
+
+    if (!fifo || fifo.layerCount === 0) return legacyTotal();
+    if (fifo.layerCount < sale.items.length) return legacyTotal();
+    return fifo.totalCost;
+  }
+
   /// Resolves the monetary filter currency for a report.
   ///
   /// An explicit `query.currency` wins. When omitted, the company's base
@@ -67,19 +99,20 @@ export class ReportsService {
     ).length;
 
     // Gross revenue & profit (all completed sales — no date filter) — scoped
-    // to the single report currency.
+    // to the single report currency. COGS uses the canonical FIFO basis
+    // (CostLayer OUT, same as the GL) with per-sale legacy fallback.
     const grossData = await this.repo.grossProfitData(companyId, currency);
+    const grossFifo = await this.repo.saleFifoCosts(
+      companyId,
+      grossData.map((sale) => sale.id),
+    );
     let grossRevenue = new Prisma.Decimal(0);
     let grossCost = new Prisma.Decimal(0);
     for (const sale of grossData) {
       grossRevenue = grossRevenue.add(
         new Prisma.Decimal(sale.total.toString()),
       );
-      for (const item of sale.items ?? []) {
-        grossCost = grossCost.add(
-          new Prisma.Decimal(item.costPrice.toString()).mul(item.quantity),
-        );
-      }
+      grossCost = grossCost.add(this.canonicalSaleCost(sale, grossFifo.get(sale.id)));
     }
     const grossProfit = grossRevenue.sub(grossCost);
     const todayTotal = todayRaw._sum.total ?? new Prisma.Decimal(0);
@@ -157,14 +190,17 @@ export class ReportsService {
       sortOrder,
     );
 
+    // Canonical FIFO COGS for the current page (same basis as the GL).
+    const fifoCosts = await this.repo.saleFifoCosts(
+      companyId,
+      sales.map((s) => s.id),
+    );
     let productsSold = 0;
     let totalCost = new Prisma.Decimal(0);
     for (const sale of sales) {
+      totalCost = totalCost.add(this.canonicalSaleCost(sale, fifoCosts.get(sale.id)));
       for (const item of sale.items ?? []) {
         productsSold += item.quantity;
-        totalCost = totalCost.add(
-          new Prisma.Decimal(item.costPrice.toString()).mul(item.quantity),
-        );
       }
     }
 
@@ -552,6 +588,12 @@ export class ReportsService {
       currency,
     );
     const sales = await this.repo.profitReportData(companyId, where);
+    // Canonical FIFO COGS (CostLayer OUT — same basis as the GL), resolved in
+    // ONE batched query; per-sale legacy fallback keeps buckets consistent.
+    const fifoCosts = await this.repo.saleFifoCosts(
+      companyId,
+      sales.map((s) => s.id),
+    );
 
     let revenue = new Prisma.Decimal(0);
     let cost = new Prisma.Decimal(0);
@@ -571,12 +613,7 @@ export class ReportsService {
     for (const sale of sales) {
       const saleTotal = new Prisma.Decimal(sale.total.toString());
       revenue = revenue.add(saleTotal);
-      let saleCost = new Prisma.Decimal(0);
-      for (const item of sale.items ?? []) {
-        saleCost = saleCost.add(
-          new Prisma.Decimal(item.costPrice.toString()).mul(item.quantity),
-        );
-      }
+      const saleCost = this.canonicalSaleCost(sale, fifoCosts.get(sale.id));
       cost = cost.add(saleCost);
 
       const dayKey = sale.createdAt.toISOString().slice(0, 10);

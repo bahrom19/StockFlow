@@ -26,6 +26,7 @@ describe('ReportsRepository — revenue scoping (P1 net refunds)', () => {
         groupBy: jest.fn(),
       },
       product: { findMany: jest.fn() },
+      costLayer: { findMany: jest.fn() },
       cashShift: { findMany: jest.fn(), count: jest.fn() },
       company: { findUnique: jest.fn() },
     };
@@ -186,5 +187,46 @@ describe('ReportsRepository — revenue scoping (P1 net refunds)', () => {
     await expect(repository.companyCurrency('comp-1')).resolves.toBe('USD');
     mockPrisma.company.findUnique.mockResolvedValue(null);
     await expect(repository.companyCurrency('comp-1')).resolves.toBe('KZT');
+  });
+
+  // ── Canonical FIFO COGS (G11-B) ─────────────────────────────────
+
+  it('saleFifoCosts returns an empty map without querying for an empty dataset', async () => {
+    const result = await repository.saleFifoCosts('comp-1', []);
+    expect(result.size).toBe(0);
+    expect(mockPrisma.costLayer.findMany).not.toHaveBeenCalled();
+  });
+
+  it('saleFifoCosts runs ONE grouped tenant-scoped query identical to the Finance GL read', async () => {
+    mockPrisma.costLayer.findMany.mockResolvedValue([]);
+    await repository.saleFifoCosts('comp-1', ['s1', 's2']);
+    expect(mockPrisma.costLayer.findMany).toHaveBeenCalledTimes(1);
+    const args = mockPrisma.costLayer.findMany.mock.calls[0][0];
+    expect(args.where).toEqual({
+      companyId: 'comp-1',
+      direction: 'OUT',
+      referenceType: 'SALE',
+      referenceId: { in: ['s1', 's2'] },
+    });
+  });
+
+  it('saleFifoCosts aggregates multiple OUT layers per sale (sum + count)', async () => {
+    mockPrisma.costLayer.findMany.mockResolvedValue([
+      { referenceId: 's1', totalCost: new Prisma.Decimal('40') },
+      { referenceId: 's1', totalCost: new Prisma.Decimal('60') },
+      { referenceId: 's2', totalCost: new Prisma.Decimal('25.5') },
+    ]);
+    const result = await repository.saleFifoCosts('comp-1', ['s1', 's2']);
+    expect(result.get('s1')!.totalCost.toString()).toBe('100');
+    expect(result.get('s1')!.layerCount).toBe(2);
+    expect(result.get('s2')!.totalCost.toString()).toBe('25.5');
+    expect(result.get('s2')!.layerCount).toBe(1);
+  });
+
+  it('grossProfitData selects sale id (CostLayer referenceId join key)', async () => {
+    mockPrisma.sale.findMany.mockResolvedValue([]);
+    await repository.grossProfitData('comp-1');
+    const select = mockPrisma.sale.findMany.mock.calls[0][0].select;
+    expect(select.id).toBe(true);
   });
 });
