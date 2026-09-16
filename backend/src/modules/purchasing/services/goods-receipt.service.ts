@@ -17,6 +17,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../common/prisma';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import { EventBus, EVENT_BUS } from '../../../common/events';
 import { CreateGoodsReceiptDto } from '../dto/create-goods-receipt.dto';
 import { GoodsReceiptQueryDto } from '../dto/goods-receipt-query.dto';
@@ -40,6 +41,7 @@ export class GoodsReceiptService {
     private readonly prismaService: PrismaService,
     private readonly financeService: PurchasingFinanceService,
     private readonly idempotencyService: IdempotencyService,
+    private readonly auditLog: AuditLogService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
 
@@ -290,6 +292,31 @@ export class GoodsReceiptService {
         receiptDate: new Date(),
         items,
         createdBy: userId,
+      },
+      tx,
+    );
+
+    // G11-A: document-level audit trail for the receipt, written inside the
+    // SAME transaction. A goods receipt is created directly in COMPLETED
+    // (there is no separate "complete" endpoint), so exactly one record is
+    // written per receipt: 'CREATE'. A failure later in the transaction rolls
+    // the audit row back together with the document.
+    await this.auditLog.log(
+      {
+        companyId,
+        userId,
+        entityType: 'GoodsReceipt',
+        entityId: receipt.id,
+        action: 'CREATE',
+        before: null,
+        after: {
+          receiptNumber,
+          status: GoodsReceiptStatus.COMPLETED,
+          purchaseOrderId: dto.purchaseOrderId,
+          warehouseId: dto.warehouseId,
+          items: receiptItemsData.length,
+          subtotal: subtotal.toString(),
+        },
       },
       tx,
     );

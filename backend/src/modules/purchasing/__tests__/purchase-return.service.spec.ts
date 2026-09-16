@@ -14,7 +14,9 @@ import { UpdatePurchaseReturnDto } from '../dto/update-purchase-return.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { CompaniesService } from '../../companies/services/companies.service';
 import { PurchasingFinanceService } from '../services/purchasing-finance.service';
+import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { CostingService } from '../../inventory/services/costing.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -70,6 +72,7 @@ describe('PurchaseReturnService', () => {
   let mockPrisma: Record<string, jest.Mock>;
   let mockEventBus: { publish: jest.Mock };
   let mockFinance: { createPurchaseReturnJournal: jest.Mock };
+  let mockAuditLog: jest.Mocked<AuditLogService>;
   let mockCosting: { consumeFifoLayers: jest.Mock };
   const mockTransaction = jest.fn();
 
@@ -85,6 +88,7 @@ describe('PurchaseReturnService', () => {
     } as any;
     mockEventBus = { publish: jest.fn().mockResolvedValue(undefined) };
     mockFinance = { createPurchaseReturnJournal: jest.fn().mockResolvedValue(undefined) };
+    mockAuditLog = { log: jest.fn().mockResolvedValue(undefined) } as any;
     mockCosting = {
       // G9-F4: default FIFO basis covers the fixture item exactly
       // (5 × 20 = 100), so legacy journal expectations stay unchanged.
@@ -107,6 +111,7 @@ describe('PurchaseReturnService', () => {
         { provide: EVENT_BUS, useValue: mockEventBus },
         { provide: PurchasingFinanceService, useValue: mockFinance },
         { provide: CostingService, useValue: mockCosting },
+        { provide: AuditLogService, useValue: mockAuditLog },
       ],
     }).compile();
     service = mod.get(PurchaseReturnService);
@@ -153,6 +158,34 @@ describe('PurchaseReturnService', () => {
           company: { connect: { id: companyId } },
           supplier: { connect: { id: supplierId } },
           warehouse: { connect: { id: warehouseId } },
+        }),
+        mockTx,
+      );
+    });
+
+    // G11-A: creation audit trail, inside the same transaction as the document.
+    it('writes a PurchaseReturn CREATE audit record inside the transaction', async () => {
+      const mockTx = tenantTx();
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue(baseReturn as any);
+
+      await service.create(validDto, userId, companyId);
+
+      expect(mockAuditLog.log).toHaveBeenCalledTimes(1);
+      expect(mockAuditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: 'pr-1',
+          action: 'CREATE',
+          before: null,
+          after: expect.objectContaining({
+            status: PurchaseReturnStatus.DRAFT,
+            supplierId,
+            warehouseId,
+            total: '100',
+          }),
         }),
         mockTx,
       );
@@ -764,6 +797,63 @@ describe('PurchaseReturnService', () => {
       expect(mockEventBus.publish).not.toHaveBeenCalled();
     });
 
+    // G11-A: status-transition audit trail (action = new status).
+    it('writes a PurchaseReturn COMPLETED audit record with the status pair inside the transaction', async () => {
+      const mockTx = baseCompleteTx();
+      mockRepo.findById
+        .mockResolvedValueOnce(approved as any)
+        .mockResolvedValueOnce({
+          ...approved,
+          status: PurchaseReturnStatus.COMPLETED,
+        } as any);
+      mockRepo.completeIfApproved.mockResolvedValue(1);
+
+      await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.COMPLETED,
+        userId,
+        companyId,
+      );
+
+      expect(mockAuditLog.log).toHaveBeenCalledTimes(1);
+      expect(mockAuditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: 'pr-1',
+          action: 'COMPLETED',
+          before: { status: PurchaseReturnStatus.APPROVED },
+          after: { status: PurchaseReturnStatus.COMPLETED },
+        }),
+        mockTx,
+      );
+    });
+
+    // G11-A: a failed transition must not leave an audit record behind — the
+    // audit write shares the transaction that carries the failure back out.
+    it('writes no audit record when the GL journal fails (rollback)', async () => {
+      baseCompleteTx();
+      mockRepo.findById.mockResolvedValue(approved as any);
+      mockRepo.completeIfApproved.mockResolvedValue(1);
+      mockFinance.createPurchaseReturnJournal.mockRejectedValue(
+        new BadRequestException(
+          'Chart of Accounts not configured for company comp-1 — missing mandatory account(s): 1300 (Inventory)',
+        ),
+      );
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
     // C. Duplicate completion: CAS loses → no stock/movement/journal/event
     it('rejects a duplicate COMPLETED with no stock mutation, no movement, no journal, no event', async () => {
       const mockTx = baseCompleteTx();
@@ -1020,6 +1110,221 @@ describe('PurchaseReturnService', () => {
       );
 
       expect(mockCosting.consumeFifoLayers).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── G11-A: real account gate — COMPLETE fails fast on missing CoA ────────
+  // Uses the REAL PurchasingFinanceService (only the GL engine is mocked) to
+  // prove the D2 per-operation contract end-to-end through the return service.
+  describe('transitionStatus — G11-A real PurchasingFinanceService account gate', () => {
+    const approved = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
+
+    const ACCOUNTS: Record<string, { id: string; code: string }> = {
+      '1300': { id: 'acc-1300', code: '1300' },
+      '2100': { id: 'acc-2100', code: '2100' },
+      '2110': { id: 'acc-2110', code: '2110' },
+      '5200': { id: 'acc-5200', code: '5200' },
+    };
+
+    let gateService: PurchaseReturnService;
+    let gateGlPost: jest.Mock;
+    let chartOfAccountFindMany: jest.Mock;
+    let gateEventBus: { publish: jest.Mock };
+    let gateTx: Record<string, any>;
+
+    beforeEach(async () => {
+      gateGlPost = jest.fn().mockResolvedValue(undefined);
+      gateEventBus = { publish: jest.fn().mockResolvedValue(undefined) };
+      chartOfAccountFindMany = jest
+        .fn()
+        .mockImplementation(({ where }: any) => {
+          const codes: string[] = where.code.in;
+          return Promise.resolve(
+            codes.map((code) => ACCOUNTS[code]).filter(Boolean),
+          );
+        });
+
+      const mod = await Test.createTestingModule({
+        providers: [
+          {
+            provide: CompaniesService,
+            useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+          },
+          // REAL finance service — only the GL engine boundary is mocked.
+          { provide: GlEngineService, useValue: { post: gateGlPost } },
+          PurchasingFinanceService,
+          PurchaseReturnService,
+          { provide: PurchaseReturnRepository, useValue: mockRepo },
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: EVENT_BUS, useValue: gateEventBus },
+          { provide: CostingService, useValue: mockCosting },
+          {
+            provide: AuditLogService,
+            useValue: { log: jest.fn().mockResolvedValue(undefined) },
+          },
+        ],
+      }).compile();
+      gateService = mod.get(PurchaseReturnService);
+    });
+
+    function gateCompleteTx(withVariance = false) {
+      gateTx = {
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(baseReturn.items),
+        },
+        stock: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 's-1',
+            quantity: 50,
+            reservedQuantity: 0,
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        stockMovement: { create: jest.fn() },
+        chartOfAccount: { findMany: chartOfAccountFindMany },
+        financialPeriod: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'fp-1' }),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(gateTx));
+      // Default FIFO basis matches the fixture exactly (variance = 0);
+      // pass withVariance to produce a declared (100) ≠ FIFO (85) basis.
+      mockCosting.consumeFifoLayers.mockResolvedValue({
+        totalCost: new Decimal(withVariance ? '85' : '100'),
+        layers: [],
+        fallbackCost: new Decimal('0'),
+      });
+      mockRepo.findById.mockResolvedValue(approved as any);
+      mockRepo.completeIfApproved.mockResolvedValue(1);
+      return gateTx;
+    }
+
+    function dropAccount(code: string) {
+      chartOfAccountFindMany.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          (where.code.in as string[])
+            .filter((c) => c !== code)
+            .map((c) => ACCOUNTS[c])
+            .filter(Boolean),
+        ),
+      );
+    }
+
+    it('fails COMPLETE with BadRequestException when 1300 (Inventory) is missing', async () => {
+      gateCompleteTx();
+      dropAccount('1300');
+
+      await expect(
+        gateService.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(
+        `Chart of Accounts not configured for company ${companyId} — missing mandatory account(s): 1300 (Inventory)`,
+      );
+
+      // The journal never posted and the completion never published.
+      expect(gateGlPost).not.toHaveBeenCalled();
+      expect(gateEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('fails COMPLETE with BadRequestException when 2100 (AP) is missing', async () => {
+      gateCompleteTx();
+      dropAccount('2100');
+
+      await expect(
+        gateService.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(
+        `Chart of Accounts not configured for company ${companyId} — missing mandatory account(s): 2100 (Accounts Payable)`,
+      );
+      expect(gateGlPost).not.toHaveBeenCalled();
+    });
+
+    it('succeeds with a zero-variance return even when 5200 is missing', async () => {
+      gateCompleteTx(false);
+      dropAccount('5200');
+
+      await gateService.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.COMPLETED,
+        userId,
+        companyId,
+      );
+
+      expect(gateGlPost).toHaveBeenCalledTimes(1);
+      const lines = gateGlPost.mock.calls[0][0].lines;
+      expect(lines).toHaveLength(2); // Dr AP, Cr Inventory — no 5200 line
+      expect(lines.map((l: any) => l.accountId).sort()).toEqual([
+        'acc-1300',
+        'acc-2100',
+      ]);
+    });
+
+    it('fails COMPLETE when 5200 is missing AND the return has a non-zero variance', async () => {
+      gateCompleteTx(true);
+      dropAccount('5200');
+
+      await expect(
+        gateService.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(
+        `Chart of Accounts not configured for company ${companyId} — missing mandatory account(s): 5200 (Purchase Discounts and Write-Offs)`,
+      );
+      expect(gateGlPost).not.toHaveBeenCalled();
+      expect(gateEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('keeps the CoA lookup tenant-scoped and posts the balanced zero-variance journal', async () => {
+      gateCompleteTx(false);
+
+      await gateService.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.COMPLETED,
+        userId,
+        companyId,
+      );
+
+      // Tenant isolation: the account resolution carries companyId.
+      expect(chartOfAccountFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            companyId,
+            isActive: true,
+            deletedAt: null,
+          }),
+        }),
+      );
+      // Balanced zero-variance journal: Dr AP 100 / Cr Inventory 100.
+      expect(gateGlPost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          referenceType: 'PURCHASE_RETURN',
+          referenceId: 'PR-TEST-0001',
+          lines: [
+            expect.objectContaining({
+              accountId: 'acc-2100',
+              debit: '100',
+              credit: '0',
+            }),
+            expect.objectContaining({
+              accountId: 'acc-1300',
+              debit: '0',
+              credit: '100',
+            }),
+          ],
+        }),
+        gateTx,
+      );
     });
   });
 

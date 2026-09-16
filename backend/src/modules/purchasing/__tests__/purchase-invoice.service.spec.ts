@@ -930,6 +930,89 @@ describe('PurchaseInvoiceService', () => {
       expect(eventCtx?.context?.transactionClient).toBe(txArg);
     });
 
+    // ── G11-A: per-operation account gate (fail-fast, no silent skip) ─
+    /**
+     * Rebuilds the transaction with exactly the given CoA codes, so a test can
+     * remove a mandatory account and observe the failure contract.
+     */
+    function coaTxWithCodes(codes: string[]) {
+      const coa = codes.map((code) => ({ id: `acct-${code}`, code }));
+      mockTransaction.mockImplementation((cb: any) =>
+        cb({
+          purchaseInvoiceItem: {
+            findMany: jest.fn().mockResolvedValue(baseInvoice.items),
+          },
+          chartOfAccount: {
+            findMany: jest
+              .fn()
+              .mockImplementation(async ({ where }: any) =>
+                coa.filter((a) => where.code.in.includes(a.code)),
+              ),
+          },
+          financialPeriod: {
+            findFirst: jest.fn().mockResolvedValue({ id: 'period-1' }),
+          },
+        }),
+      );
+    }
+
+    it('G11-A: missing mandatory 2110 fails the approval (no journal, no event, no audit)', async () => {
+      coaTxWithCodes(['2100', '5200']);
+      const promise = approve();
+      await expect(promise).rejects.toThrow(BadRequestException);
+      await expect(promise).rejects.toThrow(
+        '2110 (Goods Received Not Invoiced)',
+      );
+      // The CAS already ran inside the shared transaction — the same tx
+      // carries the status write back out, so the invoice stays DRAFT.
+      expect(mockRepo.approveWithCas).toHaveBeenCalled();
+      expect(glEngine.post).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('G11-A: missing mandatory 2100 fails the approval', async () => {
+      coaTxWithCodes(['2110', '5200']);
+      const promise = approve();
+      await expect(promise).rejects.toThrow(BadRequestException);
+      await expect(promise).rejects.toThrow('2100 (Accounts Payable)');
+      expect(glEngine.post).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('G11-A: approval succeeds without 5200 when there is no tax and no discount', async () => {
+      const untaxed = {
+        ...baseInvoice,
+        taxAmount: new Prisma.Decimal('0'),
+        discountAmount: new Prisma.Decimal('0'),
+        grandTotal: new Prisma.Decimal('500'),
+      };
+      mockRepo.findById.mockResolvedValue(untaxed as any);
+      mockRepo.approveWithCas.mockResolvedValue({
+        ...untaxed,
+        status: PurchaseInvoiceStatus.APPROVED,
+      } as any);
+      coaTxWithCodes(['2100', '2110']);
+
+      await approve();
+
+      const lines = postedLines();
+      expect(lines).toHaveLength(2);
+      expect(lines.map((l) => l.accountId).sort()).toEqual([
+        'acct-2100',
+        'acct-2110',
+      ]);
+    });
+
+    it('G11-A: approval fails without 5200 when a tax leg must be posted', async () => {
+      coaTxWithCodes(['2100', '2110']);
+      const promise = approve();
+      await expect(promise).rejects.toThrow(
+        '5200 (Purchase Discounts and Write-Offs)',
+      );
+      expect(glEngine.post).not.toHaveBeenCalled();
+    });
+
     it('returns 409 and posts no journal/event when the CAS loses', async () => {
       mockRepo.approveWithCas.mockRejectedValue(new ConflictException('Invoice was modified or approved by another user. Please refresh and retry.'));
       await expect(approve()).rejects.toThrow(ConflictException);

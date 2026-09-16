@@ -23,6 +23,7 @@ import { PurchaseReturnedEvent } from '../events/purchase-returned.event';
 import { CompaniesService } from '../../companies/services/companies.service';
 import { PurchasingFinanceService } from './purchasing-finance.service';
 import { CostingService } from '../../inventory/services/costing.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 
 const VALID_RETURN_TRANSITIONS: Record<
   PurchaseReturnStatus,
@@ -51,6 +52,7 @@ export class PurchaseReturnService {
     private readonly companiesService: CompaniesService,
     private readonly purchasingFinanceService: PurchasingFinanceService,
     private readonly costingService: CostingService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   async create(
@@ -186,6 +188,27 @@ export class PurchaseReturnService {
           supplier: { connect: { id: dto.supplierId } },
           warehouse: { connect: { id: dto.warehouseId } },
           items: { create: itemsData },
+        },
+        tx,
+      );
+
+      // G11-A: creation audit trail, written inside the SAME transaction as
+      // the document (a rolled-back create leaves no audit row behind).
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: ret.id,
+          action: 'CREATE',
+          before: null,
+          after: {
+            returnNumber,
+            status: PurchaseReturnStatus.DRAFT,
+            supplierId: dto.supplierId,
+            warehouseId: dto.warehouseId,
+            total: ret.grandTotal.toString(),
+          },
         },
         tx,
       );
@@ -550,6 +573,25 @@ export class PurchaseReturnService {
           // Non-critical event
         }
       }
+
+      // G11-A: status-transition audit trail. Written inside the SAME
+      // transaction and AFTER every business side effect (CAS, stock
+      // decrement, StockMovement, FIFO consumption, GL journal, event) — a
+      // rolled-back transition leaves no audit row behind. Action naming
+      // mirrors the PurchaseOrder/PurchaseInvoice convention
+      // (action = the new status, before/after carry the status pair).
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: id,
+          action: String(newStatus),
+          before: { status: current },
+          after: { status: newStatus },
+        },
+        tx,
+      );
 
       // G9-E1: the COMPLETED status write already happened via the CAS
       // (completeIfApproved) — skip the redundant generic status update so

@@ -18,6 +18,7 @@ import { PurchasingFinanceService } from '../services/purchasing-finance.service
 import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { EVENT_BUS } from '../../../common/events';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import { CreateGoodsReceiptDto } from '../dto/create-goods-receipt.dto';
 
 const companyId = 'comp-1';
@@ -84,6 +85,7 @@ describe('GoodsReceiptService', () => {
   let mockPrisma: Record<string, jest.Mock>;
   let mockFinanceService: jest.Mocked<PurchasingFinanceService>;
   let mockEventBus: { publish: jest.Mock };
+  let mockAuditLog: jest.Mocked<AuditLogService>;
   const mockTransaction = jest.fn();
 
   beforeEach(async () => {
@@ -108,6 +110,7 @@ describe('GoodsReceiptService', () => {
       createGoodsReceiptJournal: jest.fn().mockResolvedValue(undefined),
     } as any;
     mockEventBus = { publish: jest.fn().mockResolvedValue(undefined) };
+    mockAuditLog = { log: jest.fn().mockResolvedValue(undefined) } as any;
     mockPrisma = { $transaction: mockTransaction };
 
     const mod = await Test.createTestingModule({
@@ -123,6 +126,7 @@ describe('GoodsReceiptService', () => {
           provide: IdempotencyService,
           useValue: { hashRequest: jest.fn().mockReturnValue('hash') },
         },
+        { provide: AuditLogService, useValue: mockAuditLog },
       ],
     }).compile();
     service = mod.get(GoodsReceiptService);
@@ -191,6 +195,95 @@ describe('GoodsReceiptService', () => {
       expect(mockTx.stock.create).not.toHaveBeenCalled();
       expect(mockTx.stock.update).not.toHaveBeenCalled();
       expect(mockTx.stockMovement.create).not.toHaveBeenCalled();
+    });
+
+    // G11-A: one audit record per receipt, written inside the same tx.
+    it('writes exactly one GoodsReceipt CREATE audit record inside the transaction', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: warehouseId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          }),
+        },
+        purchaseOrderItem: {
+          findFirst: jest.fn().mockResolvedValue(basePo.items[0]),
+          findUnique: jest.fn().mockResolvedValue(basePo.items[0]),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockGrRepo.create.mockResolvedValue(baseReceipt as any);
+      mockGrRepo.updateStatus.mockResolvedValue({} as any);
+      mockGrRepo.findById.mockResolvedValue(baseReceipt as any);
+
+      await service.create(validDto, userId, companyId);
+
+      const createdNumber = (mockGrRepo.create.mock.calls[0]?.[0] as any)
+        .receiptNumber;
+      expect(mockAuditLog.log).toHaveBeenCalledTimes(1);
+      expect(mockAuditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId,
+          userId,
+          entityType: 'GoodsReceipt',
+          entityId: 'gr-1',
+          action: 'CREATE',
+          before: null,
+          after: expect.objectContaining({
+            receiptNumber: createdNumber,
+            status: GoodsReceiptStatus.COMPLETED,
+            purchaseOrderId: poId,
+            warehouseId,
+            items: 1,
+            subtotal: '50',
+          }),
+        }),
+        mockTx,
+      );
+    });
+
+    // G11-A: fail-fast contract — a missing mandatory account aborts the
+    // whole receipt (no silent success) and the audit record is never written.
+    it('fails fast when a mandatory CoA account is missing and writes no audit record', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: warehouseId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          }),
+        },
+        purchaseOrderItem: {
+          findFirst: jest.fn().mockResolvedValue(basePo.items[0]),
+          findUnique: jest.fn().mockResolvedValue(basePo.items[0]),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+      mockGrRepo.create.mockResolvedValue(baseReceipt as any);
+      mockGrRepo.updateStatus.mockResolvedValue({} as any);
+      mockGrRepo.findById.mockResolvedValue(baseReceipt as any);
+      mockFinanceService.createGoodsReceiptJournal.mockRejectedValue(
+        new BadRequestException(
+          'Chart of Accounts not configured for company comp-1 — missing mandatory account(s): 2110 (Goods Received Not Invoiced)',
+        ),
+      );
+
+      const promise = service.create(validDto, userId, companyId);
+      await expect(promise).rejects.toThrow(BadRequestException);
+      await expect(promise).rejects.toThrow(
+        '2110 (Goods Received Not Invoiced)',
+      );
+
+      // Error propagates un-swallowed; the post-journal steps never ran.
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+      expect(mockGrRepo.findById).not.toHaveBeenCalled();
     });
 
     it('should propagate purchase.received handler failure (B7 fail-fast — no silent stock loss)', async () => {
@@ -617,13 +710,17 @@ describe('GoodsReceiptService', () => {
       expect(new Prisma.Decimal(lines[0].debit).equals(new Prisma.Decimal('122.5'))).toBe(true);
     });
 
-    it('skips journaling gracefully when GRNI 2110 is missing (pre-backfill tenant)', async () => {
+    // G11-A: the silent skip is gone. A missing mandatory account — here the
+    // GRNI 2110 that G10-A introduced and that the G11-A backfill migration
+    // restores — now fails fast so the caller's transaction rolls back
+    // instead of committing a receipt whose stock moved without a GL entry.
+    it('fails fast when the mandatory GRNI 2110 is missing (no silent skip)', async () => {
       const tx = coaTx();
       tx.chartOfAccount.findMany.mockResolvedValue([
         { id: 'acct-1300', code: '1300' },
         { id: 'acct-2100', code: '2100' },
       ]);
-      await financeService.createGoodsReceiptJournal(
+      const promise = financeService.createGoodsReceiptJournal(
         {
           companyId,
           warehouseId,
@@ -634,7 +731,61 @@ describe('GoodsReceiptService', () => {
         },
         tx,
       );
+
+      await expect(promise).rejects.toThrow(BadRequestException);
+      await expect(promise).rejects.toThrow(
+        '2110 (Goods Received Not Invoiced)',
+      );
       expect(glEngine.post).not.toHaveBeenCalled();
+    });
+
+    it('fails fast when the mandatory Inventory 1300 is missing', async () => {
+      const tx = coaTx();
+      tx.chartOfAccount.findMany.mockResolvedValue([
+        { id: 'acct-2110', code: '2110' },
+      ]);
+      const promise = financeService.createGoodsReceiptJournal(
+        {
+          companyId,
+          warehouseId,
+          receiptNumber: 'GR-004',
+          receiptDate: new Date(),
+          items: [{ productId, quantity: 1, unitCost: '10' }],
+          createdBy: userId,
+        },
+        tx,
+      );
+
+      await expect(promise).rejects.toThrow('1300 (Inventory)');
+      expect(glEngine.post).not.toHaveBeenCalled();
+    });
+
+    it('posts normally when 2100/5200 are missing (a receipt needs only 1300 + 2110)', async () => {
+      const tx = coaTx();
+      tx.chartOfAccount.findMany.mockResolvedValue([
+        { id: 'acct-1300', code: '1300' },
+        { id: 'acct-2110', code: '2110' },
+      ]);
+      await financeService.createGoodsReceiptJournal(
+        {
+          companyId,
+          warehouseId,
+          receiptNumber: 'GR-005',
+          receiptDate: new Date(),
+          items: [{ productId, quantity: 1, unitCost: '10' }],
+          createdBy: userId,
+        },
+        tx,
+      );
+
+      expect(glEngine.post).toHaveBeenCalledTimes(1);
+      const lines = glEngine.post.mock.calls[0][0].lines as Array<{
+        accountId: string;
+      }>;
+      expect(lines.map((line) => line.accountId)).toEqual([
+        'acct-1300',
+        'acct-2110',
+      ]);
     });
 
     it('tenant isolation: CoA lookup is company-scoped (companyId carried into the where clause)', async () => {

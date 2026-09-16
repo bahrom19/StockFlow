@@ -17,6 +17,30 @@ const ACCOUNT_CODES = {
 } as const;
 
 /**
+ * G11-A: human-readable labels for the mandatory accounts, used in the
+ * fail-fast diagnostic so an operator can identify the missing account
+ * without looking up the code.
+ */
+const ACCOUNT_LABELS: Record<string, string> = {
+  [ACCOUNT_CODES.INVENTORY]: 'Inventory',
+  [ACCOUNT_CODES.ACCOUNTS_PAYABLE]: 'Accounts Payable',
+  [ACCOUNT_CODES.GRNI]: 'Goods Received Not Invoiced',
+  [ACCOUNT_CODES.PURCHASE_DISCOUNT]: 'Purchase Discounts and Write-Offs',
+};
+
+/** Logical account slots a purchasing journal can post to (G11-A). */
+type PurchasingAccountKey =
+  | 'inventory'
+  | 'accountsPayable'
+  | 'grni'
+  | 'purchaseDiscount';
+
+interface PurchasingAccountRequirement {
+  key: PurchasingAccountKey;
+  code: string;
+}
+
+/**
  * Handles automatic journal entry creation for purchasing operations.
  *
  * All journal entries are created via GlEngineService.post() to ensure:
@@ -51,14 +75,24 @@ export class PurchasingFinanceService {
     },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const accounts = await this.getAccountIds(params.companyId, tx);
-    if (!accounts) return;
-
     const totalAmount = params.items.reduce((sum, item) => {
       return sum.add(new Decimal(item.unitCost).mul(item.quantity));
     }, new Decimal(0));
 
+    // G11-A: a zero-value receipt posts nothing, so it must never depend on
+    // the CoA (same contract as the invoice/return early-return paths).
     if (totalAmount.isZero()) return;
+
+    // G11-A: per-operation account gate. A goods receipt posts ONLY
+    // 1300 (Inventory, debit) and 2110 (GRNI, credit) — AP (2100) is credited
+    // on invoice approval and 5200 is never touched here, so neither account
+    // may block a receipt. Missing/inactive mandatory accounts now fail fast
+    // (whole transaction rolls back) instead of silently committing a
+    // receipt whose stock moved without any GL entry.
+    const accounts = await this.resolveAccounts(params.companyId, tx, [
+      { key: 'inventory', code: ACCOUNT_CODES.INVENTORY },
+      { key: 'grni', code: ACCOUNT_CODES.GRNI },
+    ]);
 
     const description = `Goods receipt: ${params.receiptNumber}`;
 
@@ -126,9 +160,6 @@ export class PurchasingFinanceService {
     },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const accounts = await this.getAccountIds(params.companyId, tx);
-    if (!accounts) return;
-
     const declaredTotal = params.items.reduce((sum, item) => {
       return sum.add(new Decimal(item.unitCost).mul(item.quantity));
     }, new Decimal(0));
@@ -146,7 +177,31 @@ export class PurchasingFinanceService {
     }
     const variance = declaredTotal.sub(inventoryCredit);
 
+    // G11-A: a return with no economic value posts nothing, so it must never
+    // depend on the CoA (same contract as the GR/invoice early-return paths).
     if (declaredTotal.isZero() && inventoryCredit.isZero()) return;
+
+    // G11-A: per-operation account gate. A return posts ONLY 2100 (AP debit at
+    // the declared supplier value) and 1300 (Inventory credit at the FIFO
+    // relief). 2110 (GRNI) is never touched by a return, so a missing GRNI
+    // account must not block it. 5200 is required ONLY when a variance leg is
+    // actually produced (declared basis ≠ FIFO basis), preserving the existing
+    // conditional semantics of zero-variance returns.
+    const requirements: PurchasingAccountRequirement[] = [
+      { key: 'accountsPayable', code: ACCOUNT_CODES.ACCOUNTS_PAYABLE },
+      { key: 'inventory', code: ACCOUNT_CODES.INVENTORY },
+    ];
+    if (!variance.isZero()) {
+      requirements.push({
+        key: 'purchaseDiscount',
+        code: ACCOUNT_CODES.PURCHASE_DISCOUNT,
+      });
+    }
+    const accounts = await this.resolveAccounts(
+      params.companyId,
+      tx,
+      requirements,
+    );
 
     const description = `Purchase return: ${params.returnNumber}`;
 
@@ -231,15 +286,35 @@ export class PurchasingFinanceService {
     },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const accounts = await this.getAccountIds(params.companyId, tx);
-    if (!accounts) return;
-
     const subtotal = new Decimal(params.subtotal);
     const discountAmount = new Decimal(params.discountAmount);
     const taxAmount = new Decimal(params.taxAmount);
     const grandTotal = new Decimal(params.grandTotal);
 
+    // G11-A: a zero-total invoice posts nothing, so it must never depend on
+    // the CoA (same contract as the GR/return early-return paths).
     if (grandTotal.isZero()) return;
+
+    // G11-A: per-operation account gate. Invoice approval posts 2110 (GRNI
+    // settlement, debit) and 2100 (AP credit) unconditionally; 5200 carries the
+    // purchase tax/discount legs and is therefore required ONLY when such a
+    // line is actually produced. 1300 (Inventory) is never touched here —
+    // inventory is capitalized by the goods receipt (G10-A).
+    const requirements: PurchasingAccountRequirement[] = [
+      { key: 'grni', code: ACCOUNT_CODES.GRNI },
+      { key: 'accountsPayable', code: ACCOUNT_CODES.ACCOUNTS_PAYABLE },
+    ];
+    if (!taxAmount.isZero() || !discountAmount.isZero()) {
+      requirements.push({
+        key: 'purchaseDiscount',
+        code: ACCOUNT_CODES.PURCHASE_DISCOUNT,
+      });
+    }
+    const accounts = await this.resolveAccounts(
+      params.companyId,
+      tx,
+      requirements,
+    );
 
     const description = `Purchase invoice: ${params.invoiceNumber}`;
 
@@ -296,45 +371,67 @@ export class PurchasingFinanceService {
     );
   }
 
-  private async getAccountIds(
+  /**
+   * G11-A: resolve ONLY the accounts the requested journal actually posts to.
+   *
+   * The previous implementation required ALL FOUR purchasing accounts for
+   * every journal and returned `null` when any of them was missing/inactive,
+   * which let callers commit the document (and move stock) without any GL
+   * entry and without an error. Requirements are now declared per operation
+   * by the caller, and a missing mandatory account fails fast so the
+   * surrounding transaction rolls back.
+   *
+   * The lookup stays tenant-scoped (companyId) and requires an active,
+   * non-soft-deleted account — G11-A does not change account policy beyond
+   * failing loudly.
+   */
+  private async resolveAccounts(
     companyId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{
-    inventory: string;
-    grni: string;
-    accountsPayable: string;
-    purchaseDiscount: string;
-  } | null> {
+    requirements: ReadonlyArray<PurchasingAccountRequirement>,
+  ): Promise<Record<PurchasingAccountKey, string>> {
     const accounts = await tx.chartOfAccount.findMany({
       where: {
         companyId,
-        code: {
-          in: [
-            ACCOUNT_CODES.INVENTORY,
-            ACCOUNT_CODES.ACCOUNTS_PAYABLE,
-            ACCOUNT_CODES.GRNI,
-            ACCOUNT_CODES.PURCHASE_DISCOUNT,
-          ],
-        },
+        code: { in: requirements.map((requirement) => requirement.code) },
         isActive: true,
         deletedAt: null,
       },
+      select: { id: true, code: true },
     });
 
-    const map = new Map(accounts.map((a) => [a.code, a.id]));
-    const inventory = map.get(ACCOUNT_CODES.INVENTORY);
-    const accountsPayable = map.get(ACCOUNT_CODES.ACCOUNTS_PAYABLE);
-    const grni = map.get(ACCOUNT_CODES.GRNI);
-    const purchaseDiscount = map.get(ACCOUNT_CODES.PURCHASE_DISCOUNT);
+    const byCode = new Map(
+      accounts.map((account) => [account.code, account.id]),
+    );
+    const missing = requirements.filter(
+      (requirement) => !byCode.has(requirement.code),
+    );
 
-    if (!inventory || !accountsPayable || !grni || !purchaseDiscount) {
-      this.logger.warn(
-        `Chart of Accounts not configured for company ${companyId} — skipping journal`,
+    if (missing.length > 0) {
+      const missingList = missing
+        .map(
+          (requirement) =>
+            `${requirement.code} (${ACCOUNT_LABELS[requirement.code] ?? requirement.code})`,
+        )
+        .join(', ');
+
+      // Stable, greppable diagnostic — the message prefix is part of the
+      // G11-A contract (asserted in unit tests and used by operators).
+      this.logger.error(
+        `Chart of Accounts not configured for company ${companyId} — missing mandatory account(s): ${missingList}`,
       );
-      return null;
+
+      throw new BadRequestException(
+        `Chart of Accounts not configured for company ${companyId} — missing mandatory account(s): ${missingList}`,
+      );
     }
 
-    return { inventory, grni, accountsPayable, purchaseDiscount };
+    const resolved = {} as Record<PurchasingAccountKey, string>;
+    for (const requirement of requirements) {
+      resolved[requirement.key] = byCode.get(requirement.code)!;
+    }
+
+    return resolved;
   }
 
   private async getOpenPeriodId(
