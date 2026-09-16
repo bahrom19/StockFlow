@@ -325,6 +325,10 @@ export class FinanceIntegrationService {
     }
 
     const cashAccountId = accountMap.get(DEFAULT_ACCOUNT_CODES.CASH);
+    const bankAccountId = accountMap.get(DEFAULT_ACCOUNT_CODES.BANK);
+    const arAccountId = accountMap.get(
+      DEFAULT_ACCOUNT_CODES.ACCOUNTS_RECEIVABLE,
+    );
     const revenueAccountId = accountMap.get(
       DEFAULT_ACCOUNT_CODES.SALES_REVENUE,
     );
@@ -333,6 +337,36 @@ export class FinanceIntegrationService {
     );
     const inventoryAccountId = accountMap.get(DEFAULT_ACCOUNT_CODES.INVENTORY);
 
+    // G11-D: determine payment composition from the event payload.
+    // The refund event carries the same payment records as the completion
+    // event, so the handler can reconstruct the original payment-side
+    // account mapping without any event-contract or model changes.
+    let cashAmount = new Decimal(0);
+    let cardAmount = new Decimal(0);
+    let creditAmount = new Decimal(0);
+    let otherAmount = new Decimal(0);
+
+    for (const payment of event.payments) {
+      const amt = new Decimal(payment.amount);
+      switch (payment.method) {
+        case 'CASH':
+          cashAmount = cashAmount.add(amt);
+          break;
+        case 'CARD':
+        case 'QR':
+        case 'BANK_TRANSFER':
+        case 'MOBILE_WALLET':
+          cardAmount = cardAmount.add(amt);
+          break;
+        case 'STORE_CREDIT':
+        case 'GIFT_CARD':
+          creditAmount = creditAmount.add(amt);
+          break;
+        default:
+          otherAmount = otherAmount.add(amt);
+      }
+    }
+
     const entryDate = new Date();
     const description = `Refund — ${event.saleNumber}`;
 
@@ -340,7 +374,7 @@ export class FinanceIntegrationService {
 
     const totalRefund = new Decimal(event.total);
 
-    // Reverse revenue: Debit Sales Revenue, Credit Cash
+    // Reverse revenue: Debit Sales Revenue
     if (revenueAccountId) {
       lines.push({
         accountId: revenueAccountId,
@@ -350,12 +384,73 @@ export class FinanceIntegrationService {
       });
     }
 
-    if (cashAccountId) {
+    // G11-D: payment-side reversal mirrors the original sale completion
+    // journal structure. Each payment method's credit targets the same
+    // account the original sale debited, so Cash/Bank/AR balances are
+    // correctly restored.
+    //
+    // cashNet = cashAmount − changeAmount.  changeAmount is not in the
+    // refund event payload, but by construction:
+    //   cashNet + cardAmount + creditAmount + otherAmount = totalRefund
+    // so: cashNet = totalRefund − cardAmount − creditAmount − otherAmount.
+    const cashNet = totalRefund
+      .sub(cardAmount)
+      .sub(creditAmount)
+      .sub(otherAmount);
+
+    // Cash: credit when positive, debit when change exceeded cash tendered
+    if (cashNet.gt(0) && cashAccountId) {
       lines.push({
         accountId: cashAccountId,
         debit: '0',
-        credit: totalRefund.toString(),
+        credit: cashNet.toString(),
         description: `Cash refund — ${description}`,
+      });
+    } else if (cashNet.isNegative() && cashAccountId) {
+      lines.push({
+        accountId: cashAccountId,
+        debit: cashNet.abs().toString(),
+        credit: '0',
+        description: `Change drawn from float — ${description}`,
+      });
+    }
+
+    // Card / QR / Bank transfer / Mobile wallet → Bank 1020
+    if (cardAmount.gt(0)) {
+      if (bankAccountId) {
+        lines.push({
+          accountId: bankAccountId,
+          debit: '0',
+          credit: cardAmount.toString(),
+          description: `Card/QR/Bank refund — ${description}`,
+        });
+      } else if (cashAccountId) {
+        lines.push({
+          accountId: cashAccountId,
+          debit: '0',
+          credit: cardAmount.toString(),
+          description: `Card/QR/Bank refund (via cash acct) — ${description}`,
+        });
+      }
+    }
+
+    // Store credit / Gift card → AR 1200
+    if (creditAmount.gt(0) && arAccountId) {
+      lines.push({
+        accountId: arAccountId,
+        debit: '0',
+        credit: creditAmount.toString(),
+        description: `Store credit / Gift card refund — ${description}`,
+      });
+    }
+
+    // Other / unknown methods → Cash 1010
+    if (otherAmount.gt(0) && cashAccountId) {
+      lines.push({
+        accountId: cashAccountId,
+        debit: '0',
+        credit: otherAmount.toString(),
+        description: `Other payment refund — ${description}`,
       });
     }
 

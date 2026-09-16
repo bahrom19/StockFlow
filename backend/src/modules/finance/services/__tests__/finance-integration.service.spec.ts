@@ -575,4 +575,239 @@ describe('FinanceIntegrationService', () => {
     const { totalDebit, totalCredit } = getBalanceTotals(journal);
     expect(totalDebit).toBe(totalCredit);
   });
+
+  // ─────────────────────────────────────────────
+  // G11-D: Refund payment-method reversal integrity
+  // ─────────────────────────────────────────────
+
+  it('G11-D: CARD refund credits Bank (1020), not Cash', async () => {
+    await service.onSaleRefunded(
+      {
+        saleId,
+        companyId,
+        warehouseId,
+        cashierId,
+        saleNumber,
+        total: '1000.00',
+        currency: 'KZT',
+        items: [{
+          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
+          costPrice: '600.00', discount: '0', subtotal: '1000.00',
+          total: '1000.00', margin: '400.00',
+        }],
+        payments: [{ method: 'CARD', amount: '1000.00' }],
+      },
+      mockTx as unknown as Prisma.TransactionClient,
+    );
+
+    const journal = getPostedJournal();
+    const lines = journal.lines;
+
+    const bankCredit = lines.find(
+      (l) => l.accountId === bankAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(bankCredit).toBeDefined();
+    expect(bankCredit!.credit).toBe('1000');
+
+    const cashCredits = lines.filter(
+      (l) => l.accountId === cashAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(cashCredits).toHaveLength(0);
+
+    const { totalDebit, totalCredit } = getBalanceTotals(journal);
+    expect(totalDebit).toBe(totalCredit);
+  });
+
+  it('G11-D: mixed CASH + CARD refund credits Cash (net) + Bank', async () => {
+    await service.onSaleRefunded(
+      {
+        saleId,
+        companyId,
+        warehouseId,
+        cashierId,
+        saleNumber,
+        total: '1000.00',
+        currency: 'KZT',
+        items: [{
+          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
+          costPrice: '600.00', discount: '0', subtotal: '1000.00',
+          total: '1000.00', margin: '400.00',
+        }],
+        payments: [
+          { method: 'CASH', amount: '400.00' },
+          { method: 'CARD', amount: '600.00' },
+        ],
+      },
+      mockTx as unknown as Prisma.TransactionClient,
+    );
+
+    const journal = getPostedJournal();
+    const lines = journal.lines;
+
+    const cashCredit = lines.find(
+      (l) => l.accountId === cashAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(cashCredit).toBeDefined();
+    expect(cashCredit!.credit).toBe('400');
+
+    const bankCredit = lines.find(
+      (l) => l.accountId === bankAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(bankCredit).toBeDefined();
+    expect(bankCredit!.credit).toBe('600');
+
+    const { totalDebit, totalCredit } = getBalanceTotals(journal);
+    expect(totalDebit).toBe(totalCredit);
+  });
+
+  it('G11-D: STORE_CREDIT refund credits AR (1200), not Cash', async () => {
+    await service.onSaleRefunded(
+      {
+        saleId,
+        companyId,
+        warehouseId,
+        cashierId,
+        saleNumber,
+        total: '1000.00',
+        currency: 'KZT',
+        items: [{
+          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
+          costPrice: '600.00', discount: '0', subtotal: '1000.00',
+          total: '1000.00', margin: '400.00',
+        }],
+        payments: [{ method: 'STORE_CREDIT', amount: '1000.00' }],
+      },
+      mockTx as unknown as Prisma.TransactionClient,
+    );
+
+    const journal = getPostedJournal();
+    const lines = journal.lines;
+
+    const arCredit = lines.find(
+      (l) => l.accountId === arAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(arCredit).toBeDefined();
+    expect(arCredit!.credit).toBe('1000');
+
+    const cashCredits = lines.filter(
+      (l) => l.accountId === cashAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(cashCredits).toHaveLength(0);
+
+    const { totalDebit, totalCredit } = getBalanceTotals(journal);
+    expect(totalDebit).toBe(totalCredit);
+  });
+
+  it('G11-D: CASH + CARD + STORE_CREDIT refund credits all three accounts', async () => {
+    await service.onSaleRefunded(
+      {
+        saleId,
+        companyId,
+        warehouseId,
+        cashierId,
+        saleNumber,
+        total: '1000.00',
+        currency: 'KZT',
+        items: [{
+          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
+          costPrice: '600.00', discount: '0', subtotal: '1000.00',
+          total: '1000.00', margin: '400.00',
+        }],
+        payments: [
+          { method: 'CASH', amount: '200.00' },
+          { method: 'CARD', amount: '300.00' },
+          { method: 'STORE_CREDIT', amount: '500.00' },
+        ],
+      },
+      mockTx as unknown as Prisma.TransactionClient,
+    );
+
+    const journal = getPostedJournal();
+    const lines = journal.lines;
+
+    const cashCredit = lines.find(
+      (l) => l.accountId === cashAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(cashCredit).toBeDefined();
+    expect(cashCredit!.credit).toBe('200');
+
+    const bankCredit = lines.find(
+      (l) => l.accountId === bankAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(bankCredit).toBeDefined();
+    expect(bankCredit!.credit).toBe('300');
+
+    const arCredit = lines.find(
+      (l) => l.accountId === arAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(arCredit).toBeDefined();
+    expect(arCredit!.credit).toBe('500');
+
+    const { totalDebit, totalCredit } = getBalanceTotals(journal);
+    expect(totalDebit).toBe(totalCredit);
+  });
+
+  it('G11-D: QR / BANK_TRANSFER / MOBILE_WALLET refund all credit Bank', async () => {
+    const methods = ['QR', 'BANK_TRANSFER', 'MOBILE_WALLET'];
+    for (const method of methods) {
+      mockGlEngine.post.mockClear();
+
+      await service.onSaleRefunded(
+        {
+          saleId,
+          companyId,
+          warehouseId,
+          cashierId,
+          saleNumber,
+          total: '500.00',
+          currency: 'KZT',
+          items: [{
+            productId: 'prod-1', quantity: 1, unitPrice: '500.00',
+            costPrice: '300.00', discount: '0', subtotal: '500.00',
+            total: '500.00', margin: '200.00',
+          }],
+          payments: [{ method, amount: '500.00' }],
+        },
+        mockTx as unknown as Prisma.TransactionClient,
+      );
+
+      const journal = getPostedJournal();
+      const lines = journal.lines;
+      const bankCredit = lines.find(
+        (l) => l.accountId === bankAccountId && Number.parseFloat(l.credit) > 0,
+      );
+      expect(bankCredit).toBeDefined();
+      expect(bankCredit!.credit).toBe('500');
+    }
+  });
+
+  it('G11-D: GIFT_CARD refund credits AR (1200)', async () => {
+    await service.onSaleRefunded(
+      {
+        saleId,
+        companyId,
+        warehouseId,
+        cashierId,
+        saleNumber,
+        total: '1000.00',
+        currency: 'KZT',
+        items: [{
+          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
+          costPrice: '600.00', discount: '0', subtotal: '1000.00',
+          total: '1000.00', margin: '400.00',
+        }],
+        payments: [{ method: 'GIFT_CARD', amount: '1000.00' }],
+      },
+      mockTx as unknown as Prisma.TransactionClient,
+    );
+
+    const journal = getPostedJournal();
+    const lines = journal.lines;
+    const arCredit = lines.find(
+      (l) => l.accountId === arAccountId && Number.parseFloat(l.credit) > 0,
+    );
+    expect(arCredit).toBeDefined();
+    expect(arCredit!.credit).toBe('1000');
+    expect(arCredit!.description).toContain('Gift card');
+  });
 });
