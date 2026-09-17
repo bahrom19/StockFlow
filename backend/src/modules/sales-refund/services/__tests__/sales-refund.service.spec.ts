@@ -566,7 +566,7 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     });
   });
 
-  it('partial refund publishes NO legacy event and touches no cash shift', async () => {
+  it('partial refund publishes sale.partially_refunded (no legacy event, no cash shift)', async () => {
     cashShift = {
       id: 'shift-1',
       status: 'OPEN',
@@ -579,16 +579,54 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
       totalSales: new Decimal('500.0000'),
     };
     await refund([{ saleItemId: 'item-1', quantity: 2 }]);
-    expect(mockEventBus.publish).not.toHaveBeenCalled();
+    // G11-E E3: exactly ONE event fires — the new sale.partially_refunded,
+    // built from canonical SalesRefund facts, with the tx in the context.
+    expect(mockEventBus.publish).toHaveBeenCalledTimes(1);
+    const published = mockEventBus.publish.mock.calls[0];
+    expect((published?.[0] as any).eventName).toBe('sale.partially_refunded');
+    const payload = (published?.[0] as any).payload;
+    expect(payload.saleId).toBe('sale-1');
+    expect(payload.companyId).toBe(COMPANY);
+    expect(payload.warehouseId).toBe('wh-1');
+    expect(payload.refundId).toBe('refund-1');
+    expect(payload.items).toEqual([
+      {
+        productId: 'prod-1',
+        saleItemId: 'item-1',
+        quantity: 2,
+        unitPrice: '100',
+        total: '200',
+        fifoCost: '200',
+      },
+    ]);
+    expect(published?.[1]).toEqual({
+      context: { transactionClient: mockTx },
+    });
+    // legacy event never fires for a partial refund
+    expect(
+      mockEventBus.publish.mock.calls.some(
+        (c: any[]) => (c[0] as any).eventName === 'sale.refunded',
+      ),
+    ).toBe(false);
     expect(mockCashShiftRepository.update).not.toHaveBeenCalled();
   });
 
-  it('final refund after a partial publishes NO legacy event', async () => {
+  it('final refund after a partial publishes sale.partially_refunded, not the legacy event', async () => {
     await refund([{ saleItemId: 'item-1', quantity: 3 }]);
-    expect(mockEventBus.publish).not.toHaveBeenCalled();
+    expect(mockEventBus.publish).toHaveBeenCalledTimes(1);
+    expect(
+      (mockEventBus.publish.mock.calls[0]?.[0] as any).eventName,
+    ).toBe('sale.partially_refunded');
+
     await refund([{ saleItemId: 'item-1', quantity: 2 }]);
     expect(saleRow.status).toBe(SaleStatus.REFUNDED);
-    expect(mockEventBus.publish).not.toHaveBeenCalled();
+    expect(mockEventBus.publish).toHaveBeenCalledTimes(2);
+    // BOTH refunds used the partial event; the legacy full-sale event never fired
+    expect(
+      mockEventBus.publish.mock.calls.every(
+        (c: any[]) => (c[0] as any).eventName === 'sale.partially_refunded',
+      ),
+    ).toBe(true);
   });
 
   // ── 24. Compatibility flow ───────────────────────────────────
@@ -600,8 +638,12 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
 
     expect(persistedQty()).toBe(5); // 2 + 3 remaining
     expect(saleRow.status).toBe(SaleStatus.REFUNDED);
-    // final-after-partial must not publish the legacy full-sale event
-    expect(mockEventBus.publish).not.toHaveBeenCalled();
+    // final-after-partial must not publish the legacy full-sale event —
+    // G11-E E3: it publishes sale.partially_refunded instead
+    expect(mockEventBus.publish).toHaveBeenCalledTimes(1);
+    expect(
+      (mockEventBus.publish.mock.calls[0]?.[0] as any).eventName,
+    ).toBe('sale.partially_refunded');
   });
 
   // ── Audit ────────────────────────────────────────────────────

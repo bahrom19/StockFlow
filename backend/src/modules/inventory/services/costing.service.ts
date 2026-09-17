@@ -241,6 +241,58 @@ export class CostingService {
   }
 
   /**
+   * G11-E E3: restore the exact cost VALUE of a refunded quantity as a new IN
+   * CostLayer, priced from the caller-supplied canonical refund cost.
+   *
+   * Unlike {@link restoreLayer} (which multiplies unitCost × quantity), this
+   * primitive takes the TOTAL cost directly and preserves it exactly —
+   * including non-representable-per-unit remainders such as a 100.0000 total
+   * split into 33.3333 + 33.3333 + 33.3334 across three refund lines.
+   * Re-deriving the total from a rounded unit cost would break the persisted
+   * SalesRefundItem.fifoCost conservation, so the total is authoritative.
+   *
+   * The canonical refund cost source is `SalesRefundItem.fifoCost` (G11-E
+   * locked design); CostLayer OUT rows are NEVER consulted here — there is no
+   * re-FIFO and no fallback to SaleItem.costPrice. Must run inside the
+   * caller's transaction (tx) so the restore commits or rolls back together
+   * with the refund and the stock restore.
+   */
+  async restoreRefundLayer(
+    productId: string,
+    companyId: string,
+    quantity: number,
+    totalCost: Decimal,
+    referenceType: string,
+    referenceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (quantity <= 0) {
+      throw new NotFoundException(
+        `Restore quantity must be positive (got ${quantity}) for product ${productId}`,
+      );
+    }
+    if (totalCost.isNegative()) {
+      throw new NotFoundException(
+        `Restore totalCost must not be negative (got ${totalCost.toString()}) for product ${productId}`,
+      );
+    }
+    await this.inventoryRepository.createCostLayer(
+      {
+        company: { connect: { id: companyId } },
+        product: { connect: { id: productId } },
+        direction: 'IN',
+        quantity,
+        remainingQuantity: quantity,
+        unitCost: totalCost.div(quantity),
+        totalCost,
+        referenceType,
+        referenceId,
+      },
+      tx,
+    );
+  }
+
+  /**
    * G9-F1 OUT-layer lookup (architecture review decision 10): finds the
    * immutable historical costing record (direction OUT) for a consuming
    * document, e.g. the sale's summary layer (referenceType='SALE',

@@ -17,6 +17,7 @@ import { SalesRepository } from '../../sales/repositories/sales.repository';
 import { CashShiftRepository } from '../../sales/repositories/cash-shift.repository';
 import { allocateShiftSales } from '../../sales/services/payment-allocation';
 import { SaleRefundedEvent } from '../../sales/events/sale-refunded.event';
+import { SalePartiallyRefundedEvent } from '../../sales/events/sale-partially-refunded.event';
 import {
   SalesRefundPreviousAggregate,
   SalesRefundRepository,
@@ -313,8 +314,9 @@ export class SalesRefundService {
 
     // 14. LEGACY single-shot full refund only: preserve the existing cash-shift
     // reversal and publish the EXISTING SaleRefundedEvent unchanged. Partial
-    // (and final-after-partial) refunds publish nothing — the existing payload
-    // represents the full original sale and is owned by E3/E4/E5.
+    // (and final-after-partial) refunds publish the NEW SalePartiallyRefundedEvent
+    // (G11-E E3) instead — the two inventory events are mutually exclusive per
+    // refund operation, so stock is restored exactly once.
     const isLegacySingleShotFullRefund =
       sale.status === SaleStatus.COMPLETED &&
       newStatus === SaleStatus.REFUNDED;
@@ -326,6 +328,8 @@ export class SalesRefundService {
         companyId,
         tx,
       );
+    } else {
+      await this.publishPartiallyRefundedEvent(sale, refund, userId, tx);
     }
 
     return SalesRefundMapper.toEntity(refund);
@@ -469,6 +473,51 @@ export class SalesRefundService {
       .div(saleItem.quantity)
       .toDecimalPlaces(MONEY_SCALE);
   }
+  /**
+   * G11-E E3 — publish `sale.partially_refunded` from the canonical
+   * SalesRefund/SalesRefundItem facts, inside the originating transaction
+   * (event handlers receive the tx via the event context).
+   *
+   * Event-scope rule (locked):
+   * - COMPLETED → full refund         → legacy `sale.refunded` ONLY
+   * - COMPLETED → partial             → `sale.partially_refunded`
+   * - PARTIALLY_REFUNDED → partial    → `sale.partially_refunded`
+   * - PARTIALLY_REFUNDED → final      → `sale.partially_refunded`
+   *
+   * This method is reached only for the non-legacy cases (see step 14);
+   * the legacy single-shot full refund never reaches it, so the two
+   * inventory events can never both fire for one refund operation.
+   */
+  private async publishPartiallyRefundedEvent(
+    sale: Sale,
+    refund: Prisma.SalesRefundGetPayload<{ include: { items: true } }>,
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await this.eventBus.publish(
+      new SalePartiallyRefundedEvent({
+        saleId: sale.id,
+        companyId: sale.companyId,
+        warehouseId: sale.warehouseId,
+        refundId: refund.id,
+        refundNumber: refund.refundNumber,
+        saleNumber: sale.saleNumber,
+        total: refund.total.toString(),
+        currency: refund.currency,
+        createdBy: userId,
+        items: refund.items.map((item) => ({
+          productId: item.productId,
+          saleItemId: item.saleItemId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice.toString(),
+          total: item.total.toString(),
+          fifoCost: item.fifoCost.toString(),
+        })),
+      }),
+      { context: { transactionClient: tx } },
+    );
+  }
+
   /**
    * LEGACY full-refund side effects — preserved VERBATIM from the previous
    * `SalesService.refundSale()` for the single-shot full refund only:

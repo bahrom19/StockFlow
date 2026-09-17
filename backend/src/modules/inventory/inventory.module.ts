@@ -30,6 +30,7 @@ import { InventoryRepository } from './repositories/inventory.repository';
 import {
   SaleCompletedEventHandler,
   SaleRefundedEventHandler,
+  SalePartiallyRefundedEventHandler,
   PurchaseReceivedEventHandler,
   InventoryFinanceHandler,
 } from './events';
@@ -60,6 +61,7 @@ import {
     CostingService,
     SaleCompletedEventHandler,
     SaleRefundedEventHandler,
+    SalePartiallyRefundedEventHandler,
     PurchaseReceivedEventHandler,
     InventoryFinanceHandler,
   ],
@@ -75,6 +77,7 @@ export class InventoryModule implements OnModuleInit {
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
     private readonly saleCompletedHandler: SaleCompletedEventHandler,
     private readonly saleRefundedHandler: SaleRefundedEventHandler,
+    private readonly salePartiallyRefundedHandler: SalePartiallyRefundedEventHandler,
     private readonly purchaseReceivedHandler: PurchaseReceivedEventHandler,
     private readonly inventoryFinanceHandler: InventoryFinanceHandler,
   ) {}
@@ -82,6 +85,10 @@ export class InventoryModule implements OnModuleInit {
   onModuleInit(): void {
     this.eventBus.subscribe('sale.completed', this.saleCompletedHandler);
     this.eventBus.subscribe('sale.refunded', this.saleRefundedHandler);
+    this.eventBus.subscribe(
+      'sale.partially_refunded',
+      this.salePartiallyRefundedHandler,
+    );
     this.eventBus.subscribe('purchase.received', this.purchaseReceivedHandler);
     this.eventBus.subscribe('inventory.adjusted', this.inventoryFinanceHandler);
   }

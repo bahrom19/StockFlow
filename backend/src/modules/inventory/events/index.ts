@@ -14,3 +14,4 @@ export { SaleCompletedEventHandler } from './sale-completed.handler';
 export { PurchaseReceivedEventHandler } from './purchase-received.handler';
 export { InventoryFinanceHandler } from './finance-integration.handler';
 export { SaleRefundedEventHandler } from './sale-refunded.handler';
+export { SalePartiallyRefundedEventHandler } from './sale-partially-refunded.handler';
