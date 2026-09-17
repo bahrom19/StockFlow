@@ -18,6 +18,7 @@ import { CashShiftRepository } from '../../sales/repositories/cash-shift.reposit
 import { allocateShiftSales } from '../../sales/services/payment-allocation';
 import { SaleRefundedEvent } from '../../sales/events/sale-refunded.event';
 import { SalePartiallyRefundedEvent } from '../../sales/events/sale-partially-refunded.event';
+import { RefundPaymentAllocationService } from './refund-payment-allocation.service';
 import {
   SalesRefundPreviousAggregate,
   SalesRefundRepository,
@@ -25,6 +26,7 @@ import {
 import { CreateRefundDto } from '../dto/create-refund.dto';
 import { SalesRefundEntity } from '../entities/sales-refund.entity';
 import { SalesRefundMapper } from '../mappers/sales-refund.mapper';
+import type { RefundAllocationFact } from './refund-payment-allocation.service';
 
 /** Monetary/historical-cost scale — matches Decimal(18,4) columns. */
 const MONEY_SCALE = 4;
@@ -60,8 +62,7 @@ function toDecimal(
  * allocation.
  */
 @Injectable()
-export class SalesRefundService {
-  constructor(
+export class SalesRefundService {    constructor(
     private readonly prismaService: PrismaService,
     private readonly salesRepository: SalesRepository,
     private readonly cashShiftRepository: CashShiftRepository,
@@ -70,6 +71,14 @@ export class SalesRefundService {
     private readonly auditLog: AuditLogService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
+
+  /**
+   * G11-E5 — bucket-level refund payment allocation. A stateless pure domain
+   * service (no injected infrastructure — everything flows through the tx
+   * client), so it is instantiated directly; this keeps the module provider
+   * list and the DI graph unchanged.
+   */
+  private readonly refundPaymentAllocation = new RefundPaymentAllocationService();
 
   /**
    * Refund the given quantities (or ALL remaining quantities when `items` is
@@ -256,7 +265,8 @@ export class SalesRefundService {
     );
 
     // 11. Derive the refund-derived Sale status: REFUNDED only when EVERY
-    // SaleItem reaches zero remaining quantity.
+    // SaleItem reaches zero remaining quantity. Computed here (before the
+    // allocation step) so the legacy single-shot full refund is known early.
     const fullyRefunded = saleItems.every((saleItem) => {
       const already = previous.get(saleItem.id)?.quantity ?? 0;
       const here = requested.get(saleItem.id) ?? 0;
@@ -265,6 +275,33 @@ export class SalesRefundService {
     const newStatus = fullyRefunded
       ? SaleStatus.REFUNDED
       : SaleStatus.PARTIALLY_REFUNDED;
+    const isLegacySingleShotFullRefund =
+      sale.status === SaleStatus.COMPLETED &&
+      newStatus === SaleStatus.REFUNDED;
+
+    // 10b. G11-E5 — persist the bucket-level refund payment allocation
+    // (insert-only facts) inside the SAME transaction, so the refund and its
+    // payment-side allocation are atomic: a rollback removes both. Full
+    // single-shot refunds (legacy path) do not need allocation rows — their
+    // G11-D payment reversal reconstructs buckets from the full payments[]
+    // payload — so allocation is computed only for the partial lifecycle
+    // (partial or final-after-partial). Finance consumes these rows via the
+    // event's transaction client (E4 handler, same tx).
+    let paymentAllocationFacts: RefundAllocationFact[] = [];
+    if (!isLegacySingleShotFullRefund) {
+      paymentAllocationFacts = await this.refundPaymentAllocation.createForRefund(
+        tx,
+        {
+          sale,
+          salesRefundId: refund.id,
+          refundTotal,
+          userId,
+        },
+      );
+    }
+
+    // (Status derivation + legacy-refund detection moved above the allocation
+    // step — see step 11.)
 
     // 12. CAS update the Sale using the rowVersion captured before any write.
     // A conflicting concurrent refund makes this match 0 rows and the
@@ -316,10 +353,8 @@ export class SalesRefundService {
     // reversal and publish the EXISTING SaleRefundedEvent unchanged. Partial
     // (and final-after-partial) refunds publish the NEW SalePartiallyRefundedEvent
     // (G11-E E3) instead — the two inventory events are mutually exclusive per
-    // refund operation, so stock is restored exactly once.
-    const isLegacySingleShotFullRefund =
-      sale.status === SaleStatus.COMPLETED &&
-      newStatus === SaleStatus.REFUNDED;
+    // refund operation, so stock is restored exactly once. The legacy-refund
+    // predicate was computed in step 11.
     if (isLegacySingleShotFullRefund) {
       await this.applyLegacyFullRefundSideEffects(
         sale,

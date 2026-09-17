@@ -159,6 +159,7 @@ model Company {
   sales                 Sale[]
   cashShifts            CashShift[]
   salesRefunds          SalesRefund[]
+  refundPaymentAllocations RefundPaymentAllocation[]
   chartOfAccounts       ChartOfAccount[]
   financialPeriods      FinancialPeriod[]
   cashAccounts          CashAccount[]
@@ -1733,6 +1734,7 @@ model SalesRefund {
   warehouse    Warehouse    @relation(fields: [warehouseId], references: [id])
   items        SalesRefundItem[]
   company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  paymentAllocations RefundPaymentAllocation[]
 
   @@index([companyId])
   @@index([saleId])
@@ -1763,6 +1765,26 @@ model SalesRefundItem {
   @@index([saleItemId])
   @@index([productId])
   @@index([createdAt])
+}
+
+model RefundPaymentAllocation {
+  id            String        @id @default(uuid()) @db.Uuid
+  companyId     String        @db.Uuid
+  salesRefundId String        @db.Uuid
+  method        PaymentMethod
+  amount        Decimal       @db.Decimal(18, 4)
+  currency      Currency      @default(KZT)
+  createdBy     String        @db.Uuid
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  salesRefund   SalesRefund   @relation(fields: [salesRefundId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([salesRefundId])
+  @@index([companyId, deletedAt])
+  @@index([salesRefundId, method])
 }
 
 model CashShift {

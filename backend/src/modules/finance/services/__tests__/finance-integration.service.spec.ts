@@ -160,6 +160,12 @@ describe('FinanceIntegrationService', () => {
       costLayer: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      // G11-E5: allocation facts of the refund. Default is EMPTY → historical
+      // E4-era refunds take the legacy Cash fallback (that is exactly what the
+      // E4 tests below assert); E5 tests override per scenario.
+      refundPaymentAllocation: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
 
     mockPeriodsRepo.findCurrent.mockResolvedValue({ id: periodId } as any);
@@ -1106,6 +1112,198 @@ describe('FinanceIntegrationService', () => {
       expect(integration.onSalePartiallyRefunded).toHaveBeenCalledWith(
         expect.objectContaining({ refundId }),
         tx,
+      );
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // G11-E5 — allocation-driven payment side (sale.partially_refunded)
+  // ═══════════════════════════════════════════
+  describe('G11-E5: onSalePartiallyRefunded payment allocation', () => {
+    const refundId = 'refund-1';
+    const refundNumber = 'REF-COMP-0001';
+
+    const partialEvent = (overrides: Record<string, unknown> = {}) => ({
+      saleId,
+      companyId,
+      warehouseId,
+      refundId,
+      refundNumber,
+      saleNumber,
+      total: '300.0000',
+      currency: 'KZT' as const,
+      createdBy: 'user-9',
+      items: [
+        {
+          productId: 'prod-1',
+          saleItemId: 'sale-item-1',
+          quantity: 3,
+          unitPrice: '100.0000',
+          total: '300.0000',
+          fifoCost: '180.0000',
+        },
+      ],
+      ...overrides,
+    });
+
+    const setAllocations = (
+      rows: Array<{ method: string; amount: string }>,
+    ) => {
+      mockTx.refundPaymentAllocation.findMany.mockResolvedValue(
+        rows.map((r) => ({ ...r, amount: new Decimal(r.amount) })),
+      );
+    };
+
+    beforeEach(() => {
+      mockGlEngine.post.mockClear();
+      mockTx.refundPaymentAllocation.findMany.mockClear();
+      mockTx.refundPaymentAllocation.findMany.mockResolvedValue([]);
+    });
+
+    it('18: no allocation rows → legacy fallback Cr Cash 1010 = total (historical E4 refund)', async () => {
+      await service.onSalePartiallyRefunded(
+        partialEvent() as any,
+        mockTx as unknown as Prisma.TransactionClient,
+      );
+      expect(mockTx.refundPaymentAllocation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            companyId,
+            salesRefundId: refundId,
+          }),
+        }),
+      );
+      const lines = getPostedJournal().lines;
+      const cashCredit = lines.find(
+        (l) => l.accountId === cashAccountId && Number.parseFloat(l.credit) > 0,
+      );
+      expect(cashCredit!.credit).toBe('300');
+      // no bank/AR lines exist
+      expect(
+        lines.some(
+          (l) =>
+            (l.accountId === bankAccountId || l.accountId === arAccountId) &&
+            Number.parseFloat(l.credit) > 0,
+        ),
+      ).toBe(false);
+    });
+
+    it('19: allocation rows drive the payment side (CASH→1010, CARD→1020, STORE_CREDIT→1200)', async () => {
+      setAllocations([
+        { method: 'CASH', amount: '100.0000' },
+        { method: 'CARD', amount: '120.0000' },
+        { method: 'STORE_CREDIT', amount: '80.0000' },
+      ]);
+      await service.onSalePartiallyRefunded(
+        partialEvent() as any,
+        mockTx as unknown as Prisma.TransactionClient,
+      );
+      const lines = getPostedJournal().lines;
+      const creditFor = (accountId: string) =>
+        Number.parseFloat(
+          lines.find(
+            (l) =>
+              l.accountId === accountId && Number.parseFloat(l.credit) > 0,
+          )!.credit,
+        );
+      expect(creditFor(cashAccountId)).toBe(100);
+      expect(creditFor(bankAccountId)).toBe(120);
+      expect(creditFor(arAccountId)).toBe(80);
+      // FIFO/COGS side untouched
+      expect(
+        Number.parseFloat(
+          lines.find(
+            (l) =>
+              l.accountId === inventoryAccountId &&
+              Number.parseFloat(l.debit) > 0,
+          )!.debit,
+        ),
+      ).toBe(180);
+      expect(
+        Number.parseFloat(
+          lines.find(
+            (l) =>
+              l.accountId === cogsAccountId && Number.parseFloat(l.credit) > 0,
+          )!.credit,
+        ),
+      ).toBe(180);
+      const { totalDebit, totalCredit } = getBalanceTotals(getPostedJournal());
+      expect(totalDebit).toBe(totalCredit);
+    });
+
+    it('20: BANK_TRANSFER and GIFT_CARD aggregate into 1020/1200; no zero lines', async () => {
+      setAllocations([
+        { method: 'BANK_TRANSFER', amount: '150.0000' },
+        { method: 'GIFT_CARD', amount: '150.0000' },
+      ]);
+      await service.onSalePartiallyRefunded(
+        partialEvent() as any,
+        mockTx as unknown as Prisma.TransactionClient,
+      );
+      const lines = getPostedJournal().lines;
+      expect(
+        Number.parseFloat(
+          lines.find(
+            (l) =>
+              l.accountId === bankAccountId && Number.parseFloat(l.credit) > 0,
+          )!.credit,
+        ),
+      ).toBe(150);
+      expect(
+        Number.parseFloat(
+          lines.find(
+            (l) =>
+              l.accountId === arAccountId && Number.parseFloat(l.credit) > 0,
+          )!.credit,
+        ),
+      ).toBe(150);
+      // no zero-value credit lines anywhere
+      expect(
+        lines.filter((l) => Number.parseFloat(l.credit) === 0 && Number.parseFloat(l.debit) === 0),
+      ).toHaveLength(0);
+    });
+
+    it('21: allocation sum != refund total → FAIL FAST, no journal', async () => {
+      setAllocations([
+        { method: 'CASH', amount: '100.0000' },
+        { method: 'CARD', amount: '100.0000' },
+      ]); // sums to 200, refund total is 300
+      await expect(
+        service.onSalePartiallyRefunded(
+          partialEvent() as any,
+          mockTx as unknown as Prisma.TransactionClient,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+    });
+
+    it('22: non-positive allocation row → FAIL FAST, no silent Cash fallback', async () => {
+      setAllocations([
+        { method: 'CASH', amount: '300.0000' },
+        { method: 'CARD', amount: '0.0000' },
+      ]);
+      await expect(
+        service.onSalePartiallyRefunded(
+          partialEvent() as any,
+          mockTx as unknown as Prisma.TransactionClient,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+    });
+
+    it('23: allocation read is tenant-scoped by companyId + salesRefundId (never refundId alone)', async () => {
+      setAllocations([{ method: 'CASH', amount: '300.0000' }]);
+      await service.onSalePartiallyRefunded(
+        partialEvent({ companyId: 'comp-42' }) as any,
+        mockTx as unknown as Prisma.TransactionClient,
+      );
+      expect(mockTx.refundPaymentAllocation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            companyId: 'comp-42',
+            salesRefundId: refundId,
+          }),
+        }),
       );
     });
   });

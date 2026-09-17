@@ -105,6 +105,20 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
   let sequence: number;
   let payments: Array<{ method: string; amount: Decimal }>;
   let cashShift: unknown;
+  /** G11-E5 allocation rows (insert-only facts, keyed by salesRefundId). */
+  interface StoredAllocation {
+    companyId: string;
+    salesRefundId: string;
+    method: string;
+    amount: Decimal;
+    currency: string;
+    createdBy: string;
+    deletedAt?: Date | null;
+  }
+  let allocationLedger: StoredAllocation[];
+
+  const allocationsFor = (refundId: string) =>
+    allocationLedger.filter((a) => a.salesRefundId === refundId);
 
   let mockSalesRepository: any;
   let mockCashShiftRepository: any;
@@ -140,7 +154,10 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
   beforeEach(async () => {
     store = [];
     sequence = 0;
-    payments = [];
+    // Default payment facts reconcile with the default sale (CASH 500 = total);
+    // tests override as needed. G11-E5: partial refunds allocate against these.
+    payments = [{ method: 'CASH', amount: new Decimal('500.0000') }];
+    allocationLedger = [];
     cashShift = null;
     saleItems = [saleItem()];
     saleRow = sale();
@@ -230,17 +247,34 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
       saleItem: { findMany: jest.fn(async () => saleItems) },
       cashShift: { findFirst: jest.fn(async () => cashShift) },
       payment: { findMany: jest.fn(async () => payments) },
+      salesRefund: { findMany: jest.fn(async () => store) },
+      refundPaymentAllocation: {
+        findMany: jest.fn(async ({ where }: any) =>
+          allocationLedger.filter(
+            (row) =>
+              row.companyId === where.companyId &&
+              where.salesRefundId.in.includes(row.salesRefundId) &&
+              row.deletedAt == null,
+          ),
+        ),
+        createMany: jest.fn(async ({ data }: any) => {
+          allocationLedger.push(...data);
+          return { count: data.length };
+        }),
+      },
     };
 
     const mockPrisma = {
       $transaction: jest.fn(async (fn: any) => {
-        const before = snapshot();
-        try {
-          return await fn(mockTx);
-        } catch (error) {
-          store = before;
-          throw error;
-        }
+      const before = snapshot();
+      const allocationsBefore = allocationLedger.map((a) => ({ ...a }));
+      try {
+        return await fn(mockTx);
+      } catch (error) {
+        store = before;
+        allocationLedger = allocationsBefore; // rollback removes allocation rows too
+        throw error;
+      }
       }),
     };
 
@@ -425,6 +459,11 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
         total: new Decimal('600.0000'),
       }),
     ];
+    // keep payment facts consistent with the 600 sale total (G11-E5 allocation)
+    saleRow = { ...saleRow, total: new Decimal('600.0000') } as ReturnType<
+      typeof sale
+    >;
+    payments = [{ method: 'CASH', amount: new Decimal('600.0000') }];
     await refund([{ saleItemId: 'item-1', quantity: 2 }]);
     await refund([{ saleItemId: 'item-1', quantity: 3 }]);
     expect(fifoCosts()).toEqual(['240', '360']);
@@ -662,5 +701,93 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     });
     expect(first?.[1]).toBe(mockTx);
     expect(second?.[1]).toBe(mockTx);
+  });
+
+  // ── G11-E5. Refund payment allocation integration ───────────
+  it('partial refund persists allocation rows summing to the refund total', async () => {
+    payments = [
+      { method: 'CASH', amount: new Decimal('6000.0000') },
+      { method: 'CARD', amount: new Decimal('4000.0000') },
+    ];
+    saleRow = { ...saleRow, total: new Decimal('10000.0000') } as ReturnType<
+      typeof sale
+    >;
+    saleItems = [
+      saleItem({
+        quantity: 10,
+        unitPrice: new Decimal('1000.0000'),
+        total: new Decimal('10000.0000'),
+        fifoCost: new Decimal('5000.0000'),
+      }),
+    ];
+    await refund([{ saleItemId: 'item-1', quantity: 4 }]); // refund 4000
+    const rows = allocationsFor('refund-1');
+    const total = rows.reduce((acc, r) => acc.add(r.amount), new Decimal(0));
+    expect(total.toString()).toBe('4000');
+    expect(
+      rows.find((r) => r.method === 'CASH')?.amount.toString(),
+    ).toBe('2400');
+    expect(
+      rows.find((r) => r.method === 'CARD')?.amount.toString(),
+    ).toBe('1600');
+    expect(rows.every((r) => r.companyId === COMPANY)).toBe(true);
+    expect(rows.every((r) => r.currency === 'KZT')).toBe(true);
+  });
+
+  it('single-shot full refund does NOT create allocation rows (legacy path)', async () => {
+    await refund([]); // full refund of the whole sale
+    expect(allocationLedger).toHaveLength(0);
+    expect((mockEventBus.publish.mock.calls[0]?.[0] as any).eventName).toBe(
+      'sale.refunded',
+    );
+  });
+
+  it('multiple partial refunds get their own immutable allocation rows', async () => {
+    payments = [
+      { method: 'CASH', amount: new Decimal('6000.0000') },
+      { method: 'CARD', amount: new Decimal('4000.0000') },
+    ];
+    saleRow = { ...saleRow, total: new Decimal('10000.0000') } as ReturnType<
+      typeof sale
+    >;
+    saleItems = [
+      saleItem({
+        quantity: 10,
+        unitPrice: new Decimal('1000.0000'),
+        total: new Decimal('10000.0000'),
+        fifoCost: new Decimal('5000.0000'),
+      }),
+    ];
+    await refund([{ saleItemId: 'item-1', quantity: 3 }]); // 3000
+    await refund([{ saleItemId: 'item-1', quantity: 2 }]); // 2000
+    const first = allocationsFor('refund-1');
+    const second = allocationsFor('refund-2');
+    expect(
+      first.reduce((acc, r) => acc.add(r.amount), new Decimal(0)).toString(),
+    ).toBe('3000');
+    expect(
+      second.reduce((acc, r) => acc.add(r.amount), new Decimal(0)).toString(),
+    ).toBe('2000');
+    // cumulative per-method caps: CASH 3000 <= 6000, CARD 2000 <= 4000
+    const cumulative = new Map<string, Decimal>();
+    for (const row of allocationLedger) {
+      cumulative.set(
+        row.method,
+        (cumulative.get(row.method) ?? new Decimal(0)).add(row.amount),
+      );
+    }
+    expect(cumulative.get('CASH')!.lte('6000')).toBe(true);
+    expect(cumulative.get('CARD')!.lte('4000')).toBe(true);
+  });
+
+  it('rolls back allocation rows together with the refund on CAS conflict', async () => {
+    mockSalesRepository.updateStatus.mockRejectedValueOnce(
+      new ConflictException('conflict'),
+    );
+    await expect(
+      refund([{ saleItemId: 'item-1', quantity: 1 }]),
+    ).rejects.toThrow(ConflictException);
+    expect(store).toHaveLength(0);
+    expect(allocationLedger).toHaveLength(0);
   });
 });

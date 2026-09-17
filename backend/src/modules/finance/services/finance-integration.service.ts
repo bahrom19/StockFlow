@@ -3,7 +3,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PaymentMethod, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import {
   SaleCompletedEventPayload,
@@ -557,6 +557,10 @@ export class FinanceIntegrationService {
     }
 
     const cashAccountId = accountMap.get(DEFAULT_ACCOUNT_CODES.CASH);
+    const bankAccountId = accountMap.get(DEFAULT_ACCOUNT_CODES.BANK);
+    const arAccountId = accountMap.get(
+      DEFAULT_ACCOUNT_CODES.ACCOUNTS_RECEIVABLE,
+    );
     const revenueAccountId = accountMap.get(
       DEFAULT_ACCOUNT_CODES.SALES_REVENUE,
     );
@@ -566,7 +570,10 @@ export class FinanceIntegrationService {
     const inventoryAccountId = accountMap.get(DEFAULT_ACCOUNT_CODES.INVENTORY);
 
     // F9: required accounts must exist — fail fast rather than posting an
-    // incomplete or silently unbalanced journal.
+    // incomplete or silently unbalanced journal. The payment side needs BANK
+    // and AR only when the allocation actually credits them, so their absence
+    // alone does not block a cash-only refund; CASH is always required (it is
+    // both the legacy fallback bucket and a G11-D credit target).
     const missing: string[] = [];
     if (!revenueAccountId) missing.push(DEFAULT_ACCOUNT_CODES.SALES_REVENUE);
     if (!cashAccountId) missing.push(DEFAULT_ACCOUNT_CODES.CASH);
@@ -587,6 +594,21 @@ export class FinanceIntegrationService {
     const entryDate = new Date();
     const description = `Partial refund — ${event.saleNumber} (${event.refundNumber})`;
 
+    // G11-E5 payment side: read the refund's persisted allocation facts via
+    // the SAME transaction client (tenant-scoped: companyId + salesRefundId,
+    // never refundId alone).
+    // - NO ROWS  → historical E4-era refund: legacy fallback Cr Cash 1010 =
+    //   refund total (interim default bucket; no backfill of history).
+    // - ROWS PRESENT BUT INVALID (Σ != total, non-positive amount) → FAIL
+    //   FAST; never silently fall back to Cash.
+    const allocationRows = await tx.refundPaymentAllocation.findMany({
+      where: {
+        companyId: event.companyId,
+        salesRefundId: event.refundId,
+        deletedAt: null,
+      },
+    });
+
     const lines: Array<PostJournalEntryInput['lines'][0]> = [
       // F3: reverse revenue for THIS refund only.
       {
@@ -595,14 +617,74 @@ export class FinanceIntegrationService {
         credit: '0',
         description: `Revenue reversal — ${description}`,
       },
-      // F4: interim payment-side default bucket (E6 will allocate per method).
-      {
+    ];
+
+    if (allocationRows.length === 0) {
+      // Legacy fallback (E4 interim rule): the historical refund carried no
+      // allocation facts — keep the E4 behavior unchanged.
+      lines.push({
         accountId: cashAccountId!,
         debit: '0',
         credit: refundTotal.toString(),
         description: `Refund payout — ${description}`,
-      },
-    ];
+      });
+    } else {
+      // G11-E5: credit the same accounts the original sale debited, aggregated
+      // per GL account (G11-D map: CASH→1010, CARD/QR/BANK_TRANSFER/
+      // MOBILE_WALLET→1020, STORE_CREDIT/GIFT_CARD→1200). Zero-value lines are
+      // omitted; Σ credits must equal the refund total exactly.
+      const byAccount = new Map<string, { amount: Decimal; methods: PaymentMethod[] }>();
+      for (const row of allocationRows) {
+        const amount = new Decimal(row.amount);
+        if (amount.lte(0)) {
+          throw new BadRequestException(
+            `Invalid refund payment allocation for refund ${event.refundNumber}: ${row.method} amount ${amount.toString()} must be positive.`,
+          );
+        }
+        const accountId =
+          row.method === PaymentMethod.CASH
+            ? cashAccountId!
+            : row.method === PaymentMethod.CARD ||
+                row.method === PaymentMethod.QR ||
+                row.method === PaymentMethod.BANK_TRANSFER ||
+                row.method === PaymentMethod.MOBILE_WALLET
+              ? bankAccountId!
+              : arAccountId!; // STORE_CREDIT / GIFT_CARD
+        const bucket = byAccount.get(accountId);
+        if (bucket) {
+          bucket.amount = bucket.amount.add(amount);
+          bucket.methods.push(row.method);
+        } else {
+          byAccount.set(accountId, { amount, methods: [row.method] });
+        }
+      }
+      // BANK/AR are required only when the allocation actually targets them;
+      // an undefined account id means the Chart of Accounts is incomplete —
+      // fail fast rather than posting a line without an account.
+      const missingPaymentAccounts = [...byAccount.keys()].filter((id) => !id);
+      if (missingPaymentAccounts.length > 0) {
+        throw new BadRequestException(
+          `Missing required Chart of Accounts for partial refund ${event.refundNumber} (payment side: Bank 1020 / AR 1200). Cannot post journal.`,
+        );
+      }
+      for (const [accountId, { amount }] of byAccount) {
+        lines.push({
+          accountId,
+          debit: '0',
+          credit: amount.toString(),
+          description: `Refund payout — ${description}`,
+        });
+      }
+      const paymentCredits = [...byAccount.values()].reduce(
+        (acc, bucket) => acc.add(bucket.amount),
+        new Decimal(0),
+      );
+      if (!paymentCredits.equals(refundTotal)) {
+        throw new BadRequestException(
+          `Refund payment allocations of refund ${event.refundNumber} sum to ${paymentCredits.toString()} but the refund total is ${refundTotal.toString()}. Refusing to post an unbalanced journal.`,
+        );
+      }
+    }
 
     // F5: restore inventory value at the canonical refund cost from the
     // payload. CostLayer OUT is intentionally never consulted.
