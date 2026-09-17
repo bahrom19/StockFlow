@@ -22,5 +22,8 @@ import { SalesService } from './services/sales.service';
     SalesService,
     CashShiftService,
   ],
+  // G11-E E2: consumed by SalesRefundModule. The dependency direction stays
+  // SalesRefundModule -> SalesModule (never the reverse), so there is no cycle.
+  exports: [SalesRepository, CashShiftRepository],
 })
 export class SalesModule {}

@@ -158,6 +158,7 @@ model Company {
   quotations            SupplierQuotation[]
   sales                 Sale[]
   cashShifts            CashShift[]
+  salesRefunds          SalesRefund[]
   chartOfAccounts       ChartOfAccount[]
   financialPeriods      FinancialPeriod[]
   cashAccounts          CashAccount[]
@@ -884,6 +885,7 @@ model Warehouse {
   stockMovements StockMovement[]
   goodsReceipts GoodsReceipt[]
   purchaseReturns PurchaseReturn[]
+  salesRefunds   SalesRefund[]
   sales          Sale[]
   cashShifts     CashShift[]
   cashAccounts   CashAccount[]
@@ -1534,6 +1536,11 @@ enum SaleStatus {
   PARTIALLY_REFUNDED
 }
 
+enum RefundStatus {
+  COMPLETED
+  CANCELLED
+}
+
 enum PaymentMethod {
   CASH
   CARD
@@ -1634,6 +1641,7 @@ model Sale {
   receipts      Receipt[]
   cashShift     CashShift? @relation(fields: [cashShiftId], references: [id])
   cashShiftId   String?    @db.Uuid
+  salesRefunds  SalesRefund[]
 
   @@index([companyId])
   @@index([warehouseId])
@@ -1656,6 +1664,7 @@ model SaleItem {
   quantity  Int      @default(1)
   unitPrice Decimal  @db.Decimal(18, 4)
   costPrice Decimal  @db.Decimal(18, 4)
+  fifoCost  Decimal? @db.Decimal(18, 4)
   discount  Decimal  @default(0) @db.Decimal(18, 4)
   subtotal  Decimal  @default(0) @db.Decimal(18, 4)
   total     Decimal  @default(0) @db.Decimal(18, 4)
@@ -1663,6 +1672,7 @@ model SaleItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  salesRefundItems SalesRefundItem[]
 
   @@index([saleId])
   @@index([productId])
@@ -1700,6 +1710,58 @@ model Receipt {
   @@index([saleId])
   @@index([receiptNumber])
   @@index([status])
+  @@index([createdAt])
+}
+
+model SalesRefund {
+  id           String       @id @default(uuid()) @db.Uuid
+  companyId    String       @db.Uuid
+  saleId       String       @db.Uuid
+  warehouseId  String       @db.Uuid
+  refundNumber String       @db.VarChar(100)
+  status       RefundStatus @default(COMPLETED)
+  total        Decimal      @default(0) @db.Decimal(18, 4)
+  currency     Currency     @default(KZT)
+  reason       String?      @db.Text
+  reference    String?      @db.VarChar(255)
+  createdBy    String       @db.Uuid
+  rowVersion   Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+  sale         Sale         @relation(fields: [saleId], references: [id])
+  warehouse    Warehouse    @relation(fields: [warehouseId], references: [id])
+  items        SalesRefundItem[]
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([saleId])
+  @@index([warehouseId])
+  @@index([refundNumber])
+  @@index([status])
+  @@index([createdAt])
+  @@index([companyId, deletedAt])
+  @@index([companyId, status])
+  @@unique([companyId, refundNumber])
+}
+
+model SalesRefundItem {
+  id            String   @id @default(uuid()) @db.Uuid
+  salesRefundId String   @db.Uuid
+  saleItemId    String   @db.Uuid
+  productId     String   @db.Uuid
+  quantity      Int      @default(1)
+  unitPrice     Decimal  @db.Decimal(18, 4)
+  total         Decimal  @default(0) @db.Decimal(18, 4)
+  fifoCost      Decimal  @db.Decimal(18, 4)
+  salesRefund   SalesRefund @relation(fields: [salesRefundId], references: [id], onDelete: Cascade)
+  saleItem      SaleItem    @relation(fields: [saleItemId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([salesRefundId])
+  @@index([saleItemId])
+  @@index([productId])
   @@index([createdAt])
 }
 

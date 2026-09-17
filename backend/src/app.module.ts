@@ -20,6 +20,7 @@ import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { PurchasingModule } from './modules/purchasing/purchasing.module';
 import { SalesModule } from './modules/sales/sales.module';
+import { SalesRefundModule } from './modules/sales-refund/sales-refund.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { CrmModule } from './modules/crm/crm.module';
@@ -47,6 +48,9 @@ import { CompaniesModule } from './modules/companies/companies.module';
     RbacModule,
     PurchasingModule,
     SalesModule,
+    // G11-E E2: registered AFTER SalesModule so its controller routes bind after
+    // the sales routes (no literal/param shadowing).
+    SalesRefundModule,
     ReportsModule,
     FinanceModule,
     CrmModule,

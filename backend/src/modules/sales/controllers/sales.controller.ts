@@ -204,21 +204,7 @@ export class SalesController {
     );
   }
 
-  @Post(':id/refund')
-  @RequirePermission('sales:refund')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refund a completed sale (restore inventory)' })
-  @ApiParam({ name: 'id', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Sale refunded', type: SaleEntity })
-  async refund(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<SaleEntity> {
-    return this.salesService.transitionStatus(
-      id,
-      SaleStatus.REFUNDED,
-      user.userId,
-      user.companyId,
-    );
-  }
+  // G11-E E2: the refund route moved to SalesRefundController, which owns the
+  // single POST /sales/:id/refund handler and routes it through the SalesRefund
+  // aggregate (refunding ALL REMAINING quantities).
 }

@@ -23,16 +23,18 @@ import { SaleQueryDto } from '../dto/sale-query.dto';
 import { SaleEntity } from '../entities/sale.entity';
 import { SaleMapper } from '../mappers/sale.mapper';
 import { SaleCompletedEvent } from '../events/sale-completed.event';
-import { SaleRefundedEvent } from '../events/sale-refunded.event';
 import { CompaniesService } from '../../companies/services/companies.service';
 
+// G11-E E2: REFUNDED / PARTIALLY_REFUNDED are REFUND-DERIVED statuses. They are
+// not reachable through the generic status path — SalesRefundService is their
+// only writer (via the Sale rowVersion CAS update).
 const VALID_TRANSITIONS: Record<SaleStatus, SaleStatus[]> = {
   DRAFT: ['PENDING', 'CANCELLED', 'COMPLETED'],
   PENDING: ['COMPLETED', 'CANCELLED'],
-  COMPLETED: ['REFUNDED', 'PARTIALLY_REFUNDED'],
+  COMPLETED: [],
   REFUNDED: [],
   CANCELLED: [],
-  PARTIALLY_REFUNDED: ['REFUNDED'],
+  PARTIALLY_REFUNDED: [],
 };
 
 function toDecimal(
@@ -245,6 +247,19 @@ export class SalesService {
       const sale = await this.salesRepository.findById(id, companyId, tx);
       if (!sale) throw new NotFoundException(`Sale ${id} not found`);
 
+      // G11-E E2: refund statuses are derived from the refund workflow only.
+      // Enforced at the SERVICE level so the SalesRefund aggregate is the sole
+      // writer of REFUNDED / PARTIALLY_REFUNDED — a client cannot fabricate a
+      // refund state through PATCH /sales/:id/status.
+      if (
+        newStatus === SaleStatus.REFUNDED ||
+        newStatus === SaleStatus.PARTIALLY_REFUNDED
+      ) {
+        throw new BadRequestException(
+          'Refund status is derived from the refund workflow; use POST /sales/:id/refund or the refund workflow.',
+        );
+      }
+
       const current = sale.status as SaleStatus;
       const allowed = VALID_TRANSITIONS[current];
       if (!allowed || !allowed.includes(newStatus)) {
@@ -258,11 +273,6 @@ export class SalesService {
       if (newStatus === SaleStatus.COMPLETED) {
         const result = await this.completeSale(sale, userId, tx, companyId);
         cashShiftId = result.cashShiftId;
-      }
-
-      // REFUNDED: reverse inventory + audit log
-      if (newStatus === SaleStatus.REFUNDED) {
-        await this.refundSale(sale, userId, tx, companyId);
       }
 
       const updateData: Prisma.SaleUpdateInput = { status: newStatus };
@@ -417,95 +427,6 @@ export class SalesService {
     });
 
     return { cashShiftId };
-  }
-
-  private async refundSale(
-    sale: Sale,
-    userId: string,
-    tx: Prisma.TransactionClient,
-    companyId: string,
-  ): Promise<void> {
-    const items = await tx.saleItem.findMany({ where: { saleId: sale.id } });
-
-    // NOTE: Inventory changes (stock restoration + stock movement) are handled
-    // by the SaleRefundedEventHandler in the Inventory module via the EventBus.
-    // This service ONLY publishes the event — it no longer directly mutates stock.
-
-    // Net the refunded amounts out of the linked cash shift, reversing the
-    // exact allocation applied at completion: cash sales are net of change
-    // (tendered − change), all non-cash methods (CARD/QR/…) are netted from
-    // cardSales, and totalSales is reduced by the sale total. Only an OPEN
-    // shift is touched — a closed shift's Z report is final. The write is
-    // guarded by rowVersion (optimistic locking): a stale version throws
-    // ConflictException and rolls the whole transaction back, so a refund can
-    // never be double-counted against a concurrently-mutated shift.
-    if (sale.cashShiftId) {
-      const shift = await tx.cashShift.findFirst({
-        where: { id: sale.cashShiftId, companyId },
-      });
-      if (shift && shift.status === 'OPEN') {
-        const payments = await tx.payment.findMany({
-          where: { saleId: sale.id },
-        });
-        // v1.2: refund reverses the EXACT original payment composition — each
-        // method is subtracted from its own shift bucket, so the shift stays
-        // perfectly consistent (Cash Shift == Sales after refunds).
-        const alloc = allocateShiftSales(payments);
-        const changeAmount = new Decimal(sale.changeAmount.toString());
-        const cashSalesNet = alloc.cash.sub(changeAmount);
-        const saleTotal = new Decimal(sale.total.toString());
-
-        await this.cashShiftRepository.update(
-          shift.id,
-          {
-            cashSales: new Decimal(shift.cashSales.toString()).sub(
-              cashSalesNet,
-            ),
-            cardSales: new Decimal(shift.cardSales.toString()).sub(alloc.card),
-            qrSales: new Decimal(shift.qrSales.toString()).sub(alloc.qr),
-            bankTransferSales: new Decimal(
-              shift.bankTransferSales.toString(),
-            ).sub(alloc.bankTransfer),
-            mobileWalletSales: new Decimal(
-              shift.mobileWalletSales.toString(),
-            ).sub(alloc.mobileWallet),
-            totalSales: new Decimal(shift.totalSales.toString()).sub(saleTotal),
-          },
-          companyId,
-          shift.rowVersion ?? 0,
-          tx,
-        );
-      }
-    }
-
-    // Publish SaleRefundedEvent
-    const payments = await tx.payment.findMany({ where: { saleId: sale.id } });
-    await this.eventBus.publish(
-      new SaleRefundedEvent({
-        saleId: sale.id,
-        companyId,
-        warehouseId: sale.warehouseId,
-        cashierId: userId,
-        saleNumber: sale.saleNumber,
-        total: sale.total.toString(),
-        currency: sale.currency,
-        items: items.map((i) => ({
-          productId: i.productId,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice.toString(),
-          costPrice: i.costPrice.toString(),
-          discount: i.discount.toString(),
-          subtotal: i.subtotal.toString(),
-          total: i.total.toString(),
-          margin: i.margin.toString(),
-        })),
-        payments: payments.map((p) => ({
-          method: p.method,
-          amount: p.amount.toString(),
-        })),
-      }),
-      { context: { transactionClient: tx } },
-    );
   }
 
   async getReceipt(saleId: string, companyId: string): Promise<SaleEntity> {

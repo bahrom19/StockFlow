@@ -8,6 +8,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 export const DocumentSequenceType = {
   SALE: 'SALE',
   PURCHASE_ORDER: 'PURCHASE_ORDER',
+  SALES_REFUND: 'SALES_REFUND',
 } as const;
 
 export type DocumentSequenceTypeValue =
