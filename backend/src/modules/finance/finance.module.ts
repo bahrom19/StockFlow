@@ -31,6 +31,7 @@ import { LedgerRepository } from './repositories/ledger.repository';
 import { FinanceIntegrationService } from './services/finance-integration.service';
 import { SaleCompletedEventHandler } from './events/sale-completed.handler';
 import { SaleRefundedEventHandler } from './events/sale-refunded.handler';
+import { SalePartiallyRefundedEventHandler } from './events/sale-partially-refunded.handler';
 
 @Module({
   imports: [PrismaModule, SharedModule, CompaniesModule],
@@ -69,6 +70,7 @@ import { SaleRefundedEventHandler } from './events/sale-refunded.handler';
     // Event handlers
     SaleCompletedEventHandler,
     SaleRefundedEventHandler,
+    SalePartiallyRefundedEventHandler,
   ],
   exports: [
     ChartOfAccountsService,
@@ -89,10 +91,15 @@ export class FinanceModule implements OnModuleInit {
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
     private readonly saleCompletedHandler: SaleCompletedEventHandler,
     private readonly saleRefundedHandler: SaleRefundedEventHandler,
+    private readonly salePartiallyRefundedHandler: SalePartiallyRefundedEventHandler,
   ) {}
 
   onModuleInit(): void {
     this.eventBus.subscribe('sale.completed', this.saleCompletedHandler);
     this.eventBus.subscribe('sale.refunded', this.saleRefundedHandler);
+    this.eventBus.subscribe(
+      'sale.partially_refunded',
+      this.salePartiallyRefundedHandler,
+    );
   }
 }

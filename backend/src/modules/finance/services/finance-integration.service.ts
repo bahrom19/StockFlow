@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import {
   SaleCompletedEventPayload,
+  SalePartiallyRefundedEventPayload,
   SaleRefundedEventPayload,
 } from '../../sales/interfaces/sale-event.interface';
 import { FinancialPeriodsRepository } from '../repositories/financial-periods.repository';
@@ -497,6 +498,141 @@ export class FinanceIntegrationService {
         referenceType: 'REFUND',
         referenceId: event.saleId,
         createdBy: event.cashierId,
+        lines,
+      },
+      tx,
+    );
+  }
+
+  /**
+   * G11-E4: called when a PARTIAL refund (or a final refund after partials)
+   * has been durably recorded as SalesRefund facts (`sale.partially_refunded`).
+   *
+   * Locked design (F1–F10):
+   * - ONE journal per SalesRefund: referenceType='REFUND', referenceId=refundId
+   *   (NEVER saleId — a sale may have many refunds, each posts exactly its own
+   *   amount; the legacy full-refund journal keeps saleId untouched).
+   * - CURRENT refund only: amounts come from THIS refund's event payload,
+   *   never cumulative and never re-stating previous partials.
+   * - Revenue reversal: Dr Revenue 4000 = event.total.
+   * - Payment-side interim rule (until G11-E6 allocation exists): the partial
+   *   event carries no payment allocation, so the credit defaults to the
+   *   G11-D default bucket — Cr Cash 1010 = event.total. Balanced by
+   *   construction; replaced by E6's per-method allocation later.
+   * - FIFO/COGS: Dr Inventory 1300 / Cr COGS 5000 = Σ items[].fifoCost from
+   *   the payload (SalesRefundItem.fifoCost is the canonical refund cost).
+   *   CostLayer OUT is NEVER queried here and product.costPrice is never
+   *   used — no re-FIFO, no legacy fallback.
+   * - Required accounts (1010/4000/5000/1300) are company-scoped and
+   *   fail-fast when missing (skip would post a silently unbalanced or
+   *   incomplete journal).
+   * - Must run inside the caller's transaction (tx) — same transactional
+   *   model as the legacy refund path; glEngine.post receives tx directly.
+   */
+  async onSalePartiallyRefunded(
+    event: SalePartiallyRefundedEventPayload,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const currentPeriod = await this.periodsRepository.findCurrent(
+      event.companyId,
+    );
+    if (!currentPeriod) {
+      throw new BadRequestException(
+        `No open financial period for company ${event.companyId}. Cannot create journal entries for partial refund ${event.refundNumber} of sale ${event.saleNumber}.`,
+      );
+    }
+
+    const accountCodes = await tx.chartOfAccount.findMany({
+      where: {
+        companyId: event.companyId,
+        code: { in: Object.values(DEFAULT_ACCOUNT_CODES) },
+        isActive: true,
+        deletedAt: null,
+      },
+    });
+
+    const accountMap = new Map<string, string>();
+    for (const acct of accountCodes) {
+      accountMap.set(acct.code, acct.id);
+    }
+
+    const cashAccountId = accountMap.get(DEFAULT_ACCOUNT_CODES.CASH);
+    const revenueAccountId = accountMap.get(
+      DEFAULT_ACCOUNT_CODES.SALES_REVENUE,
+    );
+    const cogsAccountId = accountMap.get(
+      DEFAULT_ACCOUNT_CODES.COST_OF_GOODS_SOLD,
+    );
+    const inventoryAccountId = accountMap.get(DEFAULT_ACCOUNT_CODES.INVENTORY);
+
+    // F9: required accounts must exist — fail fast rather than posting an
+    // incomplete or silently unbalanced journal.
+    const missing: string[] = [];
+    if (!revenueAccountId) missing.push(DEFAULT_ACCOUNT_CODES.SALES_REVENUE);
+    if (!cashAccountId) missing.push(DEFAULT_ACCOUNT_CODES.CASH);
+    if (!cogsAccountId) missing.push(DEFAULT_ACCOUNT_CODES.COST_OF_GOODS_SOLD);
+    if (!inventoryAccountId) missing.push(DEFAULT_ACCOUNT_CODES.INVENTORY);
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Missing required Chart of Accounts for partial refund ${event.refundNumber}: ${missing.join(', ')}. Cannot post journal.`,
+      );
+    }
+
+    const refundTotal = new Decimal(event.total);
+    const fifoTotal = event.items.reduce(
+      (acc, item) => acc.add(new Decimal(item.fifoCost)),
+      new Decimal(0),
+    );
+
+    const entryDate = new Date();
+    const description = `Partial refund — ${event.saleNumber} (${event.refundNumber})`;
+
+    const lines: Array<PostJournalEntryInput['lines'][0]> = [
+      // F3: reverse revenue for THIS refund only.
+      {
+        accountId: revenueAccountId!,
+        debit: refundTotal.toString(),
+        credit: '0',
+        description: `Revenue reversal — ${description}`,
+      },
+      // F4: interim payment-side default bucket (E6 will allocate per method).
+      {
+        accountId: cashAccountId!,
+        debit: '0',
+        credit: refundTotal.toString(),
+        description: `Refund payout — ${description}`,
+      },
+    ];
+
+    // F5: restore inventory value at the canonical refund cost from the
+    // payload. CostLayer OUT is intentionally never consulted.
+    if (fifoTotal.gt(0)) {
+      lines.push({
+        accountId: inventoryAccountId!,
+        debit: fifoTotal.toString(),
+        credit: '0',
+        description: `Inventory restore — ${description}`,
+      });
+      lines.push({
+        accountId: cogsAccountId!,
+        debit: '0',
+        credit: fifoTotal.toString(),
+        description: `COGS reversal — ${description}`,
+      });
+    }
+
+    // F6: balanced by construction — Dr (refundTotal + fifoTotal) ==
+    // Cr (refundTotal + fifoTotal); PostingValidation enforces at runtime.
+    await this.glEngine.post(
+      {
+        companyId: event.companyId,
+        financialPeriodId: currentPeriod.id,
+        entryDate,
+        description: `Sales partial refund journal — ${description}`,
+        // F1/F7: identity is the REFUND, not the sale.
+        referenceType: 'REFUND',
+        referenceId: event.refundId,
+        createdBy: event.createdBy,
         lines,
       },
       tx,
