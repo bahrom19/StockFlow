@@ -114,10 +114,36 @@ export class CashShiftService {
       const cardSales = new Decimal(shift.cardSales.toString());
       const cashIn = new Decimal(shift.cashIn.toString());
       const cashOut = new Decimal(shift.cashOut.toString());
+      // G11-F1 (GAP-B): partial refunds pay the cash part back out of the
+      // drawer, but only the legacy FULL refund netts cashSales at refund
+      // time (G11-D). Partial refunds carry E5 allocation facts instead, so
+      // closeShift nets their COMPLETED CASH allocations here — exactly once,
+      // tenant-scoped, bound to THIS shift through Sale.cashShiftId.
+      // CARD/QR/BANK/MOBILE/STORE_CREDIT/GIFT_CARD allocations never affect
+      // the drawer. Full legacy refunds have no allocation rows, so this
+      // member is structurally zero for them (no double netting).
+      const partialCashRefunds = new Decimal(
+        (
+          await tx.refundPaymentAllocation.aggregate({
+            where: {
+              companyId,
+              method: 'CASH',
+              deletedAt: null,
+              salesRefund: {
+                status: 'COMPLETED',
+                deletedAt: null,
+                sale: { cashShiftId: shift.id },
+              },
+            },
+            _sum: { amount: true },
+          })
+        )._sum.amount?.toString() ?? '0',
+      );
       const expectedClosing = openingBalance
         .add(cashSales)
         .add(cashIn)
-        .sub(cashOut);
+        .sub(cashOut)
+        .sub(partialCashRefunds);
       const actualClosing =
         dto.actualClosingBalance != null
           ? new Decimal(dto.actualClosingBalance)

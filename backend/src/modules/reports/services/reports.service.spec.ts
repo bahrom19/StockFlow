@@ -51,6 +51,9 @@ describe('ReportsService — net refunds (P1)', () => {
       salesReportData: jest.fn(),
       // G11-B: default no OUT layers → legacy costPrice fallback.
       saleFifoCosts: jest.fn().mockResolvedValue(new Map()),
+      // G11-F1: default no completed refunds → zero deductions.
+      salesRefundTotals: jest.fn().mockResolvedValue(new Map()),
+      revenueSaleIds: jest.fn().mockResolvedValue([]),
       dashboardSummary: jest.fn(),
       completedSaleIds: jest.fn(),
       topProductsData: jest.fn(),
@@ -758,5 +761,141 @@ describe('ReportsService — net refunds (P1)', () => {
       {} as ReportQueryDto,
     );
     expect(result.summary.cost).toBe('300');
+  });
+
+  // ── G11-F1: canonical refund deductions ─────────────────────
+  it('G11-F1: profit report nets revenue and FIFO COGS by completed refunds', async () => {
+    repo.profitReportData.mockResolvedValue([
+      completedSale('s1', '1000.0000', [{ cost: '600.0000', qty: 1 }]),
+    ]);
+    repo.salesRefundTotals.mockResolvedValue(
+      new Map([
+        [
+          's1',
+          {
+            refundTotal: dec('400.0000'),
+            refundFifoCost: dec('240.0000'),
+          },
+        ],
+      ]),
+    );
+    const result = await service.getProfitReport('comp-1', {} as ReportQueryDto);
+    expect(result.summary.revenue).toBe('600'); // 1000 − 400
+    expect(result.summary.cost).toBe('360'); // 600 − 240
+    expect(result.summary.profit).toBe('240');
+    const dayRow = result.daily.find(
+      (d: { date: string }) => d.date === '2026-01-15',
+    );
+    expect(dayRow!.revenue).toBe('600');
+    expect(dayRow!.cost).toBe('360');
+  });
+
+  it('G11-F1: multiple partial refunds SUM exactly once; missing saleId → zero deduction', async () => {
+    repo.profitReportData.mockResolvedValue([
+      completedSale('s1', '1000.0000', [{ cost: '600.0000', qty: 1 }]),
+      completedSale('s2', '500.0000', [{ cost: '300.0000', qty: 1 }]),
+    ]);
+    // s1 has two completed refunds; s2 has none (absent from map).
+    repo.salesRefundTotals.mockResolvedValue(
+      new Map([
+        [
+          's1',
+          {
+            refundTotal: dec('150.0000'),
+            refundFifoCost: dec('90.0000'),
+          },
+        ],
+      ]),
+    );
+    const result = await service.getProfitReport('comp-1', {} as ReportQueryDto);
+    expect(result.summary.revenue).toBe('1350'); // 1000−150 + 500
+    expect(result.summary.cost).toBe('810'); // 600−90 + 300
+  });
+
+  it('G11-F1: sales report summary revenue/profit are netted', async () => {
+    repo.salesReportData.mockResolvedValue([
+      [
+        {
+          id: 's1',
+          saleNumber: 'S-1',
+          createdAt: new Date(),
+          status: 'PARTIALLY_REFUNDED',
+          total: dec('1000.0000'),
+          paidAmount: dec('1000.0000'),
+          changeAmount: dec('0'),
+          items: [
+            { quantity: 1, total: dec('1000.0000'), costPrice: dec('0.0000') },
+          ],
+          payments: [],
+        },
+      ],
+      { _sum: { total: dec('1000.0000') }, _count: { id: 1 }, _avg: {} },
+      { _sum: { quantity: 1, costPrice: dec('0') } },
+    ]);
+    repo.salesRefundTotals.mockResolvedValue(
+      new Map([['s1', { refundTotal: dec('250.0000'), refundFifoCost: dec('100.0000') }]]),
+    );
+    const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
+    expect(result.summary.revenue).toBe('750'); // 1000 − 250
+    // profit = netRevenue − (grossCost − refundFifo)
+    expect(Number(result.summary.profit)).toBe(750 - (0 - 100));
+  });
+
+  it('G11-F1: no refunds → all reports equal gross values (no regression)', async () => {
+    repo.profitReportData.mockResolvedValue([
+      completedSale('s1', '1000.0000', [{ cost: '600.0000', qty: 1 }]),
+    ]);
+    const result = await service.getProfitReport('comp-1', {} as ReportQueryDto);
+    expect(result.summary.revenue).toBe('1000');
+    expect(result.summary.cost).toBe('600');
+    expect(repo.salesRefundTotals).toHaveBeenCalledWith('comp-1', ['s1']);
+  });
+
+  it('G11-F1: dashboard grossRevenue/grossProfit are netted', async () => {
+    repo.dashboardSummary.mockResolvedValue([
+      { _sum: { total: dec('300') }, _count: { id: 1 } }, // today
+      { _sum: { total: null }, _count: { id: 0 } }, // yesterday
+      { _sum: { total: null }, _count: { id: 0 } }, // month
+      0,
+      [],
+      0,
+      0,
+      { _sum: { grandTotal: null } },
+    ]);
+    repo.grossProfitData.mockResolvedValue([
+      completedSale('s1', '2000.0000', [{ cost: '1200.0000', qty: 1 }]),
+    ]);
+    repo.revenueSaleIds.mockResolvedValue(['s1']);
+    repo.salesRefundTotals.mockImplementation(
+      async (_c: string, ids: string[]) =>
+        ids.includes('s1')
+          ? new Map([['s1', { refundTotal: dec('500.0000'), refundFifoCost: dec('300.0000') }]])
+          : new Map(),
+    );
+    const result = await service.getDashboard('comp-1', {} as ReportQueryDto);
+    // grossRevenue 2000−500; grossProfit (2000−500)−(1200−300)
+    expect(result.grossRevenue).toBe('1500');
+    expect(result.grossProfit).toBe('600');
+    // today bucket: 300 (COMPLETED aggregate) − 500 (refund on s1 in window)
+    expect(result.todaySales.revenue).toBe('-200');
+  });
+
+  it('G11-F1: dashboard daily buckets include PARTIALLY_REFUNDED sales (revenue statuses)', async () => {
+    repo.dashboardSummary.mockResolvedValue([
+      { _sum: { total: dec('700') }, _count: { id: 2 } },
+      { _sum: { total: null }, _count: { id: 0 } },
+      { _sum: { total: null }, _count: { id: 0 } },
+      0,
+      [],
+      0,
+      0,
+      { _sum: { grandTotal: null } },
+    ]);
+    repo.revenueSaleIds.mockResolvedValue([]); // no partial sales in window
+    repo.grossProfitData.mockResolvedValue([]);
+    const result = await service.getDashboard('comp-1', {} as ReportQueryDto);
+    expect(result.todaySales.revenue).toBe('700');
+    // bucket query must scope to revenue statuses, not COMPLETED only
+    expect(repo.revenueSaleIds).toHaveBeenCalled();
   });
 });

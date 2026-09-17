@@ -59,6 +59,10 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
         txCallback = cb;
         return cb(mockPrisma);
       }),
+      // G11-F1: partial-refund CASH allocation facts (E5) — default zero.
+      refundPaymentAllocation: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -172,6 +176,76 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
     await expect(
       service.closeShift({}, userId, companyId, warehouseId),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  // ───────────────────────────────
+  // G11-F1 — closeShift nets partial CASH refunds (GAP-B)
+  // ───────────────────────────────
+  const cashRefundAggregate = (amount: string | null) => ({
+    _sum: { amount: amount == null ? null : new Prisma.Decimal(amount) },
+  });
+
+  it('G11-F1 closeShift: expected closing subtracts partial CASH refund allocations', async () => {
+    repo.findOpenShift.mockResolvedValue({
+      ...baseShift,
+      cashSales: new Prisma.Decimal('500.0000'),
+    });
+    repo.update.mockResolvedValue({ ...baseShift, status: 'CLOSED' as const });
+    mockPrisma.refundPaymentAllocation.aggregate.mockResolvedValue(
+      cashRefundAggregate('120.5000'),
+    );
+
+    await service.closeShift({}, userId, companyId, warehouseId);
+
+    // 100 opening + 500 cashSales − 120.5 partial CASH refunds = 479.5
+    const payload = repo.update.mock.calls[0]![1] as Record<string, unknown>;
+    expect((payload.expectedClosing as Prisma.Decimal).toString()).toBe('479.5');
+  });
+
+  it('G11-F1 closeShift: CARD-only refunds leave expected closing unchanged', async () => {
+    repo.findOpenShift.mockResolvedValue({
+      ...baseShift,
+      cashSales: new Prisma.Decimal('500.0000'),
+    });
+    repo.update.mockResolvedValue({ ...baseShift, status: 'CLOSED' as const });
+    // service-level where already pins method=CASH — simulate zero cash rows
+    mockPrisma.refundPaymentAllocation.aggregate.mockResolvedValue(
+      cashRefundAggregate(null),
+    );
+
+    await service.closeShift({}, userId, companyId, warehouseId);
+
+    const payload = repo.update.mock.calls[0]![1] as Record<string, unknown>;
+    expect((payload.expectedClosing as Prisma.Decimal).toString()).toBe('600');
+  });
+
+  it('G11-F1 closeShift: no refunds → zero query member, expected closing unchanged', async () => {
+    repo.findOpenShift.mockResolvedValue({ ...baseShift });
+    repo.update.mockResolvedValue({ ...baseShift, status: 'CLOSED' as const });
+
+    const result = await service.closeShift({}, userId, companyId, warehouseId);
+
+    expect(result.expectedClosing.toString()).toBe('100');
+    const where = mockPrisma.refundPaymentAllocation.aggregate.mock.calls[0][0]
+      .where;
+    expect(where.companyId).toBe(companyId);
+    expect(where.method).toBe('CASH');
+    expect(where.deletedAt).toBeNull();
+    expect(where.salesRefund).toEqual({
+      status: 'COMPLETED',
+      deletedAt: null,
+      sale: { cashShiftId: 'shift-1' },
+    });
+  });
+
+  it('G11-F1 closeShift: query runs inside the close transaction (tx-scoped)', async () => {
+    repo.findOpenShift.mockResolvedValue({ ...baseShift });
+    repo.update.mockResolvedValue({ ...baseShift, status: 'CLOSED' as const });
+
+    await service.closeShift({}, userId, companyId, warehouseId);
+
+    // the aggregate ran against the same in-memory tx mock ($transaction cb)
+    expect(mockPrisma.refundPaymentAllocation.aggregate).toHaveBeenCalled();
   });
 
   // ───────────────────────────────

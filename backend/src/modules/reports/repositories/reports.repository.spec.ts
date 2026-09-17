@@ -29,6 +29,8 @@ describe('ReportsRepository — revenue scoping (P1 net refunds)', () => {
       costLayer: { findMany: jest.fn() },
       cashShift: { findMany: jest.fn(), count: jest.fn() },
       company: { findUnique: jest.fn() },
+      salesRefund: { findMany: jest.fn() },
+      refundPaymentAllocation: { aggregate: jest.fn() },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -228,5 +230,78 @@ describe('ReportsRepository — revenue scoping (P1 net refunds)', () => {
     await repository.grossProfitData('comp-1');
     const select = mockPrisma.sale.findMany.mock.calls[0][0].select;
     expect(select.id).toBe(true);
+  });
+
+  // ── G11-F1: canonical refund aggregation ────────────────────
+  it('salesRefundTotals returns an empty map without querying for an empty dataset', async () => {
+    const result = await repository.salesRefundTotals('comp-1', []);
+    expect(result.size).toBe(0);
+    expect(mockPrisma.salesRefund.findMany).not.toHaveBeenCalled();
+  });
+
+  it('salesRefundTotals runs ONE grouped tenant-scoped COMPLETED query', async () => {
+    mockPrisma.salesRefund.findMany.mockResolvedValue([]);
+    await repository.salesRefundTotals('comp-1', ['s1', 's2']);
+    const call = mockPrisma.salesRefund.findMany.mock.calls[0][0];
+    expect(call.where).toEqual({
+      companyId: 'comp-1',
+      saleId: { in: ['s1', 's2'] },
+      status: 'COMPLETED',
+      deletedAt: null,
+    });
+    expect(call.select.items).toBeDefined(); // fifoCost included in the same query
+  });
+
+  it('salesRefundTotals sums refund total and items.fifoCost per sale', async () => {
+    mockPrisma.salesRefund.findMany.mockResolvedValue([
+      {
+        saleId: 's1',
+        total: new Prisma.Decimal('300'),
+        items: [
+          { fifoCost: new Prisma.Decimal('33.3333') },
+          { fifoCost: new Prisma.Decimal('66.6667') },
+        ],
+      },
+      {
+        saleId: 's1',
+        total: new Prisma.Decimal('200.5'),
+        items: [{ fifoCost: new Prisma.Decimal('120') }],
+      },
+    ]);
+    const result = await repository.salesRefundTotals('comp-1', ['s1']);
+    expect(result.get('s1')!.refundTotal.toString()).toBe('500.5');
+    expect(result.get('s1')!.refundFifoCost.toString()).toBe('220');
+  });
+
+  it('salesRefundTotals: CANCELLED and deleted refunds never reach the query result', async () => {
+    // The where-clause itself excludes them — assert the filter is present.
+    mockPrisma.salesRefund.findMany.mockResolvedValue([]);
+    await repository.salesRefundTotals('comp-1', ['s1']);
+    const where = mockPrisma.salesRefund.findMany.mock.calls[0][0].where;
+    expect(where.status).toBe('COMPLETED');
+    expect(where.deletedAt).toBeNull();
+  });
+
+  it('cashRefundedForShift aggregates only CASH allocations of COMPLETED refunds bound to the shift', async () => {
+    mockPrisma.refundPaymentAllocation.aggregate.mockResolvedValue({
+      _sum: { amount: new Prisma.Decimal('700') },
+    });
+    const result = await repository.cashRefundedForShift('shift-1', 'comp-1');
+    expect(result.toString()).toBe('700');
+    const where = mockPrisma.refundPaymentAllocation.aggregate.mock.calls[0][0]
+      .where;
+    expect(where.companyId).toBe('comp-1');
+    expect(where.method).toBe('CASH');
+    expect(where.deletedAt).toBeNull();
+    expect(where.salesRefund.status).toBe('COMPLETED');
+    expect(where.salesRefund.sale).toEqual({ cashShiftId: 'shift-1' });
+  });
+
+  it('cashRefundedForShift returns zero when no allocations exist', async () => {
+    mockPrisma.refundPaymentAllocation.aggregate.mockResolvedValue({
+      _sum: { amount: null },
+    });
+    const result = await repository.cashRefundedForShift('shift-1', 'comp-1');
+    expect(result.toString()).toBe('0');
   });
 });

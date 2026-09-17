@@ -42,6 +42,25 @@ export class ReportsService {
     return fifo.totalCost;
   }
 
+  /**
+   * G11-F1 — canonical refund deduction, shared by every revenue/COGS report
+   * so all surfaces mirror the GL economy posted by G11-E4/E5 (partial refund
+   * journals reduce Revenue 4000 and COGS 5000).
+   *
+   * ONE grouped query per report (no N+1). Only COMPLETED non-deleted refunds
+   * count; REFUNDED sales never reach these loops (outside the revenue set),
+   * so their refunds are never fetched and full refunds cannot be deducted
+   * twice.
+   */
+  private async saleRefundDeductions(
+    companyId: string,
+    saleIds: string[],
+  ): Promise<
+    Map<string, { refundTotal: Prisma.Decimal; refundFifoCost: Prisma.Decimal }>
+  > {
+    return this.repo.salesRefundTotals(companyId, saleIds);
+  }
+
   /// Resolves the monetary filter currency for a report.
   ///
   /// An explicit `query.currency` wins. When omitted, the company's base
@@ -101,21 +120,64 @@ export class ReportsService {
     // Gross revenue & profit (all completed sales — no date filter) — scoped
     // to the single report currency. COGS uses the canonical FIFO basis
     // (CostLayer OUT, same as the GL) with per-sale legacy fallback.
+    // G11-F1: partial refunds deduct both revenue and FIFO cost so the
+    // dashboard mirrors the GL economy (E4/E5 journals).
     const grossData = await this.repo.grossProfitData(companyId, currency);
     const grossFifo = await this.repo.saleFifoCosts(
+      companyId,
+      grossData.map((sale) => sale.id),
+    );
+    const grossRefunds = await this.saleRefundDeductions(
       companyId,
       grossData.map((sale) => sale.id),
     );
     let grossRevenue = new Prisma.Decimal(0);
     let grossCost = new Prisma.Decimal(0);
     for (const sale of grossData) {
-      grossRevenue = grossRevenue.add(
-        new Prisma.Decimal(sale.total.toString()),
-      );
-      grossCost = grossCost.add(this.canonicalSaleCost(sale, grossFifo.get(sale.id)));
+      const refunds = grossRefunds.get(sale.id);
+      grossRevenue = grossRevenue
+        .add(new Prisma.Decimal(sale.total.toString()))
+        .sub(refunds?.refundTotal ?? new Prisma.Decimal(0));
+      grossCost = grossCost
+        .add(this.canonicalSaleCost(sale, grossFifo.get(sale.id)))
+        .sub(refunds?.refundFifoCost ?? new Prisma.Decimal(0));
     }
     const grossProfit = grossRevenue.sub(grossCost);
-    const todayTotal = todayRaw._sum.total ?? new Prisma.Decimal(0);
+
+    // G11-F1: the daily buckets previously counted COMPLETED sales only, so a
+    // partially refunded sale vanished entirely from today/yesterday/month.
+    // They now use the revenue statuses and are netted by the same canonical
+    // refund facts (refund date is not attributed — bucket remains the sale's
+    // day, matching the sale-centric aggregation contract).
+    const [todayRefunds, yesterdayRefunds, monthRefunds] =
+      await Promise.all([
+        this.saleRefundDeductions(
+          companyId,
+          (await this.repo.revenueSaleIds(companyId, todayStart, todayEnd, currency)) as string[],
+        ),
+        this.saleRefundDeductions(
+          companyId,
+          (await this.repo.revenueSaleIds(
+            companyId,
+            new Date(todayStart.getTime() - 86400000),
+            todayStart,
+            currency,
+          )) as string[],
+        ),
+        this.saleRefundDeductions(
+          companyId,
+          (await this.repo.revenueSaleIds(companyId, monthStart, todayEnd, currency)) as string[],
+        ),
+      ]);
+    const netOf = (
+      raw: { _sum: { total: Prisma.Decimal | null } },
+      deductions: Map<string, { refundTotal: Prisma.Decimal }>,
+    ) => {
+      let refunded = new Prisma.Decimal(0);
+      for (const d of deductions.values()) refunded = refunded.add(d.refundTotal);
+      return (raw._sum.total ?? new Prisma.Decimal(0)).sub(refunded);
+    };
+    const todayTotal = netOf(todayRaw, todayRefunds);
     const todayCount = todayRaw._count.id;
     const avgReceipt =
       todayCount > 0
@@ -129,11 +191,11 @@ export class ReportsService {
         averageReceipt: avgReceipt.toString(),
       },
       yesterdaySales: {
-        revenue: yesterdayRaw._sum.total?.toString() ?? '0.0000',
+        revenue: netOf(yesterdayRaw, yesterdayRefunds).toString(),
         count: yesterdayRaw._count.id,
       },
       monthSales: {
-        revenue: monthRaw._sum.total?.toString() ?? '0.0000',
+        revenue: netOf(monthRaw, monthRefunds).toString(),
         count: monthRaw._count.id,
       },
       ordersCount: orderCount,
@@ -195,6 +257,18 @@ export class ReportsService {
       companyId,
       sales.map((s) => s.id),
     );
+    // G11-F1: net the summary by canonical refund facts (revenue AND cost),
+    // mirroring the E4/E5 partial-refund journals.
+    const refundDeductions = await this.saleRefundDeductions(
+      companyId,
+      sales.map((s) => s.id),
+    );
+    let refundTotalSum = new Prisma.Decimal(0);
+    let refundFifoSum = new Prisma.Decimal(0);
+    for (const d of refundDeductions.values()) {
+      refundTotalSum = refundTotalSum.add(d.refundTotal);
+      refundFifoSum = refundFifoSum.add(d.refundFifoCost);
+    }
     let productsSold = 0;
     let totalCost = new Prisma.Decimal(0);
     for (const sale of sales) {
@@ -245,8 +319,11 @@ export class ReportsService {
       cashTotal = cashTotal.add(cashForSale).sub(changeAmount);
     }
 
-    const revenue = agg._sum.total ?? new Prisma.Decimal(0);
-    const profit = revenue.sub(totalCost);
+    // G11-F1: revenue/cost are net of completed partial refunds — the page
+    // rows still show gross sale facts; the summary carries the net economy.
+    const revenue = (agg._sum.total ?? new Prisma.Decimal(0)).sub(refundTotalSum);
+    const cost = totalCost.sub(refundFifoSum);
+    const profit = revenue.sub(cost);
     const margin = revenue.gt(0)
       ? profit.div(revenue).mul(100)
       : new Prisma.Decimal(0);
@@ -594,6 +671,13 @@ export class ReportsService {
       companyId,
       sales.map((s) => s.id),
     );
+    // G11-F1: per-sale refund deductions (revenue + FIFO cost) — one grouped
+    // query, applied identically to the totals and the daily/weekly/monthly
+    // buckets so every view mirrors the GL economy.
+    const refundDeductions = await this.saleRefundDeductions(
+      companyId,
+      sales.map((s) => s.id),
+    );
 
     let revenue = new Prisma.Decimal(0);
     let cost = new Prisma.Decimal(0);
@@ -611,9 +695,14 @@ export class ReportsService {
     > = {};
 
     for (const sale of sales) {
-      const saleTotal = new Prisma.Decimal(sale.total.toString());
+      // G11-F1: net this sale by its completed refunds (revenue + FIFO cost)
+      // before contributing to the totals and the time buckets.
+      const refunds = refundDeductions.get(sale.id);
+      const refundTotal = refunds?.refundTotal ?? new Prisma.Decimal(0);
+      const refundFifo = refunds?.refundFifoCost ?? new Prisma.Decimal(0);
+      const saleTotal = new Prisma.Decimal(sale.total.toString()).sub(refundTotal);
       revenue = revenue.add(saleTotal);
-      const saleCost = this.canonicalSaleCost(sale, fifoCosts.get(sale.id));
+      const saleCost = this.canonicalSaleCost(sale, fifoCosts.get(sale.id)).sub(refundFifo);
       cost = cost.add(saleCost);
 
       const dayKey = sale.createdAt.toISOString().slice(0, 10);

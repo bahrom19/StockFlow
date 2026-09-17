@@ -78,7 +78,7 @@ export class ReportsRepository {
     const where: Prisma.SaleWhereInput = {
       companyId,
       createdAt: { gte: from, lte: to },
-      status: 'COMPLETED',
+      status: { in: REVENUE_SALE_STATUSES },
       deletedAt: null,
     };
     if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
@@ -87,6 +87,31 @@ export class ReportsRepository {
       _sum: { total: true, paidAmount: true },
       _count: { id: true },
     });
+  }
+
+  /**
+   * Ids of revenue-generating sales in a window (G11-F1): the dashboard
+   * daily buckets previously counted COMPLETED sales only, so a partially
+   * refunded sale vanished from its day. Buckets now scope to the same
+   * revenue statuses as every other report; the service nets the bucket by
+   * the canonical refund facts.
+   */
+  revenueSaleIds(
+    companyId: string,
+    from: Date,
+    to: Date,
+    currency?: string,
+  ): Promise<string[]> {
+    const where: Prisma.SaleWhereInput = {
+      companyId,
+      createdAt: { gte: from, lte: to },
+      status: { in: REVENUE_SALE_STATUSES },
+      deletedAt: null,
+    };
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
+    return this.prismaService.sale
+      .findMany({ where, select: { id: true } })
+      .then((rows) => rows.map((r) => r.id));
   }
 
   private stockValueAgg(companyId: string) {
@@ -128,8 +153,98 @@ export class ReportsRepository {
     });
   }
 
-  // ── Canonical FIFO COGS (G11-B) ─────────────────────────────────
+  // ── Canonical refund facts (G11-F1) ─────────────────────────────
 
+  /**
+   * Canonical per-sale refund deduction for every revenue/COGS report
+   * (G11-F1, closes GAP-A).
+   *
+   * ONE grouped query over the immutable E2 refund facts — never a query per
+   * sale (no N+1), same shape as {@link saleFifoCosts}.
+   *
+   * Semantics (locked):
+   * - only `status = COMPLETED` refunds deduct (a CANCELLED refund never
+   *   reduces revenue);
+   * - soft-deleted refunds are excluded (`deletedAt: null`);
+   * - tenant-scoped: `companyId` is mandatory, never refundId alone;
+   * - `Sale.status = REFUNDED` never enters the revenue set, so its refunds
+   *   are never fetched by callers (no double-deduction of full refunds).
+   *
+   * Returns Map<saleId, { refundTotal, refundFifoCost }>; a sale absent from
+   * the map has no completed refunds (zero deduction).
+   */
+  async salesRefundTotals(
+    companyId: string,
+    saleIds: string[],
+  ): Promise<
+    Map<string, { refundTotal: Prisma.Decimal; refundFifoCost: Prisma.Decimal }>
+  > {
+    const totals = new Map<
+      string,
+      { refundTotal: Prisma.Decimal; refundFifoCost: Prisma.Decimal }
+    >();
+    if (saleIds.length === 0) return totals;
+
+    const refunds = await this.prismaService.salesRefund.findMany({
+      where: {
+        companyId,
+        saleId: { in: saleIds },
+        status: 'COMPLETED',
+        deletedAt: null,
+      },
+      select: {
+        saleId: true,
+        total: true,
+        items: { select: { fifoCost: true } },
+      },
+    });
+
+    for (const refund of refunds) {
+      const existing = totals.get(refund.saleId);
+      const fifoSum = refund.items.reduce(
+        (acc, item) => acc.add(item.fifoCost),
+        new Prisma.Decimal(0),
+      );
+      totals.set(refund.saleId, {
+        refundTotal: (existing?.refundTotal ?? new Prisma.Decimal(0)).add(
+          refund.total,
+        ),
+        refundFifoCost: (existing?.refundFifoCost ?? new Prisma.Decimal(0)).add(
+          fifoSum,
+        ),
+      });
+    }
+    return totals;
+  }
+
+  /**
+   * Cash refunded within a shift window for the expected-closing netting
+   * (G11-F1, closes GAP-B). ONE grouped query over the E5 allocation facts;
+   * only `method = CASH` rows count (CARD/QR/BANK/MOBILE/STORE_CREDIT/
+   * GIFT_CARD never affect the drawer), only COMPLETED non-deleted refunds.
+   * Legacy full refunds (G11-D) have NO allocation rows — they were netted at
+   * refund time — so this member is structurally zero for them and the
+   * close-time netting cannot double-count them.
+   */
+  cashRefundedForShift(shiftId: string, companyId: string) {
+    return this.prismaService.refundPaymentAllocation
+      .aggregate({
+        where: {
+          companyId,
+          method: 'CASH',
+          deletedAt: null,
+          salesRefund: {
+            status: 'COMPLETED',
+            deletedAt: null,
+            sale: { cashShiftId: shiftId },
+          },
+        },
+        _sum: { amount: true },
+      })
+      .then((agg) => agg._sum.amount ?? new Prisma.Decimal(0));
+  }
+
+  // ── Canonical FIFO COGS (G11-B) ─────────────────────────────────
   /**
    * Batched canonical COGS read for a report dataset: ONE grouped CostLayer
    * query — never a query per sale (no N+1).
