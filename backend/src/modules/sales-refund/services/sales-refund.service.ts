@@ -19,6 +19,7 @@ import { allocateShiftSales } from '../../sales/services/payment-allocation';
 import { SaleRefundedEvent } from '../../sales/events/sale-refunded.event';
 import { SalePartiallyRefundedEvent } from '../../sales/events/sale-partially-refunded.event';
 import { RefundPaymentAllocationService } from './refund-payment-allocation.service';
+import { CustomerCreditLedgerService } from '../../crm/services/customer-credit-ledger.service';
 import {
   SalesRefundPreviousAggregate,
   SalesRefundRepository,
@@ -27,6 +28,10 @@ import { CreateRefundDto } from '../dto/create-refund.dto';
 import { SalesRefundEntity } from '../entities/sales-refund.entity';
 import { SalesRefundMapper } from '../mappers/sales-refund.mapper';
 import type { RefundAllocationFact } from './refund-payment-allocation.service';
+import {
+  CREDIT_PAYMENT_METHODS,
+  isCreditMethod,
+} from './refund-payment-allocation.service';
 
 /** Monetary/historical-cost scale — matches Decimal(18,4) columns. */
 const MONEY_SCALE = 4;
@@ -62,7 +67,8 @@ function toDecimal(
  * allocation.
  */
 @Injectable()
-export class SalesRefundService {    constructor(
+export class SalesRefundService {
+    constructor(
     private readonly prismaService: PrismaService,
     private readonly salesRepository: SalesRepository,
     private readonly cashShiftRepository: CashShiftRepository,
@@ -70,6 +76,7 @@ export class SalesRefundService {    constructor(
     private readonly documentSequenceService: DocumentSequenceService,
     private readonly auditLog: AuditLogService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
+    private readonly creditLedger: CustomerCreditLedgerService,
   ) {}
 
   /**
@@ -298,6 +305,36 @@ export class SalesRefundService {    constructor(
           userId,
         },
       );
+
+      // G11-F2 — customer credit ledger issuance: every persisted
+      // STORE_CREDIT/GIFT_CARD allocation returns spendable credit to the
+      // sale's customer, one ISSUED ledger row per allocation row (amounts
+      // exactly equal), inside THIS transaction. The customer is mandatory
+      // for credit refunds — its absence fails the whole refund. Legacy full
+      // refunds (G11-D, no allocation rows) intentionally create NO ledger
+      // rows (locked P2 gap for a future workstream); historical E4 refunds
+      // are never backfilled.
+      if (paymentAllocationFacts.some((f) => isCreditMethod(f.method))) {
+        const allocationRows = await tx.refundPaymentAllocation.findMany({
+          where: {
+            companyId,
+            salesRefundId: refund.id,
+            deletedAt: null,
+            method: { in: CREDIT_PAYMENT_METHODS },
+          },
+        });
+        await this.creditLedger.issueRefundCredit(tx, {
+          companyId,
+          customerId: sale.customerId,
+          currency: sale.currency,
+          allocations: allocationRows.map((row) => ({
+            id: row.id,
+            method: row.method,
+            amount: row.amount,
+          })),
+          createdBy: userId,
+        });
+      }
     }
 
     // (Status derivation + legacy-refund detection moved above the allocation

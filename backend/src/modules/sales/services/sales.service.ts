@@ -24,6 +24,7 @@ import { SaleEntity } from '../entities/sale.entity';
 import { SaleMapper } from '../mappers/sale.mapper';
 import { SaleCompletedEvent } from '../events/sale-completed.event';
 import { CompaniesService } from '../../companies/services/companies.service';
+import { CustomerCreditLedgerService } from '../../crm/services/customer-credit-ledger.service';
 
 // G11-E E2: REFUNDED / PARTIALLY_REFUNDED are REFUND-DERIVED statuses. They are
 // not reachable through the generic status path — SalesRefundService is their
@@ -53,6 +54,7 @@ export class SalesService {
     private readonly prismaService: PrismaService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
     private readonly companiesService: CompaniesService,
+    private readonly creditLedger: CustomerCreditLedgerService,
   ) {}
 
   async create(
@@ -378,6 +380,26 @@ export class SalesService {
     // Publish SaleCompletedEvent — handlers (Finance, Inventory, Loyalty, etc.)
     // execute inside this transaction via the context.transactionClient
     const payments = await tx.payment.findMany({ where: { saleId: sale.id } });
+
+    // G11-F2 — customer credit ledger spend: when the sale is paid (partly)
+    // with STORE_CREDIT/GIFT_CARD, the spendable customer credit balance is
+    // reduced HERE, inside the completion transaction, by exactly ONE
+    // aggregated SPENT row. The final guard is the repository's atomic
+    // INSERT…SELECT…WHERE balance >= amount — an insufficient balance fails
+    // the whole completion (never a negative ledger). CASH/CARD/etc. never
+    // touch the ledger. No customer + credit payment → BadRequest.
+    await this.creditLedger.spend(tx, {
+      companyId,
+      saleId: sale.id,
+      customerId: sale.customerId,
+      currency: sale.currency,
+      payments: payments.map((p) => ({
+        method: p.method,
+        amount: p.amount.toString(),
+      })),
+      createdBy: userId,
+    });
+
     await this.eventBus.publish(
       new SaleCompletedEvent({
         saleId: sale.id,

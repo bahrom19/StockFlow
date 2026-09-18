@@ -13,6 +13,7 @@ import {
   TaskController,
   PriceListController,
   CustomerNoteController,
+  CustomerCreditController,
 } from './controllers';
 import {
   CustomerAddressService,
@@ -24,6 +25,7 @@ import {
   TaskService,
   PriceListService,
   CustomerNoteService,
+  CustomerCreditLedgerService,
 } from './services';
 import {
   CustomerAddressRepository,
@@ -35,6 +37,7 @@ import {
   TaskRepository,
   PriceListRepository,
   CustomerNoteRepository,
+  CustomerCreditLedgerRepository,
 } from './repositories';
 import {
   CustomerAddressMapper,
@@ -60,6 +63,7 @@ import {
     TaskController,
     PriceListController,
     CustomerNoteController,
+    CustomerCreditController,
   ],
   providers: [
     CustomerAddressService,
@@ -71,6 +75,8 @@ import {
     TaskService,
     PriceListService,
     CustomerNoteService,
+    CustomerCreditLedgerService,
+    CustomerCreditLedgerRepository,
     CustomerAddressRepository,
     ContactRepository,
     CustomerGroupRepository,
@@ -96,6 +102,7 @@ import {
     CustomerGroupService,
     CreditLimitService,
     LoyaltyService,
+    CustomerCreditLedgerService,
   ],
 })
 export class CrmModule {}

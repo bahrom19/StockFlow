@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SharedModule } from '../shared/shared.module';
 import { SalesModule } from '../sales/sales.module';
+import { CrmModule } from '../crm/crm.module';
 import { SalesRefundController } from './controllers/sales-refund.controller';
 import { SalesRefundRepository } from './repositories/sales-refund.repository';
 import { SalesRefundService } from './services/sales-refund.service';
@@ -16,7 +17,7 @@ import { SalesRefundService } from './services/sales-refund.service';
  * imported here.
  */
 @Module({
-  imports: [SharedModule, SalesModule],
+  imports: [SharedModule, SalesModule, CrmModule],
   controllers: [SalesRefundController],
   providers: [SalesRefundRepository, SalesRefundService],
   exports: [SalesRefundService, SalesRefundRepository],

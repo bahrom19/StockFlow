@@ -13,6 +13,8 @@ import { CashShiftRepository } from '../../../sales/repositories/cash-shift.repo
 import { AuditLogService } from '../../../shared/services/audit-log.service';
 import { DocumentSequenceService } from '../../../shared/services/document-sequence.service';
 import { PrismaService } from '../../../../common/prisma';
+import { CustomerCreditLedgerService } from '../../../crm/services/customer-credit-ledger.service';
+import { CustomerCreditLedgerRepository } from '../../../crm/repositories/customer-credit-ledger.repository';
 import { EventBus, EVENT_BUS } from '../../../../common/events';
 
 /**
@@ -116,6 +118,9 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     deletedAt?: Date | null;
   }
   let allocationLedger: StoredAllocation[];
+  /** G11-F2 (F2-8): spy handle for ledger assertions on the legacy path. */
+  let creditLedgerRepo: { issueRefundCredit: jest.Mock };
+
 
   const allocationsFor = (refundId: string) =>
     allocationLedger.filter((a) => a.salesRefundId === refundId);
@@ -288,13 +293,15 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
         { provide: DocumentSequenceService, useValue: mockDocumentSequence },
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: EVENT_BUS, useValue: mockEventBus },
+        CustomerCreditLedgerService,
+        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(SalesRefundService);
+    creditLedgerRepo = module.get(CustomerCreditLedgerRepository);
   });
-  const refund = (items?: Array<{ saleItemId: string; quantity: number }>) =>
-    service.createRefund('sale-1', { items }, 'user-1', COMPANY);
+  const refund = (items?: Array<{ saleItemId: string; quantity: number }>) =>    service.createRefund('sale-1', { items }, 'user-1', COMPANY);
 
   const persistedFifo = (saleItemId = 'item-1') =>
     store
@@ -603,6 +610,11 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     expect(published?.[1]).toEqual({
       context: { transactionClient: mockTx },
     });
+
+    // G11-F2 (F2-8): the legacy G11-D full-refund path must NEVER create
+    // customer-credit ledger rows — refund credit issuance belongs to the
+    // E5 allocation-driven partial/final path only.
+    expect(creditLedgerRepo.issueRefundCredit).not.toHaveBeenCalled();
   });
 
   it('partial refund publishes sale.partially_refunded (no legacy event, no cash shift)', async () => {

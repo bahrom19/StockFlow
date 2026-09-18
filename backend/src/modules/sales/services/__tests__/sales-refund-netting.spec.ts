@@ -10,6 +10,8 @@ import { AuditLogService } from '../../../shared/services/audit-log.service';
 import { DocumentSequenceService } from '../../../shared/services/document-sequence.service';
 import { PrismaService } from '../../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../../common/events';
+import { CustomerCreditLedgerService } from '../../../crm/services/customer-credit-ledger.service';
+import { CustomerCreditLedgerRepository } from '../../../crm/repositories/customer-credit-ledger.repository';
 
 /**
  * Regression tests for refund netting into the active cash shift (v1.1.1
@@ -168,6 +170,8 @@ describe('SalesRefundService — refund cash shift netting (v1.1.1, E2 owner)', 
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: EVENT_BUS, useValue: mockEventBus },
+        CustomerCreditLedgerService,
+        { provide: CustomerCreditLedgerRepository, useValue: { findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn(), atomicSpend: jest.fn() } },
       ],
     }).compile();
 

@@ -7,3 +7,4 @@ export * from './opportunity.controller';
 export * from './task.controller';
 export * from './price-list.controller';
 export * from './customer-note.controller';
+export * from './customer-credit.controller';

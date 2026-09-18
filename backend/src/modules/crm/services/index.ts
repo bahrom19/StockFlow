@@ -7,3 +7,4 @@ export * from './opportunity.service';
 export * from './task.service';
 export * from './price-list.service';
 export * from './customer-note.service';
+export * from './customer-credit-ledger.service';

@@ -5,6 +5,9 @@ import { SalesService } from '../sales.service';
 import { SalesRepository } from '../../repositories/sales.repository';
 import { CashShiftRepository } from '../../repositories/cash-shift.repository';
 import { PrismaService } from '../../../../common/prisma';
+import { AuditLogService } from '../../../shared/services/audit-log.service';
+import { CustomerCreditLedgerService } from '../../../crm/services/customer-credit-ledger.service';
+import { CustomerCreditLedgerRepository } from '../../../crm/repositories/customer-credit-ledger.repository';
 import { EventBus, EVENT_BUS } from '../../../../common/events';
 import { CompaniesService } from '../../../companies/services/companies.service';
 
@@ -103,6 +106,9 @@ describe('SalesService — transitionStatus (D1 regression)', () => {
         { provide: CashShiftRepository, useValue: mockCashShiftRepo },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: EVENT_BUS, useValue: mockEventBus },
+        CustomerCreditLedgerService,
+        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },
+        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

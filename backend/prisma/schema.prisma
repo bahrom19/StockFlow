@@ -160,6 +160,7 @@ model Company {
   cashShifts            CashShift[]
   salesRefunds          SalesRefund[]
   refundPaymentAllocations RefundPaymentAllocation[]
+  customerCreditTransactions CustomerCreditTransaction[]
   chartOfAccounts       ChartOfAccount[]
   financialPeriods      FinancialPeriod[]
   cashAccounts          CashAccount[]
@@ -249,6 +250,7 @@ model Customer {
   tasks         Task[]
   customerNotes CustomerNote[]
   sales         Sale[]
+  creditTransactions CustomerCreditTransaction[]
 
   @@index([companyId])
   @@index([groupId])
@@ -260,6 +262,46 @@ model Customer {
   @@index([companyId, deletedAt])
   @@index([companyId, isActive])
   @@index([companyId, createdAt])
+}
+
+/// G11-F2 — insert-only ledger fact for spendable customer credit
+/// (STORE_CREDIT / GIFT_CARD). This is NOT the general ledger: GL account
+/// 1200 remains the accounting control account (its existing settlement
+/// semantics are untouched). The authoritative spendable balance is a pure
+/// aggregation of these rows: balance(customer, currency) =
+/// Σ(ISSUED) − Σ(SPENT) − Σ(ADJUSTED). Amounts are always positive; the
+/// direction carries the sign. v1 ADJUSTED rows are negative manual
+/// corrections only; a positive manual correction is ISSUED with
+/// referenceType MANUAL_ADJUSTMENT. No backfill of historical data —
+/// balances start at zero.
+model CustomerCreditTransaction {
+  id            String                             @id @default(uuid()) @db.Uuid
+  companyId     String                             @db.Uuid
+  customerId    String                             @db.Uuid
+  direction     CustomerCreditTransactionDirection
+  amount        Decimal                            @db.Decimal(18, 4)
+  currency      Currency
+  /// REFUND_ALLOCATION → RefundPaymentAllocation.id;
+  /// SALE_PAYMENT      → Sale.id (one aggregated SPENT row per sale);
+  /// MANUAL_ADJUSTMENT → this row's own id (application-generated).
+  referenceType String                             @db.VarChar(50)
+  referenceId   String                             @db.Uuid
+  createdBy     String                             @db.Uuid
+  /// Mandatory for ADJUSTED (service-level validation); null otherwise.
+  reason        String?                            @db.VarChar(255)
+  createdAt     DateTime                           @default(now())
+  updatedAt     DateTime                           @updatedAt
+  /// Reserved by project convention; v1 ledger facts are never deleted.
+  deletedAt     DateTime?
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, customerId, direction, referenceType, referenceId, currency])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([companyId, deletedAt])
+  @@index([customerId, currency])
 }
 
 model CustomerContact {
@@ -1550,6 +1592,18 @@ enum PaymentMethod {
   MOBILE_WALLET
   GIFT_CARD
   STORE_CREDIT
+}
+
+/// G11-F2 — direction of a CustomerCreditTransaction ledger fact.
+/// ISSUED increases the spendable credit balance (refund credit or a positive
+/// manual adjustment); SPENT decreases it (credit used to pay a sale);
+/// ADJUSTED is v1-restricted to NEGATIVE manual corrections (a positive manual
+/// correction is ISSUED with referenceType MANUAL_ADJUSTMENT). Amounts are
+/// always positive — the direction carries the sign.
+enum CustomerCreditTransactionDirection {
+  ISSUED
+  SPENT
+  ADJUSTED
 }
 
 enum ReceiptStatus {

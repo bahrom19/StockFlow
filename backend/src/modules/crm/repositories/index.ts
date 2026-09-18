@@ -7,3 +7,4 @@ export * from './opportunity.repository';
 export * from './task.repository';
 export * from './price-list.repository';
 export * from './customer-note.repository';
+export * from './customer-credit-ledger.repository';

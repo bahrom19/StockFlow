@@ -26,6 +26,17 @@ const REMAINDER_DISTRIBUTION_ORDER: PaymentMethod[] = [
 
 const ZERO = new Decimal(0);
 
+/** G11-F2 — payment methods backed by spendable customer credit. Shared by
+ * the allocation service and the refund-service ledger issuance. */
+export const CREDIT_PAYMENT_METHODS: PaymentMethod[] = [
+  PaymentMethod.STORE_CREDIT,
+  PaymentMethod.GIFT_CARD,
+];
+
+export function isCreditMethod(method: PaymentMethod): boolean {
+  return CREDIT_PAYMENT_METHODS.includes(method);
+}
+
 function toDecimal(
   value: string | number | Decimal | null | undefined,
 ): Decimal {

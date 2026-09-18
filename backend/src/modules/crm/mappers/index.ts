@@ -7,3 +7,4 @@ export * from './opportunity.mapper';
 export * from './task.mapper';
 export * from './price-list.mapper';
 export * from './customer-note.mapper';
+export * from './customer-credit-transaction.mapper';

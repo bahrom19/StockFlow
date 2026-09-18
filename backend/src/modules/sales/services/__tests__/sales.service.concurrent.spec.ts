@@ -5,6 +5,9 @@ import { SalesRepository } from '../../repositories/sales.repository';
 import { SalesService } from '../sales.service';
 import { CashShiftRepository } from '../../repositories/cash-shift.repository';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
+import { AuditLogService } from '../../../shared/services/audit-log.service';
+import { CustomerCreditLedgerService } from '../../../crm/services/customer-credit-ledger.service';
+import { CustomerCreditLedgerRepository } from '../../../crm/repositories/customer-credit-ledger.repository';
 import { EVENT_BUS } from '../../../../common/events';
 import { DocumentSequenceService } from '../../../shared/services/document-sequence.service';
 import { CompaniesService } from '../../../companies/services/companies.service';
@@ -326,6 +329,9 @@ describe('SalesService — Concurrent Completion (Optimistic Locking)', () => {
           useValue: { nextNumber: jest.fn() },
         },
         { provide: EVENT_BUS, useValue: mockEventBus },
+        CustomerCreditLedgerService,
+        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },
+        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
         { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
       ],
     }).compile();

@@ -7,3 +7,4 @@ export * from './loyalty-account.entity';
 export * from './sales-opportunity.entity';
 export * from './task.entity';
 export * from './price-list.entity';
+export * from './customer-credit-transaction.entity';
