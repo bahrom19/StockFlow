@@ -80,7 +80,7 @@ const sale = (overrides: Record<string, unknown> = {}) => ({
   companyId: COMPANY,
   warehouseId: 'wh-1',
   cashierId: 'user-1',
-  customerId: null,
+  customerId: null as string | null,
   currency: 'KZT',
   notes: null,
   subtotal: new Decimal('500.0000'),
@@ -118,8 +118,11 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     deletedAt?: Date | null;
   }
   let allocationLedger: StoredAllocation[];
-  /** G11-F2 (F2-8): spy handle for ledger assertions on the legacy path. */
-  let creditLedgerRepo: { issueRefundCredit: jest.Mock };
+  /** G11-F2 (F2-8) + G11-F3-2: spy handle for ledger assertions. */
+  let creditLedgerRepo: {
+    issueRefundCredit: jest.Mock;
+    issueLegacyRefundCredit: jest.Mock;
+  };
 
 
   const allocationsFor = (refundId: string) =>
@@ -294,7 +297,7 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: EVENT_BUS, useValue: mockEventBus },
         CustomerCreditLedgerService,
-        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },
+        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), issueLegacyRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },
       ],
     }).compile();
 
@@ -611,10 +614,12 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
       context: { transactionClient: mockTx },
     });
 
-    // G11-F2 (F2-8): the legacy G11-D full-refund path must NEVER create
-    // customer-credit ledger rows — refund credit issuance belongs to the
-    // E5 allocation-driven partial/final path only.
+    // G11-F2 (F2-8) / G11-F3-2: the legacy G11-D full-refund path must NEVER
+    // touch the allocation-driven issuance — refund credit restoration on the
+    // legacy path goes exclusively through issueLegacyRefundCredit (the CASH
+    // payment here must not produce any ledger call).
     expect(creditLedgerRepo.issueRefundCredit).not.toHaveBeenCalled();
+    expect(creditLedgerRepo.issueLegacyRefundCredit).not.toHaveBeenCalled();
   });
 
   it('partial refund publishes sale.partially_refunded (no legacy event, no cash shift)', async () => {
@@ -752,6 +757,120 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     expect((mockEventBus.publish.mock.calls[0]?.[0] as any).eventName).toBe(
       'sale.refunded',
     );
+  });
+
+  // ── G11-F3-2 — legacy full-refund credit bridge ─────────────────
+  const legacyRow = (overrides: Record<string, unknown> = {}) => ({
+    id: 'lrow-legacy',
+    direction: 'ISSUED',
+    referenceType: 'REFUND',
+    currency: 'KZT',
+    amount: new Decimal('1.0000'),
+    ...overrides,
+  });
+
+  it('legacy full refund with STORE_CREDIT only issues exactly one ISSUED for the aggregated amount', async () => {
+    saleRow = { ...saleRow, customerId: 'cust-1' } as ReturnType<typeof sale>;
+    payments = [{ method: 'STORE_CREDIT', amount: new Decimal('10000.0000') }];
+    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(
+      legacyRow(),
+    );
+    await refund([]);
+    expect(creditLedgerRepo.issueLegacyRefundCredit).toHaveBeenCalledTimes(1);
+    const [tx, , facts] = creditLedgerRepo.issueLegacyRefundCredit.mock
+      .calls[0] as [unknown, unknown, Record<string, unknown>];
+    expect(tx).toBe(mockTx);
+    expect(facts.currency).toBe('KZT');
+    expect(facts.refundId).toBe('refund-1');
+    expect((facts.amount as Decimal).toString()).toBe('10000');
+  });
+
+  it('legacy full refund with GIFT_CARD only issues exactly one ISSUED', async () => {
+    saleRow = { ...saleRow, customerId: 'cust-1' } as ReturnType<typeof sale>;
+    payments = [{ method: 'GIFT_CARD', amount: new Decimal('750.5000') }];
+    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(
+      legacyRow(),
+    );
+    await refund([]);
+    const [, , facts] = creditLedgerRepo.issueLegacyRefundCredit.mock
+      .calls[0] as [unknown, unknown, Record<string, unknown>];
+    expect((facts.amount as Decimal).toString()).toBe('750.5');
+    expect(facts.customerId).toBe('cust-1');
+  });
+
+  it('legacy full refund with mixed payments issues only the credit buckets (CASH excluded)', async () => {
+    saleRow = { ...saleRow, customerId: 'cust-1' } as ReturnType<typeof sale>;
+    payments = [
+      { method: 'CASH', amount: new Decimal('4000.0000') },
+      { method: 'STORE_CREDIT', amount: new Decimal('3000.0000') },
+      { method: 'GIFT_CARD', amount: new Decimal('3000.0000') },
+    ];
+    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(
+      legacyRow(),
+    );
+    await refund([]);
+    expect(creditLedgerRepo.issueLegacyRefundCredit).toHaveBeenCalledTimes(1);
+    const [, , facts] = creditLedgerRepo.issueLegacyRefundCredit.mock
+      .calls[0] as [unknown, unknown, Record<string, unknown>];
+    expect((facts.amount as Decimal).toString()).toBe('6000');
+  });
+
+  it('legacy full refund aggregates multiple credit payment rows into ONE ISSUED', async () => {
+    saleRow = { ...saleRow, customerId: 'cust-1' } as ReturnType<typeof sale>;
+    payments = [
+      { method: 'STORE_CREDIT', amount: new Decimal('1000.0000') },
+      { method: 'STORE_CREDIT', amount: new Decimal('2000.0000') },
+      { method: 'GIFT_CARD', amount: new Decimal('500.0000') },
+    ];
+    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(
+      legacyRow(),
+    );
+    await refund([]);
+    expect(creditLedgerRepo.issueLegacyRefundCredit).toHaveBeenCalledTimes(1);
+    const [, , facts] = creditLedgerRepo.issueLegacyRefundCredit.mock
+      .calls[0] as [unknown, unknown, Record<string, unknown>];
+    expect((facts.amount as Decimal).toString()).toBe('3500');
+  });
+
+  it('legacy full refund of a cash-only/card-only sale never reaches the credit ledger', async () => {
+    payments = [
+      { method: 'CASH', amount: new Decimal('300.0000') },
+      { method: 'CARD', amount: new Decimal('200.0000') },
+    ];
+    await refund([]);
+    expect(creditLedgerRepo.issueLegacyRefundCredit).not.toHaveBeenCalled();
+  });
+
+  it('legacy refund with a credit payment but NO customer still completes and skips issuance', async () => {
+    saleRow = { ...saleRow, customerId: null } as ReturnType<typeof sale>;
+    payments = [{ method: 'STORE_CREDIT', amount: new Decimal('5000.0000') }];
+    await refund([]); // must NOT throw
+    expect(creditLedgerRepo.issueLegacyRefundCredit).not.toHaveBeenCalled();
+    // anomaly audit written in the same transaction
+    const anomaly = mockAuditLog.log.mock.calls.find(
+      (c: any[]) => (c[0] as any).action === 'SKIPPED',
+    );
+    expect(anomaly).toBeDefined();
+    const entry = anomaly![0] as Record<string, unknown>;
+    expect(entry.entityType).toBe('CustomerCreditTransaction');
+    expect(entry.entityId).toBe('refund-1');
+    expect((entry.after as Record<string, unknown>).creditAmount).toBe('5000');
+    expect((entry.after as Record<string, unknown>).reason).toBe(
+      'no customer',
+    );
+  });
+
+  it('legacy bridge rollback: a failed refund leaves no issuance call persisted', async () => {
+    saleRow = { ...saleRow, customerId: 'cust-1' } as ReturnType<typeof sale>;
+    payments = [{ method: 'GIFT_CARD', amount: new Decimal('1000.0000') }];
+    mockSalesRepository.updateStatus.mockRejectedValueOnce(
+      new ConflictException('conflict'),
+    );
+    await expect(refund([])).rejects.toThrow(ConflictException);
+    // the bridge ran inside the rolled-back transaction — the caller-side
+    // mock records the call, but the tx client was the rolled-back one and
+    // no refund document was persisted:
+    expect(store).toHaveLength(0);
   });
 
   it('multiple partial refunds get their own immutable allocation rows', async () => {

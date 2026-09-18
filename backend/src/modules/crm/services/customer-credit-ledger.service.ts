@@ -154,6 +154,83 @@ export class CustomerCreditLedgerService {
     return created;
   }
 
+  /** G11-F3-2 — legacy full-refund credit bridge (called inside the CALLER's
+   * refund transaction).
+   *
+   * The legacy single-shot full refund (COMPLETED → REFUNDED) persists no E5
+   * allocation rows — its payment reversal is reconstructed from the sale's
+   * original payments — so the credit to restore comes from the SAME
+   * `Payment[]` the Finance G11-D handler uses for its `Cr 1200` line:
+   * Σ(STORE_CREDIT + GIFT_CARD). Cash/Card/QR/Bank/Wallet never touch the
+   * ledger.
+   *
+   * Exactly ONE aggregated ISSUED fact per refund (`referenceType 'REFUND'`,
+   * `referenceId` = refund id) — idempotent under the existing @@unique.
+   *
+   * Historical no-customer exception (pre-F2 sales only): a legacy sale may
+   * carry credit payments without a customer (post-F2 sales cannot). Failing
+   * the refund would permanently block the reversal (customerId is immutable
+   * past DRAFT), so the issuance is SKIPPED and an anomaly AuditLog is
+   * written inside the same transaction; the existing GL flow is untouched.
+   *
+   * @returns the created fact, or null when there were no credit payments
+   *          (no-op) or the issuance was skipped for the no-customer case. */
+  async issueLegacyRefundCredit(
+    tx: PrismaTx,
+    facts: {
+      companyId: string;
+      saleId: string;
+      refundId: string;
+      customerId: string | null;
+      currency: Currency;
+      payments: CreditPaymentLike[];
+      createdBy: string;
+    },
+  ): Promise<CustomerCreditTransactionEntity | null> {
+    const creditAmount = facts.payments
+      .filter((p) =>
+        (CustomerCreditLedgerRepository.CREDIT_METHODS as string[]).includes(
+          p.method,
+        ),
+      )
+      .reduce<Decimal>(
+        (acc, p) => acc.add(new Decimal(p.amount.toString())),
+        new Decimal(0),
+      );
+    if (creditAmount.lte(0)) return null;
+
+    if (!facts.customerId) {
+      await this.auditLog.log(
+        {
+          companyId: facts.companyId,
+          userId: facts.createdBy,
+          entityType: 'CustomerCreditTransaction',
+          entityId: facts.refundId,
+          action: 'SKIPPED',
+          before: null,
+          after: {
+            saleId: facts.saleId,
+            refundId: facts.refundId,
+            creditAmount: creditAmount.toString(),
+            currency: facts.currency,
+            reason: 'no customer',
+          },
+        },
+        tx,
+      );
+      return null;
+    }
+
+    const row = await this.repository.issueLegacyRefundCredit(tx, facts.companyId, {
+      refundId: facts.refundId,
+      customerId: facts.customerId,
+      currency: facts.currency,
+      amount: creditAmount,
+      createdBy: facts.createdBy,
+    });
+    return CustomerCreditTransactionMapper.toEntity(row);
+  }
+
   /** Manual adjustment (ledger-only in F2). Positive amount → ISSUED
    * top-up; negative amount → ADJUSTED write-off. The never-negative
    * invariant for write-offs is enforced by the repository's DB-level guard

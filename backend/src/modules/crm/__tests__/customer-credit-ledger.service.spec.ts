@@ -56,6 +56,7 @@ describe('CustomerCreditLedgerService', () => {
   let repo: {
     atomicSpend: jest.Mock;
     issueRefundCredit: jest.Mock;
+    issueLegacyRefundCredit: jest.Mock;
     createManualAdjustment: jest.Mock;
     getBalances: jest.Mock;
     getTransactions: jest.Mock;
@@ -84,6 +85,11 @@ describe('CustomerCreditLedgerService', () => {
         .fn()
         .mockImplementation((_tx: PrismaTx, _c: string, f: unknown) =>
           Promise.resolve({ id: 'lrow-issued', ...(f as object) } as never),
+        ),
+      issueLegacyRefundCredit: jest
+        .fn()
+        .mockImplementation((_tx: PrismaTx, _c: string, f: unknown) =>
+          Promise.resolve({ id: 'lrow-legacy', ...(f as object) } as never),
         ),
       createManualAdjustment: jest
         .fn()
@@ -260,6 +266,123 @@ describe('CustomerCreditLedgerService', () => {
         }),
       ).rejects.toThrow(BadRequestException);
       expect(repo.issueRefundCredit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('issueLegacyRefundCredit — G11-F3-2 legacy full-refund credit bridge', () => {
+    it('issues exactly ONE aggregated ISSUED fact with referenceType REFUND', async () => {
+      await service.issueLegacyRefundCredit(tx, {
+        companyId,
+        saleId: 'sale-1',
+        refundId: 'refund-1',
+        customerId,
+        currency: Currency.KZT,
+        payments: [
+          { method: 'STORE_CREDIT', amount: '1000.0000' },
+          { method: 'GIFT_CARD', amount: '500.0000' },
+        ],
+        createdBy: userId,
+      });
+      expect(repo.issueLegacyRefundCredit).toHaveBeenCalledTimes(1);
+      const [rcvTx, rcvCompany, facts] = repo.issueLegacyRefundCredit.mock
+        .calls[0] as [PrismaTx, string, Record<string, unknown>];
+      expect(rcvTx).toBe(tx);
+      expect(rcvCompany).toBe(companyId);
+      expect(facts.refundId).toBe('refund-1');
+      expect(facts.customerId).toBe(customerId);
+      expect(facts.currency).toBe(Currency.KZT);
+      expect((facts.amount as Decimal).toFixed(4)).toBe('1500.0000');
+    });
+
+    it('aggregates multiple credit payment rows (Decimal-safe) and excludes other methods', async () => {
+      await service.issueLegacyRefundCredit(tx, {
+        companyId,
+        saleId: 'sale-1',
+        refundId: 'refund-1',
+        customerId,
+        currency: Currency.KZT,
+        payments: [
+          { method: 'CASH', amount: '4000.0000' },
+          { method: 'STORE_CREDIT', amount: '1000.0000' },
+          { method: 'STORE_CREDIT', amount: '2000.0000' },
+          { method: 'GIFT_CARD', amount: '500.0000' },
+        ],
+        createdBy: userId,
+      });
+      const [, , facts] = repo.issueLegacyRefundCredit.mock.calls[0] as [
+        PrismaTx,
+        string,
+        Record<string, unknown>,
+      ];
+      expect((facts.amount as Decimal).toFixed(4)).toBe('3500.0000');
+    });
+
+    it('no credit payments → no-op, no ledger call, no audit', async () => {
+      const result = await service.issueLegacyRefundCredit(tx, {
+        companyId,
+        saleId: 'sale-1',
+        refundId: 'refund-1',
+        customerId,
+        currency: Currency.KZT,
+        payments: [
+          { method: 'CASH', amount: '100.0000' },
+          { method: 'CARD', amount: '200.0000' },
+        ],
+        createdBy: userId,
+      });
+      expect(result).toBeNull();
+      expect(repo.issueLegacyRefundCredit).not.toHaveBeenCalled();
+      expect(auditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('historical no-customer case → SKIP issuance + anomaly AuditLog in the same tx', async () => {
+      const result = await service.issueLegacyRefundCredit(tx, {
+        companyId,
+        saleId: 'sale-1',
+        refundId: 'refund-1',
+        customerId: null,
+        currency: Currency.KZT,
+        payments: [{ method: 'GIFT_CARD', amount: '5000.0000' }],
+        createdBy: userId,
+      });
+      expect(result).toBeNull();
+      expect(repo.issueLegacyRefundCredit).not.toHaveBeenCalled();
+      expect(auditLog.log).toHaveBeenCalledTimes(1);
+      const [entry, rcvTx] = auditLog.log.mock.calls[0] as [
+        Record<string, unknown>,
+        PrismaTx,
+      ];
+      expect(entry.companyId).toBe(companyId);
+      expect(entry.userId).toBe(userId);
+      expect(entry.entityType).toBe('CustomerCreditTransaction');
+      expect(entry.entityId).toBe('refund-1');
+      expect(entry.action).toBe('SKIPPED');
+      expect(entry.before).toBeNull();
+      const after = entry.after as Record<string, unknown>;
+      expect(after.saleId).toBe('sale-1');
+      expect(after.refundId).toBe('refund-1');
+      expect(after.creditAmount).toBe('5000');
+      expect(after.currency).toBe('KZT');
+      expect(after.reason).toBe('no customer');
+      expect(rcvTx).toBe(tx); // same transaction → audit rolls back with the refund
+    });
+
+    it('currency is passed through to the fact (sale/refund currency, no FX)', async () => {
+      await service.issueLegacyRefundCredit(tx, {
+        companyId,
+        saleId: 'sale-1',
+        refundId: 'refund-1',
+        customerId,
+        currency: Currency.USD,
+        payments: [{ method: 'STORE_CREDIT', amount: '100.0000' }],
+        createdBy: userId,
+      });
+      const [, , facts] = repo.issueLegacyRefundCredit.mock.calls[0] as [
+        PrismaTx,
+        string,
+        Record<string, unknown>,
+      ];
+      expect(facts.currency).toBe(Currency.USD);
     });
   });
 

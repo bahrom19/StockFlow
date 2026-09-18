@@ -393,6 +393,30 @@ export class SalesRefundService {
     // refund operation, so stock is restored exactly once. The legacy-refund
     // predicate was computed in step 11.
     if (isLegacySingleShotFullRefund) {
+      // G11-F3-2 — legacy full-refund credit bridge: restore the customer's
+      // spendable credit consumed by the sale's original STORE_CREDIT/
+      // GIFT_CARD payments. ONE aggregated ISSUED fact per refund, keyed by
+      // the refund document — same transaction, same credit composition the
+      // G11-D Finance handler credits to AR 1200 (lockstep ledger/GL). The
+      // refund row already exists in this tx, so its id is the canonical
+      // idempotency reference. No E5 allocation rows are created (protected
+      // F1 shift-reconciliation semantics); Finance/events are untouched.
+      const originalPayments = await tx.payment.findMany({
+        where: { saleId: sale.id },
+      });
+      await this.creditLedger.issueLegacyRefundCredit(tx, {
+        companyId,
+        saleId: sale.id,
+        refundId: refund.id,
+        customerId: sale.customerId,
+        currency: sale.currency,
+        payments: originalPayments.map((p) => ({
+          method: p.method,
+          amount: p.amount.toString(),
+        })),
+        createdBy: userId,
+      });
+
       await this.applyLegacyFullRefundSideEffects(
         sale,
         saleItems,

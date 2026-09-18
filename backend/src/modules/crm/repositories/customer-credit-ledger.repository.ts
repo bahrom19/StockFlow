@@ -208,16 +208,69 @@ export class CustomerCreditLedgerRepository {
     companyId: string,
     facts: RefundIssuanceFacts,
   ): Promise<PrismaCustomerCreditTransaction> {
+    return this.createIssued(
+      tx,
+      companyId,
+      facts.customerId,
+      facts.currency,
+      facts.amount,
+      'REFUND_ALLOCATION',
+      facts.allocationId,
+      facts.createdBy,
+    );
+  }
+
+  /** G11-F3-2 — legacy full-refund credit bridge: ONE aggregated ISSUED fact
+   * per legacy single-shot full refund. The legacy path persists no E5
+   * allocation rows (protected F1 shift-reconciliation semantics), so the
+   * canonical source is the sale's original credit payments; the fact is
+   * keyed by the refund document (`referenceType 'REFUND'`, `referenceId` =
+   * SalesRefund.id) and is idempotent under the existing @@unique. */
+  async issueLegacyRefundCredit(
+    tx: PrismaTx,
+    companyId: string,
+    facts: {
+      refundId: string;
+      customerId: string;
+      currency: Currency;
+      amount: Prisma.Decimal;
+      createdBy: string;
+    },
+  ): Promise<PrismaCustomerCreditTransaction> {
+    return this.createIssued(
+      tx,
+      companyId,
+      facts.customerId,
+      facts.currency,
+      facts.amount,
+      'REFUND',
+      facts.refundId,
+      facts.createdBy,
+    );
+  }
+
+  /** Shared plain-ISSUED insert (no balance guard needed: issuance only
+   * ever increases the balance — same rationale as positive adjustments). */
+  private createIssued(
+    tx: PrismaTx,
+    companyId: string,
+    customerId: string,
+    currency: Currency,
+    amount: Prisma.Decimal,
+    referenceType: 'REFUND_ALLOCATION' | 'REFUND',
+    referenceId: string,
+    createdBy: string,
+  ): Promise<PrismaCustomerCreditTransaction> {
     return tx.customerCreditTransaction.create({
       data: {
         companyId,
-        customerId: facts.customerId,
+        customerId,
         direction: CustomerCreditTransactionDirection.ISSUED,
-        amount: facts.amount,
-        currency: facts.currency,
-        referenceType: 'REFUND_ALLOCATION',
-        referenceId: facts.allocationId,
-        createdBy: facts.createdBy,
+        amount,
+        currency,
+        referenceType,
+        referenceId,
+        createdBy,
       },
     });
   }
