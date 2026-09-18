@@ -6,22 +6,36 @@ import { CustomerNote, Prisma } from '@prisma/client';
 export class CustomerNoteRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Tenant-safe customer existence check (CRM convention: foreign == 404). */
+  async findCustomerCompany(
+    customerId: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ id: string } | null> {
+    const prisma = tx ?? this.prisma;
+    return prisma.customer.findFirst({
+      where: { id: customerId, companyId, deletedAt: null },
+      select: { id: true },
+    });
+  }
+
   async findMany(params: {
+    companyId: string;
     skip?: number;
     take?: number;
     where?: Prisma.CustomerNoteWhereInput;
     orderBy?: Prisma.CustomerNoteOrderByWithRelationInput;
   }): Promise<[CustomerNote[], number]> {
-    const { skip, take, where, orderBy } = params;
+    const { companyId, skip, take, where, orderBy } = params;
     const [items, total] = await Promise.all([
       this.prisma.customerNote.findMany({
-        where: { ...where, deletedAt: null },
+        where: { ...where, customer: { companyId }, deletedAt: null },
         skip,
         take,
         orderBy,
       }),
       this.prisma.customerNote.count({
-        where: { ...where, deletedAt: null },
+        where: { ...where, customer: { companyId }, deletedAt: null },
       }),
     ]);
     return [items, total];

@@ -1,4 +1,9 @@
-import { Inject, Injectable, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { LoyaltyRepository } from '../repositories/loyalty.repository';
@@ -28,7 +33,15 @@ export class LoyaltyService {
     companyId: string,
     userId: string,
   ): Promise<LoyaltyAccountEntity> {
-    let account = await this.repository.findByCustomerId(customerId);
+    const customer = await this.repository.findCustomerCompany(
+      customerId,
+      companyId,
+    );
+    if (!customer) {
+      // Tenant-safe: foreign customer == non-existent (CRM convention).
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
+    let account = await this.repository.findByCustomerId(customerId, companyId);
     if (!account) {
       account = await this.repository.create({
         points: 0,
@@ -50,8 +63,14 @@ export class LoyaltyService {
     return this.mapper.toEntity(account);
   }
 
-  async getAccount(customerId: string): Promise<LoyaltyAccountEntity> {
-    const account = await this.repository.findByCustomerIdOrThrow(customerId);
+  async getAccount(
+    customerId: string,
+    companyId: string,
+  ): Promise<LoyaltyAccountEntity> {
+    const account = await this.repository.findByCustomerIdOrThrow(
+      customerId,
+      companyId,
+    );
     return this.mapper.toEntity(account);
   }
 
@@ -63,6 +82,7 @@ export class LoyaltyService {
     return this.prisma.$transaction(async (tx) => {
       const account = await this.repository.findByCustomerIdOrThrow(
         dto.customerId,
+        companyId,
       );
       const pointsBefore = account.points;
       const updated = await this.repository.update({
@@ -106,6 +126,7 @@ export class LoyaltyService {
     return this.prisma.$transaction(async (tx) => {
       const account = await this.repository.findByCustomerIdOrThrow(
         dto.customerId,
+        companyId,
       );
       if (account.points < dto.points) {
         throw new BadRequestException('Insufficient loyalty points');

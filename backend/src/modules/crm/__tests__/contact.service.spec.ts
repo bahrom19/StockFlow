@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ContactService } from '../services/contact.service';
 import { ContactRepository } from '../repositories/contact.repository';
@@ -25,6 +26,9 @@ describe('ContactService', () => {
       findByIdOrThrow: jest.fn(),
       update: jest.fn(),
       softDelete: jest.fn(),
+      // Tenant-safe ownership check: resolves by default so same-tenant
+      // scenarios succeed; foreign-customer tests override to null.
+      findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }),
     } as unknown as jest.Mocked<ContactRepository>;
 
     mockMapper = {
@@ -117,5 +121,52 @@ describe('ContactService', () => {
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'DELETE' }),
     );
+  });
+
+  describe('G12-R1 tenant isolation', () => {
+    it('findAll propagates companyId to repository (tenant scope)', async () => {
+      mockRepo.findMany.mockResolvedValue([[], 0] as any);
+      mockMapper.toEntityList.mockReturnValue([]);
+
+      await service.findAll({ page: 1, limit: 20 } as any, companyId);
+
+      expect(mockRepo.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ companyId }),
+      );
+    });
+
+    it('create succeeds when customer belongs to same company', async () => {
+      const created = { id: 'contact-9' };
+      mockRepo.create.mockResolvedValue(created as any);
+      mockMapper.toEntity.mockReturnValue({ id: 'contact-9' } as any);
+
+      const result = await service.create(
+        { customerId: 'cust-1', firstName: 'A', lastName: 'B' } as any,
+        companyId,
+        userId,
+      );
+
+      expect(result).toBeDefined();
+      expect(mockRepo.findCustomerCompany).toHaveBeenCalledWith(
+        'cust-1',
+        companyId,
+        expect.anything(),
+      );
+    });
+
+    it('create returns 404 when customer belongs to another company', async () => {
+      (mockRepo.findCustomerCompany as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          { customerId: 'foreign-cust', firstName: 'A', lastName: 'B' } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(mockRepo.create).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
   });
 });

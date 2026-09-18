@@ -6,22 +6,40 @@ import { CreditLimit, Prisma } from '@prisma/client';
 export class CreditLimitRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Tenant-safe customer existence check (CRM convention: foreign == 404). */
+  async findCustomerCompany(
+    customerId: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ id: string } | null> {
+    const prisma = tx ?? this.prisma;
+    return prisma.customer.findFirst({
+      where: { id: customerId, companyId, deletedAt: null },
+      select: { id: true },
+    });
+  }
+
   async findMany(params: {
+    companyId: string;
     skip?: number;
     take?: number;
     where?: Prisma.CreditLimitWhereInput;
     orderBy?: Prisma.CreditLimitOrderByWithRelationInput;
   }): Promise<[CreditLimit[], number]> {
-    const { skip, take, where, orderBy } = params;
+    const { companyId, skip, take, where, orderBy } = params;
+    const tenantWhere: Prisma.CreditLimitWhereInput = {
+      ...where,
+      customer: { companyId, deletedAt: null },
+    };
     const [items, total] = await Promise.all([
       this.prisma.creditLimit.findMany({
-        where: { ...where, customer: { deletedAt: null } },
+        where: tenantWhere,
         skip,
         take,
         orderBy,
       }),
       this.prisma.creditLimit.count({
-        where: { ...where, customer: { deletedAt: null } },
+        where: tenantWhere,
       }),
     ]);
     return [items, total];
@@ -39,8 +57,13 @@ export class CreditLimitRepository {
     return entity;
   }
 
-  async findByCustomerId(customerId: string): Promise<CreditLimit | null> {
-    return this.prisma.creditLimit.findFirst({ where: { customerId } });
+  async findByCustomerId(
+    customerId: string,
+    companyId: string,
+  ): Promise<CreditLimit | null> {
+    return this.prisma.creditLimit.findFirst({
+      where: { customerId, customer: { companyId } },
+    });
   }
 
   async create(

@@ -81,7 +81,7 @@ export class CreditLimitController {
     @Param('customerId') customerId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<CreditLimitEntity | null> {
-    return this.service.findByCustomer(customerId);
+    return this.service.findByCustomer(customerId, user.companyId);
   }
 
   @Patch(':id')

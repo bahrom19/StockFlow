@@ -1,4 +1,9 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, Currency as PrismaCurrency } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CreditLimitRepository } from '../repositories/credit-limit.repository';
@@ -31,6 +36,7 @@ export class CreditLimitService {
     userId: string,
   ): Promise<CreditLimitEntity> {
     return this.prisma.$transaction(async (tx) => {
+      await this.assertCustomer(dto.customerId, companyId, tx);
       const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
       const data: Prisma.CreditLimitCreateInput = {
         amount: dto.amount,
@@ -73,9 +79,9 @@ export class CreditLimitService {
     } = query;
     const skip = (page - 1) * limit;
     const [items, total] = await this.repository.findMany({
+      companyId,
       skip,
       take: limit,
-      where: { customer: { companyId } },
       orderBy: { [sortBy]: sortOrder },
     });
     return { items: this.mapper.toEntityList(items), total, page, limit };
@@ -86,9 +92,16 @@ export class CreditLimitService {
     return this.mapper.toEntity(entity);
   }
 
-  async findByCustomer(customerId: string): Promise<CreditLimitEntity | null> {
-    const entity = await this.repository.findByCustomerId(customerId);
-    return entity ? this.mapper.toEntity(entity) : null;
+  async findByCustomer(
+    customerId: string,
+    companyId: string,
+  ): Promise<CreditLimitEntity | null> {
+    const entity = await this.repository.findByCustomerId(customerId, companyId);
+    if (!entity) {
+      // Tenant-safe: foreign/unknown customer == not found (CRM convention).
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
+    return this.mapper.toEntity(entity);
   }
 
   async update(
@@ -140,5 +153,21 @@ export class CreditLimitService {
         after: null,
       });
     });
+  }
+
+  /** Tenant-safe ownership check (CRM convention: foreign == 404). */
+  private async assertCustomer(
+    customerId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const customer = await this.repository.findCustomerCompany(
+      customerId,
+      companyId,
+      tx,
+    );
+    if (!customer) {
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
   }
 }

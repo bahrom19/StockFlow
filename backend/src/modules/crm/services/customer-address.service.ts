@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CustomerAddressRepository } from '../repositories/customer-address.repository';
@@ -28,6 +28,7 @@ export class CustomerAddressService {
     userId: string,
   ): Promise<CustomerAddressEntity> {
     return this.prisma.$transaction(async (tx) => {
+      await this.assertCustomer(dto.customerId, companyId, tx);
       const data: Prisma.CustomerAddressCreateInput = {
         city: dto.city,
         country: dto.country,
@@ -70,6 +71,7 @@ export class CustomerAddressService {
     const where: Prisma.CustomerAddressWhereInput = {};
     if (customerId) where.customerId = customerId;
     const [items, total] = await this.repository.findMany({
+      companyId,
       skip,
       take: limit,
       where,
@@ -125,5 +127,21 @@ export class CustomerAddressService {
         after: null,
       });
     });
+  }
+
+  /** Tenant-safe ownership check (CRM convention: foreign == 404). */
+  private async assertCustomer(
+    customerId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const customer = await this.repository.findCustomerCompany(
+      customerId,
+      companyId,
+      tx,
+    );
+    if (!customer) {
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
   }
 }

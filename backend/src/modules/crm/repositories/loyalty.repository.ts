@@ -8,16 +8,18 @@ export class LoyaltyRepository {
 
   async findByCustomerId(
     customerId: string,
+    companyId: string,
   ): Promise<PrismaLoyaltyAccount | null> {
-    return this.prisma.loyaltyAccount.findUnique({
-      where: { customerId },
+    return this.prisma.loyaltyAccount.findFirst({
+      where: { customerId, customer: { companyId } },
     });
   }
 
   async findByCustomerIdOrThrow(
     customerId: string,
+    companyId: string,
   ): Promise<PrismaLoyaltyAccount> {
-    const entity = await this.findByCustomerId(customerId);
+    const entity = await this.findByCustomerId(customerId, companyId);
     if (!entity)
       throw new NotFoundException('Loyalty account not found for customer');
     return entity;
@@ -29,6 +31,19 @@ export class LoyaltyRepository {
   ): Promise<PrismaLoyaltyAccount | null> {
     return this.prisma.loyaltyAccount.findFirst({
       where: { id, customer: { companyId } },
+    });
+  }
+
+  /** Tenant-safe customer existence check (CRM convention: foreign == 404). */
+  async findCustomerCompany(
+    customerId: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ id: string } | null> {
+    const prisma = tx ?? this.prisma;
+    return prisma.customer.findFirst({
+      where: { id: customerId, companyId, deletedAt: null },
+      select: { id: true },
     });
   }
 

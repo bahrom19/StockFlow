@@ -44,7 +44,7 @@ export class LoyaltyController {
     @Param('customerId') customerId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<LoyaltyAccountEntity> {
-    return this.service.getAccount(customerId);
+    return this.service.getAccount(customerId, user.companyId);
   }
 
   @Post('earn')

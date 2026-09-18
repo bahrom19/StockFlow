@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ContactRepository } from '../repositories/contact.repository';
@@ -28,6 +28,7 @@ export class ContactService {
     userId: string,
   ): Promise<ContactEntity> {
     return this.prisma.$transaction(async (tx) => {
+      await this.assertCustomer(dto.customerId, companyId, tx);
       const data: Prisma.CustomerContactCreateInput = {
         firstName: dto.firstName,
         lastName: dto.lastName,
@@ -138,5 +139,21 @@ export class ContactService {
         after: null,
       });
     });
+  }
+
+  /** Tenant-safe ownership check (CRM convention: foreign == 404). */
+  private async assertCustomer(
+    customerId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const customer = await this.repository.findCustomerCompany(
+      customerId,
+      companyId,
+      tx,
+    );
+    if (!customer) {
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
   }
 }

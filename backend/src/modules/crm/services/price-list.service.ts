@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { PriceListRepository } from '../repositories/price-list.repository';
@@ -28,6 +28,7 @@ export class PriceListService {
     userId: string,
   ): Promise<PriceListEntity> {
     return this.prisma.$transaction(async (tx) => {
+      await this.assertCustomer(dto.customerId, companyId, tx);
       const data: Prisma.PriceListCreateInput = {
         name: dto.name,
         description: dto.description,
@@ -73,9 +74,10 @@ export class PriceListService {
       ];
     }
     const [items, total] = await this.repository.findMany({
+      companyId,
       skip,
       take: limit,
-      where: { ...where, customer: { companyId } },
+      where,
       orderBy: { [sortBy]: sortOrder },
     });
     return { items: this.mapper.toEntityList(items), total, page, limit };
@@ -126,5 +128,21 @@ export class PriceListService {
         after: null,
       });
     });
+  }
+
+  /** Tenant-safe ownership check (CRM convention: foreign == 404). */
+  private async assertCustomer(
+    customerId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const customer = await this.repository.findCustomerCompany(
+      customerId,
+      companyId,
+      tx,
+    );
+    if (!customer) {
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
   }
 }

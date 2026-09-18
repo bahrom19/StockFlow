@@ -28,7 +28,10 @@ describe('CreditLimitService — currency enforcement', () => {
     const mod: TestingModule = await Test.createTestingModule({
       providers: [
         CreditLimitService,
-        { provide: CreditLimitRepository, useValue: { create: jest.fn().mockResolvedValue({ id: 'cl-1', currency, amount: new Prisma.Decimal('50000'), customerId }) } },
+        { provide: CreditLimitRepository, useValue: {
+          create: jest.fn().mockResolvedValue({ id: 'cl-1', currency, amount: new Prisma.Decimal('50000'), customerId }),
+          findCustomerCompany: jest.fn().mockResolvedValue({ id: customerId }),
+        } },
         { provide: CreditLimitMapper, useValue: { toEntity: jest.fn().mockReturnValue({ id: 'cl-1', currency }) } },
         { provide: PrismaService, useValue: { $transaction: jest.fn(async (fn: any) => fn({})) } },
         { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
