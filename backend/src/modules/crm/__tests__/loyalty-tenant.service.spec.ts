@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { LoyaltyService } from '../services/loyalty.service';
 import { LoyaltyRepository } from '../repositories/loyalty.repository';
@@ -29,6 +29,7 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
     update: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
+  let eventBus: { publish: jest.Mock };
 
   beforeEach(async () => {
     repo = {
@@ -39,6 +40,7 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
       update: jest.fn(),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    eventBus = { publish: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -53,7 +55,7 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
           useValue: { $transaction: jest.fn(async (fn: any) => fn({})) },
         },
         { provide: AuditLogService, useValue: auditLog },
-        { provide: EVENT_BUS, useValue: { publish: jest.fn() } },
+        { provide: EVENT_BUS, useValue: eventBus },
       ],
     }).compile();
 
@@ -65,6 +67,7 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
     customerId,
     points: 100,
     lifetimePoints: 150,
+    rowVersion: 7,
   };
 
   describe('getAccount', () => {
@@ -107,6 +110,10 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
         customerId,
         companyId,
       );
+      // G12-R2: CAS must carry the rowVersion read from the account.
+      expect(repo.update).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'loy-1', rowVersion: 7 }),
+      );
     });
 
     it('foreign customer → 404, no mutation, no audit', async () => {
@@ -136,6 +143,10 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
       expect(repo.findByCustomerIdOrThrow).toHaveBeenCalledWith(
         customerId,
         companyId,
+      );
+      // G12-R2: CAS must carry the rowVersion read from the account.
+      expect(repo.update).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'loy-1', rowVersion: 7 }),
       );
     });
 
@@ -184,6 +195,63 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
       expect(result).toBeDefined();
       expect(repo.findCustomerCompany).toHaveBeenCalledWith(customerId, companyId);
       expect(repo.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('G12-R2 — optimistic locking (CAS)', () => {
+    const conflictMessage = /modified by another user/;
+
+    it('earn CAS conflict (count===0) → 409, no audit, no event', async () => {
+      repo.findByCustomerIdOrThrow.mockResolvedValue(account);
+      repo.update.mockRejectedValue(
+        new ConflictException(`Loyalty account ${account.id} was modified by another user. Please refresh and retry.`),
+      );
+
+      await expect(
+        service.earnPoints({ customerId, points: 50 } as any, companyId, userId),
+      ).rejects.toThrow(ConflictException);
+      await expect(
+        service.earnPoints({ customerId, points: 50 } as any, companyId, userId),
+      ).rejects.toThrow(conflictMessage);
+
+      // Conflict aborts the transaction: audit/event must not fire.
+      expect(auditLog.log).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('redeem CAS conflict (count===0) → 409, no audit, no event', async () => {
+      repo.findByCustomerIdOrThrow.mockResolvedValue(account);
+      repo.update.mockRejectedValue(new ConflictException('modified by another user'));
+
+      await expect(
+        service.redeemPoints({ customerId, points: 10 } as any, companyId, userId),
+      ).rejects.toThrow(ConflictException);
+
+      expect(auditLog.log).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('earn success passes exact read rowVersion into CAS update', async () => {
+      repo.findByCustomerIdOrThrow.mockResolvedValue(account);
+      repo.update.mockResolvedValue({ ...account, points: 150, rowVersion: 8 });
+
+      await service.earnPoints({ customerId, points: 50 } as any, companyId, userId);
+
+      // CAS predicate: id + rowVersion exactly as read (7), not a stale guess.
+      expect(repo.update).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'loy-1', rowVersion: 7 }),
+      );
+    });
+
+    it('redeem success passes exact read rowVersion into CAS update', async () => {
+      repo.findByCustomerIdOrThrow.mockResolvedValue(account);
+      repo.update.mockResolvedValue({ ...account, points: 40, rowVersion: 8 });
+
+      await service.redeemPoints({ customerId, points: 60 } as any, companyId, userId);
+
+      expect(repo.update).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'loy-1', rowVersion: 7 }),
+      );
     });
   });
 });

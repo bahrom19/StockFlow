@@ -85,6 +85,8 @@ export class LoyaltyService {
         companyId,
       );
       const pointsBefore = account.points;
+      // Optimistic-lock CAS (G12-R2): write applies only if the row still
+      // carries the version read above; conflict → ConflictException (409).
       const updated = await this.repository.update({
         id: account.id,
         data: {
@@ -93,6 +95,7 @@ export class LoyaltyService {
           lastActivity: new Date(),
         },
         tx,
+        rowVersion: account.rowVersion,
       });
       await this.auditLog.log({
         companyId,
@@ -132,6 +135,9 @@ export class LoyaltyService {
         throw new BadRequestException('Insufficient loyalty points');
       }
       const pointsBefore = account.points;
+      // Optimistic-lock CAS (G12-R2): protects the read-modify-write race and
+      // the balance guard (both redeems validated against the same read);
+      // conflict → ConflictException (409), transaction rolls back.
       const updated = await this.repository.update({
         id: account.id,
         data: {
@@ -139,6 +145,7 @@ export class LoyaltyService {
           lastActivity: new Date(),
         },
         tx,
+        rowVersion: account.rowVersion,
       });
       await this.auditLog.log({
         companyId,
