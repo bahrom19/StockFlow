@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -50,11 +51,13 @@ export class PurchaseReturnController {
   async create(
     @Body() dto: CreatePurchaseReturnDto,
     @CurrentUser() currentUser: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<PurchaseReturnEntity> {
     return this.purchaseReturnService.create(
       dto,
       currentUser.userId,
       currentUser.companyId,
+      idempotencyKey,
     );
   }
 
@@ -143,12 +146,14 @@ export class PurchaseReturnController {
     @Param('id') id: string,
     @Query('status') status: PurchaseReturnStatus,
     @CurrentUser() currentUser: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<PurchaseReturnEntity> {
     return this.purchaseReturnService.transitionStatus(
       id,
       status,
       currentUser.userId,
       currentUser.companyId,
+      idempotencyKey,
     );
   }
 }

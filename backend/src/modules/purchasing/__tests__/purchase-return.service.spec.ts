@@ -17,6 +17,7 @@ import { PurchasingFinanceService } from '../services/purchasing-finance.service
 import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { CostingService } from '../../inventory/services/costing.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -74,6 +75,7 @@ describe('PurchaseReturnService', () => {
   let mockFinance: { createPurchaseReturnJournal: jest.Mock };
   let mockAuditLog: jest.Mocked<AuditLogService>;
   let mockCosting: { consumeFifoLayers: jest.Mock };
+  let mockIdempotency: { reserve: jest.Mock; complete: jest.Mock; hashRequest: jest.Mock };
   const mockTransaction = jest.fn();
 
   beforeEach(async () => {
@@ -100,6 +102,11 @@ describe('PurchaseReturnService', () => {
           fallbackCost: new Decimal('0'),
         }),
     };
+    mockIdempotency = {
+      reserve: jest.fn().mockResolvedValue({ type: 'created', requestHash: 'hash' }),
+      complete: jest.fn().mockResolvedValue(undefined),
+      hashRequest: jest.fn().mockReturnValue('hash'),
+    };
     mockPrisma = { $transaction: mockTransaction };
 
     const mod = await Test.createTestingModule({
@@ -112,6 +119,7 @@ describe('PurchaseReturnService', () => {
         { provide: PurchasingFinanceService, useValue: mockFinance },
         { provide: CostingService, useValue: mockCosting },
         { provide: AuditLogService, useValue: mockAuditLog },
+        { provide: IdempotencyService, useValue: mockIdempotency },
       ],
     }).compile();
     service = mod.get(PurchaseReturnService);
@@ -1162,6 +1170,7 @@ describe('PurchaseReturnService', () => {
             provide: AuditLogService,
             useValue: { log: jest.fn().mockResolvedValue(undefined) },
           },
+          { provide: IdempotencyService, useValue: mockIdempotency },
         ],
       }).compile();
       gateService = mod.get(PurchaseReturnService);
