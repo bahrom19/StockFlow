@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, TaskStatus, TaskPriority } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { TaskRepository } from '../repositories/task.repository';
@@ -24,6 +24,12 @@ export class TaskService {
     userId: string,
   ): Promise<TaskEntity> {
     return this.prisma.$transaction(async (tx) => {
+      // G12-R3 — tenant-safe ownership check BEFORE any connect/create: a
+      // Task must never link to a Customer of another company (foreign and
+      // unknown both surface as 404; deleted is not an ownership target).
+      if (dto.customerId) {
+        await this.assertCustomer(dto.customerId, companyId, tx);
+      }
       const data: Prisma.TaskCreateInput = {
         title: dto.title,
         status: (dto.status as TaskStatus) ?? TaskStatus.TODO,
@@ -47,6 +53,22 @@ export class TaskService {
       });
       return this.mapper.toEntity(created);
     });
+  }
+
+  /** Tenant-safe ownership check (CRM convention: foreign == 404). */
+  private async assertCustomer(
+    customerId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const customer = await this.repository.findCustomerCompany(
+      customerId,
+      companyId,
+      tx,
+    );
+    if (!customer) {
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
   }
 
   async findAll(

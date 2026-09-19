@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { TaskStatus, TaskPriority } from '@prisma/client';
 import { TaskService } from '../services/task.service';
 import { TaskRepository } from '../repositories/task.repository';
@@ -23,6 +24,7 @@ describe('TaskService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       findByIdOrThrow: jest.fn(),
+      findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }),
       update: jest.fn(),
       softDelete: jest.fn(),
     } as unknown as jest.Mocked<TaskRepository>;
@@ -136,5 +138,93 @@ describe('TaskService', () => {
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'DELETE' }),
     );
+  });
+
+  // G12-R3 — tenant-safe customer-link ownership on create
+  describe('G12-R3 create ownership', () => {
+    it('same-tenant customer → create succeeds and links that customer', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue({ id: 'cust-1' });
+      mockRepo.create.mockResolvedValue({ id: 'task-1' } as any);
+      mockMapper.toEntity.mockReturnValue({ id: 'task-1' } as any);
+
+      await service.create(
+        { title: 'T', customerId: 'cust-1' } as any,
+        companyId,
+        userId,
+      );
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customer: { connect: { id: 'cust-1' } },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('foreign-tenant customer → 404, no create, no audit', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          { title: 'T', customerId: 'foreign-cust' } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('unknown customer → 404', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          { title: 'T', customerId: '00000000-0000-0000-0000-000000000000' } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('deleted customer → 404 (findCustomerCompany excludes deletedAt)', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          { title: 'T', customerId: 'deleted-cust' } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('ownership query uses exact tenant predicate (id + companyId + deletedAt) via tx', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue({ id: 'cust-1' });
+      mockRepo.create.mockResolvedValue({ id: 'task-1' } as any);
+      mockMapper.toEntity.mockReturnValue({ id: 'task-1' } as any);
+
+      await service.create(
+        { title: 'T', customerId: 'cust-1' } as any,
+        companyId,
+        userId,
+      );
+      // Exact contract of the helper itself (id, companyId, deletedAt: null).
+      expect(mockRepo.findCustomerCompany).toHaveBeenCalledWith(
+        'cust-1',
+        companyId,
+        mockTx,
+      );
+    });
+
+    it('no customerId → no ownership lookup, create proceeds', async () => {
+      mockRepo.create.mockResolvedValue({ id: 'task-1' } as any);
+      mockMapper.toEntity.mockReturnValue({ id: 'task-1' } as any);
+
+      await service.create({ title: 'T' } as any, companyId, userId);
+      expect(mockRepo.findCustomerCompany).not.toHaveBeenCalled();
+      expect(mockRepo.create).toHaveBeenCalled();
+    });
   });
 });

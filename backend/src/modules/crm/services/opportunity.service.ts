@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, OpportunityStatus, OpportunityPriority } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { OpportunityRepository } from '../repositories/opportunity.repository';
@@ -28,6 +28,10 @@ export class OpportunityService {
     userId: string,
   ): Promise<SalesOpportunityEntity> {
     return this.prisma.$transaction(async (tx) => {
+      // G12-R3 — tenant-safe ownership check BEFORE any connect/create: an
+      // Opportunity must never link to a Customer of another company (foreign
+      // and unknown both surface as 404; deleted is not an ownership target).
+      await this.assertCustomer(dto.customerId, companyId, tx);
       const data: Prisma.SalesOpportunityCreateInput = {
         title: dto.title,
         status: (dto.status as OpportunityStatus) ?? OpportunityStatus.NEW,
@@ -56,6 +60,22 @@ export class OpportunityService {
       });
       return this.mapper.toEntity(created);
     });
+  }
+
+  /** Tenant-safe ownership check (CRM convention: foreign == 404). */
+  private async assertCustomer(
+    customerId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const customer = await this.repository.findCustomerCompany(
+      customerId,
+      companyId,
+      tx,
+    );
+    if (!customer) {
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
   }
 
   async findAll(

@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { OpportunityStatus, OpportunityPriority } from '@prisma/client';
 import { OpportunityService } from '../services/opportunity.service';
 import { OpportunityRepository } from '../repositories/opportunity.repository';
@@ -23,6 +24,7 @@ describe('OpportunityService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       findByIdOrThrow: jest.fn(),
+      findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }),
       update: jest.fn(),
       softDelete: jest.fn(),
     } as unknown as jest.Mocked<OpportunityRepository>;
@@ -103,5 +105,83 @@ describe('OpportunityService', () => {
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'DELETE' }),
     );
+  });
+
+  // G12-R3 — tenant-safe customer-link ownership on create
+  describe('G12-R3 create ownership', () => {
+    it('same-tenant customer → create succeeds and links that customer', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue({ id: 'cust-1' });
+      mockRepo.create.mockResolvedValue({ id: 'opp-1' } as any);
+      mockMapper.toEntity.mockReturnValue({ id: 'opp-1' } as any);
+
+      await service.create(
+        { title: 'Big Deal', customerId: 'cust-1' } as any,
+        companyId,
+        userId,
+      );
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customer: { connect: { id: 'cust-1' } },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('foreign-tenant customer → 404, no create, no audit', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          { title: 'Big Deal', customerId: 'foreign-cust' } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('unknown customer → 404', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          { title: 'Big Deal', customerId: '00000000-0000-0000-0000-000000000000' } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('deleted customer → 404 (findCustomerCompany excludes deletedAt)', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          { title: 'Big Deal', customerId: 'deleted-cust' } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('ownership query uses exact tenant predicate (id + companyId + deletedAt) via tx', async () => {
+      mockRepo.findCustomerCompany.mockResolvedValue({ id: 'cust-1' });
+      mockRepo.create.mockResolvedValue({ id: 'opp-1' } as any);
+      mockMapper.toEntity.mockReturnValue({ id: 'opp-1' } as any);
+
+      await service.create(
+        { title: 'Big Deal', customerId: 'cust-1' } as any,
+        companyId,
+        userId,
+      );
+      expect(mockRepo.findCustomerCompany).toHaveBeenCalledWith(
+        'cust-1',
+        companyId,
+        mockTx,
+      );
+    });
   });
 });

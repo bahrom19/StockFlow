@@ -6,6 +6,19 @@ import { Task as PrismaTask, Prisma } from '@prisma/client';
 export class TaskRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Tenant-safe customer existence check (CRM convention: foreign == 404). */
+  async findCustomerCompany(
+    customerId: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ id: string } | null> {
+    const prisma = tx ?? this.prisma;
+    return prisma.customer.findFirst({
+      where: { id: customerId, companyId, deletedAt: null },
+      select: { id: true },
+    });
+  }
+
   async findMany(params: {
     companyId: string;
     skip?: number;
