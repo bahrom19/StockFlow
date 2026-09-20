@@ -23,6 +23,15 @@ export class PrismaService
   /** Injected after construction to break circular dependency */
   private metricsCollector: QueryMetricsCollector | null = null;
 
+  constructor() {
+    super({
+      transactionOptions: {
+        timeout: 30000,
+        maxWait: 5000,
+      },
+    });
+  }
+
   /**
    * Set the metrics collector (called by ObservabilityModule after
    * both PrismaService and MetricsService are available).

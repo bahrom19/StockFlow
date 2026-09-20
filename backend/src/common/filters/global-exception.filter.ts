@@ -70,6 +70,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       if (this.isStatementTimeout(exception)) {
         return HttpStatus.REQUEST_TIMEOUT;
       }
+      // P2028 — Prisma interactive transaction timeout exceeded (Prisma 6.x).
+      // The transaction ran longer than the configured timeout (default 5s,
+      // configured to 30s in PrismaService). 408 is semantically correct.
+      if (this.isTransactionTimeout(exception)) {
+        return HttpStatus.REQUEST_TIMEOUT;
+      }
       return HttpStatus.BAD_REQUEST;
     }
 
@@ -136,6 +142,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         return 'Query timeout: the database query exceeded the allowed time limit';
       }
 
+      if (this.isTransactionTimeout(exception)) {
+        return 'Transaction timeout: the database transaction exceeded the allowed time limit';
+      }
+
       return 'Database operation failed';
     }
 
@@ -177,6 +187,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       if (this.isStatementTimeout(exception)) {
+        return 'Request Timeout';
+      }
+      if (this.isTransactionTimeout(exception)) {
         return 'Request Timeout';
       }
       return 'Prisma Error';
@@ -228,6 +241,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     return 'A record with the same unique value already exists';
+  }
+
+  /**
+   * Detect Prisma interactive transaction timeout (P2028).
+   * This error is thrown when a $transaction(fn) callback exceeds the
+   * configured transaction timeout (default 5s, configured to 30s).
+   * In Prisma 6.x, the error code for interactive transaction timeout is P2028,
+   * not P2024.
+   */
+  private isTransactionTimeout(
+    exception: Prisma.PrismaClientKnownRequestError,
+  ): boolean {
+    return exception.code === 'P2028';
   }
 
   /**

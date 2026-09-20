@@ -222,6 +222,36 @@ describe('GlobalExceptionFilter', () => {
     expect(jsonMock.mock.calls[0][0].message).toBe('Database operation failed');
   });
 
+  it('maps P2028 (interactive transaction timeout) to HTTP 408', () => {
+    const { host, statusMock, jsonMock } = createHost();
+    const err = new Prisma.PrismaClientKnownRequestError(
+      'Transaction already closed: A query cannot be executed on an expired transaction. The timeout for this transaction was 1000 ms, however 2030 ms passed since the start of the transaction.',
+      { code: 'P2028', clientVersion: 'test' },
+    );
+    filter.catch(err, host);
+
+    expect(statusMock).toHaveBeenCalledWith(408);
+    const body = jsonMock.mock.calls[0][0];
+    expect(body.statusCode).toBe(408);
+    expect(body.success).toBe(false);
+    expect(body.message).toBe(
+      'Transaction timeout: the database transaction exceeded the allowed time limit',
+    );
+    expect(body.error).toBe('Request Timeout');
+  });
+
+  it('keeps P2024 at HTTP 400 (not a transaction timeout in Prisma 6.x)', () => {
+    const { host, statusMock, jsonMock } = createHost();
+    const err = new Prisma.PrismaClientKnownRequestError(
+      'Some other P2024',
+      { code: 'P2024', clientVersion: 'test' },
+    );
+    filter.catch(err, host);
+
+    expect(statusMock).toHaveBeenCalledWith(400);
+    expect(jsonMock.mock.calls[0][0].message).toBe('Database operation failed');
+  });
+
   // ─────────────────────────────────────────────
   // OTHER PRISMA ERRORS — UNCHANGED
   // ─────────────────────────────────────────────
