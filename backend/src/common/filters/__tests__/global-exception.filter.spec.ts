@@ -180,6 +180,48 @@ describe('GlobalExceptionFilter', () => {
     expect(jsonMock.mock.calls[0][0].message).toBe('Database operation failed');
   });
 
+  it('maps P0001 with SQLSTATE 57014 (statement timeout) to HTTP 408', () => {
+    const { host, statusMock, jsonMock } = createHost();
+    const err = new Prisma.PrismaClientKnownRequestError(
+      'query timeout',
+      { code: 'P0001', clientVersion: 'test', meta: { code: '57014' } },
+    );
+    filter.catch(err, host);
+
+    expect(statusMock).toHaveBeenCalledWith(408);
+    const body = jsonMock.mock.calls[0][0];
+    expect(body.statusCode).toBe(408);
+    expect(body.success).toBe(false);
+    expect(body.message).toBe(
+      'Query timeout: the database query exceeded the allowed time limit',
+    );
+    expect(body.error).toBe('Request Timeout');
+  });
+
+  it('maps P0001 with SQLSTATE 57014 to 408 even without meta target', () => {
+    const { host, statusMock, jsonMock } = createHost();
+    const err = new Prisma.PrismaClientKnownRequestError(
+      'statement canceled due to statement timeout',
+      { code: 'P0001', clientVersion: 'test', meta: { code: '57014' } },
+    );
+    filter.catch(err, host);
+
+    expect(statusMock).toHaveBeenCalledWith(408);
+    expect(jsonMock.mock.calls[0][0].error).toBe('Request Timeout');
+  });
+
+  it('P0001 without 57014 stays at HTTP 400 (not a timeout)', () => {
+    const { host, statusMock, jsonMock } = createHost();
+    const err = new Prisma.PrismaClientKnownRequestError(
+      'some other DB error',
+      { code: 'P0001', clientVersion: 'test', meta: { code: '42P01' } },
+    );
+    filter.catch(err, host);
+
+    expect(statusMock).toHaveBeenCalledWith(400);
+    expect(jsonMock.mock.calls[0][0].message).toBe('Database operation failed');
+  });
+
   // ─────────────────────────────────────────────
   // OTHER PRISMA ERRORS — UNCHANGED
   // ─────────────────────────────────────────────

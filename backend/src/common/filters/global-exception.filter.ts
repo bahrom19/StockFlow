@@ -64,6 +64,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       if (exception.code === 'P2002') {
         return HttpStatus.CONFLICT;
       }
+      // P0001 with SQLSTATE 57014 (query_canceled) — PostgreSQL statement
+      // timeout fired. The server cancelled the query; the client did
+      // nothing wrong. 408 (Request Timeout) is semantically correct.
+      if (this.isStatementTimeout(exception)) {
+        return HttpStatus.REQUEST_TIMEOUT;
+      }
       return HttpStatus.BAD_REQUEST;
     }
 
@@ -126,6 +132,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         return 'The requested record was not found';
       }
 
+      if (this.isStatementTimeout(exception)) {
+        return 'Query timeout: the database query exceeded the allowed time limit';
+      }
+
       return 'Database operation failed';
     }
 
@@ -166,6 +176,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      if (this.isStatementTimeout(exception)) {
+        return 'Request Timeout';
+      }
       return 'Prisma Error';
     }
 
@@ -215,6 +228,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     return 'A record with the same unique value already exists';
+  }
+
+  /**
+   * Detect PostgreSQL statement_timeout (SQLSTATE 57014 / query_canceled).
+   * Prisma wraps raw PostgreSQL errors as P0001 with the original SQLSTATE
+   * in `meta.code`. This method identifies the specific case where
+   * PostgreSQL cancelled a query due to `statement_timeout`.
+   */
+  private isStatementTimeout(
+    exception: Prisma.PrismaClientKnownRequestError,
+  ): boolean {
+    return exception.code === 'P0001' && exception.meta?.code === '57014';
   }
 
   private getRequestId(request: RequestWithId): string {
