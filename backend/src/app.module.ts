@@ -28,6 +28,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AIModule } from './modules/ai/ai.module';
 import { CompaniesModule } from './modules/companies/companies.module';
+import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { CompaniesModule } from './modules/companies/companies.module';
     CrmModule,
     CompaniesModule,
     BillingModule,
+    MaintenanceModule,
     // Last: subscriptions register after inventory's stock handlers, so a
     // low-stock check on sale.completed reads post-decrement stock.
     NotificationsModule,
