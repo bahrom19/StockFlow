@@ -7,7 +7,6 @@ import { InvoiceService } from '../services/invoice.service';
 import { InvoiceRepository } from '../repositories/invoice.repository';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
-import { SubscriptionExpiredEvent } from '../events/subscription-expired.event';
 
 const LOCK_PREFIX = 'cron:lock:';
 const SYSTEM_USER = 'system';
@@ -238,12 +237,9 @@ export class BillingCronService {
             'EXPIRED',
             SYSTEM_USER,
           );
-          await this.eventBus.publish(
-            new SubscriptionExpiredEvent({
-              companyId: sub.companyId,
-              subscriptionId: sub.id,
-            }),
-          );
+          // NOTE (G13-03-07-01): SubscriptionExpiredEvent is published once
+          // inside transitionStatus (with transaction context) — no duplicate
+          // publication here.
           this.logger.log(`Expired: company ${sub.companyId}`);
         } catch (error) {
           this.logger.error(`Expiration failed for ${sub.companyId}: ${error}`);
