@@ -40,7 +40,7 @@ describe('MaintenanceCronService', () => {
 
   describe('cleanupIdempotencyRecords', () => {
     it('should acquire lock before cleanup', async () => {
-      mockRedis.acquireLock.mockResolvedValue(true);
+      mockRedis.acquireLock.mockResolvedValue('token-abc');
       mockPrisma.$executeRawUnsafe.mockResolvedValue(0);
 
       await service.cleanupIdempotencyRecords();
@@ -49,7 +49,7 @@ describe('MaintenanceCronService', () => {
     });
 
     it('should return 0 and skip cleanup if lock not acquired', async () => {
-      mockRedis.acquireLock.mockResolvedValue(false);
+      mockRedis.acquireLock.mockResolvedValue(null);
 
       const result = await service.cleanupIdempotencyRecords();
 
@@ -57,17 +57,18 @@ describe('MaintenanceCronService', () => {
       expect(mockPrisma.$executeRawUnsafe).not.toHaveBeenCalled();
     });
 
-    it('should release lock in finally block', async () => {
-      mockRedis.acquireLock.mockResolvedValue(true);
+    it('should release lock with token in finally block', async () => {
+      const fakeToken = 'test-token-maintenance';
+      mockRedis.acquireLock.mockResolvedValue(fakeToken);
       mockPrisma.$executeRawUnsafe.mockResolvedValue(0);
 
       await service.cleanupIdempotencyRecords();
 
-      expect(mockRedis.releaseLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup');
+      expect(mockRedis.releaseLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', fakeToken);
     });
 
     it('should not release lock if acquisition failed', async () => {
-      mockRedis.acquireLock.mockResolvedValue(false);
+      mockRedis.acquireLock.mockResolvedValue(null);
 
       await service.cleanupIdempotencyRecords();
 
@@ -75,16 +76,17 @@ describe('MaintenanceCronService', () => {
     });
 
     it('should release lock even when error occurs', async () => {
-      mockRedis.acquireLock.mockResolvedValue(true);
+      const fakeToken = 'test-token-error';
+      mockRedis.acquireLock.mockResolvedValue(fakeToken);
       mockPrisma.$executeRawUnsafe.mockRejectedValue(new Error('DB error'));
 
       await service.cleanupIdempotencyRecords();
 
-      expect(mockRedis.releaseLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup');
+      expect(mockRedis.releaseLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', fakeToken);
     });
 
     it('should execute multiple batches until no more records', async () => {
-      mockRedis.acquireLock.mockResolvedValue(true);
+      mockRedis.acquireLock.mockResolvedValue('token-batch');
       mockPrisma.$executeRawUnsafe
         .mockResolvedValueOnce(5000)
         .mockResolvedValueOnce(3000)
@@ -97,7 +99,7 @@ describe('MaintenanceCronService', () => {
     });
 
     it('should use correct lock key and TTL', async () => {
-      mockRedis.acquireLock.mockResolvedValue(true);
+      mockRedis.acquireLock.mockResolvedValue('token-ttl');
       mockPrisma.$executeRawUnsafe.mockResolvedValue(0);
 
       await service.cleanupIdempotencyRecords();
@@ -106,7 +108,7 @@ describe('MaintenanceCronService', () => {
     });
 
     it('should record error metric on failure', async () => {
-      mockRedis.acquireLock.mockResolvedValue(true);
+      mockRedis.acquireLock.mockResolvedValue('token-err');
       mockPrisma.$executeRawUnsafe.mockRejectedValue(new Error('DB error'));
 
       await service.cleanupIdempotencyRecords();
@@ -118,7 +120,7 @@ describe('MaintenanceCronService', () => {
     });
 
     it('should observe duration metric', async () => {
-      mockRedis.acquireLock.mockResolvedValue(true);
+      mockRedis.acquireLock.mockResolvedValue('token-dur');
       mockPrisma.$executeRawUnsafe.mockResolvedValue(0);
 
       await service.cleanupIdempotencyRecords();
@@ -130,7 +132,7 @@ describe('MaintenanceCronService', () => {
     });
 
     it('should use correct SQL for batched delete', async () => {
-      mockRedis.acquireLock.mockResolvedValue(true);
+      mockRedis.acquireLock.mockResolvedValue('token-sql');
       mockPrisma.$executeRawUnsafe.mockResolvedValue(0);
 
       await service.cleanupIdempotencyRecords();

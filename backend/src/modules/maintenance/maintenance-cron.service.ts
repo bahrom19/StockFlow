@@ -22,9 +22,9 @@ export class MaintenanceCronService {
   @Cron('0 4 * * *')
   async cleanupIdempotencyRecords(): Promise<number> {
     const lockKey = LOCK_PREFIX + LOCK_KEY;
-    const acquired = await this.redis.acquireLock(lockKey, LOCK_TTL_SEC);
+    const ownerToken = await this.redis.acquireLock(lockKey, LOCK_TTL_SEC);
 
-    if (!acquired) {
+    if (!ownerToken) {
       this.logger.debug('Idempotency cleanup lock not acquired, skipping this run');
       return 0;
     }
@@ -56,7 +56,7 @@ export class MaintenanceCronService {
       const durationMs = Date.now() - startTime;
       this.metrics.eventDuration.observe({ event_name: 'idempotency_cleanup', handler: 'batch' }, durationMs);
 
-      await this.redis.releaseLock(lockKey);
+      await this.redis.releaseLock(lockKey, ownerToken);
       this.logger.debug(`Idempotency cleanup lock released`);
     }
 

@@ -42,17 +42,18 @@ export class BillingCronService {
 
   /**
    * Acquire a distributed lock for a cron job using Redis atomic SET NX EX.
-   * Falls back to running the job if Redis is unavailable.
+   * Returns a unique ownership token if acquired, null otherwise.
    */
-  private async acquireLock(lockKey: LockKey): Promise<boolean> {
+  private async acquireLock(lockKey: LockKey): Promise<string | null> {
     return this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_BY_JOB[lockKey]);
   }
 
   /**
-   * Release a distributed lock.
+   * Release a distributed lock using atomic compare-and-delete.
+   * Only releases if the stored token matches the owner token.
    */
-  private async releaseLock(lockKey: LockKey): Promise<void> {
-    await this.redisService.releaseLock(LOCK_PREFIX + lockKey);
+  private async releaseLock(lockKey: LockKey, ownerToken: string): Promise<boolean> {
+    return this.redisService.releaseLock(LOCK_PREFIX + lockKey, ownerToken);
   }
 
   /**
@@ -62,7 +63,8 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_MINUTE)
   async processExpiredTrials(): Promise<void> {
     const lockKey = 'expired-trials';
-    if (!(await this.acquireLock(lockKey))) return;
+    const ownerToken = await this.acquireLock(lockKey);
+    if (!ownerToken) return;
 
     try {
       const expiredTrials =
@@ -86,7 +88,7 @@ export class BillingCronService {
         this.logger.log(`Processed ${expiredTrials.length} expired trials`);
       }
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, ownerToken);
     }
   }
 
@@ -96,7 +98,8 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async generateRecurringInvoices(): Promise<void> {
     const lockKey = 'recurring-invoices';
-    if (!(await this.acquireLock(lockKey))) return;
+    const ownerToken = await this.acquireLock(lockKey);
+    if (!ownerToken) return;
 
     try {
       const expiringToday =
@@ -128,7 +131,7 @@ export class BillingCronService {
         this.logger.log(`Generated ${generated} recurring invoices`);
       }
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, ownerToken);
     }
   }
 
@@ -138,7 +141,8 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_5_MINUTES)
   async retryFailedPayments(): Promise<void> {
     const lockKey = 'retry-payments';
-    if (!(await this.acquireLock(lockKey))) return;
+    const ownerToken = await this.acquireLock(lockKey);
+    if (!ownerToken) return;
 
     try {
       const pendingRetries =
@@ -178,7 +182,7 @@ export class BillingCronService {
         this.logger.log(`Processed ${pendingRetries.length} payment retries`);
       }
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, ownerToken);
     }
   }
 
@@ -188,7 +192,8 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_30_MINUTES)
   async suspendOverdueSubscriptions(): Promise<void> {
     const lockKey = 'suspend-overdue';
-    if (!(await this.acquireLock(lockKey))) return;
+    const ownerToken = await this.acquireLock(lockKey);
+    if (!ownerToken) return;
 
     try {
       const overdue =
@@ -209,7 +214,7 @@ export class BillingCronService {
         this.logger.log(`Suspended ${overdue.length} overdue subscriptions`);
       }
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, ownerToken);
     }
   }
 
@@ -219,7 +224,8 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async expireSuspendedSubscriptions(): Promise<void> {
     const lockKey = 'expire-suspended';
-    if (!(await this.acquireLock(lockKey))) return;
+    const ownerToken = await this.acquireLock(lockKey);
+    if (!ownerToken) return;
 
     try {
       const expired =
@@ -246,7 +252,7 @@ export class BillingCronService {
         this.logger.log(`Expired ${expired.length} suspended subscriptions`);
       }
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, ownerToken);
     }
   }
 
@@ -256,13 +262,14 @@ export class BillingCronService {
   @Cron('0 2 1 * *')
   async resetUsageRecords(): Promise<void> {
     const lockKey = 'reset-usage';
-    if (!(await this.acquireLock(lockKey))) return;
+    const ownerToken = await this.acquireLock(lockKey);
+    if (!ownerToken) return;
 
     try {
       const result = await this.prismaService.usageRecord.deleteMany({});
       this.logger.log(`Reset ${result.count} usage records`);
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, ownerToken);
     }
   }
 
@@ -273,7 +280,8 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_5_MINUTES)
   async resumeAfterPayment(): Promise<void> {
     const lockKey = 'resume-paid';
-    if (!(await this.acquireLock(lockKey))) return;
+    const ownerToken = await this.acquireLock(lockKey);
+    if (!ownerToken) return;
 
     try {
       const pastDueSubs = await this.subscriptionRepository.findAll({
@@ -317,7 +325,7 @@ export class BillingCronService {
         this.logger.log(`Resumed ${resumed} subscriptions after payment`);
       }
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, ownerToken);
     }
   }
 
@@ -330,7 +338,8 @@ export class BillingCronService {
   @Cron('0 3 * * *')
   async cleanupOldData(): Promise<void> {
     const lockKey = 'cleanup';
-    if (!(await this.acquireLock(lockKey))) return;
+    const ownerToken = await this.acquireLock(lockKey);
+    if (!ownerToken) return;
 
     try {
       // Delete webhook events older than 90 days
@@ -356,7 +365,7 @@ export class BillingCronService {
         );
       }
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, ownerToken);
     }
   }
 }

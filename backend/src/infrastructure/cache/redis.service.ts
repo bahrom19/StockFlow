@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class RedisService implements OnModuleDestroy {
@@ -87,60 +88,84 @@ export class RedisService implements OnModuleDestroy {
   }
 
   /**
+   * Lua script for atomic ownership-safe lock release.
+   * Compares the stored value with the provided token before deleting.
+   * Returns 1 if deleted, 0 if token mismatch or key missing.
+   */
+  private static readonly RELEASE_LUA = `
+    if redis.call('get', KEYS[1]) == ARGV[1] then
+      return redis.call('del', KEYS[1])
+    else
+      return 0
+    end
+  `;
+
+  /**
    * Acquire a distributed lock using Redis SET NX EX.
-   * Returns true if the lock was acquired, false otherwise.
-   * When Redis is disabled, returns true (runs without lock).
-   * When Redis is configured but fails, returns false (fail-closed) unless
+   * Returns a unique ownership token if acquired, null otherwise.
+   * The token is stored as the Redis value for safe compare-and-delete release.
+   * When Redis is disabled, returns a synthetic token (runs without lock).
+   * When Redis is configured but fails, returns null (fail-closed) unless
    * REDIS_LOCK_FAIL_OPEN_ON_ERROR=true is set.
    */
-  async acquireLock(lockKey: string, ttlSeconds: number): Promise<boolean> {
+  async acquireLock(lockKey: string, ttlSeconds: number): Promise<string | null> {
     if (!this.client) {
       this.logger.debug(
         'Redis disabled — acquiring lock without Redis (fail-open for dev mode)',
       );
-      return true;
+      return randomUUID();
     }
 
     try {
+      const token = randomUUID();
       const result = await this.client.set(
         lockKey,
-        '1',
+        token,
         'EX',
         ttlSeconds,
         'NX',
       );
 
       if (result === 'OK') {
-        return true;
+        return token;
       }
 
       // Lock contention — Redis is healthy but lock is held by another process
       this.logger.debug(`Lock contention for ${lockKey}`);
-      return false;
+      return null;
     } catch (error) {
       // Redis failure — connection error, timeout, etc.
       this.logger.error(
         `Redis acquireLock failed for ${lockKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
-      return this.failOpenOnError;
+      return this.failOpenOnError ? randomUUID() : null;
     }
   }
 
   /**
-   * Release a distributed lock by deleting the key.
+   * Release a distributed lock using atomic compare-and-delete (Lua script).
+   * Only deletes the key if the stored value matches the owner token.
    * Safe to call when Redis is disabled — no-op.
+   * Returns true if the lock was released, false otherwise.
    */
-  async releaseLock(lockKey: string): Promise<void> {
+  async releaseLock(lockKey: string, ownerToken: string): Promise<boolean> {
     if (!this.client) {
-      return;
+      return true;
     }
 
     try {
-      await this.client.del(lockKey);
+      const result = await this.client.eval(
+        RedisService.RELEASE_LUA,
+        1,
+        lockKey,
+        ownerToken,
+      );
+      return result === 1;
     } catch (error) {
       this.logger.warn(
         `Redis releaseLock error for ${lockKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
+      return false;
     }
   }
 }

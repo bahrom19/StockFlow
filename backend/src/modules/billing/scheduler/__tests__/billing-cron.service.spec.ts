@@ -5,283 +5,233 @@ describe('BillingCronService - TTL verification', () => {
     jest.clearAllMocks();
   });
 
-    it('should call acquireLock with TTL 55 for processExpiredTrials', async () => {
-      const service = new BillingCronService(
-        {} as any, // RedisService
-        {} as any, // PrismaService
-        {} as any, // CompanySubscriptionRepository
-        {} as any, // InvoiceRepository
-        {} as any, // CompanySubscriptionService
-        {} as any, // InvoiceService
-        {} as any, // EventBus
-      );
+  it('should call acquireLock with TTL 55 for processExpiredTrials', async () => {
+    const service = new BillingCronService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
 
-      // Mock the redis service and the methods that would be called
-      (service as any).redisService = {
-        acquireLock: jest.fn().mockResolvedValue(true),
-        releaseLock: jest.fn().mockResolvedValue(undefined),
-      };
+    const fakeToken = 'test-token-expired-trials';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      findExpiredTrials: jest.fn().mockResolvedValue([]),
+    };
+    (service as any).companySubscriptionService = {
+      downgradeToFree: jest.fn().mockResolvedValue(undefined),
+    };
 
-      // Mock the methods that would be called to avoid errors
-      (service as any).subscriptionRepository = {
-        findExpiredTrials: jest.fn().mockResolvedValue([]),
-      };
-      (service as any).companySubscriptionService = {
-        downgradeToFree: jest.fn().mockResolvedValue(undefined),
-      };
+    await service.processExpiredTrials();
 
-      await service.processExpiredTrials();
+    const redisService = (service as any).redisService;
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:expired-trials', 55);
+    expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:expired-trials', fakeToken);
+  });
 
-      const redisService = (service as any).redisService;
-      expect(redisService.acquireLock).toHaveBeenCalledWith(
-        'cron:lock:expired-trials',
-        55
-      );
-    });
+  it('should call acquireLock with TTL 300 for generateRecurringInvoices', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
 
-    it('should call acquireLock with TTL 300 for generateRecurringInvoices', async () => {
-      const service = new BillingCronService(
-        {} as any, // RedisService
-        {} as any, // PrismaService
-        {} as any, // CompanySubscriptionRepository
-        {} as any, // InvoiceRepository
-        {} as any, // CompanySubscriptionService
-        {} as any, // InvoiceService
-        {} as any, // EventBus
-      );
+    const fakeToken = 'test-token-recurring-invoices';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      findExpiringToday: jest.fn().mockResolvedValue([]),
+    };
+    (service as any).prismaService = {
+      companySubscription: { update: jest.fn().mockResolvedValue({}) },
+    };
+    (service as any).invoiceService = {
+      generateInvoice: jest.fn().mockResolvedValue({}),
+    };
+    (service as any).companySubscriptionService = {
+      transitionStatus: jest.fn().mockResolvedValue(undefined),
+    };
 
-      (service as any).redisService = {
-        acquireLock: jest.fn().mockResolvedValue(true),
-        releaseLock: jest.fn().mockResolvedValue(undefined),
-      };
+    await service.generateRecurringInvoices();
 
-      (service as any).subscriptionRepository = {
-        findExpiringToday: jest.fn().mockResolvedValue([]),
-      };
-      (service as any).prismaService = {
-        companySubscription: {
-          update: jest.fn().mockResolvedValue({}),
-        },
-      };
-      (service as any).invoiceService = {
-        generateInvoice: jest.fn().mockResolvedValue({}),
-      };
-      (service as any).companySubscriptionService = {
-        transitionStatus: jest.fn().mockResolvedValue(undefined),
-      };
+    const redisService = (service as any).redisService;
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:recurring-invoices', 300);
+    expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:recurring-invoices', fakeToken);
+  });
 
-      await service.generateRecurringInvoices();
+  it('should call acquireLock with TTL 300 for retryFailedPayments', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
 
-      const redisService = (service as any).redisService;
-      expect(redisService.acquireLock).toHaveBeenCalledWith(
-        'cron:lock:recurring-invoices',
-        300
-      );
-    });
+    const fakeToken = 'test-token-retry-payments';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      findPendingRetries: jest.fn().mockResolvedValue([]),
+    };
+    (service as any).prismaService = {
+      companySubscription: { update: jest.fn().mockResolvedValue({}) },
+    };
+    (service as any).companySubscriptionService = {
+      transitionStatus: jest.fn().mockResolvedValue(undefined),
+    };
 
-    it('should call acquireLock with TTL 300 for retryFailedPayments', async () => {
-      const service = new BillingCronService(
-        {} as any, // RedisService
-        {} as any, // PrismaService
-        {} as any, // CompanySubscriptionRepository
-        {} as any, // InvoiceRepository
-        {} as any, // CompanySubscriptionService
-        {} as any, // InvoiceService
-        {} as any, // EventBus
-      );
+    await service.retryFailedPayments();
 
-      (service as any).redisService = {
-        acquireLock: jest.fn().mockResolvedValue(true),
-        releaseLock: jest.fn().mockResolvedValue(undefined),
-      };
+    const redisService = (service as any).redisService;
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:retry-payments', 300);
+    expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:retry-payments', fakeToken);
+  });
 
-      (service as any).subscriptionRepository = {
-        findPendingRetries: jest.fn().mockResolvedValue([]),
-      };
-      (service as any).prismaService = {
-        companySubscription: {
-          update: jest.fn().mockResolvedValue({}),
-        },
-      };
-      (service as any).companySubscriptionService = {
-        transitionStatus: jest.fn().mockResolvedValue(undefined),
-      };
+  it('should call acquireLock with TTL 55 for suspendOverdueSubscriptions', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
 
-      await service.retryFailedPayments();
+    const fakeToken = 'test-token-suspend-overdue';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      findOverdueGracePeriod: jest.fn().mockResolvedValue([]),
+    };
+    (service as any).companySubscriptionService = {
+      transitionStatus: jest.fn().mockResolvedValue(undefined),
+    };
 
-      const redisService = (service as any).redisService;
-      expect(redisService.acquireLock).toHaveBeenCalledWith(
-        'cron:lock:retry-payments',
-        300
-      );
-    });
+    await service.suspendOverdueSubscriptions();
 
-    it('should call acquireLock with TTL 55 for suspendOverdueSubscriptions', async () => {
-      const service = new BillingCronService(
-        {} as any, // RedisService
-        {} as any, // PrismaService
-        {} as any, // CompanySubscriptionRepository
-        {} as any, // InvoiceRepository
-        {} as any, // CompanySubscriptionService
-        {} as any, // InvoiceService
-        {} as any, // EventBus
-      );
+    const redisService = (service as any).redisService;
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:suspend-overdue', 55);
+    expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:suspend-overdue', fakeToken);
+  });
 
-      (service as any).redisService = {
-        acquireLock: jest.fn().mockResolvedValue(true),
-        releaseLock: jest.fn().mockResolvedValue(undefined),
-      };
+  it('should call acquireLock with TTL 55 for expireSuspendedSubscriptions', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
 
-      (service as any).subscriptionRepository = {
-        findOverdueGracePeriod: jest.fn().mockResolvedValue([]),
-      };
-      (service as any).companySubscriptionService = {
-        transitionStatus: jest.fn().mockResolvedValue(undefined),
-      };
+    const fakeToken = 'test-token-expire-suspended';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      findExpiredSuspensions: jest.fn().mockResolvedValue([]),
+    };
+    (service as any).companySubscriptionService = {
+      transitionStatus: jest.fn().mockResolvedValue(undefined),
+    };
+    (service as any).eventBus = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
 
-      await service.suspendOverdueSubscriptions();
+    await service.expireSuspendedSubscriptions();
 
-      const redisService = (service as any).redisService;
-      expect(redisService.acquireLock).toHaveBeenCalledWith(
-        'cron:lock:suspend-overdue',
-        55
-      );
-    });
+    const redisService = (service as any).redisService;
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:expire-suspended', 55);
+    expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:expire-suspended', fakeToken);
+  });
 
-    it('should call acquireLock with TTL 55 for expireSuspendedSubscriptions', async () => {
-      const service = new BillingCronService(
-        {} as any, // RedisService
-        {} as any, // PrismaService
-        {} as any, // CompanySubscriptionRepository
-        {} as any, // InvoiceRepository
-        {} as any, // CompanySubscriptionService
-        {} as any, // InvoiceService
-        {} as any, // EventBus
-      );
+  it('should call acquireLock with TTL 300 for resetUsageRecords', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
 
-      (service as any).redisService = {
-        acquireLock: jest.fn().mockResolvedValue(true),
-        releaseLock: jest.fn().mockResolvedValue(undefined),
-      };
+    const fakeToken = 'test-token-reset-usage';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).prismaService = {
+      usageRecord: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    };
 
-      (service as any).subscriptionRepository = {
-        findExpiredSuspensions: jest.fn().mockResolvedValue([]),
-      };
-      (service as any).companySubscriptionService = {
-        transitionStatus: jest.fn().mockResolvedValue(undefined),
-      };
-      (service as any).eventBus = {
-        publish: jest.fn().mockResolvedValue(undefined),
-      };
+    await service.resetUsageRecords();
 
-      await service.expireSuspendedSubscriptions();
+    const redisService = (service as any).redisService;
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:reset-usage', 300);
+    expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:reset-usage', fakeToken);
+  });
 
-      const redisService = (service as any).redisService;
-      expect(redisService.acquireLock).toHaveBeenCalledWith(
-        'cron:lock:expire-suspended',
-        55
-      );
-    });
+  it('should call acquireLock with TTL 55 for resumeAfterPayment', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
 
-    it('should call acquireLock with TTL 300 for resetUsageRecords', async () => {
-      const service = new BillingCronService(
-        {} as any, // RedisService
-        {} as any, // PrismaService
-        {} as any, // CompanySubscriptionRepository
-        {} as any, // InvoiceRepository
-        {} as any, // CompanySubscriptionService
-        {} as any, // InvoiceService
-        {} as any, // EventBus
-      );
+    const fakeToken = 'test-token-resume-paid';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      findAll: jest.fn().mockResolvedValue({ items: [] }),
+    };
+    (service as any).prismaService = {
+      paymentTransaction: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    (service as any).companySubscriptionService = {
+      transitionStatus: jest.fn().mockResolvedValue(undefined),
+    };
 
-      (service as any).redisService = {
-        acquireLock: jest.fn().mockResolvedValue(true),
-        releaseLock: jest.fn().mockResolvedValue(undefined),
-      };
+    await service.resumeAfterPayment();
 
-      (service as any).prismaService = {
-        usageRecord: {
-          deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-        },
-      };
+    const redisService = (service as any).redisService;
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:resume-paid', 55);
+    expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:resume-paid', fakeToken);
+  });
 
-      await service.resetUsageRecords();
+  it('should call acquireLock with TTL 300 for cleanupOldData', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
 
-      const redisService = (service as any).redisService;
-      expect(redisService.acquireLock).toHaveBeenCalledWith(
-        'cron:lock:reset-usage',
-        300
-      );
-    });
+    const fakeToken = 'test-token-cleanup';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).prismaService = {
+      webhookEvent: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      companySubscription: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    };
 
-    it('should call acquireLock with TTL 55 for resumeAfterPayment', async () => {
-      const service = new BillingCronService(
-        {} as any, // RedisService
-        {} as any, // PrismaService
-        {} as any, // CompanySubscriptionRepository
-        {} as any, // InvoiceRepository
-        {} as any, // CompanySubscriptionService
-        {} as any, // InvoiceService
-        {} as any, // EventBus
-      );
+    await service.cleanupOldData();
 
-      (service as any).redisService = {
-        acquireLock: jest.fn().mockResolvedValue(true),
-        releaseLock: jest.fn().mockResolvedValue(undefined),
-      };
+    const redisService = (service as any).redisService;
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:cleanup', 300);
+    expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:cleanup', fakeToken);
+  });
 
-      (service as any).subscriptionRepository = {
-        findAll: jest.fn().mockResolvedValue({ items: [] }),
-      };
-      (service as any).prismaService = {
-        paymentTransaction: {
-          findFirst: jest.fn().mockResolvedValue(null),
-        },
-      };
-      (service as any).companySubscriptionService = {
-        transitionStatus: jest.fn().mockResolvedValue(undefined),
-      };
+  it('should not release lock when acquire returns null', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
 
-      await service.resumeAfterPayment();
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(null),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      findExpiredTrials: jest.fn().mockResolvedValue([]),
+    };
+    (service as any).companySubscriptionService = {
+      downgradeToFree: jest.fn().mockResolvedValue(undefined),
+    };
 
-      const redisService = (service as any).redisService;
-      expect(redisService.acquireLock).toHaveBeenCalledWith(
-        'cron:lock:resume-paid',
-        55
-      );
-    });
+    await service.processExpiredTrials();
 
-    it('should call acquireLock with TTL 300 for cleanupOldData', async () => {
-      const service = new BillingCronService(
-        {} as any, // RedisService
-        {} as any, // PrismaService
-        {} as any, // CompanySubscriptionRepository
-        {} as any, // InvoiceRepository
-        {} as any, // CompanySubscriptionService
-        {} as any, // InvoiceService
-        {} as any, // EventBus
-      );
-
-      (service as any).redisService = {
-        acquireLock: jest.fn().mockResolvedValue(true),
-        releaseLock: jest.fn().mockResolvedValue(undefined),
-      };
-
-      (service as any).prismaService = {
-        webhookEvent: {
-          deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-        },
-        companySubscription: {
-          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-        },
-      };
-
-      await service.cleanupOldData();
-
-      const redisService = (service as any).redisService;
-      expect(redisService.acquireLock).toHaveBeenCalledWith(
-        'cron:lock:cleanup',
-        300
-      );
-    });
+    const redisService = (service as any).redisService;
+    expect(redisService.releaseLock).not.toHaveBeenCalled();
+  });
 });

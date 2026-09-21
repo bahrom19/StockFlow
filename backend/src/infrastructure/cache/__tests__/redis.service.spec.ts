@@ -5,6 +5,7 @@ describe('RedisService', () => {
   function createService(config: { redisUrl?: string; failOpenOnError?: boolean } = {}) {
     const mockRedisClient = {
       set: jest.fn(),
+      eval: jest.fn(),
       del: jest.fn(),
       ping: jest.fn(),
       quit: jest.fn(),
@@ -21,18 +22,12 @@ describe('RedisService', () => {
 
     const service = new RedisService(mockConfigService as any);
     if (config.redisUrl) {
-      (service as any).client = {
-        set: jest.fn(),
-        del: jest.fn(),
-        ping: jest.fn(),
-        quit: jest.fn(),
-        on: jest.fn(),
-      };
+      (service as any).client = mockRedisClient;
     } else {
       (service as any).client = null;
       (service as any).enabled = false;
     }
-    return { service };
+    return { service, mockRedisClient };
   }
 
   beforeEach(() => {
@@ -40,10 +35,11 @@ describe('RedisService', () => {
   });
 
   describe('Redis disabled (no REDIS_URL)', () => {
-    it('should return true when Redis is disabled (no REDIS_URL)', async () => {
+    it('should return a token string when Redis is disabled (no REDIS_URL)', async () => {
       const { service } = createService({ redisUrl: '' });
       const result = await service.acquireLock('test-lock', 60);
-      expect(result).toBe(true);
+      expect(typeof result).toBe('string');
+      expect(result).not.toBeNull();
     });
 
     it('should return false when pinging disabled Redis', async () => {
@@ -52,85 +48,133 @@ describe('RedisService', () => {
       expect(result).toBe(false);
     });
 
-    it('should return true for acquireLock even with error when disabled', async () => {
+    it('should return a token even with error when disabled', async () => {
       const { service } = createService({ redisUrl: '' });
       const result = await service.acquireLock('test-lock', 60);
-      expect(result).toBe(true);
+      expect(typeof result).toBe('string');
     });
   });
 
   describe('Redis healthy - lock acquired', () => {
-    it('should return true when lock is acquired', async () => {
-      const { service } = createService({ 
-        redisUrl: 'redis://localhost:6379', 
-        failOpenOnError: false 
+    it('should return a unique token when lock is acquired', async () => {
+      const { service, mockRedisClient } = createService({
+        redisUrl: 'redis://localhost:6379',
+        failOpenOnError: false,
       });
-      (service as any).client = { set: jest.fn().mockResolvedValue('OK'), del: jest.fn(), ping: jest.fn(), quit: jest.fn(), on: jest.fn() };
-      const result = await service.acquireLock('test-lock', 60);
-      expect(result).toBe(true);
+      mockRedisClient.set.mockResolvedValue('OK');
+
+      const token = await service.acquireLock('test-lock', 60);
+
+      expect(typeof token).toBe('string');
+      expect(token).not.toBeNull();
+      expect(mockRedisClient.set).toHaveBeenCalledWith('test-lock', token, 'EX', 60, 'NX');
+    });
+
+    it('should generate different tokens for separate acquisitions', async () => {
+      const { service, mockRedisClient } = createService({
+        redisUrl: 'redis://localhost:6379',
+        failOpenOnError: false,
+      });
+      mockRedisClient.set.mockResolvedValue('OK');
+
+      const token1 = await service.acquireLock('lock-1', 60);
+      const token2 = await service.acquireLock('lock-2', 60);
+
+      expect(token1).not.toEqual(token2);
     });
   });
 
   describe('Redis healthy - lock contention', () => {
-    it('should return false when lock is already held (contention)', async () => {
-      const { service } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
-      (service as any).client = { set: jest.fn().mockResolvedValue(null), del: jest.fn(), ping: jest.fn(), quit: jest.fn(), on: jest.fn() };
+    it('should return null when lock is already held (contention)', async () => {
+      const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
+      mockRedisClient.set.mockResolvedValue(null);
+
       const result = await service.acquireLock('test-lock', 60);
-      expect(result).toBe(false);
+      expect(result).toBeNull();
     });
   });
 
   describe('Redis configured + error + failOpen=false (production default)', () => {
-    it('should return false when Redis throws error and failOpenOnError=false', async () => {
-      const { service } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
-      (service as any).client = { set: jest.fn().mockRejectedValue(new Error('Redis connection failed')), del: jest.fn(), ping: jest.fn(), quit: jest.fn(), on: jest.fn() };
+    it('should return null when Redis throws error and failOpenOnError=false', async () => {
+      const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
+      mockRedisClient.set.mockRejectedValue(new Error('Redis connection failed'));
+
       const result = await service.acquireLock('test-lock', 60);
-      expect(result).toBe(false);
+      expect(result).toBeNull();
     });
 
     it('should log error when Redis throws', async () => {
-      const { service } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
-      (service as any).client = { set: jest.fn().mockRejectedValue(new Error('Redis connection failed')), del: jest.fn(), ping: jest.fn(), quit: jest.fn(), on: jest.fn() };
-      
+      const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
+      mockRedisClient.set.mockRejectedValue(new Error('Redis connection failed'));
+
       await service.acquireLock('test-lock', 60);
     });
   });
 
   describe('Redis configured + error + failOpen=true (explicit degraded mode)', () => {
-    it('should return true when Redis throws and failOpenOnError=true', async () => {
-      const { service } = createService({ 
-        redisUrl: 'redis://localhost:6379', 
-        failOpenOnError: true 
+    it('should return a token when Redis throws and failOpenOnError=true', async () => {
+      const { service, mockRedisClient } = createService({
+        redisUrl: 'redis://localhost:6379',
+        failOpenOnError: true,
       });
-      (service as any).client = { set: jest.fn().mockRejectedValue(new Error('Redis connection failed')), del: jest.fn(), ping: jest.fn(), quit: jest.fn(), on: jest.fn() };
+      mockRedisClient.set.mockRejectedValue(new Error('Redis connection failed'));
+
       const result = await service.acquireLock('test-lock', 60);
-      expect(result).toBe(true);
+      expect(typeof result).toBe('string');
     });
   });
 
   describe('releaseLock', () => {
-    it('should call del when Redis is enabled', async () => {
-      const mockRedisClient = { set: jest.fn(), del: jest.fn(), ping: jest.fn(), quit: jest.fn(), on: jest.fn() };
-      const { service } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
-      (service as any).client = mockRedisClient;
-      
-      await service.releaseLock('test-lock');
-      expect(mockRedisClient.del).toHaveBeenCalledWith('test-lock');
+    it('should call eval with Lua script when Redis is enabled', async () => {
+      const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
+      mockRedisClient.eval.mockResolvedValue(1);
+
+      const result = await service.releaseLock('test-lock', 'my-token');
+      expect(result).toBe(true);
+      expect(mockRedisClient.eval).toHaveBeenCalledWith(
+        expect.stringContaining("redis.call('get', KEYS[1])"),
+        1,
+        'test-lock',
+        'my-token',
+      );
     });
 
-    it('should not call del when Redis is disabled', async () => {
+    it('should return true when Redis is disabled (no-op)', async () => {
       const { service } = createService({ redisUrl: '' });
       (service as any).client = null;
-      (service as any).enabled = false;
-      
-      await service.releaseLock('test-lock');
+
+      const result = await service.releaseLock('test-lock', 'my-token');
+      expect(result).toBe(true);
     });
 
-    it('should not throw when del throws', async () => {
-      const { service } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
-      (service as any).client = { set: jest.fn(), del: jest.fn().mockRejectedValue(new Error('Redis error')), ping: jest.fn(), quit: jest.fn(), on: jest.fn() };
-      
-      await expect(service.releaseLock('test-lock')).resolves.toBeUndefined();
+    it('should return false when eval throws', async () => {
+      const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
+      mockRedisClient.eval.mockRejectedValue(new Error('Redis error'));
+
+      const result = await service.releaseLock('test-lock', 'my-token');
+      expect(result).toBe(false);
+    });
+
+    it('should return false when token does not match (wrong owner)', async () => {
+      const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
+      mockRedisClient.eval.mockResolvedValue(0);
+
+      const result = await service.releaseLock('test-lock', 'wrong-token');
+      expect(result).toBe(false);
+    });
+
+    it('should not delete lock when another owner holds it (critical regression test)', async () => {
+      const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
+
+      // Simulate: Process A's token-A tries to release, but Redis has token-B
+      // Lua script returns 0 — lock must NOT be deleted
+      mockRedisClient.eval.mockResolvedValue(0);
+
+      const result = await service.releaseLock('cron:lock:recurring-invoices', 'token-A');
+      expect(result).toBe(false);
+      // Verify eval was called (Lua script executed) — not plain DEL
+      expect(mockRedisClient.eval).toHaveBeenCalled();
+      expect(mockRedisClient.del).not.toHaveBeenCalled();
     });
   });
 });

@@ -37,7 +37,8 @@ export class OverdueNotificationCronService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async scanOverdueInvoices(): Promise<void> {
     const lockKey = 'overdue-notifications';
-    if (!(await this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_SEC))) {
+    const ownerToken = await this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_SEC);
+    if (!ownerToken) {
       return;
     }
 
@@ -90,7 +91,7 @@ export class OverdueNotificationCronService {
       // scheduler; the next daily run retries.
       this.logger.error(`Overdue scan failed: ${(error as Error).message}`);
     } finally {
-      await this.redisService.releaseLock(LOCK_PREFIX + lockKey);
+      await this.redisService.releaseLock(LOCK_PREFIX + lockKey, ownerToken);
     }
   }
 
