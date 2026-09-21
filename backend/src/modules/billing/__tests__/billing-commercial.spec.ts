@@ -402,8 +402,11 @@ describe('Billing Commercial Integration', () => {
   // ─── 8. Signature Verification ──────────────────────────────────
 
   describe('Signature Verification', () => {
-    it('8a. returns true in development mode (no signature configured)', () => {
-      expect(webhookEngine.verifySignature('{}', '')).toBe(true);
+    it('8a. returns false when no signature secret is configured (fail closed)', () => {
+      // G13-03-08-01: the old fail-open behavior (true without a secret)
+      // was a P1 vulnerability. The mocked ConfigService returns '' for
+      // every key, so the engine has no secret and must reject.
+      expect(webhookEngine.verifySignature('{}', '')).toBe(false);
     });
   });
 });

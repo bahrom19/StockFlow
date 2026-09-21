@@ -50,7 +50,7 @@ interface WebhookPayload {
 export class WebhookEngineService {
   private readonly logger = new Logger(WebhookEngineService.name);
   private readonly webhookSecret: string;
-  private readonly isDevelopment: boolean;
+  private readonly skipSignatureVerification: boolean;
 
   constructor(
     private readonly configService: ConfigService,
@@ -66,10 +66,15 @@ export class WebhookEngineService {
       'app.stripeWebhookSecret',
       '',
     );
-    this.isDevelopment = !this.webhookSecret;
-    if (this.isDevelopment) {
+    // G13-03-08-01: explicit opt-in bypass only. A missing secret NEVER
+    // disables verification implicitly — it fails closed (see below).
+    this.skipSignatureVerification = this.configService.get<boolean>(
+      'app.stripeWebhookSkipVerify',
+      false,
+    );
+    if (this.skipSignatureVerification) {
       this.logger.warn(
-        'Webhook engine in DEVELOPMENT mode — signature verification disabled',
+        'Stripe webhook signature verification DISABLED via explicit opt-in — never enable in production',
       );
     }
   }
@@ -79,7 +84,16 @@ export class WebhookEngineService {
    * Accepts Stripe's standard format: t=timestamp,v1=signature
    */
   verifySignature(payload: string, signature: string): boolean {
-    if (this.isDevelopment) return true;
+    if (this.skipSignatureVerification) return true;
+
+    // G13-03-08-01: fail closed — an unconfigured secret rejects every
+    // webhook instead of silently accepting it.
+    if (!this.webhookSecret) {
+      this.logger.error(
+        'Stripe webhook secret is not configured — rejecting webhook',
+      );
+      return false;
+    }
 
     try {
       const parts = signature

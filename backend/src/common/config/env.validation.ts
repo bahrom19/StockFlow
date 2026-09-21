@@ -17,6 +17,15 @@ export const envValidationSchema = Joi.object({
   JWT_REFRESH_EXPIRES_IN: Joi.string().required(),
   SWAGGER_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
 
+  // G13-03-08-01: Stripe webhook verification. Optional on startup (the
+  // engine fails closed at runtime without a secret); the skip flag is an
+  // explicit opt-in bypass for local development only.
+  STRIPE_WEBHOOK_SECRET: Joi.string().optional().allow(''),
+  STRIPE_WEBHOOK_SKIP_VERIFY: Joi.boolean()
+    .truthy('true')
+    .falsy('false')
+    .default(false),
+
   // AI Configuration
   AI_PROVIDER: Joi.string().valid('openai').default('openai'),
   AI_API_KEY: Joi.string().min(10).optional().allow(''),
