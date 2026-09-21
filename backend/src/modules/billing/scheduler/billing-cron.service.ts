@@ -10,8 +10,21 @@ import { EventBus, EVENT_BUS } from '../../../common/events';
 import { SubscriptionExpiredEvent } from '../events/subscription-expired.event';
 
 const LOCK_PREFIX = 'cron:lock:';
-const LOCK_TTL_SEC = 55; // must be less than smallest cron interval (60s for EVERY_MINUTE)
 const SYSTEM_USER = 'system';
+
+// Per-job lock TTLs (seconds) - longer for jobs with potentially longer execution time
+const LOCK_TTL_BY_JOB = {
+  'expired-trials': 55,
+  'recurring-invoices': 300,
+  'retry-payments': 300,
+  'suspend-overdue': 55,
+  'expire-suspended': 55,
+  'reset-usage': 300,
+  'resume-paid': 55,
+  'cleanup': 300,
+} as const;
+
+type LockKey = keyof typeof LOCK_TTL_BY_JOB;
 
 @Injectable()
 export class BillingCronService {
@@ -31,14 +44,14 @@ export class BillingCronService {
    * Acquire a distributed lock for a cron job using Redis atomic SET NX EX.
    * Falls back to running the job if Redis is unavailable.
    */
-  private async acquireLock(lockKey: string): Promise<boolean> {
-    return this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_SEC);
+  private async acquireLock(lockKey: LockKey): Promise<boolean> {
+    return this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_BY_JOB[lockKey]);
   }
 
   /**
    * Release a distributed lock.
    */
-  private async releaseLock(lockKey: string): Promise<void> {
+  private async releaseLock(lockKey: LockKey): Promise<void> {
     await this.redisService.releaseLock(LOCK_PREFIX + lockKey);
   }
 
