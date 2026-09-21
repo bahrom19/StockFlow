@@ -1,5 +1,4 @@
 import { Inject, Module, OnModuleInit } from '@nestjs/common';
-import { ScheduleModule } from '@nestjs/schedule';
 import { EventBus, EVENT_BUS } from '../../common/events';
 import { CacheService } from '../../infrastructure/cache/cache.service';
 import { SubscriptionPlanController } from './controllers/subscription-plan.controller';
@@ -22,7 +21,6 @@ import { WebhookEngineService } from './webhooks/webhook-engine.service';
 import { BillingCronService } from './scheduler/billing-cron.service';
 
 @Module({
-  imports: [ScheduleModule.forRoot()],
   controllers: [
     SubscriptionPlanController,
     CompanySubscriptionController,

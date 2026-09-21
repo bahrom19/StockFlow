@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppConfigModule } from './common/config/config.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { ObservabilityModule } from './common/observability/observability.module';
@@ -62,6 +63,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
     // low-stock check on sale.completed reads post-decrement stock.
     NotificationsModule,
     AIModule,
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       {
         name: 'short',

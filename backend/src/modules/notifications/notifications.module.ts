@@ -1,5 +1,4 @@
 import { Inject, Module, OnModuleInit } from '@nestjs/common';
-import { ScheduleModule } from '@nestjs/schedule';
 import { EventBus, EVENT_BUS } from '../../common/events';
 import { PrismaModule } from '../../common/prisma';
 import { NotificationRepository } from './repositories/notification.repository';
@@ -23,7 +22,7 @@ import { OverdueNotificationCronService } from './scheduler/overdue-notification
  * post-decrement stock inside the same transaction.
  */
 @Module({
-  imports: [PrismaModule, ScheduleModule.forRoot()],
+  imports: [PrismaModule],
   controllers: [NotificationsController],
   providers: [
     NotificationRepository,
