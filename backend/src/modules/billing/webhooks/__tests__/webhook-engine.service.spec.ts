@@ -67,3 +67,57 @@ describe('WebhookEngineService.verifySignature (G13-03-08-01 fail-closed)', () =
     expect(engine.verifySignature(payload, '')).toBe(false);
   });
 });
+
+describe('WebhookEngineService.handleSubscriptionDeleted (G13-03-08-02 single event)', () => {
+  const sub = { id: 'sub-1', companyId: 'comp-1' };
+
+  function makeDeletionEngine(cancelImpl: () => Promise<unknown>) {
+    const eventBus = { publish: jest.fn() };
+    const companySubscriptionService = {
+      cancel: jest.fn().mockImplementation(cancelImpl),
+    };
+    const prismaService = {
+      companySubscription: {
+        findMany: jest.fn().mockResolvedValue([sub]),
+      },
+    };
+    const engine = new WebhookEngineService(
+      { get: jest.fn() } as any,
+      prismaService as any,
+      {} as any,
+      companySubscriptionService as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      eventBus as any,
+    );
+    return { engine, eventBus, companySubscriptionService };
+  }
+
+  it('should not publish SubscriptionCancelledEvent itself on provider deletion', async () => {
+    const { engine, eventBus, companySubscriptionService } =
+      makeDeletionEngine(async () => ({ id: 'sub-1' }));
+
+    await (engine as any).handleSubscriptionDeleted({ id: 'sub_prov_1' });
+
+    // The single event comes from cancel() (mocked service boundary);
+    // the handler must not add a second publication.
+    expect(companySubscriptionService.cancel).toHaveBeenCalledWith(
+      'comp-1',
+      'Provider subscription deleted',
+      expect.anything(),
+    );
+    expect(eventBus.publish).not.toHaveBeenCalled();
+  });
+
+  it('should not publish anything when cancel() fails', async () => {
+    const { engine, eventBus } = makeDeletionEngine(async () => {
+      throw new Error('already cancelled');
+    });
+
+    await expect(
+      (engine as any).handleSubscriptionDeleted({ id: 'sub_prov_1' }),
+    ).rejects.toThrow('already cancelled');
+    expect(eventBus.publish).not.toHaveBeenCalled();
+  });
+});

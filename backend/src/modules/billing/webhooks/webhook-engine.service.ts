@@ -11,7 +11,6 @@ import { CompanySubscriptionRepository } from '../repositories/company-subscript
 import { PaymentTransactionRepository } from '../repositories/payment-transaction.repository';
 import { PaymentSucceededEvent } from '../events/payment-succeeded.event';
 import { PaymentFailedEvent } from '../events/payment-failed.event';
-import { SubscriptionCancelledEvent } from '../events/subscription-cancelled.event';
 
 const SYSTEM_USER = 'webhook';
 const IDEMPOTENCY_TTL_SEC = 86_400; // 24 hours
@@ -312,13 +311,9 @@ export class WebhookEngineService {
       'Provider subscription deleted',
       SYSTEM_USER,
     );
-    await this.eventBus.publish(
-      new SubscriptionCancelledEvent({
-        companyId: sub.companyId,
-        subscriptionId: sub.id,
-        reason: 'Provider subscription deleted',
-      }),
-    );
+    // G13-03-08-02: no handler-level SubscriptionCancelledEvent here.
+    // cancel() already publishes exactly one event inside its transaction
+    // after the successful CAS transition (canonical owner).
   }
 
   private async handleChargeRefunded(
