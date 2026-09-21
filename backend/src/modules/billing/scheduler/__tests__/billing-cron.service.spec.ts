@@ -408,4 +408,158 @@ describe('BillingCronService - TTL verification', () => {
       fakeToken,
     );
   });
+
+  function setupResumeService(
+    initialPool: Array<{ id: string; companyId: string }>,
+    paidCompanyIds: Set<string>,
+    failingCompanyIds: Set<string> = new Set(),
+  ) {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
+
+    const fakeToken = 'test-token-resume-drain';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    // Stateful pool simulates the live PAST_DUE set: successfully resumed
+    // rows leave it (as the real DB state change would), sticky rows stay.
+    const pool = [...initialPool];
+    const findAll = jest.fn().mockImplementation(({ page, limit }: any) => {
+      const items = pool.slice((page - 1) * limit, page * limit);
+      return Promise.resolve({ items, total: pool.length });
+    });
+    (service as any).subscriptionRepository = { findAll };
+    (service as any).prismaService = {
+      paymentTransaction: {
+        findFirst: jest.fn().mockImplementation(({ where }: any) =>
+          Promise.resolve(
+            paidCompanyIds.has(
+              initialPool.find((s) => s.id === where.subscriptionId)
+                ?.companyId ?? '',
+            )
+              ? { id: 'pmt-1' }
+              : null,
+          ),
+        ),
+      },
+    };
+    const transitionStatus = jest
+      .fn()
+      .mockImplementation(async (companyId: string) => {
+        if (failingCompanyIds.has(companyId)) {
+          throw new Error('transition failed');
+        }
+        const index = pool.findIndex((s) => s.companyId === companyId);
+        if (index >= 0) pool.splice(index, 1);
+        return undefined;
+      });
+    (service as any).companySubscriptionService = { transitionStatus };
+    return { service, findAll, transitionStatus, pool, fakeToken };
+  }
+
+  function makeSubs(
+    n: number,
+    prefix = 'drain',
+  ): Array<{ id: string; companyId: string }> {
+    return Array.from({ length: n }, (_, i) => ({
+      id: `sub-${prefix}-${i}`,
+      companyId: `comp-${prefix}-${i}`,
+    }));
+  }
+
+  it('should resume a small batch and keep the existing selection semantics', async () => {
+    const subs = makeSubs(2, 'small');
+    const paid = new Set(subs.map((s) => s.companyId));
+    const { service, findAll, transitionStatus } = setupResumeService(
+      subs,
+      paid,
+    );
+
+    await service.resumeAfterPayment();
+
+    expect(findAll).toHaveBeenCalledWith({
+      status: 'PAST_DUE',
+      isActive: true,
+      page: 1,
+      limit: 100,
+    });
+    expect(transitionStatus).toHaveBeenCalledTimes(2);
+    const redisService = (service as any).redisService;
+    expect(redisService.releaseLock).toHaveBeenCalledTimes(1);
+  });
+
+  it('should drain 205 subscriptions across pages without skipping rows', async () => {
+    const subs = makeSubs(205, 'big');
+    const paid = new Set(subs.map((s) => s.companyId));
+    const { service, findAll, transitionStatus, pool } = setupResumeService(
+      subs,
+      paid,
+    );
+
+    await service.resumeAfterPayment();
+
+    // All 205 processed despite the 100-row page size; a naive page++
+    // over the mutating set would have skipped ~100 of them.
+    expect(transitionStatus).toHaveBeenCalledTimes(205);
+    expect(
+      new Set(
+        (transitionStatus.mock.calls as string[][]).map((c) => c[0]),
+      ),
+    ).toEqual(paid);
+    expect(pool).toHaveLength(0);
+    // 100 + 100 + 5, then short-page termination (no extra empty fetch).
+    expect(findAll).toHaveBeenCalledTimes(3);
+  });
+
+  it('should terminate with a sticky non-payable row and still reach the tail', async () => {
+    const payable = makeSubs(101, 'tail');
+    const sticky = { id: 'sub-sticky', companyId: 'comp-sticky' };
+    const paid = new Set(payable.map((s) => s.companyId));
+    const { service, findAll, transitionStatus, pool } = setupResumeService(
+      [...payable, sticky],
+      paid,
+    );
+
+    await service.resumeAfterPayment();
+
+    expect(transitionStatus).toHaveBeenCalledTimes(101);
+    expect(transitionStatus).not.toHaveBeenCalledWith(
+      'comp-sticky',
+      expect.anything(),
+      expect.anything(),
+    );
+    // Terminates instead of re-querying the sticky page forever.
+    expect(findAll.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(pool).toEqual([sticky]);
+  });
+
+  it('should continue draining after a per-subscription failure', async () => {
+    const subs = makeSubs(3, 'partial');
+    const paid = new Set(subs.map((s) => s.companyId));
+    const failing = new Set([subs[1]!.companyId]);
+    const { service, transitionStatus, pool } = setupResumeService(
+      subs,
+      paid,
+      failing,
+    );
+
+    await expect(service.resumeAfterPayment()).resolves.toBeUndefined();
+
+    expect(transitionStatus).toHaveBeenCalledTimes(3);
+    expect(pool.map((s) => s.companyId)).toEqual([subs[1]!.companyId]);
+    const redisService = (service as any).redisService;
+    expect(redisService.releaseLock).toHaveBeenCalledTimes(1);
+  });
+
+  it('should finish quietly when no PAST_DUE subscriptions exist', async () => {
+    const { service, transitionStatus } = setupResumeService([], new Set());
+
+    await expect(service.resumeAfterPayment()).resolves.toBeUndefined();
+
+    expect(transitionStatus).not.toHaveBeenCalled();
+    const redisService = (service as any).redisService;
+    expect(redisService.releaseLock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -281,15 +281,33 @@ export class BillingCronService {
     if (!ownerToken) return;
 
     try {
-      const pastDueSubs = await this.subscriptionRepository.findAll({
-        status: 'PAST_DUE',
-        isActive: true,
-        page: 1,
-        limit: 100,
-      });
+      // G13-03-07-03: drain every page within one run (was: first page of
+      // 100 only). Two phases: collect candidate IDs first without mutating
+      // anything, then process the snapshot exactly as before. A naive
+      // page++ while processing would skip rows (resumed rows leave the
+      // PAST_DUE set and shift subsequent pages into consumed offsets),
+      // while re-querying page 1 alone would never terminate while
+      // non-payable rows stay. Rows that change status between collection
+      // and processing are absorbed by the per-item catch plus the CAS and
+      // state guard inside transitionStatus.
+      const PAGE_SIZE = 100;
+      const candidates: { id: string; companyId: string }[] = [];
+      for (let page = 1; ; page++) {
+        const batch = await this.subscriptionRepository.findAll({
+          status: 'PAST_DUE',
+          isActive: true,
+          page,
+          limit: PAGE_SIZE,
+        });
+        if (batch.items.length === 0) break;
+        for (const sub of batch.items) {
+          candidates.push({ id: sub.id, companyId: sub.companyId });
+        }
+        if (batch.items.length < PAGE_SIZE) break;
+      }
 
       let resumed = 0;
-      for (const sub of pastDueSubs.items) {
+      for (const sub of candidates) {
         try {
           // Check if there's a recent successful payment transaction
           const recentPayment =
