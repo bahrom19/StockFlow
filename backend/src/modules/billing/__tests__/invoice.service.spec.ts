@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { InvoiceService } from '../services/invoice.service';
 import { InvoiceRepository } from '../repositories/invoice.repository';
@@ -51,6 +55,7 @@ describe('InvoiceService', () => {
   beforeEach(async () => {
     mockTx = {
       auditLog: { create: jest.fn() },
+      invoice: { findFirst: jest.fn() },
     };
 
     mockInvoiceRepo = {
@@ -66,6 +71,7 @@ describe('InvoiceService', () => {
     mockSubRepo = {
       findById: jest.fn(),
       findByCompany: jest.fn(),
+      updateByCompany: jest.fn(),
     } as any;
 
     mockPaymentRepo = {
@@ -148,6 +154,143 @@ describe('InvoiceService', () => {
       mockSubRepo.findById.mockResolvedValue(null);
       await expect(
         service.generateInvoice('missing', 'comp-1', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('generateRecurringInvoice (G13-03-05 atomic)', () => {
+    it('should create an invoice and advance the period in one transaction', async () => {
+      mockSubRepo.findById.mockResolvedValue(mockSubscription as any);
+      mockTx.invoice.findFirst.mockResolvedValue(null);
+      mockInvoiceRepo.getNextInvoiceNumber.mockResolvedValue(
+        'INV-20260801-A3F2C9',
+      );
+      mockInvoiceRepo.create.mockResolvedValue({
+        ...mockInvoice,
+        lines: [],
+      } as any);
+      mockSubRepo.updateByCompany.mockResolvedValue({
+        ...mockSubscription,
+      } as any);
+
+      const result = await service.generateRecurringInvoice(
+        'sub-1',
+        'comp-1',
+        'user-1',
+      );
+
+      expect(result.created).toBe(true);
+      expect(result.invoice.invoiceNumber).toBe('INV-20260801-A3F2C9');
+      // Idempotency guard keyed by subscription + current billing period.
+      expect(mockTx.invoice.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            subscriptionId: 'sub-1',
+            companyId: 'comp-1',
+            dueDate: mockSubscription.currentPeriodEnd,
+          }),
+        }),
+      );
+      expect(mockInvoiceRepo.create).toHaveBeenCalled();
+      // Period advancement uses the existing rowVersion optimistic lock.
+      expect(mockSubRepo.updateByCompany).toHaveBeenCalledWith(
+        'comp-1',
+        { currentPeriodEnd: expect.any(Date) },
+        0,
+        mockTx,
+      );
+      expect(mockEventBus.publish).toHaveBeenCalled();
+      expect(mockTx.auditLog.create).toHaveBeenCalled();
+    });
+
+    it('should not create a second invoice when the period is already invoiced', async () => {
+      mockSubRepo.findById.mockResolvedValue(mockSubscription as any);
+      mockTx.invoice.findFirst.mockResolvedValue({
+        ...mockInvoice,
+        lines: [],
+      } as any);
+
+      const result = await service.generateRecurringInvoice(
+        'sub-1',
+        'comp-1',
+        'user-1',
+      );
+
+      expect(result.created).toBe(false);
+      expect(result.invoice.id).toBe('inv-1');
+      expect(mockInvoiceRepo.create).not.toHaveBeenCalled();
+      expect(mockSubRepo.updateByCompany).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('should propagate period-advancement failure so the transaction rolls back', async () => {
+      mockSubRepo.findById.mockResolvedValue(mockSubscription as any);
+      mockTx.invoice.findFirst.mockResolvedValue(null);
+      mockInvoiceRepo.getNextInvoiceNumber.mockResolvedValue(
+        'INV-20260801-A3F2C9',
+      );
+      mockInvoiceRepo.create.mockResolvedValue({
+        ...mockInvoice,
+        lines: [],
+      } as any);
+      mockSubRepo.updateByCompany.mockRejectedValue(
+        new Error('period update failed'),
+      );
+
+      await expect(
+        service.generateRecurringInvoice('sub-1', 'comp-1', 'user-1'),
+      ).rejects.toThrow('period update failed');
+      // Creation was attempted inside the same $transaction: with a real
+      // database the rejected update aborts the whole transaction, so the
+      // invoice insert is rolled back together with the period change.
+      expect(mockInvoiceRepo.create).toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('should not advance the period when invoice creation fails', async () => {
+      mockSubRepo.findById.mockResolvedValue(mockSubscription as any);
+      mockTx.invoice.findFirst.mockResolvedValue(null);
+      mockInvoiceRepo.getNextInvoiceNumber.mockResolvedValue(
+        'INV-20260801-A3F2C9',
+      );
+      mockInvoiceRepo.create.mockRejectedValue(new Error('insert failed'));
+
+      await expect(
+        service.generateRecurringInvoice('sub-1', 'comp-1', 'user-1'),
+      ).rejects.toThrow('insert failed');
+      expect(mockSubRepo.updateByCompany).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('should roll back the insert when a concurrent run wins the rowVersion check', async () => {
+      mockSubRepo.findById.mockResolvedValue(mockSubscription as any);
+      mockTx.invoice.findFirst.mockResolvedValue(null);
+      mockInvoiceRepo.getNextInvoiceNumber.mockResolvedValue(
+        'INV-20260801-A3F2C9',
+      );
+      mockInvoiceRepo.create.mockResolvedValue({
+        ...mockInvoice,
+        lines: [],
+      } as any);
+      // Simulates the overlapping instance losing the compare-and-swap:
+      // the winner already bumped rowVersion, so this update matches 0 rows.
+      mockSubRepo.updateByCompany.mockRejectedValue(
+        new ConflictException('Subscription was modified by another user.'),
+      );
+
+      await expect(
+        service.generateRecurringInvoice('sub-1', 'comp-1', 'user-1'),
+      ).rejects.toThrow(ConflictException);
+      // The insert happened inside the same $transaction, so the conflict
+      // aborts it as well — exactly one invoice per period survives.
+      expect(mockInvoiceRepo.create).toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('should throw if subscription not found', async () => {
+      mockSubRepo.findById.mockResolvedValue(null);
+      await expect(
+        service.generateRecurringInvoice('missing', 'comp-1', 'user-1'),
       ).rejects.toThrow(NotFoundException);
     });
   });

@@ -21,6 +21,16 @@ import { InvoiceMapper } from '../mappers/invoice.mapper';
 import { InvoiceGeneratedEvent } from '../events/invoice-generated.event';
 import { PaymentSucceededEvent } from '../events/payment-succeeded.event';
 
+/**
+ * Result of {@link InvoiceService.generateRecurringInvoice}.
+ * `created` is false when the current billing period was already invoiced
+ * (idempotent skip — no new invoice, no repeated period advancement).
+ */
+export interface RecurringInvoiceResult {
+  invoice: InvoiceEntity;
+  created: boolean;
+}
+
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -156,6 +166,145 @@ export class InvoiceService {
       });
 
       return InvoiceMapper.toEntity(invoice);
+    });
+  }
+
+  /**
+   * Atomic recurring-invoice generation for the billing cron (G13-03-05).
+   *
+   * Invoice creation + billing period advancement happen in a SINGLE database
+   * transaction, so a crash or a failed period update can never leave a
+   * committed invoice behind with an un-advanced period (which the next cron
+   * run would invoice a second time).
+   *
+   * Canonical billing-period identity: the invoice's `dueDate` equals the
+   * subscription's `currentPeriodEnd` at generation time. If a live
+   * (non-CANCELLED, non-deleted) invoice already covers the current period,
+   * no new invoice is created and the period is NOT advanced again
+   * (idempotent re-run protection).
+   *
+   * Concurrency: the period is advanced with the existing `rowVersion`
+   * optimistic lock inside the same transaction. A concurrent overlapping
+   * execution loses the compare-and-swap check, throws, and rolls back its
+   * own invoice insert together with everything else — exactly one invoice
+   * per billing period survives.
+   */
+  async generateRecurringInvoice(
+    subscriptionId: string,
+    companyId: string,
+    userId: string,
+  ): Promise<RecurringInvoiceResult> {
+    return this.prismaService.$transaction(async (tx) => {
+      const subRecord = await this.subscriptionRepository.findById(
+        subscriptionId,
+        companyId,
+        tx,
+      );
+      if (!subRecord) throw new NotFoundException('Subscription not found');
+
+      const subData = subRecord as unknown as CompanySubscription & {
+        plan: { priceMonthly: Prisma.Decimal; currency: string; name: string };
+      };
+      const periodEnd = subData.currentPeriodEnd ?? null;
+
+      // Idempotency guard: this billing period is already invoiced.
+      if (periodEnd) {
+        const existing = await tx.invoice.findFirst({
+          where: {
+            subscriptionId,
+            companyId,
+            dueDate: periodEnd,
+            status: { not: 'CANCELLED' },
+            deletedAt: null,
+          },
+          include: { lines: { orderBy: { createdAt: 'asc' } } },
+        });
+        if (existing) {
+          return { invoice: InvoiceMapper.toEntity(existing), created: false };
+        }
+      }
+
+      const invoiceNumber = await this.invoiceRepository.getNextInvoiceNumber(
+        companyId,
+        tx,
+      );
+      const plan = subData.plan as {
+        priceMonthly: Prisma.Decimal;
+        currency: string;
+        name: string;
+      };
+      const totalAmount = plan.priceMonthly;
+
+      const invoice = await this.invoiceRepository.create(
+        {
+          company: { connect: { id: companyId } },
+          subscription: { connect: { id: subscriptionId } },
+          invoiceNumber,
+          status: 'PENDING',
+          subtotal: totalAmount,
+          discountAmount: 0,
+          taxAmount: 0,
+          totalAmount,
+          paidAmount: 0,
+          currency: plan.currency as Currency,
+          dueDate:
+            subData.currentPeriodEnd ??
+            new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          lines: {
+            create: [
+              {
+                description: `${plan.name} plan - Monthly subscription`,
+                quantity: 1,
+                unitPrice: totalAmount,
+                discountAmount: 0,
+                taxAmount: 0,
+                total: totalAmount,
+              },
+            ],
+          },
+        },
+        tx,
+      );
+
+      // Advance the billing period in the SAME transaction, guarded by the
+      // existing rowVersion optimistic lock: a concurrent overlapping run
+      // fails this check and rolls back its invoice insert as well.
+      const rowVer = subRecord.rowVersion ?? 0;
+      await this.subscriptionRepository.updateByCompany(
+        companyId,
+        { currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
+        rowVer,
+        tx,
+      );
+
+      await this.eventBus.publish(
+        new InvoiceGeneratedEvent({
+          companyId,
+          invoiceId: invoice.id,
+          invoiceNumber,
+          amount: totalAmount.toString(),
+          dueDate: invoice.dueDate?.toISOString() ?? '',
+        }),
+        { context: { transactionClient: tx } },
+      );
+
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          action: 'INVOICE_GENERATED',
+          entity: 'Invoice',
+          entityId: invoice.id,
+          newValues: {
+            invoiceNumber,
+            amount: totalAmount.toString(),
+            status: 'PENDING',
+          },
+          companyId,
+          userId: userId ?? null,
+        },
+      });
+
+      return { invoice: InvoiceMapper.toEntity(invoice), created: true };
     });
   }
 

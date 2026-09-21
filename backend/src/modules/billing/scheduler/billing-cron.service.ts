@@ -108,19 +108,15 @@ export class BillingCronService {
 
       for (const sub of expiringToday) {
         try {
-          await this.invoiceService.generateInvoice(
+          // Atomic: invoice creation + period advancement happen in a single
+          // DB transaction inside the service (G13-03-05). Skipped when the
+          // period is already invoiced (idempotent re-run protection).
+          const result = await this.invoiceService.generateRecurringInvoice(
             sub.id,
             sub.companyId,
             SYSTEM_USER,
           );
-          // Extend current period
-          await this.prismaService.companySubscription.update({
-            where: { companyId: sub.companyId },
-            data: {
-              currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-            },
-          });
-          generated++;
+          if (result.created) generated++;
         } catch (error) {
           this.logger.error(
             `Invoice generation failed for ${sub.companyId}: ${error}`,

@@ -52,7 +52,9 @@ describe('BillingCronService - TTL verification', () => {
       companySubscription: { update: jest.fn().mockResolvedValue({}) },
     };
     (service as any).invoiceService = {
-      generateInvoice: jest.fn().mockResolvedValue({}),
+      generateRecurringInvoice: jest
+        .fn()
+        .mockResolvedValue({ invoice: {}, created: true }),
     };
     (service as any).companySubscriptionService = {
       transitionStatus: jest.fn().mockResolvedValue(undefined),
@@ -233,5 +235,88 @@ describe('BillingCronService - TTL verification', () => {
 
     const redisService = (service as any).redisService;
     expect(redisService.releaseLock).not.toHaveBeenCalled();
+  });
+
+  it('should use the atomic recurring-invoice method and never update the period separately', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
+
+    const fakeToken = 'test-token-atomic-recurring';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    const expiring = [
+      { id: 'sub-1', companyId: 'comp-1' },
+      { id: 'sub-2', companyId: 'comp-2' },
+    ];
+    (service as any).subscriptionRepository = {
+      findExpiringToday: jest.fn().mockResolvedValue(expiring),
+    };
+    const companySubscriptionUpdate = jest.fn();
+    (service as any).prismaService = {
+      companySubscription: { update: companySubscriptionUpdate },
+    };
+    const generateRecurringInvoice = jest
+      .fn()
+      .mockResolvedValue({ invoice: { id: 'inv-1' }, created: true });
+    (service as any).invoiceService = { generateRecurringInvoice };
+
+    await service.generateRecurringInvoices();
+
+    expect(generateRecurringInvoice).toHaveBeenCalledTimes(2);
+    expect(generateRecurringInvoice).toHaveBeenCalledWith(
+      'sub-1',
+      'comp-1',
+      'system',
+    );
+    expect(generateRecurringInvoice).toHaveBeenCalledWith(
+      'sub-2',
+      'comp-2',
+      'system',
+    );
+    // Period advancement lives inside the service transaction — the cron must
+    // not perform a separate period update (G13-03-05 atomicity).
+    expect(companySubscriptionUpdate).not.toHaveBeenCalled();
+    const redisService = (service as any).redisService;
+    expect(redisService.releaseLock).toHaveBeenCalledWith(
+      'cron:lock:recurring-invoices',
+      fakeToken,
+    );
+  });
+
+  it('should skip already-invoiced periods and continue after per-subscription failure', async () => {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
+
+    const fakeToken = 'test-token-recurring-partial';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      findExpiringToday: jest.fn().mockResolvedValue([
+        { id: 'sub-1', companyId: 'comp-1' },
+        { id: 'sub-2', companyId: 'comp-2' },
+      ]),
+    };
+    (service as any).prismaService = {
+      companySubscription: { update: jest.fn() },
+    };
+    const generateRecurringInvoice = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('CAS conflict'))
+      .mockResolvedValueOnce({ invoice: { id: 'inv-2' }, created: false });
+    (service as any).invoiceService = { generateRecurringInvoice };
+
+    await expect(service.generateRecurringInvoices()).resolves.toBeUndefined();
+    expect(generateRecurringInvoice).toHaveBeenCalledTimes(2);
+    const redisService = (service as any).redisService;
+    expect(redisService.releaseLock).toHaveBeenCalledWith(
+      'cron:lock:recurring-invoices',
+      fakeToken,
+    );
   });
 });
