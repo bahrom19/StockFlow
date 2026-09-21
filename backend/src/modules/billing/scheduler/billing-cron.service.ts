@@ -145,18 +145,23 @@ export class BillingCronService {
         await this.subscriptionRepository.findPendingRetries({ maxRetries: 3 });
       for (const sub of pendingRetries) {
         try {
-          const retryCount = sub.paymentRetryCount + 1;
+          // G13-03-06: atomic DB-side increment (was read-modify-write with
+          // a JS-computed absolute value, which lost updates on overlap).
+          // The threshold below uses the persisted value returned by Prisma,
+          // never the potentially stale `sub.paymentRetryCount`.
+          const updated = await this.prismaService.companySubscription.update(
+            {
+              where: { companyId: sub.companyId },
+              data: {
+                paymentRetryCount: { increment: 1 },
+                lastPaymentAttempt: new Date(),
+              },
+            },
+          );
+          const retryCount = updated.paymentRetryCount;
           this.logger.log(
             `Retry ${retryCount}/3: payment for company ${sub.companyId}`,
           );
-
-          await this.prismaService.companySubscription.update({
-            where: { companyId: sub.companyId },
-            data: {
-              paymentRetryCount: retryCount,
-              lastPaymentAttempt: new Date(),
-            },
-          });
 
           if (retryCount >= 3) {
             await this.companySubscriptionService.transitionStatus(

@@ -94,6 +94,95 @@ describe('BillingCronService - TTL verification', () => {
     expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:retry-payments', fakeToken);
   });
 
+  function setupRetryService(
+    subs: Array<{ id: string; companyId: string; paymentRetryCount: number }>,
+    persistedCounts: number[],
+  ) {
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    );
+
+    const fakeToken = 'test-token-retry-behavioral';
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      findPendingRetries: jest.fn().mockResolvedValue(subs),
+    };
+    const update = jest.fn().mockImplementation(({ data }: any) => {
+      const next = persistedCounts.shift();
+      return Promise.resolve({ paymentRetryCount: next });
+    });
+    (service as any).prismaService = {
+      companySubscription: { update },
+    };
+    const transitionStatus = jest.fn().mockResolvedValue(undefined);
+    (service as any).companySubscriptionService = { transitionStatus };
+    return { service, update, transitionStatus };
+  }
+
+  it('should atomically increment to 1 and not suspend when count was 0', async () => {
+    const { service, update, transitionStatus } = setupRetryService(
+      [{ id: 'sub-1', companyId: 'comp-1', paymentRetryCount: 0 }],
+      [1],
+    );
+
+    await service.retryFailedPayments();
+
+    expect(update).toHaveBeenCalledWith({
+      where: { companyId: 'comp-1' },
+      data: {
+        paymentRetryCount: { increment: 1 },
+        lastPaymentAttempt: expect.any(Date),
+      },
+    });
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('should atomically increment to 2 and not suspend when count was 1', async () => {
+    const { service, update, transitionStatus } = setupRetryService(
+      [{ id: 'sub-1', companyId: 'comp-1', paymentRetryCount: 1 }],
+      [2],
+    );
+
+    await service.retryFailedPayments();
+
+    expect(update).toHaveBeenCalledWith({
+      where: { companyId: 'comp-1' },
+      data: {
+        paymentRetryCount: { increment: 1 },
+        lastPaymentAttempt: expect.any(Date),
+      },
+    });
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('should suspend when the persisted count reaches 3', async () => {
+    const { service, update, transitionStatus } = setupRetryService(
+      [{ id: 'sub-1', companyId: 'comp-1', paymentRetryCount: 2 }],
+      [3],
+    );
+
+    await service.retryFailedPayments();
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(transitionStatus).toHaveBeenCalledWith('comp-1', 'SUSPENDED', 'system');
+  });
+
+  it('should decide the threshold from the persisted value, not the stale read', async () => {
+    // Stale read says 0, but the database atomically advanced to 3
+    // (e.g. overlapping runs each incremented once).
+    const { service, transitionStatus } = setupRetryService(
+      [{ id: 'sub-1', companyId: 'comp-1', paymentRetryCount: 0 }],
+      [3],
+    );
+
+    await service.retryFailedPayments();
+
+    expect(transitionStatus).toHaveBeenCalledWith('comp-1', 'SUSPENDED', 'system');
+  });
+
   it('should call acquireLock with TTL 55 for suspendOverdueSubscriptions', async () => {
     const service = new BillingCronService(
       {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
