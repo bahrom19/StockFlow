@@ -7,9 +7,12 @@ export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private readonly client: Redis | null = null;
   readonly enabled: boolean;
+  private readonly failOpenOnError: boolean;
 
   constructor(private readonly configService: ConfigService) {
     const url = this.configService.get<string>('redis.url', '');
+    const lockConfig = this.configService.get<{ failOpenOnError?: boolean }>('redis.lock');
+    this.failOpenOnError = lockConfig?.failOpenOnError ?? false;
 
     if (!url) {
       this.logger.warn('Redis disabled — no REDIS_URL configured');
@@ -87,9 +90,14 @@ export class RedisService implements OnModuleDestroy {
    * Acquire a distributed lock using Redis SET NX EX.
    * Returns true if the lock was acquired, false otherwise.
    * When Redis is disabled, returns true (runs without lock).
+   * When Redis is configured but fails, returns false (fail-closed) unless
+   * REDIS_LOCK_FAIL_OPEN_ON_ERROR=true is set.
    */
   async acquireLock(lockKey: string, ttlSeconds: number): Promise<boolean> {
     if (!this.client) {
+      this.logger.debug(
+        'Redis disabled — acquiring lock without Redis (fail-open for dev mode)',
+      );
       return true;
     }
 
@@ -101,12 +109,20 @@ export class RedisService implements OnModuleDestroy {
         ttlSeconds,
         'NX',
       );
-      return result === 'OK';
+
+      if (result === 'OK') {
+        return true;
+      }
+
+      // Lock contention — Redis is healthy but lock is held by another process
+      this.logger.debug(`Lock contention for ${lockKey}`);
+      return false;
     } catch (error) {
-      this.logger.warn(
-        `Redis acquireLock error for ${lockKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      // Redis failure — connection error, timeout, etc.
+      this.logger.error(
+        `Redis acquireLock failed for ${lockKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
-      return true;
+      return this.failOpenOnError;
     }
   }
 

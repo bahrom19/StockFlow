@@ -7,6 +7,10 @@ export const envValidationSchema = Joi.object({
   PORT: Joi.number().port().default(3000),
   DATABASE_URL: Joi.string().uri().required(),
   REDIS_URL: Joi.string().uri().optional().allow(''),
+  REDIS_LOCK_FAIL_OPEN_ON_ERROR: Joi.boolean()
+    .truthy('true')
+    .falsy('false')
+    .default(false),
   JWT_SECRET: Joi.string().min(16).required(),
   JWT_REFRESH_SECRET: Joi.string().min(16).optional(),
   JWT_EXPIRES_IN: Joi.string().required(),
