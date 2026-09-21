@@ -383,6 +383,15 @@ export class CompanySubscriptionService {
       );
       if (!sub) throw new NotFoundException('Subscription not found');
 
+      // G13-03-07-02: stale-state guard. The scheduler selects TRIAL rows,
+      // but a checkout webhook may flip TRIAL → ACTIVE before this
+      // transaction runs. Downgrade only when the fresh in-transaction read
+      // is still TRIAL; otherwise return the current state unchanged
+      // (scheduler-safe no-op: no update, no audit entry, no exception).
+      if (sub.status !== SubscriptionStatus.TRIAL) {
+        return CompanySubscriptionMapper.toEntity(sub);
+      }
+
       const rowVer = sub.rowVersion ?? 0;
       const updated = await this.subscriptionRepository.updateByCompany(
         companyId,

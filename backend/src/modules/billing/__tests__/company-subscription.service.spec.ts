@@ -218,4 +218,76 @@ describe('CompanySubscriptionService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('downgradeToFree (G13-03-07-02 stale-state guard)', () => {
+    it('should downgrade an expired TRIAL to FREE', async () => {
+      mockPlanRepo.findByCode.mockResolvedValue(mockPlan as any);
+      mockSubRepo.findByCompany.mockResolvedValue(mockSubscription as any);
+      mockSubRepo.updateByCompany.mockResolvedValue({
+        ...mockSubscription,
+        status: 'FREE',
+      } as any);
+
+      const result = await service.downgradeToFree('comp-1', 'system');
+
+      expect(result.status).toBe('FREE');
+      expect(mockSubRepo.updateByCompany).toHaveBeenCalledWith(
+        'comp-1',
+        expect.objectContaining({ status: 'FREE' }),
+        0,
+        mockTx,
+      );
+      expect(mockTx.auditLog.create).toHaveBeenCalled();
+    });
+
+    it('should NOT downgrade when the fresh read is ACTIVE (stale scheduler selection)', async () => {
+      mockPlanRepo.findByCode.mockResolvedValue(mockPlan as any);
+      mockSubRepo.findByCompany.mockResolvedValue({
+        ...mockSubscription,
+        status: 'ACTIVE',
+      } as any);
+
+      const result = await service.downgradeToFree('comp-1', 'system');
+
+      expect(result.status).toBe('ACTIVE');
+      expect(mockSubRepo.updateByCompany).not.toHaveBeenCalled();
+      expect(mockTx.auditLog.create).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('should NOT downgrade when the fresh read is PAST_DUE', async () => {
+      mockPlanRepo.findByCode.mockResolvedValue(mockPlan as any);
+      mockSubRepo.findByCompany.mockResolvedValue({
+        ...mockSubscription,
+        status: 'PAST_DUE',
+      } as any);
+
+      const result = await service.downgradeToFree('comp-1', 'system');
+
+      expect(result.status).toBe('PAST_DUE');
+      expect(mockSubRepo.updateByCompany).not.toHaveBeenCalled();
+      expect(mockTx.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('should still pass the fresh rowVersion to the CAS update', async () => {
+      mockPlanRepo.findByCode.mockResolvedValue(mockPlan as any);
+      mockSubRepo.findByCompany.mockResolvedValue({
+        ...mockSubscription,
+        rowVersion: 7,
+      } as any);
+      mockSubRepo.updateByCompany.mockResolvedValue({
+        ...mockSubscription,
+        status: 'FREE',
+      } as any);
+
+      await service.downgradeToFree('comp-1', 'system');
+
+      expect(mockSubRepo.updateByCompany).toHaveBeenCalledWith(
+        'comp-1',
+        expect.anything(),
+        7,
+        mockTx,
+      );
+    });
+  });
 });
