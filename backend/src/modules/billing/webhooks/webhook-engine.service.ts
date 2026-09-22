@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { Currency, PaymentTransactionStatus } from '@prisma/client';
+import { Currency, PaymentTransactionStatus, Prisma } from '@prisma/client';
 import { EventBus, EVENT_BUS } from '../../../common/events';
 import { PrismaService } from '../../../common/prisma';
 import { CacheService } from '../../../infrastructure/cache/cache.service';
@@ -319,32 +319,85 @@ export class WebhookEngineService {
   private async handleChargeRefunded(
     object: Record<string, unknown>,
   ): Promise<void> {
-    const paymentIntentId = object.payment_intent as string;
+    const chargeId = object.id as string;
+    // For invoice-driven payments the charge carries OUR Stripe invoice id.
+    // Our Invoice.providerInvoiceId stores exactly this value (see
+    // InvoiceService.markPaid via handleInvoicePaid), so it is the correct,
+    // tenant-consistent linkage: Stripe invoice ids are globally unique.
+    const providerInvoiceId = object.invoice as string | undefined;
     const amountRefunded = (object.amount_refunded as number) ?? 0;
     const currency = (object.currency as string) ?? 'usd';
 
-    const tx =
-      await this.paymentTransactionRepository.findByInvoice(paymentIntentId);
-    const paymentTx = tx[0];
-    if (!paymentTx?.invoiceId) return;
+    // G13-03-08-03: never query with a missing key — an undefined filter
+    // would degrade to an unfiltered lookup and attach the refund to an
+    // arbitrary transaction.
+    if (typeof chargeId !== 'string' || chargeId.length === 0) {
+      this.logger.warn('Charge refunded event without charge id — skipping');
+      return;
+    }
+    if (
+      typeof providerInvoiceId !== 'string' ||
+      providerInvoiceId.length === 0
+    ) {
+      this.logger.warn(
+        `Charge ${chargeId} has no linked Stripe invoice — skipping refund record`,
+      );
+      return;
+    }
 
-    const invoice = await this.prismaService.invoice.findUnique({
-      where: { id: paymentTx.invoiceId },
+    const invoice = await this.prismaService.invoice.findFirst({
+      where: { providerInvoiceId },
+      select: {
+        id: true,
+        companyId: true,
+        subscriptionId: true,
+        invoiceNumber: true,
+      },
     });
-    if (!invoice) return;
+    if (!invoice) {
+      this.logger.warn(
+        `Charge ${chargeId} references unknown Stripe invoice ${providerInvoiceId} — skipping refund record`,
+      );
+      return;
+    }
 
-    // Create refund transaction via repository
-    await this.paymentTransactionRepository.create({
-      company: { connect: { id: paymentTx.companyId } },
-      subscription: { connect: { id: paymentTx.subscriptionId } },
-      invoice: { connect: { id: paymentTx.invoiceId } },
-      amount: (amountRefunded / 100).toFixed(4),
-      currency: currency.toUpperCase() as Currency,
-      status: 'REFUNDED' as PaymentTransactionStatus,
-      method: 'stripe',
-      providerPaymentId: `refund_${paymentIntentId}`,
-      reference: `Refund for ${invoice.invoiceNumber}`,
-    });
+    // G13-03-08-03: deterministic effect-level idempotency key. Stable
+    // across redeliveries of the same event (same charge snapshot), distinct
+    // across distinct refund operations (the cumulative amount differs), so
+    // the DB UNIQUE constraint below turns sequential, concurrent and
+    // crash-retry duplicates into a no-op. No migration needed — the column
+    // is already UNIQUE.
+    const idempotencyKey = `stripe-refund:${chargeId}:${amountRefunded}`;
+    try {
+      await this.paymentTransactionRepository.create({
+        company: { connect: { id: invoice.companyId } },
+        subscription: { connect: { id: invoice.subscriptionId } },
+        invoice: { connect: { id: invoice.id } },
+        amount: (amountRefunded / 100).toFixed(4),
+        currency: currency.toUpperCase() as Currency,
+        status: 'REFUNDED' as PaymentTransactionStatus,
+        method: 'stripe',
+        idempotencyKey,
+        providerPaymentId: `refund_${chargeId}`,
+        reference: `Refund for ${invoice.invoiceNumber}`,
+      });
+    } catch (error) {
+      // A concurrent duplicate (or a Stripe retry after a crash between the
+      // insert and markProcessed) already recorded this exact refund: the
+      // UNIQUE constraint on idempotencyKey converts the race into a no-op.
+      // Any other DB error keeps the existing semantics (propagate → 500 →
+      // Stripe retry) — only the refund-key conflict is swallowed.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        this.logger.log(
+          `Duplicate refund ${idempotencyKey} already recorded — skipping`,
+        );
+        return;
+      }
+      throw error;
+    }
   }
 
   private async handlePaymentIntentSucceeded(
