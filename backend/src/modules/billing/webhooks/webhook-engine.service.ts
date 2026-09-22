@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Currency, PaymentTransactionStatus, Prisma } from '@prisma/client';
@@ -37,6 +43,15 @@ interface WebhookPayload {
   data: { object: Record<string, unknown> };
   created: number;
   idempotency_key?: string;
+}
+
+/**
+ * Minimal event context threaded into state-changing webhook handlers so
+ * already-applied convergence remains observable (event type/id in logs).
+ */
+interface WebhookHandlerContext {
+  eventId: string;
+  eventType: string;
 }
 
 /**
@@ -142,21 +157,22 @@ export class WebhookEngineService {
     }
 
     try {
+      const ctx: WebhookHandlerContext = { eventId, eventType: type };
       switch (type) {
         case 'checkout.session.completed':
-          await this.handleCheckoutSessionCompleted(payload.data.object);
+          await this.handleCheckoutSessionCompleted(payload.data.object, ctx);
           break;
         case 'invoice.paid':
-          await this.handleInvoicePaid(payload.data.object);
+          await this.handleInvoicePaid(payload.data.object, ctx);
           break;
         case 'invoice.payment_failed':
-          await this.handleInvoicePaymentFailed(payload.data.object);
+          await this.handleInvoicePaymentFailed(payload.data.object, ctx);
           break;
         case 'customer.subscription.updated':
-          await this.handleSubscriptionUpdated(payload.data.object);
+          await this.handleSubscriptionUpdated(payload.data.object, ctx);
           break;
         case 'customer.subscription.deleted':
-          await this.handleSubscriptionDeleted(payload.data.object);
+          await this.handleSubscriptionDeleted(payload.data.object, ctx);
           break;
         case 'charge.refunded':
           await this.handleChargeRefunded(payload.data.object);
@@ -180,8 +196,80 @@ export class WebhookEngineService {
 
   // ─── Individual Event Handlers ──────────────────────────────────
 
+  /**
+   * G13-03-09-01: handler-local already-applied convergence for subscription
+   * transitions. Runs the transition; if the service throws BadRequest or
+   * Conflict (stale/duplicate delivery, CAS race), re-reads the CURRENT
+   * persisted status and converges to success ONLY when it already equals
+   * one of the expected end-states. Anything else rethrows the ORIGINAL
+   * error, preserving retry semantics for genuine failures. The normal
+   * markProcessed flow then runs via the caller.
+   */
+  private async transitionSubscriptionConverged(
+    ctx: WebhookHandlerContext,
+    companyId: string,
+    expectedStatuses: string[],
+    transition: () => Promise<unknown>,
+  ): Promise<void> {
+    try {
+      await transition();
+    } catch (error) {
+      if (
+        (error instanceof BadRequestException ||
+          error instanceof ConflictException) &&
+        expectedStatuses.includes(
+          (await this.readSubscriptionStatus(companyId)) ?? '',
+        )
+      ) {
+        this.logger.warn(
+          `Stripe webhook ${ctx.eventType} ${ctx.eventId} already applied ` +
+            `for company ${companyId} — converging retry as handled`,
+        );
+        return;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Fresh subscription status read for convergence checks. Read failures
+   * yield null so the caller rethrows the original error (safe direction:
+   * never converge on unreadable state).
+   */
+  private async readSubscriptionStatus(
+    companyId: string,
+  ): Promise<string | null> {
+    try {
+      const sub =
+        await this.subscriptionRepository.findByCompany(companyId);
+      return sub?.status ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fresh invoice status read for convergence checks. Same null-on-failure
+   * contract as readSubscriptionStatus.
+   */
+  private async readInvoiceStatus(
+    invoiceId: string,
+    companyId: string,
+  ): Promise<string | null> {
+    try {
+      const invoice = await this.prismaService.invoice.findFirst({
+        where: { id: invoiceId, companyId },
+        select: { status: true },
+      });
+      return invoice?.status ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   private async handleCheckoutSessionCompleted(
     object: Record<string, unknown>,
+    ctx: WebhookHandlerContext,
   ): Promise<void> {
     const sessionId = object.id as string;
     const customerId = object.customer as string;
@@ -195,14 +283,23 @@ export class WebhookEngineService {
       return;
     }
 
-    // Activate subscription (trial → active) if currently in trial or past_due
+    // Activate subscription (trial → active) if currently in trial or past_due.
+    // G13-03-09-01: a duplicate/retry delivery finds the subscription
+    // already ACTIVE; converge it instead of failing, then still ensure the
+    // provider references below (idempotent same-value write).
     const existingSub =
       await this.subscriptionRepository.findByCompany(companyId);
     if (existingSub && existingSub.status !== 'ACTIVE') {
-      await this.companySubscriptionService.transitionStatus(
+      await this.transitionSubscriptionConverged(
+        ctx,
         companyId,
-        'ACTIVE',
-        SYSTEM_USER,
+        ['ACTIVE'],
+        () =>
+          this.companySubscriptionService.transitionStatus(
+            companyId,
+            'ACTIVE',
+            SYSTEM_USER,
+          ),
       );
     }
 
@@ -218,6 +315,7 @@ export class WebhookEngineService {
 
   private async handleInvoicePaid(
     object: Record<string, unknown>,
+    ctx: WebhookHandlerContext,
   ): Promise<void> {
     const providerInvoiceId = object.id as string;
     const paymentIntentId = object.payment_intent as string;
@@ -231,17 +329,39 @@ export class WebhookEngineService {
     if (invoice) {
       // Stripe amounts are in cents — convert to decimal string
       const amountStr = (amountPaid / 100).toFixed(4);
-      await this.invoiceService.markPaid(
-        invoice.id,
-        invoice.companyId,
-        amountStr,
-        providerInvoiceId,
-      );
+      try {
+        await this.invoiceService.markPaid(
+          invoice.id,
+          invoice.companyId,
+          amountStr,
+          providerInvoiceId,
+        );
+      } catch (error) {
+        // G13-03-09-01: a retry after the payment was already recorded finds
+        // the invoice PAID. Converge only on PAID — any other status (e.g.
+        // CANCELLED/voided) is a genuine mismatch and must keep retrying.
+        if (
+          (error instanceof BadRequestException ||
+            error instanceof ConflictException) &&
+          ((await this.readInvoiceStatus(
+            invoice.id,
+            invoice.companyId,
+          )) === 'PAID')
+        ) {
+          this.logger.warn(
+            `Stripe webhook ${ctx.eventType} ${ctx.eventId} already applied ` +
+              `for invoice ${invoice.id} (already PAID) — converging retry as handled`,
+          );
+          return;
+        }
+        throw error;
+      }
     }
   }
 
   private async handleInvoicePaymentFailed(
     object: Record<string, unknown>,
+    ctx: WebhookHandlerContext,
   ): Promise<void> {
     const providerInvoiceId = object.id as string;
     const attemptCount = (object.attempt_count as number) ?? 0;
@@ -260,16 +380,25 @@ export class WebhookEngineService {
           reason: `Payment failed after ${attemptCount} attempts`,
         }),
       );
-      await this.companySubscriptionService.transitionStatus(
+      // G13-03-09-01: converge a retry that finds the subscription already
+      // PAST_DUE; any other state rethrows for normal retry semantics.
+      await this.transitionSubscriptionConverged(
+        ctx,
         invoice.companyId,
-        'PAST_DUE',
-        SYSTEM_USER,
+        ['PAST_DUE'],
+        () =>
+          this.companySubscriptionService.transitionStatus(
+            invoice.companyId,
+            'PAST_DUE',
+            SYSTEM_USER,
+          ),
       );
     }
   }
 
   private async handleSubscriptionUpdated(
     object: Record<string, unknown>,
+    ctx: WebhookHandlerContext,
   ): Promise<void> {
     const status = object.status as string;
     const providerSubscriptionId = object.id as string;
@@ -281,22 +410,36 @@ export class WebhookEngineService {
     if (!sub) return;
 
     if (status === 'past_due') {
-      await this.companySubscriptionService.transitionStatus(
+      // G13-03-09-01: converge already-applied retries; see helper.
+      await this.transitionSubscriptionConverged(
+        ctx,
         sub.companyId,
-        'PAST_DUE',
-        SYSTEM_USER,
+        ['PAST_DUE'],
+        () =>
+          this.companySubscriptionService.transitionStatus(
+            sub.companyId,
+            'PAST_DUE',
+            SYSTEM_USER,
+          ),
       );
     } else if (status === 'active' && sub.status === 'PAST_DUE') {
-      await this.companySubscriptionService.transitionStatus(
+      await this.transitionSubscriptionConverged(
+        ctx,
         sub.companyId,
-        'ACTIVE',
-        SYSTEM_USER,
+        ['ACTIVE'],
+        () =>
+          this.companySubscriptionService.transitionStatus(
+            sub.companyId,
+            'ACTIVE',
+            SYSTEM_USER,
+          ),
       );
     }
   }
 
   private async handleSubscriptionDeleted(
     object: Record<string, unknown>,
+    ctx: WebhookHandlerContext,
   ): Promise<void> {
     const providerSubscriptionId = object.id as string;
 
@@ -306,10 +449,16 @@ export class WebhookEngineService {
     const sub = subs[0];
     if (!sub) return;
 
-    await this.companySubscriptionService.cancel(
+    await this.transitionSubscriptionConverged(
+      ctx,
       sub.companyId,
-      'Provider subscription deleted',
-      SYSTEM_USER,
+      ['CANCELLED', 'EXPIRED'],
+      () =>
+        this.companySubscriptionService.cancel(
+          sub.companyId,
+          'Provider subscription deleted',
+          SYSTEM_USER,
+        ),
     );
     // G13-03-08-02: no handler-level SubscriptionCancelledEvent here.
     // cancel() already publishes exactly one event inside its transaction

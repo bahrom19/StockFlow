@@ -1,4 +1,9 @@
 import { createHmac } from 'crypto';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { WebhookEngineService } from '../webhook-engine.service';
 
@@ -300,5 +305,352 @@ describe('WebhookEngineService.handleChargeRefunded (G13-03-08-03 idempotency)',
       expect.objectContaining({ where: { providerInvoiceId: 'in_1' } }),
     );
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe('WebhookEngineService already-applied convergence (G13-03-09-01)', () => {
+  const invoiceRow = {
+    id: 'inv-1',
+    companyId: 'comp-1',
+    subscriptionId: 'sub-1',
+    totalAmount: 29.99,
+    currency: 'USD',
+  };
+  const pastDueSub = { id: 'sub-1', companyId: 'comp-1', status: 'PAST_DUE' };
+  const activeSub = { id: 'sub-1', companyId: 'comp-1', status: 'ACTIVE' };
+
+  function makeConvergenceEngine(opts: {
+    invoiceFindFirst?: unknown;
+    findByCompanyImpl?: (companyId: string) => Promise<unknown>;
+    markPaidImpl?: (...args: any[]) => Promise<unknown>;
+    transitionImpl?: (...args: any[]) => Promise<unknown>;
+    cancelImpl?: (...args: any[]) => Promise<unknown>;
+    findManySubs?: unknown[];
+  }) {
+    const cache = { get: jest.fn().mockResolvedValue(null), set: jest.fn() };
+    const webhookEvent = {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({}),
+    };
+    const invoice = {
+      findFirst: jest
+        .fn()
+        .mockImplementation(async () => opts.invoiceFindFirst ?? null),
+    };
+    const subscriptionRepository = {
+      findByCompany: jest
+        .fn()
+        .mockImplementation(
+          async (companyId: string) =>
+            opts.findByCompanyImpl?.(companyId) ?? null,
+        ),
+      updateByCompany: jest.fn().mockResolvedValue({}),
+    };
+    const invoiceService = {
+      markPaid: jest
+        .fn()
+        .mockImplementation(opts.markPaidImpl ?? (async () => ({}))),
+    };
+    const companySubscriptionService = {
+      transitionStatus: jest
+        .fn()
+        .mockImplementation(opts.transitionImpl ?? (async () => ({}))),
+      cancel: jest
+        .fn()
+        .mockImplementation(opts.cancelImpl ?? (async () => ({}))),
+    };
+    const eventBus = { publish: jest.fn() };
+    const engine = new WebhookEngineService(
+      { get: jest.fn() } as any,
+      {
+        invoice,
+        companySubscription: {
+          findMany: jest.fn().mockResolvedValue(opts.findManySubs ?? []),
+        },
+        webhookEvent,
+      } as any,
+      cache as any,
+      companySubscriptionService as any,
+      invoiceService as any,
+      subscriptionRepository as any,
+      {} as any,
+      eventBus as any,
+    );
+    return {
+      engine,
+      invoice,
+      subscriptionRepository,
+      invoiceService,
+      companySubscriptionService,
+      eventBus,
+      webhookEvent,
+    };
+  }
+
+  const paidEvent = {
+    id: 'evt-paid-1',
+    type: 'invoice.paid',
+    data: {
+      object: {
+        id: 'in_1',
+        payment_intent: 'pi_1',
+        amount_paid: 2999,
+        currency: 'usd',
+      },
+    },
+  };
+
+  it('should converge an invoice.paid retry when the invoice is already PAID', async () => {
+    const { engine, invoiceService, webhookEvent } = makeConvergenceEngine({
+      invoiceFindFirst: { ...invoiceRow, status: 'PAID' },
+      markPaidImpl: async () => {
+        throw new BadRequestException('Invoice inv-1 is not pending');
+      },
+    });
+
+    const result = await engine.handleWebhook(paidEvent as any);
+
+    expect(result).toEqual({ handled: true, eventType: 'invoice.paid' });
+    expect(invoiceService.markPaid).toHaveBeenCalledTimes(1);
+    expect(webhookEvent.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('should rethrow when the invoice is in a genuinely mismatched state', async () => {
+    const { engine, webhookEvent } = makeConvergenceEngine({
+      invoiceFindFirst: { ...invoiceRow, status: 'CANCELLED' },
+      markPaidImpl: async () => {
+        throw new BadRequestException('Invoice inv-1 is not pending');
+      },
+    });
+
+    await expect(engine.handleWebhook(paidEvent as any)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(webhookEvent.upsert).not.toHaveBeenCalled();
+  });
+
+  it('should converge a payment_failed retry when already PAST_DUE', async () => {
+    const failedEvent = {
+      id: 'evt-fail-1',
+      type: 'invoice.payment_failed',
+      data: { object: { id: 'in_2', attempt_count: 1 } },
+    };
+    const { engine, companySubscriptionService, webhookEvent } =
+      makeConvergenceEngine({
+        invoiceFindFirst: { ...invoiceRow, id: 'inv-2' },
+        findByCompanyImpl: async () => pastDueSub,
+        transitionImpl: async () => {
+          throw new BadRequestException(
+            'Cannot transition from PAST_DUE to PAST_DUE',
+          );
+        },
+      });
+
+    const result = await engine.handleWebhook(failedEvent as any);
+
+    expect(result).toEqual({
+      handled: true,
+      eventType: 'invoice.payment_failed',
+    });
+    expect(companySubscriptionService.transitionStatus).toHaveBeenCalledTimes(1);
+    expect(webhookEvent.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('should rethrow when the subscription state does not match the event intent', async () => {
+    const failedEvent = {
+      id: 'evt-fail-2',
+      type: 'invoice.payment_failed',
+      data: { object: { id: 'in_2', attempt_count: 1 } },
+    };
+    const { engine, webhookEvent } = makeConvergenceEngine({
+      invoiceFindFirst: { ...invoiceRow, id: 'inv-2' },
+      findByCompanyImpl: async () => activeSub,
+      transitionImpl: async () => {
+        throw new BadRequestException('Cannot transition test mismatch');
+      },
+    });
+
+    await expect(engine.handleWebhook(failedEvent as any)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(webhookEvent.upsert).not.toHaveBeenCalled();
+  });
+
+  it('should converge a subscription.deleted retry when already CANCELLED without republishing', async () => {
+    const deletedEvent = {
+      id: 'evt-del-1',
+      type: 'customer.subscription.deleted',
+      data: { object: { id: 'sub_prov_1' } },
+    };
+    const { engine, companySubscriptionService, eventBus, webhookEvent } =
+      makeConvergenceEngine({
+        findManySubs: [{ id: 'sub-1', companyId: 'comp-1' }],
+        findByCompanyImpl: async () => ({
+          ...pastDueSub,
+          status: 'CANCELLED',
+        }),
+        cancelImpl: async () => {
+          throw new BadRequestException('Subscription is already CANCELLED');
+        },
+      });
+
+    const result = await engine.handleWebhook(deletedEvent as any);
+
+    expect(result).toEqual({
+      handled: true,
+      eventType: 'customer.subscription.deleted',
+    });
+    expect(companySubscriptionService.cancel).toHaveBeenCalledTimes(1);
+    // G13-03-08-02 invariant: no handler-level SubscriptionCancelledEvent.
+    expect(eventBus.publish).not.toHaveBeenCalled();
+    expect(webhookEvent.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('should rethrow when cancellation finds a non-terminal state', async () => {
+    const deletedEvent = {
+      id: 'evt-del-2',
+      type: 'customer.subscription.deleted',
+      data: { object: { id: 'sub_prov_1' } },
+    };
+    const { engine, webhookEvent } = makeConvergenceEngine({
+      findManySubs: [{ id: 'sub-1', companyId: 'comp-1' }],
+      findByCompanyImpl: async () => pastDueSub,
+      cancelImpl: async () => {
+        throw new BadRequestException('Subscription is already CANCELLED');
+      },
+    });
+
+    await expect(engine.handleWebhook(deletedEvent as any)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(webhookEvent.upsert).not.toHaveBeenCalled();
+  });
+
+  it('should converge a CAS-conflict loser that finds the expected final state', async () => {
+    const failedEvent = {
+      id: 'evt-fail-3',
+      type: 'invoice.payment_failed',
+      data: { object: { id: 'in_2', attempt_count: 2 } },
+    };
+    const { engine, webhookEvent } = makeConvergenceEngine({
+      invoiceFindFirst: { ...invoiceRow, id: 'inv-2' },
+      findByCompanyImpl: async () => pastDueSub,
+      transitionImpl: async () => {
+        throw new ConflictException(
+          'Subscription was modified by another user.',
+        );
+      },
+    });
+
+    const result = await engine.handleWebhook(failedEvent as any);
+
+    expect(result).toEqual({
+      handled: true,
+      eventType: 'invoice.payment_failed',
+    });
+    expect(webhookEvent.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('should never swallow NotFoundException or unexpected errors', async () => {
+    const { engine, webhookEvent } = makeConvergenceEngine({
+      invoiceFindFirst: { ...invoiceRow, id: 'inv-2' },
+      findByCompanyImpl: async () => {
+        throw new NotFoundException('Subscription not found');
+      },
+      transitionImpl: async () => {
+        throw new BadRequestException('Cannot transition from X to PAST_DUE');
+      },
+    });
+    const failedEvent = {
+      id: 'evt-fail-4',
+      type: 'invoice.payment_failed',
+      data: { object: { id: 'in_2', attempt_count: 1 } },
+    };
+
+    // Read failure inside verification → original error preserved.
+    await expect(engine.handleWebhook(failedEvent as any)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(webhookEvent.upsert).not.toHaveBeenCalled();
+
+    const { engine: engine2, webhookEvent: upsert2 } = makeConvergenceEngine({
+      invoiceFindFirst: { ...invoiceRow },
+      markPaidImpl: async () => {
+        throw new NotFoundException('Invoice inv-1 not found');
+      },
+    });
+    await expect(engine2.handleWebhook(paidEvent as any)).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(upsert2.upsert).not.toHaveBeenCalled();
+  });
+
+  it('should converge a checkout retry and still store provider references', async () => {
+    const checkoutEvent = {
+      id: 'evt-co-1',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_1',
+          customer: 'cus_1',
+          subscription: 'sub_prov_9',
+          metadata: { companyId: 'comp-1', planCode: 'starter' },
+        },
+      },
+    };
+    let reads = 0;
+    const {
+      engine,
+      companySubscriptionService,
+      subscriptionRepository,
+      webhookEvent,
+    } = makeConvergenceEngine({
+      findByCompanyImpl: async () =>
+        ++reads === 1 ? pastDueSub : activeSub,
+      transitionImpl: async () => {
+        throw new BadRequestException(
+          'Cannot transition from ACTIVE to ACTIVE',
+        );
+      },
+    });
+
+    const result = await engine.handleWebhook(checkoutEvent as any);
+
+    expect(result).toEqual({
+      handled: true,
+      eventType: 'checkout.session.completed',
+    });
+    // Trailing provider-ref write still completed on the converged path.
+    expect(subscriptionRepository.updateByCompany).toHaveBeenCalledWith(
+      'comp-1',
+      expect.objectContaining({ providerCustomerId: 'cus_1' }),
+    );
+    expect(webhookEvent.upsert).toHaveBeenCalledTimes(1);
+    expect(companySubscriptionService.transitionStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('should converge a subscription.updated retry already at the target state', async () => {
+    const updatedEvent = {
+      id: 'evt-upd-1',
+      type: 'customer.subscription.updated',
+      data: { object: { id: 'sub_prov_1', status: 'active' } },
+    };
+    const { engine, webhookEvent } = makeConvergenceEngine({
+      findManySubs: [{ id: 'sub-1', companyId: 'comp-1', status: 'PAST_DUE' }],
+      findByCompanyImpl: async () => activeSub,
+      transitionImpl: async () => {
+        throw new BadRequestException(
+          'Cannot transition from ACTIVE to ACTIVE',
+        );
+      },
+    });
+
+    const result = await engine.handleWebhook(updatedEvent as any);
+
+    expect(result).toEqual({
+      handled: true,
+      eventType: 'customer.subscription.updated',
+    });
+    expect(webhookEvent.upsert).toHaveBeenCalledTimes(1);
   });
 });
