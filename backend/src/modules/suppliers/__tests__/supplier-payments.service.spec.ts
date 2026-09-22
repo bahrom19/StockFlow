@@ -91,6 +91,8 @@ describe('SupplierPaymentsService', () => {
   beforeEach(async () => {
     mockPrisma = {
       $transaction: jest.fn((cb: any) => cb(mockPrisma)),
+      // G14-02-12: shared invoice lock stub (SELECT id ... FOR UPDATE).
+      $queryRaw: jest.fn().mockResolvedValue([{ id: invoiceId }]),
       purchaseInvoice: {
         findFirst: jest.fn().mockResolvedValue({ ...baseInvoice }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -378,6 +380,33 @@ describe('SupplierPaymentsService', () => {
           companyId,
         ),
       ).rejects.toThrow(BadRequestException);
+      expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+      expect(mockPrisma.purchaseInvoice.updateMany).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    // G14-02-12: shared invoice lock acquired tenant-scoped before coverage guards.
+    it('should lock the invoice row tenant-scoped before coverage validation (G14-02-12)', async () => {
+      await service.create(supplierId, cashPaymentDto, userId, companyId);
+
+      expect(mockPrisma.$queryRaw).toHaveBeenCalled();
+      const lockCall = mockPrisma.$queryRaw.mock.calls[0];
+      // Raw query text targets PurchaseInvoice with FOR UPDATE.
+      expect(lockCall[0].join('')).toContain('PurchaseInvoice');
+      expect(lockCall[0].join('')).toContain('FOR UPDATE');
+      // Interpolated values carry the tenant-scoped predicate.
+      expect(lockCall).toContain(invoiceId);
+      expect(lockCall).toContain(companyId);
+    });
+
+    // G14-02-12: missing/foreign/soft-deleted invoice cannot be locked.
+    it('should reject when the invoice row cannot be locked (G14-02-12)', async () => {
+      mockPrisma.$queryRaw.mockResolvedValueOnce([]);
+
+      await expect(
+        service.create(supplierId, cashPaymentDto, userId, companyId),
+      ).rejects.toThrow(NotFoundException);
       expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
       expect(mockGlEngine.post).not.toHaveBeenCalled();
       expect(mockPrisma.purchaseInvoice.updateMany).not.toHaveBeenCalled();

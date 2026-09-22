@@ -38,7 +38,9 @@ export class SupplierPaymentAllocationsService {
    * - amount > 0
    *
    * Concurrency: uses SELECT ... FOR UPDATE on the payment row to serialize
-   * concurrent allocation operations for the same payment.
+   * concurrent allocation operations for the same payment, plus the shared
+   * G14-02-12 invoice lock (invoice → payment order) to serialize against
+   * concurrent supplier-payment creates for the same invoice.
    *
    * Idempotency: uses runWithIdempotency to prevent duplicate allocations.
    */
@@ -130,6 +132,24 @@ export class SupplierPaymentAllocationsService {
     tx: Prisma.TransactionClient;
   }): Promise<SupplierPaymentAllocationEntity> {
     const { supplierId, companyId, paymentId, purchaseInvoiceId, allocationAmount, tx } = params;
+
+    // G14-02-12: shared invoice lock FIRST (canonical order:
+    // invoice → payment). Serializes coverage reads below against
+    // concurrent supplier-payment creates for the same invoice. Uses the
+    // existing tx client directly (same inline $queryRaw precedent as the
+    // payment lock below); see PurchaseInvoiceRepository.lockInvoiceById
+    // for the canonical repository-level form. Held to commit.
+    const lockedInvoice = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "PurchaseInvoice"
+      WHERE id = ${purchaseInvoiceId}
+        AND "companyId" = ${companyId}
+        AND "deletedAt" IS NULL
+      FOR UPDATE
+    `;
+
+    if (lockedInvoice.length === 0) {
+      throw new NotFoundException(`Purchase invoice ${purchaseInvoiceId} not found`);
+    }
 
     // 5. Lock the payment row with SELECT ... FOR UPDATE
     // This prevents concurrent allocations from reading the same state

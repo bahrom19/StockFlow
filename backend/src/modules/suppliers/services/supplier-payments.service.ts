@@ -159,6 +159,25 @@ export class SupplierPaymentsService {
         );
       }
 
+      // G14-02-12: shared invoice lock (canonical order: invoice → payment).
+      // Serializes coverage reads below against concurrent standalone
+      // allocations for the same invoice. Uses the existing tx client
+      // directly (same inline $queryRaw precedent as the allocation
+      // service); see PurchaseInvoiceRepository.lockInvoiceById for the
+      // canonical repository-level form. Held to commit.
+      const lockedInvoice = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM "PurchaseInvoice"
+        WHERE id = ${dto.purchaseInvoiceId}
+          AND "companyId" = ${companyId}
+          AND "deletedAt" IS NULL
+        FOR UPDATE
+      `;
+      if (!lockedInvoice || lockedInvoice.length === 0) {
+        throw new NotFoundException(
+          `Purchase invoice ${dto.purchaseInvoiceId} not found`,
+        );
+      }
+
       if (!ALLOWED_INVOICE_STATUSES.includes(invoice.status as PurchaseInvoiceStatus)) {
         throw new BadRequestException(
           `Cannot record payment for invoice with status ${invoice.status}. Only APPROVED or PAID invoices are accepted.`,

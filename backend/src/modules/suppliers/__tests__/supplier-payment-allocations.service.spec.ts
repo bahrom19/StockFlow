@@ -415,8 +415,36 @@ describe('SupplierPaymentAllocationsService', () => {
       expect(queryCall[0].join('')).toContain('FOR UPDATE');
     });
 
-    it('should reject when payment is voided (locked row not found)', async () => {
+    // G14-02-12: canonical lock order — invoice lock BEFORE payment lock.
+    it('should acquire the invoice lock before the payment lock (G14-02-12)', async () => {
+      await service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId);
+
+      expect(mockPrisma.$queryRaw.mock.calls.length).toBeGreaterThanOrEqual(2);
+      const firstLock = mockPrisma.$queryRaw.mock.calls[0][0].join('');
+      const secondLock = mockPrisma.$queryRaw.mock.calls[1][0].join('');
+      expect(firstLock).toContain('PurchaseInvoice');
+      expect(firstLock).toContain('FOR UPDATE');
+      expect(secondLock).toContain('SupplierPayment');
+      expect(secondLock).toContain('FOR UPDATE');
+      // Invoice lock carries the tenant predicate values.
+      expect(mockPrisma.$queryRaw.mock.calls[0]).toContain(companyId);
+    });
+
+    // G14-02-12: missing/foreign/soft-deleted invoice cannot be locked.
+    it('should reject when the invoice row cannot be locked (G14-02-12)', async () => {
       mockPrisma.$queryRaw.mockResolvedValueOnce([]);
+
+      await expect(
+        service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should reject when payment is voided (locked row not found)', async () => {
+      // First call (invoice lock) succeeds; second call (payment lock)
+      // finds nothing → voided payment.
+      mockPrisma.$queryRaw
+        .mockResolvedValueOnce([{ id: invoiceId }])
+        .mockResolvedValueOnce([]);
 
       await expect(
         service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId),
@@ -526,8 +554,10 @@ describe('SupplierPaymentAllocationsService', () => {
     });
 
     it('should not persist reservation when work throws', async () => {
-      // Business failure: payment lock fails
-      mockPrisma.$queryRaw.mockResolvedValueOnce([]);
+      // Business failure: payment lock fails (invoice lock succeeds first).
+      mockPrisma.$queryRaw
+        .mockResolvedValueOnce([{ id: invoiceId }])
+        .mockResolvedValueOnce([]);
 
       await expect(
         service.create(

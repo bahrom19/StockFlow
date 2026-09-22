@@ -46,6 +46,27 @@ export class PurchaseInvoiceRepository {
     });
   }
 
+  // G14-02-12: pessimistic row-level lock on the PurchaseInvoice row used to
+  // serialize concurrent supplier-payment and allocation coverage checks for
+  // the same invoice. Prisma findUnique cannot express FOR UPDATE, so we use
+  // a tenant-scoped raw SELECT ... FOR UPDATE inside the caller's
+  // transaction. The lock is held until that transaction commits/rolls back.
+  // Follows the existing purchase-order.repository.ts lockById precedent.
+  // Canonical lock order is invoice → payment: callers MUST acquire this
+  // lock BEFORE any payment-row FOR UPDATE to avoid lock-order inversion.
+  async lockInvoiceById(
+    id: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const rows = await this.getClient(tx).$queryRaw<
+      Array<{ id: string }>
+    >`SELECT id FROM "PurchaseInvoice" WHERE id = ${id} AND "companyId" = ${companyId} AND "deletedAt" IS NULL FOR UPDATE`;
+    if (!rows || rows.length === 0) {
+      throw new NotFoundException(`Purchase invoice with id ${id} not found`);
+    }
+  }
+
   async findAll(params: {
     companyId: string;
     search?: string;
