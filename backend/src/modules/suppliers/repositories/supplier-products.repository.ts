@@ -112,10 +112,22 @@ export class SupplierProductsRepository {
     data: Prisma.SupplierProductCreateInput,
     tx?: Prisma.TransactionClient,
   ): Promise<SupplierProductWithProduct> {
-    return this.getClient(tx).supplierProduct.create({
-      data,
-      include: this.productInclude,
-    }) as Promise<SupplierProductWithProduct>;
+    try {
+      return this.getClient(tx).supplierProduct.create({
+        data,
+        include: this.productInclude,
+      }) as Promise<SupplierProductWithProduct>;
+    } catch (error: unknown) {
+      // Prisma P2002: unique constraint violation (concurrent duplicate create).
+      // Map to ConflictException with a clear message; other errors propagate.
+      const err = error as { code?: string };
+      if (err?.code === 'P2002') {
+        throw new ConflictException(
+          'This product is already linked to this supplier',
+        );
+      }
+      throw error;
+    }
   }
 
   async update(
