@@ -3,6 +3,9 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { SupplierStatementService } from '../services/supplier-statement.service';
 import { SupplierStatementRepository } from '../repositories/supplier-statement.repository';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
+import { SupplierCreditSummaryService } from '../services/supplier-credit-summary.service';
+import { SupplierCreditSummaryRepository } from '../repositories/supplier-credit-summary.repository';
+import { CompaniesService } from '../../companies/services/companies.service';
 import {
   StatementAllocationRow,
   StatementInvoiceRow,
@@ -100,7 +103,24 @@ describe('SupplierStatementService', () => {
     opening?: { invoices: Decimal; payments: Decimal; returns: Decimal };
   }) => {
     mockStatementRepo.findInvoices.mockResolvedValue(opts.invoices ?? []);
-    mockStatementRepo.findPayments.mockResolvedValue(opts.payments ?? []);
+    // Date-aware mock: mirrors the repo dateRange (gte/lte) so opening-leg
+    // tests can distinguish pre-date from in-period payments.
+    mockStatementRepo.findPayments.mockImplementation(
+      (
+        _sid: string,
+        _cid: string,
+        from?: Date,
+        to?: Date,
+        _cur?: Currency,
+      ) =>
+        Promise.resolve(
+          (opts.payments ?? []).filter(
+            (p) =>
+              (!from || p.paymentDate >= from) &&
+              (!to || p.paymentDate <= to),
+          ),
+        ),
+    );
     mockStatementRepo.findReturns.mockResolvedValue(opts.returns ?? []);
     mockStatementRepo.findActiveAllocationsForPayments.mockImplementation(
       (ids: string[]) =>
@@ -182,7 +202,7 @@ describe('SupplierStatementService', () => {
     expect(g.closingBalance).toBe('40000');
   });
 
-  it('4. unallocated payment → PAYMENT reduces balance, unallocated = full amount', async () => {
+  it('4. unallocated payment → PAYMENT credit 0 (canonical AP), unallocated = full amount', async () => {
     setData({
       payments: [payment('pay-1', 'PAY-000001', '2026-09-05', '100000')],
       allocations: [],
@@ -190,10 +210,11 @@ describe('SupplierStatementService', () => {
     const g = await group({ currency: KZT });
     const p = g.entries[0]!;
     expect(p.entryType).toBe('PAYMENT');
-    expect(p.credit).toBe('100000');
+    expect(p.amount).toBe('100000');
+    expect(p.credit).toBe('0');
     expect(p.allocatedAmount).toBe('0');
     expect(p.unallocatedAmount).toBe('100000');
-    expect(g.closingBalance).toBe('-100000');
+    expect(g.closingBalance).toBe('0');
   });
 
   it('5. multiple allocations → allocatedAmount = sum, no double deduction', async () => {
@@ -445,8 +466,150 @@ describe('SupplierStatementService', () => {
     expect(g.entries.map((e) => e.status)).toEqual(['APPROVED', 'APPROVED', 'COMPLETED']);
     expect(g.closingBalance).toBe('75000');
   });
+
+  it('25. G14-03-01 scenario B: invoice 1000 + payment 100 + alloc 0 → credit 0, closing 1000', async () => {
+    setData({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '1000')],
+      payments: [payment('pay-1', 'PAY-000001', '2026-09-05', '100')],
+      allocations: [],
+    });
+    const g = await group({ currency: KZT });
+    expect(g.entries[1]!.entryType).toBe('PAYMENT');
+    expect(g.entries[1]!.amount).toBe('100');
+    expect(g.entries[1]!.credit).toBe('0');
+    expect(g.closingBalance).toBe('1000');
+  });
+
+  it('26. G14-03-01 scenario D: invoice 1000 + payment 100 + alloc 50 → credit 50, closing 950', async () => {
+    setData({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '1000')],
+      payments: [payment('pay-1', 'PAY-000001', '2026-09-05', '100')],
+      allocations: [alloc('pay-1', 'inv-1', '50')],
+    });
+    const g = await group({ currency: KZT });
+    expect(g.entries[1]!.credit).toBe('50');
+    expect(g.entries[1]!.allocatedAmount).toBe('50');
+    expect(g.entries[1]!.unallocatedAmount).toBe('50');
+    expect(g.closingBalance).toBe('950');
+  });
+
+  it('27. G14-03-01 scenario E: voided payment contributes 0 (repo excludes soft-deleted)', async () => {
+    setData({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '1000')],
+      payments: [],
+      allocations: [],
+    });
+    const g = await group({ currency: KZT });
+    expect(g.entries).toHaveLength(1);
+    expect(g.closingBalance).toBe('1000');
+  });
+
+  it('28. G14-03-01 opening uses allocation-based payment leg', async () => {
+    setData({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '1000')],
+      payments: [payment('pay-0', 'PAY-000000', '2026-08-20', '500')],
+      allocations: [alloc('pay-0', 'inv-0', '300')],
+      opening: {
+        invoices: new Decimal(0),
+        payments: new Decimal('500'),
+        returns: new Decimal(0),
+      },
+    });
+    const g = await group({ dateFrom: '2026-09-01', currency: KZT });
+    // Opening payment leg = 300 allocated (not the 500 payment amount).
+    expect(g.openingBalance).toBe('-300');
+    expect(g.closingBalance).toBe('700');
+  });
 });
 
 
 
 
+describe('G14-03-01 statement ↔ credit-summary consistency (shared fixtures, no prod dependency)', () => {
+  const buildCreditService = (totals: {
+    invoiced: string;
+    allocated: string;
+    returned: string;
+  }) => {
+    const creditService = new SupplierCreditSummaryService(
+      { findById: jest.fn().mockResolvedValue({ id: supplierId }) } as unknown as SuppliersRepository,
+      {
+        getBaseCurrencyTotals: jest.fn().mockResolvedValue({
+          totalInvoiced: new Decimal(totals.invoiced),
+          totalAllocated: new Decimal(totals.allocated),
+          totalReturned: new Decimal(totals.returned),
+        }),
+      } as unknown as SupplierCreditSummaryRepository,
+      { getBaseCurrency: jest.fn().mockResolvedValue(KZT) } as unknown as CompaniesService,
+    );
+    return creditService;
+  };
+
+  const buildStatementService = (opts: {
+    invoices?: StatementInvoiceRow[];
+    payments?: StatementPaymentRow[];
+    allocations?: StatementAllocationRow[];
+  }) => {
+    const statementService = new SupplierStatementService(
+      { findById: jest.fn().mockResolvedValue({ id: supplierId }) } as unknown as SuppliersRepository,
+      {
+        findInvoices: jest.fn().mockResolvedValue(opts.invoices ?? []),
+        findPayments: jest.fn().mockResolvedValue(opts.payments ?? []),
+        findReturns: jest.fn().mockResolvedValue([]),
+        findActiveAllocationsForPayments: jest.fn(
+          (ids: string[]) =>
+            Promise.resolve(
+              (opts.allocations ?? []).filter((a) => ids.includes(a.paymentId)),
+            ),
+        ),
+        getOpeningBalance: jest.fn(),
+      } as unknown as SupplierStatementRepository,
+    );
+    return statementService;
+  };
+
+  it('unallocated payment → both models report 1000', async () => {
+    const statement = buildStatementService({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '1000')],
+      payments: [payment('pay-1', 'PAY-000001', '2026-09-05', '100')],
+      allocations: [],
+    });
+    const credit = buildCreditService({ invoiced: '1000', allocated: '0', returned: '0' });
+    const g = one(
+      (await statement.getStatement(supplierId, companyId, { currency: KZT } as never)).currencies,
+    );
+    const summary = await credit.getCreditSummary(supplierId, companyId);
+    expect(g.closingBalance).toBe('1000');
+    expect(summary.outstandingAP).toBe('1000');
+  });
+
+  it('partial allocation → both models report 950', async () => {
+    const statement = buildStatementService({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '1000')],
+      payments: [payment('pay-1', 'PAY-000001', '2026-09-05', '100')],
+      allocations: [alloc('pay-1', 'inv-1', '50')],
+    });
+    const credit = buildCreditService({ invoiced: '1000', allocated: '50', returned: '0' });
+    const g = one(
+      (await statement.getStatement(supplierId, companyId, { currency: KZT } as never)).currencies,
+    );
+    const summary = await credit.getCreditSummary(supplierId, companyId);
+    expect(g.closingBalance).toBe('950');
+    expect(summary.outstandingAP).toBe('950');
+  });
+
+  it('full allocation → both models report 900', async () => {
+    const statement = buildStatementService({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '1000')],
+      payments: [payment('pay-1', 'PAY-000001', '2026-09-05', '100')],
+      allocations: [alloc('pay-1', 'inv-1', '100')],
+    });
+    const credit = buildCreditService({ invoiced: '1000', allocated: '100', returned: '0' });
+    const g = one(
+      (await statement.getStatement(supplierId, companyId, { currency: KZT } as never)).currencies,
+    );
+    const summary = await credit.getCreditSummary(supplierId, companyId);
+    expect(g.closingBalance).toBe('900');
+    expect(summary.outstandingAP).toBe('900');
+  });
+});

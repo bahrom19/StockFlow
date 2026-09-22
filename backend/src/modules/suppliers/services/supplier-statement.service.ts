@@ -24,6 +24,9 @@ interface RawEntry {
   credit: Decimal;
   status: string;
   paymentId?: string;
+  // PAYMENT only: SUM(active allocations) — the canonical AP credit basis
+  // (G9-A/B1). Computed once per payment and reused for the detail block.
+  allocatedCredit?: Decimal;
 }
 
 const ENTRY_TYPE_RANK: Record<SupplierStatementEntryType, number> = {
@@ -41,7 +44,11 @@ const ENTRY_TYPE_RANK: Record<SupplierStatementEntryType, number> = {
  *   runningBalance = openingBalance + Σ debit − Σ credit
  *
  * where INVOICE is a debit (AP increase) and PAYMENT/RETURN are credits
- * (AP decrease). The statement never reads the legacy PurchaseInvoice.paidAmount
+ * (AP decrease). PAYMENT credit is the CANONICAL allocation-based coverage
+ * (G9-A/B1): SUM(active SupplierPaymentAllocation.amount for the payment),
+ * NOT the full payment amount — an unallocated payment does not reduce AP.
+ * entry.amount always keeps the full SupplierPayment.amount for display.
+ * The statement never reads the legacy PurchaseInvoice.paidAmount
  * cache, and never mixes currencies in a single running balance.
  */
 @Injectable()
@@ -104,18 +111,28 @@ export class SupplierStatementService {
         }),
       ),
       ...payments.map(
-        (p): RawEntry => ({
-          entryType: 'PAYMENT',
-          date: p.paymentDate,
-          reference: p.paymentNumber,
-          sourceEntityId: p.id,
-          currency: p.currency,
-          amount: p.amount,
-          debit: new Decimal(0),
-          credit: p.amount,
-          status: 'ACTIVE',
-          paymentId: p.id,
-        }),
+        (p): RawEntry => {
+          // G14-03-01: canonical AP credit = SUM(active allocations).
+          // allocByPayment is the existing batched fetch (no extra query).
+          const paymentAllocs = allocByPayment.get(p.id) ?? [];
+          const allocated = paymentAllocs.reduce(
+            (sum, a) => sum.add(a.amount),
+            new Decimal(0),
+          );
+          return {
+            entryType: 'PAYMENT',
+            date: p.paymentDate,
+            reference: p.paymentNumber,
+            sourceEntityId: p.id,
+            currency: p.currency,
+            amount: p.amount,
+            debit: new Decimal(0),
+            credit: allocated,
+            status: 'ACTIVE',
+            paymentId: p.id,
+            allocatedCredit: allocated,
+          };
+        },
       ),
       ...returns.map(
         (r): RawEntry => ({
@@ -164,10 +181,8 @@ export class SupplierStatementService {
         };
         if (e.entryType === 'PAYMENT' && e.paymentId) {
           const paymentAllocs = allocByPayment.get(e.paymentId) ?? [];
-          const allocated = paymentAllocs.reduce(
-            (sum, a) => sum.add(a.amount),
-            new Decimal(0),
-          );
+          // Reuse the credit already computed from the same batched data.
+          const allocated = e.allocatedCredit ?? new Decimal(0);
           const detail: SupplierStatementAllocationDetailEntity[] = paymentAllocs.map(
             (a) => ({
               purchaseInvoiceId: a.purchaseInvoiceId ?? '',
@@ -240,7 +255,35 @@ export class SupplierStatementService {
       beforeDate,
       currency,
     );
-    return opening.invoices.sub(opening.payments).sub(opening.returns);
+    // G14-03-01: the payment leg uses the same canonical allocation-based
+    // credit as in-period entries. Reuses the existing batched repo reads
+    // (no new query shape, no N+1): pre-date payments, then their active
+    // allocations. The service-side date filter mirrors the repo's strict
+    // `< beforeDate` opening predicate exactly (the repo dateRange is
+    // inclusive `lte`, so the upper bound is shifted by 1ms).
+    const exclusiveUpperBound = new Date(beforeDate.getTime() - 1);
+    const prePayments = await this.statementRepo.findPayments(
+      supplierId,
+      companyId,
+      undefined,
+      exclusiveUpperBound,
+      currency,
+    );
+    const strictlyBefore = prePayments.filter((p) => p.paymentDate < beforeDate);
+    const prePaymentIds = strictlyBefore.map((p) => p.id);
+    const preAllocs =
+      prePaymentIds.length > 0
+        ? await this.statementRepo.findActiveAllocationsForPayments(
+            prePaymentIds,
+            supplierId,
+            companyId,
+          )
+        : [];
+    const allocatedCredit = preAllocs.reduce(
+      (sum, a) => sum.add(a.amount),
+      new Decimal(0),
+    );
+    return opening.invoices.sub(allocatedCredit).sub(opening.returns);
   }
 
   /**
