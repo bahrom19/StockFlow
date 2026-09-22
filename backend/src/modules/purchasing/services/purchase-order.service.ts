@@ -96,6 +96,25 @@ export class PurchaseOrderService {
         );
       }
 
+      // G14-02-01: tenant-scoped supplier validation. Prisma `connect`
+      // only guarantees FK existence — never tenant ownership — so a
+      // foreign-tenant or soft-deleted supplierId would otherwise be
+      // accepted. Missing, foreign-tenant and soft-deleted suppliers are
+      // indistinguishable 404s (no tenant-existence oracle).
+      const supplier = await tx.supplier.findFirst({
+        where: {
+          id: dto.supplierId,
+          companyId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!supplier) {
+        throw new NotFoundException(
+          `Supplier with id ${dto.supplierId} not found`,
+        );
+      }
+
       let subtotal = new Decimal(0);
       let totalDiscount = new Decimal(0);
       let totalTax = new Decimal(0);
@@ -272,8 +291,23 @@ export class PurchaseOrderService {
       }
 
       const updateData: Prisma.PurchaseOrderUpdateInput = {};
-      if (dto.supplierId)
+      if (dto.supplierId) {
+        // G14-02-01: same tenant-scoped supplier validation as create.
+        const newSupplier = await tx.supplier.findFirst({
+          where: {
+            id: dto.supplierId,
+            companyId,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!newSupplier) {
+          throw new NotFoundException(
+            `Supplier with id ${dto.supplierId} not found`,
+          );
+        }
         updateData.supplier = { connect: { id: dto.supplierId } };
+      }
       if (dto.orderDate) updateData.orderDate = new Date(dto.orderDate);
       if (dto.expectedDate)
         updateData.expectedDate = new Date(dto.expectedDate);

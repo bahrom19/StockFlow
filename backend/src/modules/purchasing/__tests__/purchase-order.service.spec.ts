@@ -137,7 +137,10 @@ describe('PurchaseOrderService', () => {
     };
 
     it('should create a purchase order and return entity', async () => {
-      const mockTx = { purchaseOrderItem: { createMany: jest.fn() } };
+      const mockTx = {
+        purchaseOrderItem: { createMany: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.create.mockResolvedValue(basePo as any);
 
@@ -168,8 +171,50 @@ describe('PurchaseOrderService', () => {
       );
     });
 
+    // G14-02-01: cross-tenant supplier rejected, PO not created
+    it('should throw NotFoundException when supplier belongs to another company', async () => {
+      const mockTx = {
+        purchaseOrderItem: { createMany: jest.fn() },
+        // Simulates tx.supplier.findFirst finding nothing for this company
+        // (foreign-tenant supplierId) — same as soft-deleted/missing.
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockTx.supplier.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: supplierId,
+            companyId,
+            deletedAt: null,
+          }),
+        }),
+      );
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // G14-02-01: soft-deleted supplier rejected (same indistinguishable 404)
+    it('should throw NotFoundException when supplier is soft-deleted', async () => {
+      const mockTx = {
+        purchaseOrderItem: { createMany: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
     it('should calculate totals correctly for multiple items', async () => {
-      const mockTx = { purchaseOrderItem: { createMany: jest.fn() } };
+      const mockTx = {
+        purchaseOrderItem: { createMany: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
       const multiDto: CreatePurchaseOrderDto = {
@@ -298,6 +343,44 @@ describe('PurchaseOrderService', () => {
       const result = await service.update('po-1', updateDto, userId, companyId);
       expect(result).toBeDefined();
       expect(mockAuditLog.log).toHaveBeenCalled();
+    });
+
+    // G14-02-01: update without supplierId leaves supplier relation unchanged
+    it('should preserve supplier when update DTO omits supplierId', async () => {
+      const mockTx = {
+        purchaseOrderItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+        supplier: { findFirst: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+      mockRepo.update.mockResolvedValue({ ...basePo, notes: 'Updated' } as any);
+
+      await service.update('po-1', { notes: 'Updated' }, userId, companyId);
+
+      // No supplier lookup: relation untouched.
+      expect(mockTx.supplier.findFirst).not.toHaveBeenCalled();
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'po-1',
+        expect.not.objectContaining({ supplier: expect.anything() }),
+        companyId,
+        expect.anything(),
+        mockTx,
+      );
+    });
+
+    // G14-02-01: DRAFT update to foreign supplier rejected
+    it('should throw NotFoundException when updating to another company supplier', async () => {
+      const mockTx = {
+        purchaseOrderItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(
+        service.update('po-1', { supplierId: 'foreign-supplier' }, userId, companyId),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when order does not exist', async () => {
@@ -593,7 +676,10 @@ describe('PurchaseOrderService', () => {
     };
 
     it('should default to KZT when currency not provided', async () => {
-      const mockTx = { purchaseOrderItem: { createMany: jest.fn() } };
+      const mockTx = {
+        purchaseOrderItem: { createMany: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.create.mockResolvedValue(basePo as any);
 
