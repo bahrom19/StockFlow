@@ -184,6 +184,31 @@ export class SupplierPaymentsService {
           `Payment of ${amount.toString()} exceeds outstanding amount. Current paid: ${currentPaid.toString()}, grand total: ${grandTotal.toString()}`,
         );
       }
+
+      // 8b. G14-02-03: canonical allocation coverage check. The canonical
+      // payment coverage is SUM(active allocations) (G9-B1), but the legacy
+      // check above only reads invoice.paidAmount. A standalone allocation
+      // (which never touches paidAmount) can therefore cover the invoice to
+      // 100% while paidAmount stays 0, and this payment path would then add
+      // a second full coverage. Reject when existing active allocations
+      // plus this payment would exceed the invoice grand total. Runs in the
+      // same transaction before any mutation; both guards stay in force.
+      const existingAllocated = await tx.supplierPaymentAllocation.aggregate({
+        where: {
+          purchaseInvoiceId: dto.purchaseInvoiceId,
+          companyId,
+          deletedAt: null,
+        },
+        _sum: { amount: true },
+      });
+      const totalAllocated = new Decimal(existingAllocated._sum.amount ?? 0);
+      const newAllocatedTotal = totalAllocated.add(amount);
+
+      if (newAllocatedTotal.gt(grandTotal)) {
+        throw new BadRequestException(
+          `Payment of ${amount.toString()} exceeds outstanding amount. Already allocated: ${totalAllocated.toString()}, grand total: ${grandTotal.toString()}`,
+        );
+      }
     }
 
     // 9. Resolve GL accounts

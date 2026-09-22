@@ -292,6 +292,98 @@ describe('SupplierPaymentsService', () => {
       expect(mockAuditLog.log).not.toHaveBeenCalled();
     });
 
+    // G14-02-03: mixed-endpoint over-coverage. A standalone allocation has
+    // covered the invoice to 100% while legacy paidAmount is still 0, so the
+    // legacy paidAmount guard would allow a full payment. The canonical
+    // allocation guard must reject it with zero business mutation.
+    it('should reject payment when existing allocations already cover the invoice (G14-02-03)', async () => {
+      mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal('100000') },
+      });
+
+      await expect(
+        service.create(
+          supplierId,
+          { ...cashPaymentDto, amount: 100000 },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
+      expect(mockPrisma.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+      expect(mockPrisma.purchaseInvoice.updateMany).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    // G14-02-03: partial existing allocations — payment filling the
+    // remainder exactly is allowed (60k allocated + 40k payment = 100k).
+    it('should allow payment filling the remaining allocation coverage (G14-02-03)', async () => {
+      mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal('60000') },
+      });
+
+      const result = await service.create(
+        supplierId,
+        { ...cashPaymentDto, amount: 40000 },
+        userId,
+        companyId,
+      );
+
+      expect(result).toBeDefined();
+      expect(mockPaymentsRepo.create).toHaveBeenCalledTimes(1);
+      const updateCall = mockPrisma.purchaseInvoice.updateMany.mock.calls[0][0];
+      expect(updateCall.data.paidAmount).toBe('40000');
+    });
+
+    // G14-02-03: partial existing allocations — payment exceeding the
+    // remainder is rejected (60k allocated + 41k payment > 100k).
+    it('should reject payment exceeding the remaining allocation coverage (G14-02-03)', async () => {
+      mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal('60000') },
+      });
+
+      await expect(
+        service.create(
+          supplierId,
+          { ...cashPaymentDto, amount: 41000 },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
+      expect(mockPrisma.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+      expect(mockPrisma.purchaseInvoice.updateMany).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    // G14-02-03: legacy paidAmount guard preserved. Allocations are empty
+    // but paidAmount is already 90000, so a 20000 payment must still be
+    // rejected by the original paidAmount check.
+    it('should still reject by the legacy paidAmount guard when allocations allow it (G14-02-03)', async () => {
+      mockPrisma.purchaseInvoice.findFirst.mockResolvedValue({
+        ...baseInvoice,
+        paidAmount: new Decimal('90000'),
+      });
+      mockPrisma.supplierPaymentAllocation.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal('0') },
+      });
+
+      await expect(
+        service.create(
+          supplierId,
+          { ...cashPaymentDto, amount: 20000 },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+      expect(mockPrisma.purchaseInvoice.updateMany).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
     it('should reject payment currency different from company currency (company KZT + payment RUB, G3-9 #3)', async () => {
       await expect(
         service.create(
