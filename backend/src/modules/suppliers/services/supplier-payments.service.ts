@@ -479,6 +479,12 @@ export class SupplierPaymentsService {
       if (!invoice) {
         throw new NotFoundException('Associated purchase invoice not found');
       }
+
+      if (invoice.status === PurchaseInvoiceStatus.CANCELLED) {
+        throw new BadRequestException(
+          'Cannot void payment for a cancelled invoice',
+        );
+      }
     }
 
     // 3. Resolve GL accounts

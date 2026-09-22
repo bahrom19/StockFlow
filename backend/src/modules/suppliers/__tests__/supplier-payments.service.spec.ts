@@ -600,6 +600,75 @@ describe('SupplierPaymentsService', () => {
   });
 
   // ─────────────────────────────────────────────
+  // G14-02-07: CANCELLED invoice void protection
+  // ─────────────────────────────────────────────
+
+  describe('void CANCELLED invoice protection (G14-02-07)', () => {
+    const cancelledInvoice = {
+      ...baseInvoice,
+      status: PurchaseInvoiceStatus.CANCELLED,
+    };
+
+    // G14-02-07 TEST 1: CANCELLED invoice rejected
+    it('should reject void when linked PurchaseInvoice is CANCELLED', async () => {
+      mockPaymentsRepo.findById.mockResolvedValue({ ...voidedPaymentRow, purchaseInvoiceId: cancelledInvoice.id });
+      mockPrisma.purchaseInvoice.findFirst.mockResolvedValue(cancelledInvoice);
+
+      await expect(
+        service.void(paymentId, supplierId, companyId, userId),
+      ).rejects.toThrow(BadRequestException);
+      // G14-02-07: ZERO mutation before rejection
+      expect(mockPaymentsRepo.softDelete).not.toHaveBeenCalled();
+      expect(mockAllocationsRepo.softDeleteByPayment).not.toHaveBeenCalled();
+      expect(mockPrisma.purchaseInvoice.updateMany).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+// G14-02-07 TEST 2: CANCELLED invoice remains unchanged
+    it('should keep CANCELLED invoice unchanged after rejected void', async () => {
+      mockPaymentsRepo.findById.mockResolvedValue({ ...voidedPaymentRow, purchaseInvoiceId: cancelledInvoice.id });
+      mockPrisma.purchaseInvoice.findFirst.mockResolvedValue(cancelledInvoice);
+
+      await expect(
+        service.void(paymentId, supplierId, companyId, userId),
+      ).rejects.toThrow(BadRequestException);
+
+      // G14-02-07: ZERO mutation before rejection — all mutation mocks remain at 0 calls
+      expect(mockPaymentsRepo.softDelete).not.toHaveBeenCalled();
+      expect(mockAllocationsRepo.softDeleteByPayment).not.toHaveBeenCalled();
+      expect(mockPrisma.purchaseInvoice.updateMany).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+      // Invoice state is preserved (no updateMany → status/paidAmount unchanged)
+      expect(true).toBe(true);
+    });
+
+    // G14-02-07 TEST 3: existing APPROVED void behavior still valid
+    it('should still void valid APPROVED invoice payment', async () => {
+      // Payment amount 50000 ≤ invoice paidAmount 100000 → no negative guard
+      mockPaymentsRepo.findById.mockResolvedValue({
+        ...voidedPaymentRow,
+        amount: new Decimal('50000'),
+      });
+      mockPrisma.purchaseInvoice.findFirst.mockResolvedValue({
+        ...baseInvoice,
+        status: PurchaseInvoiceStatus.APPROVED,
+        paidAmount: new Decimal('100000'),
+      });
+
+      await service.void(paymentId, supplierId, companyId, userId);
+
+      // G14-02-07: APPROVED void continues to work
+      expect(mockPaymentsRepo.softDelete).toHaveBeenCalledTimes(1);
+      expect(mockAllocationsRepo.softDeleteByPayment).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.purchaseInvoice.updateMany).toHaveBeenCalledTimes(1);
+      expect(mockGlEngine.post).toHaveBeenCalledTimes(1);
+      expect(mockAuditLog.log).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─────────────────────────────────────────────
   // PATCH
   // ─────────────────────────────────────────────
 
