@@ -321,6 +321,31 @@ export class InvoiceService {
         throw new BadRequestException(`Invoice ${id} is not pending`);
       }
 
+      // G13-03-09-03: paidAmount must exactly equal invoice.totalAmount.
+      // The billing domain has no partial-payment model — every invoice
+      // represents one billing period's subscription fee and must be paid
+      // in full. Use Prisma.Decimal for precision-safe comparison so that
+      // semantically equivalent representations (e.g. "29.99" == "29.9900")
+      // are treated as equal.
+      let paidDecimal: Prisma.Decimal;
+      try {
+        paidDecimal = new Prisma.Decimal(paidAmount);
+      } catch {
+        throw new BadRequestException(
+          `Invalid paidAmount: "${paidAmount}" is not a valid decimal`,
+        );
+      }
+      if (paidDecimal.isNaN() || paidDecimal.isNeg() || paidDecimal.isZero()) {
+        throw new BadRequestException(
+          `Invalid paidAmount: must be a positive non-zero decimal`,
+        );
+      }
+      if (!paidDecimal.equals(invoice.totalAmount)) {
+        throw new BadRequestException(
+          `Paid amount ${paidAmount} does not match invoice total ${invoice.totalAmount}`,
+        );
+      }
+
       const rowVer = invoice.rowVersion ?? 0;
       const updated = await this.invoiceRepository.update(
         id,

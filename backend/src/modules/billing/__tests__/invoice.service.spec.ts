@@ -311,6 +311,20 @@ describe('InvoiceService', () => {
       expect(mockTx.auditLog.create).toHaveBeenCalled(); // Audit log created
     });
 
+    it('should accept decimal-equivalent paidAmount (29.9900 == 29.99)', async () => {
+      mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
+      mockInvoiceRepo.update.mockResolvedValue({
+        ...mockInvoice,
+        status: 'PAID',
+      } as any);
+      mockPaymentRepo.create.mockResolvedValue({ id: 'pmt-1' } as any);
+
+      const result = await service.markPaid('inv-1', 'comp-1', '29.9900');
+      expect(result.status).toBe('PAID');
+      expect(mockPaymentRepo.create).toHaveBeenCalled();
+      expect(mockEventBus.publish).toHaveBeenCalled();
+    });
+
     it('should throw for non-pending invoice', async () => {
       mockInvoiceRepo.findById.mockResolvedValue({
         ...mockInvoice,
@@ -319,6 +333,60 @@ describe('InvoiceService', () => {
       await expect(
         service.markPaid('inv-1', 'comp-1', '29.99'),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject underpayment and not create side effects', async () => {
+      mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
+
+      await expect(
+        service.markPaid('inv-1', 'comp-1', '29.98'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockInvoiceRepo.update).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.create).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+      expect(mockTx.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('should reject overpayment and not create side effects', async () => {
+      mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
+
+      await expect(
+        service.markPaid('inv-1', 'comp-1', '30.00'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockInvoiceRepo.update).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.create).not.toHaveBeenCalled();
+      expect(mockEventBus.publish).not.toHaveBeenCalled();
+      expect(mockTx.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('should reject zero paidAmount', async () => {
+      mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
+
+      await expect(
+        service.markPaid('inv-1', 'comp-1', '0'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockInvoiceRepo.update).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('should reject negative paidAmount', async () => {
+      mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
+
+      await expect(
+        service.markPaid('inv-1', 'comp-1', '-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockInvoiceRepo.update).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('should reject non-numeric paidAmount', async () => {
+      mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
+
+      await expect(
+        service.markPaid('inv-1', 'comp-1', 'abc'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockInvoiceRepo.update).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.create).not.toHaveBeenCalled();
     });
   });
 
