@@ -132,7 +132,9 @@ describe('PurchaseInvoiceService', () => {
     it('should create invoice from purchase order', async () => {
       const mockTx = {
         purchaseInvoiceItem: { create: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ defaultDueDays: null }),
+        },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(basePo as any);
@@ -171,6 +173,65 @@ describe('PurchaseInvoiceService', () => {
       await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    // G14-02-02: invoice supplier must equal PO supplier
+    it('should throw BadRequestException when supplier does not match PO supplier', async () => {
+      const mockTx = {
+        supplier: { findFirst: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(
+        service.create(
+          { ...validDto, supplierId: 'supplier-other' },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      // Rejected before any mutation: no supplier lookup, no invoice create.
+      expect(mockTx.supplier.findFirst).not.toHaveBeenCalled();
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // G14-02-02: foreign-company supplier rejected with indistinguishable 404
+    it('should throw NotFoundException when supplier belongs to another company', async () => {
+      const mockTx = {
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      // PO belongs to current company and to the requested supplier id shape;
+      // the supplier lookup finds nothing for this company (foreign-tenant).
+      mockPoRepo.findById.mockResolvedValue({ ...basePo, supplierId } as any);
+
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockTx.supplier.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: supplierId,
+            companyId,
+            deletedAt: null,
+          }),
+        }),
+      );
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // G14-02-02: soft-deleted supplier rejected (same indistinguishable 404)
+    it('should throw NotFoundException when supplier is soft-deleted', async () => {
+      const mockTx = {
+        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockPoRepo.findById.mockResolvedValue({ ...basePo, supplierId } as any);
+
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockRepo.create).not.toHaveBeenCalled();
     });
   });
 
@@ -216,7 +277,9 @@ describe('PurchaseInvoiceService', () => {
       const poWithUsd = { ...basePo, currency: 'USD' };
       const mockTx = {
         purchaseInvoiceItem: { create: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ defaultDueDays: null }),
+        },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
@@ -234,7 +297,9 @@ describe('PurchaseInvoiceService', () => {
       const poWithUsd = { ...basePo, currency: 'USD' };
       const mockTx = {
         purchaseInvoiceItem: { create: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ defaultDueDays: null }),
+        },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
@@ -256,7 +321,9 @@ describe('PurchaseInvoiceService', () => {
       const poWithUsd = { ...basePo, currency: 'USD' };
       const mockTx = {
         purchaseInvoiceItem: { create: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ defaultDueDays: null }),
+        },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
@@ -276,7 +343,9 @@ describe('PurchaseInvoiceService', () => {
       const poWithKzt = { ...basePo, currency: 'KZT' };
       const mockTx = {
         purchaseInvoiceItem: { create: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ defaultDueDays: null }),
+        },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithKzt as any);
@@ -443,11 +512,7 @@ describe('PurchaseInvoiceService', () => {
       return {
         purchaseInvoiceItem: { create: jest.fn() },
         supplier: {
-          findFirst: jest
-            .fn()
-            .mockResolvedValue(
-              defaultDueDays === null ? null : { defaultDueDays },
-            ),
+          findFirst: jest.fn().mockResolvedValue({ defaultDueDays }),
         },
       };
     }
@@ -539,7 +604,9 @@ describe('PurchaseInvoiceService', () => {
     function baseCreateWithSum(existing: string) {
       const mockTx = {
         purchaseInvoiceItem: { create: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ defaultDueDays: null }),
+        },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(basePo as any);
@@ -574,7 +641,9 @@ describe('PurchaseInvoiceService', () => {
     it('excludes DRAFT siblings and scopes sum by PO/company/currency', async () => {
       const mockTx = {
         purchaseInvoiceItem: { create: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue(null) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ defaultDueDays: null }),
+        },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(basePo as any);

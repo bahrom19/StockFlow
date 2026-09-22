@@ -100,6 +100,17 @@ export class PurchaseInvoiceService {
         tx,
       );
 
+      // G14-02-02: invoice supplier must equal PO supplier. The DTO
+      // carries supplierId and purchaseOrderId as an independent pair and
+      // Prisma FKs cannot express cross-table equality, so a mismatched
+      // pair would otherwise post AP to the wrong supplier. Reject before
+      // any mutation.
+      if (dto.supplierId !== po.supplierId) {
+        throw new BadRequestException(
+          'Invoice supplier must match purchase order supplier',
+        );
+      }
+
       // G9-C: supplier terms & credit foundation.
       // Resolve the due date with explicit precedence rules:
       //   1. An explicitly provided dto.dueDate ALWAYS wins.
@@ -110,10 +121,20 @@ export class PurchaseInvoiceService {
       // supplier.defaultDueDays is a write-time default only: changing it
       // never mutates already-created invoices (no retroactive recalc).
       const invoiceDate = dto.invoiceDate ? new Date(dto.invoiceDate) : new Date();
+      // G14-02-02: mandatory tenant-scoped supplier validation. The lookup
+      // previously served only due-date resolution (optional result), which
+      // let foreign-tenant or soft-deleted supplierIds reach `connect`.
+      // Missing, foreign-tenant and soft-deleted suppliers are
+      // indistinguishable 404s (no tenant-existence oracle).
       const supplier = await tx.supplier.findFirst({
         where: { id: dto.supplierId, companyId, deletedAt: null },
         select: { defaultDueDays: true },
       });
+      if (!supplier) {
+        throw new NotFoundException(
+          `Supplier with id ${dto.supplierId} not found`,
+        );
+      }
       let dueDate: Date | null = dto.dueDate ? new Date(dto.dueDate) : null;
       if (dueDate === null && supplier?.defaultDueDays != null) {
         dueDate = new Date(invoiceDate.getTime());
