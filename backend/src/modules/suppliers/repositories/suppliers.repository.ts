@@ -6,6 +6,34 @@ import {
 import { Prisma, Supplier } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
+function isP2002(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+  );
+}
+
+function getP2002Field(error: Prisma.PrismaClientKnownRequestError): string | undefined {
+  const target = (error.meta?.target as string[]) ?? [];
+  if (target.includes('email')) return 'email';
+  if (target.includes('phone')) return 'phone';
+  if (target.includes('bin')) return 'bin';
+  return undefined;
+}
+
+function mapP2002ToConflict(error: Prisma.PrismaClientKnownRequestError): ConflictException {
+  const field = getP2002Field(error);
+  switch (field) {
+    case 'email':
+      return new ConflictException('A supplier with this email already exists');
+    case 'phone':
+      return new ConflictException('A supplier with this phone already exists');
+    case 'bin':
+      return new ConflictException('A supplier with this BIN already exists');
+    default:
+      return new ConflictException('A supplier with these details already exists');
+  }
+}
+
 @Injectable()
 export class SuppliersRepository {
   constructor(private readonly prismaService: PrismaService) {}
@@ -18,7 +46,14 @@ export class SuppliersRepository {
     data: Prisma.SupplierCreateInput,
     tx?: Prisma.TransactionClient,
   ): Promise<Supplier> {
-    return this.getClient(tx).supplier.create({ data });
+    try {
+      return await this.getClient(tx).supplier.create({ data });
+    } catch (error) {
+      if (isP2002(error)) {
+        throw mapP2002ToConflict(error);
+      }
+      throw error;
+    }
   }
 
   async findAll(params: {
@@ -93,26 +128,33 @@ export class SuppliersRepository {
 
     // If rowVersion is provided, use optimistic locking
     if (rowVersion !== undefined) {
-      const result = await client.supplier.updateMany({
-        where: { id, companyId, rowVersion },
-        data: { ...data, rowVersion: { increment: 1 } },
-      });
-
-      if (result.count === 0) {
-        const existing = await client.supplier.findFirst({
-          where: { id, companyId },
+      try {
+        const result = await client.supplier.updateMany({
+          where: { id, companyId, rowVersion },
+          data: { ...data, rowVersion: { increment: 1 } },
         });
-        if (!existing) {
-          throw new NotFoundException(`Supplier with id ${id} not found`);
-        }
-        throw new ConflictException(
-          `Supplier ${id} was modified by another user. Please refresh and retry.`,
-        );
-      }
 
-      return client.supplier.findUnique({
-        where: { id },
-      }) as unknown as Supplier;
+        if (result.count === 0) {
+          const existing = await client.supplier.findFirst({
+            where: { id, companyId },
+          });
+          if (!existing) {
+            throw new NotFoundException(`Supplier with id ${id} not found`);
+          }
+          throw new ConflictException(
+            `Supplier ${id} was modified by another user. Please refresh and retry.`,
+          );
+        }
+
+        return client.supplier.findUnique({
+          where: { id },
+        }) as unknown as Supplier;
+      } catch (error) {
+        if (isP2002(error)) {
+          throw mapP2002ToConflict(error);
+        }
+        throw error;
+      }
     }
 
     // Legacy path without rowVersion (for create-only flows)
@@ -120,7 +162,14 @@ export class SuppliersRepository {
     if (!existing) {
       throw new NotFoundException(`Supplier with id ${id} not found`);
     }
-    return client.supplier.update({ where: { id }, data });
+    try {
+      return await client.supplier.update({ where: { id }, data });
+    } catch (error) {
+      if (isP2002(error)) {
+        throw mapP2002ToConflict(error);
+      }
+      throw error;
+    }
   }
 
   // ── Duplicate checks (G1) ─────────────────────────────────────

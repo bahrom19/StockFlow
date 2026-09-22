@@ -555,6 +555,11 @@ model Supplier {
   @@index([companyId, deletedAt])
   @@index([companyId, isActive])
   @@index([companyId, createdAt])
+  // G14-01-01: Case-insensitive functional partial unique indexes (raw SQL migration 20260923000000).
+  // Prisma cannot declare functional indexes in schema; they are managed via raw SQL migration.
+  // Email:   CREATE UNIQUE INDEX supplier_company_email_active_unique ON "Supplier" ("companyId", LOWER("email")) WHERE "deletedAt" IS NULL AND "email" IS NOT NULL;
+  // Phone:   CREATE UNIQUE INDEX supplier_company_phone_active_unique ON "Supplier" ("companyId", LOWER("phone")) WHERE "deletedAt" IS NULL AND "phone" IS NOT NULL;
+  // BIN:     CREATE UNIQUE INDEX supplier_company_bin_active_unique ON "Supplier" ("companyId", "bin") WHERE "deletedAt" IS NULL AND "bin" IS NOT NULL AND "bin" <> '';
 }
 
 model SupplierContact {
