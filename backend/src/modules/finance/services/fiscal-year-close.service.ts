@@ -22,13 +22,18 @@ export interface FiscalYearCloseResult {
  * Handles fiscal year-end closing procedures.
  *
  * Process:
- * 1. Validate all months are closed
- * 2. Close any remaining open periods
- * 3. Transfer revenue & expense balances to retained earnings
- * 4. Mark fiscal year as closed
- * 5. Generate audit trail
+ * 1. Validate fiscal year is not already closed
+ * 2. Post the closing journal into the latest OPEN period (if P&L is
+ *    non-zero) — the journal must pass the standard posting validation,
+ *    which only accepts OPEN periods
+ * 3. Close any remaining open periods
+ * 4. Transfer revenue & expense balances to retained earnings (via journal)
+ * 5. Mark fiscal year as closed
+ * 6. Generate audit trail
  *
- * All operations execute inside a single Prisma $transaction.
+ * All operations execute inside a single Prisma $transaction, and the
+ * closing journal is posted through the same transaction client, so a
+ * failure anywhere rolls back periods, journal and year-close together.
  */
 @Injectable()
 export class FiscalYearCloseService {
@@ -76,23 +81,28 @@ export class FiscalYearCloseService {
         );
       }
 
-      // 3. Close any remaining open periods
-      const openPeriods = periods.filter((p) => p.status === 'OPEN');
-      const closedPeriodIds: string[] = [];
-
-      for (const period of openPeriods) {
-        await tx.financialPeriod.update({
-          where: { id: period.id },
-          data: {
-            status:
-              'CLOSED' as Prisma.EnumFinancialPeriodStatusFilter['equals'],
-            closedBy: closedBy,
-            closedAt: new Date(),
-            rowVersion: { increment: 1 },
-          },
-        });
-        closedPeriodIds.push(period.id);
-      }
+      // G15-01: close helper — runs AFTER the closing journal is posted
+      // (posting requires an OPEN period). Closes every still-OPEN period
+      // and returns their ids. Shares the outer transaction: a later
+      // failure rolls the closes back together with everything else.
+      const closeOpenPeriods = async (): Promise<string[]> => {
+        const closedIds: string[] = [];
+        for (const period of periods) {
+          if (period.status !== 'OPEN') continue;
+          await tx.financialPeriod.update({
+            where: { id: period.id },
+            data: {
+              status:
+                'CLOSED' as Prisma.EnumFinancialPeriodStatusFilter['equals'],
+              closedBy: closedBy,
+              closedAt: new Date(),
+              rowVersion: { increment: 1 },
+            },
+          });
+          closedIds.push(period.id);
+        }
+        return closedIds;
+      };
 
       // 4. Find retained earnings account
       let retainedEarningsAccountId = fiscalYear.retainedEarningsAccountId;
@@ -135,6 +145,7 @@ export class FiscalYearCloseService {
 
       if (allIncomeAccounts.length === 0) {
         // No revenue or expense accounts — close directly
+        const closedPeriodIds = await closeOpenPeriods();
         await tx.fiscalYear.update({
           where: { id: fiscalYear.id },
           data: {
@@ -188,6 +199,7 @@ export class FiscalYearCloseService {
 
       if (netProfitLoss.isZero()) {
         // Zero profit — just close
+        const closedPeriodIds = await closeOpenPeriods();
         await tx.fiscalYear.update({
           where: { id: fiscalYear.id },
           data: {
@@ -212,7 +224,21 @@ export class FiscalYearCloseService {
       // Credit: expense accounts (to zero them out)
       // If profit: Credit retained earnings
       // If loss: Debit retained earnings
-      const lastPeriod = periods[periods.length - 1]!;
+      //
+      // G15-01: the closing journal must be posted into an OPEN period —
+      // posting validation rejects CLOSED periods and must NOT be bypassed.
+      // Use the latest still-OPEN period of the year (normally December);
+      // periods are closed only after the journal posts successfully.
+      const openPeriodsForPosting = periods.filter((p) => p.status === 'OPEN');
+      const postingPeriod =
+        openPeriodsForPosting[openPeriodsForPosting.length - 1];
+      if (!postingPeriod) {
+        throw new BadRequestException(
+          `Cannot close fiscal year ${year} with non-zero profit/loss: ` +
+            `all periods are already CLOSED and a closing journal requires ` +
+            `an OPEN period.`,
+        );
+      }
       const closingLines: Array<{
         accountId: string;
         debit: string;
@@ -275,19 +301,27 @@ export class FiscalYearCloseService {
         });
       }
 
-      // Create the closing entry — this will go through the full posting pipeline
-      const result = await this.glEngine.post({
-        companyId,
-        financialPeriodId: lastPeriod.id,
-        entryDate: lastPeriod.endDate,
-        description: `Fiscal year ${year} closing entry`,
-        referenceType: 'FISCAL_YEAR_CLOSE',
-        referenceId: fiscalYear.id,
-        createdBy: closedBy,
-        lines: closingLines,
-      });
+      // Create the closing entry through the SAME outer transaction
+      // (atomic with the period/year closes below) into the still-OPEN
+      // posting period selected above.
+      const result = await this.glEngine.post(
+        {
+          companyId,
+          financialPeriodId: postingPeriod.id,
+          entryDate: postingPeriod.endDate,
+          description: `Fiscal year ${year} closing entry`,
+          referenceType: 'FISCAL_YEAR_CLOSE',
+          referenceId: fiscalYear.id,
+          createdBy: closedBy,
+          lines: closingLines,
+        },
+        tx,
+      );
 
-      // 7. Mark fiscal year as closed
+      // 7. Close the remaining open periods only after the journal posted.
+      const closedPeriodIds = await closeOpenPeriods();
+
+      // 8. Mark fiscal year as closed
       await tx.fiscalYear.update({
         where: { id: fiscalYear.id },
         data: {
