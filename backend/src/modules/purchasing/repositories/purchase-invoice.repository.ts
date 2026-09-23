@@ -205,6 +205,45 @@ export class PurchaseInvoiceRepository {
     return approved;
   }
 
+  // G15-02-A: atomic APPROVED → CANCELLED transition. Mirrors approveWithCas
+  // — the WHERE clause carries id + companyId + rowVersion + status = APPROVED,
+  // so exactly one concurrent cancellation can win; the loser gets count = 0
+  // → ConflictException.
+  async cancelWithCas(
+    id: string,
+    companyId: string,
+    expectedRowVersion: number,
+    cancelledBy: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<PurchaseInvoice> {
+    const result = await this.getClient(tx).purchaseInvoice.updateMany({
+      where: {
+        id,
+        companyId,
+        rowVersion: expectedRowVersion,
+        status: PurchaseInvoiceStatus.APPROVED,
+      },
+      data: {
+        status: PurchaseInvoiceStatus.CANCELLED,
+        cancelledBy,
+        cancelledAt: new Date(),
+        rowVersion: { increment: 1 },
+      },
+    });
+
+    if (result.count === 0) {
+      throw new ConflictException(
+        'Invoice was modified or cancelled by another user. Please refresh and retry.',
+      );
+    }
+
+    const cancelled = await this.findById(id, companyId, tx);
+    if (!cancelled) {
+      throw new NotFoundException(`Purchase invoice with id ${id} not found`);
+    }
+    return cancelled;
+  }
+
   // G9-D2 (P1): cumulative SUM of APPROVED/PAID.active (deletedAt IS NULL)
   // invoices for a purchase order — used by the invoice overrun guard.
   // DRAFT/CANCELLED invoices intentionally do NOT reduce the available PO

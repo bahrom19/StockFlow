@@ -1,11 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
+  JournalEntryStatus,
   Prisma,
   PurchaseInvoice,
   PurchaseInvoiceStatus,
@@ -24,6 +26,7 @@ import { PurchaseOrderRepository } from '../repositories/purchase-order.reposito
 import { PurchasingFinanceService } from './purchasing-finance.service';
 import { PurchaseInvoicePostedEvent } from '../events/purchase-invoice-posted.event';
 import { AuditLogService } from '../../shared/services/audit-log.service';
+import { GlEngineService } from '../../finance/services/gl-engine.service';
 
 function toDecimal(
   value: string | number | Decimal | null | undefined,
@@ -43,6 +46,7 @@ export class PurchaseInvoiceService {
     private readonly prismaService: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly purchasingFinanceService: PurchasingFinanceService,
+    private readonly glEngine: GlEngineService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
   ) {}
 
@@ -429,14 +433,100 @@ export class PurchaseInvoiceService {
           }),
           { context: { transactionClient: tx } },
         );
+      } else if (newStatus === PurchaseInvoiceStatus.CANCELLED) {
+        // G15-02-A: CANCELLED transition with GL reversal for APPROVED invoices.
+        // DRAFT→CANCELLED: no journal exists — just flip status.
+        // APPROVED→CANCELLED: reverse the posted invoice journal.
+        if (current === PurchaseInvoiceStatus.APPROVED) {
+          // CAS cancel: exactly one concurrent cancellation can win.
+          updated = await this.repository.cancelWithCas(
+            id,
+            companyId,
+            invoice.rowVersion,
+            userId,
+            tx,
+          );
+
+          // Find the original POSTED invoice journal.
+          const originalJournal = await tx.journalEntry.findFirst({
+            where: {
+              companyId,
+              referenceType: 'PURCHASE_INVOICE',
+              referenceId: invoice.invoiceNumber,
+              status: JournalEntryStatus.POSTED,
+            },
+            include: { lines: true },
+          });
+
+          if (!originalJournal) {
+            throw new ConflictException(
+              `Cannot cancel invoice ${invoice.invoiceNumber}: no posted journal entry found. ` +
+                `The original approval journal may have been manually reversed or removed.`,
+            );
+          }
+
+          // Find the current OPEN financial period for the reversal entry.
+          const openPeriod = await tx.financialPeriod.findFirst({
+            where: { companyId, status: 'OPEN' },
+            orderBy: { startDate: 'desc' },
+            select: { id: true },
+          });
+
+          if (!openPeriod) {
+            throw new BadRequestException(
+              `Cannot cancel invoice ${invoice.invoiceNumber}: no open financial period found. ` +
+                `A GL reversal requires an OPEN period.`,
+            );
+          }
+
+          // Construct exact negation of the original journal lines.
+          const reversalLines = (originalJournal.lines ?? []).map((line) => ({
+            accountId: line.accountId,
+            debit: line.credit.toString(),
+            credit: line.debit.toString(),
+            description: `REVERSAL: ${line.description || `Invoice ${invoice.invoiceNumber}`}`,
+          }));
+
+          // Post reversal journal into the current OPEN period.
+          const reversalResult = await this.glEngine.post(
+            {
+              companyId,
+              financialPeriodId: openPeriod.id,
+              entryDate: new Date(),
+              description: `Reversal of purchase invoice ${invoice.invoiceNumber}`,
+              referenceType: 'PURCHASE_INVOICE_REVERSAL',
+              referenceId: originalJournal.id,
+              createdBy: userId,
+              lines: reversalLines,
+            },
+            tx,
+          );
+
+          // Mark the original journal as REVERSED.
+          await tx.journalEntry.update({
+            where: { id: originalJournal.id },
+            data: {
+              status: JournalEntryStatus.REVERSED,
+              rowVersion: { increment: 1 },
+            },
+          });
+        } else {
+          // DRAFT→CANCELLED: no journal exists — just flip status.
+          updated = await this.repository.update(
+            id,
+            {
+              status: newStatus,
+              cancelledBy: userId,
+              cancelledAt: new Date(),
+            },
+            companyId,
+            tx,
+          );
+        }
       } else {
         const updateData: Prisma.PurchaseInvoiceUpdateInput = {
           status: newStatus,
         };
-        if (newStatus === PurchaseInvoiceStatus.CANCELLED) {
-          updateData.cancelledBy = userId;
-          updateData.cancelledAt = new Date();
-        }
 
         updated = await this.repository.update(
           id,
