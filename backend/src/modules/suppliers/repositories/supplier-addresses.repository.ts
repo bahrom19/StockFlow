@@ -38,7 +38,22 @@ export class SupplierAddressesRepository {
     data: Prisma.SupplierAddressCreateInput,
     tx?: Prisma.TransactionClient,
   ): Promise<SupplierAddress> {
-    return this.getClient(tx).supplierAddress.create({ data });
+    try {
+      // NOTE: `await` (not bare `return`) is required so a rejected
+      // Prisma promise is caught by this try/catch.
+      return await this.getClient(tx).supplierAddress.create({ data });
+    } catch (error: unknown) {
+      // Prisma P2002: partial unique index violation — another active
+      // default address already exists for this supplier (concurrent
+      // assignment). Map to ConflictException; other errors propagate.
+      const err = error as { code?: string };
+      if (err?.code === 'P2002') {
+        throw new ConflictException(
+          'Another default address already exists for this supplier',
+        );
+      }
+      throw error;
+    }
   }
 
   async update(
@@ -50,32 +65,46 @@ export class SupplierAddressesRepository {
   ): Promise<SupplierAddress> {
     const client = this.getClient(tx);
 
-    if (rowVersion !== undefined) {
-      const result = await client.supplierAddress.updateMany({
-        where: { id, supplierId, rowVersion, deletedAt: null },
-        data: { ...data, rowVersion: { increment: 1 } },
-      });
-
-      if (result.count === 0) {
-        const existing = await client.supplierAddress.findFirst({
-          where: { id, supplierId },
+    try {
+      // NOTE: `await` each Prisma call so rejections are caught below.
+      if (rowVersion !== undefined) {
+        const result = await client.supplierAddress.updateMany({
+          where: { id, supplierId, rowVersion, deletedAt: null },
+          data: { ...data, rowVersion: { increment: 1 } },
         });
-        if (!existing) {
-          throw new NotFoundException(
-            `Supplier address with id ${id} not found`,
+
+        if (result.count === 0) {
+          const existing = await client.supplierAddress.findFirst({
+            where: { id, supplierId },
+          });
+          if (!existing) {
+            throw new NotFoundException(
+              `Supplier address with id ${id} not found`,
+            );
+          }
+          throw new ConflictException(
+            `Address ${id} was modified by another user. Please refresh and retry.`,
           );
         }
-        throw new ConflictException(
-          `Address ${id} was modified by another user. Please refresh and retry.`,
-        );
+
+        return (await client.supplierAddress.findUnique({
+          where: { id },
+        })) as unknown as SupplierAddress;
       }
 
-      return client.supplierAddress.findUnique({
-        where: { id },
-      }) as unknown as SupplierAddress;
+      return await client.supplierAddress.update({ where: { id }, data });
+    } catch (error: unknown) {
+      // Prisma P2002: partial unique index violation — another active
+      // default address already exists for this supplier (concurrent
+      // assignment on either the CAS or the plain path).
+      const err = error as { code?: string };
+      if (err?.code === 'P2002') {
+        throw new ConflictException(
+          'Another default address already exists for this supplier',
+        );
+      }
+      throw error;
     }
-
-    return client.supplierAddress.update({ where: { id }, data });
   }
 
   async softDelete(
