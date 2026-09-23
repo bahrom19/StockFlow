@@ -47,6 +47,19 @@ export class RFQService {
           `RFQ number "${rfqNumber}" already exists`,
         );
 
+      // G14-03-06: tenant-scoped product validation. RFQItem.productId has
+      // no FK in the schema, so foreign-tenant, soft-deleted or nonexistent
+      // productIds would otherwise be silently accepted. One batched lookup
+      // (not N+1) covers all items: missing products are indistinguishable
+      // 404s. Follows deletedAt-only product reference semantics (isActive
+      // is not part of reference checks). Runs before any mutation, inside
+      // the same transaction.
+      await this.validateProductsBelongToCompany(
+        dto.items.map((i) => i.productId),
+        companyId,
+        tx,
+      );
+
       const itemsData = dto.items.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
@@ -124,8 +137,37 @@ export class RFQService {
     return RFQMapper.toEntity(rfq);
   }
 
-  async softDelete(id: string, companyId: string): Promise<void> {
-    const existing = await this.repository.findById(id, companyId);
+  // G14-03-06: batched tenant-scoped product validation shared by RFQ
+  // create paths. Mirrors the purchase-return G9-E2 / purchase-order
+  // G14-03-04 pattern: one query for all distinct requested ids (no N+1);
+  // missing, foreign-tenant and soft-deleted products are
+  // indistinguishable 404s.
+  private async validateProductsBelongToCompany(
+    productIds: string[],
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const requestedProductIds = [...new Set(productIds)];
+    const foundProducts = await tx.product.findMany({
+      where: {
+        id: { in: requestedProductIds },
+        companyId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    const foundProductIds = new Set(foundProducts.map((p) => p.id));
+    const missingProductId = requestedProductIds.find(
+      (id) => !foundProductIds.has(id),
+    );
+    if (missingProductId !== undefined) {
+      throw new NotFoundException(
+        `Product with id ${missingProductId} not found`,
+      );
+    }
+  }
+
+  async softDelete(id: string, companyId: string): Promise<void> {    const existing = await this.repository.findById(id, companyId);
     if (!existing) throw new NotFoundException(`RFQ ${id} not found`);
     if (existing.status !== RFQStatus.DRAFT)
       throw new BadRequestException('Only DRAFT RFQs can be deleted');

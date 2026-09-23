@@ -53,6 +53,35 @@ export class SupplierQuotationService {
       const rfq = await this.rfqRepository.findById(dto.rfqId, companyId, tx);
       if (!rfq) throw new NotFoundException(`RFQ ${dto.rfqId} not found`);
 
+      // G14-03-06: tenant-scoped supplier validation. Prisma `connect`
+      // only guarantees FK existence — never tenant ownership — so a
+      // foreign-tenant or soft-deleted supplierId would otherwise be
+      // accepted. Missing, foreign-tenant and soft-deleted suppliers are
+      // indistinguishable 404s (no tenant-existence oracle). Runs before
+      // any mutation, inside the same transaction.
+      const supplier = await tx.supplier.findFirst({
+        where: {
+          id: dto.supplierId,
+          companyId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!supplier) {
+        throw new NotFoundException(
+          `Supplier with id ${dto.supplierId} not found`,
+        );
+      }
+
+      // G14-03-06: tenant-scoped product validation (same batched pattern
+      // as RFQ create above and the purchase-return G9-E2 precedent:
+      // SupplierQuotationItem.productId has no FK in the schema).
+      await this.validateProductsBelongToCompany(
+        dto.items.map((i) => i.productId),
+        companyId,
+        tx,
+      );
+
       let subtotal = new Decimal(0);
       let totalDiscount = new Decimal(0);
       let totalTax = new Decimal(0);
@@ -128,6 +157,36 @@ export class SupplierQuotationService {
 
       return SupplierQuotationMapper.toEntity(quotation);
     });
+  }
+
+  // G14-03-06: batched tenant-scoped product validation. Mirrors the
+  // RFQ create helper and the purchase-return G9-E2 / purchase-order
+  // G14-03-04 pattern: one query for all distinct requested ids (no N+1);
+  // missing, foreign-tenant and soft-deleted products are
+  // indistinguishable 404s.
+  private async validateProductsBelongToCompany(
+    productIds: string[],
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const requestedProductIds = [...new Set(productIds)];
+    const foundProducts = await tx.product.findMany({
+      where: {
+        id: { in: requestedProductIds },
+        companyId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    const foundProductIds = new Set(foundProducts.map((p) => p.id));
+    const missingProductId = requestedProductIds.find(
+      (id) => !foundProductIds.has(id),
+    );
+    if (missingProductId !== undefined) {
+      throw new NotFoundException(
+        `Product with id ${missingProductId} not found`,
+      );
+    }
   }
 
   async findAll(
