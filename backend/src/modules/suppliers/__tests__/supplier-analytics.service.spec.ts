@@ -900,6 +900,11 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   beforeEach(() => {
     mockPrisma = {
       $queryRaw: jest.fn().mockResolvedValue([]),
+      // G14-03-02: return pool aggregate (active APPROVED|COMPLETED returns).
+      // Default null sum → Decimal 0, preserving pre-existing expectations.
+      purchaseReturn: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: { grandTotal: null } }),
+      },
     };
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
@@ -1105,6 +1110,98 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
     // inv-2 (60 days) should come before inv-1 (10 days)
     expect(result.overdueInvoices[0]!.daysOverdue).toBeGreaterThan(
       result.overdueInvoices[1]!.daysOverdue,
+    );
+  });
+
+  // ── G14-03-02: active returns reduce aging outstanding ──
+  const agingRow = (id: string, grandTotal: string, allocated: string, daysOverdue: number) => {
+    const due = new Date();
+    due.setHours(0, 0, 0, 0);
+    due.setDate(due.getDate() - daysOverdue);
+    return {
+      id, invoiceNumber: id.toUpperCase(), invoiceDate: new Date(), dueDate: due,
+      grandTotal, allocatedAmount: allocated,
+    };
+  };
+  const setReturns = (grandTotal: string | null) => {
+    mockPrisma.purchaseReturn.aggregate.mockResolvedValue({ _sum: { grandTotal } });
+  };
+
+  it('G14-03-02 A: invoice 1000, no payment, no return → aging 1000', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    setReturns(null);
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('1000');
+    expect(result.aging.days1_30).toBe('1000');
+  });
+
+  it('G14-03-02 B: invoice 1000 + return 200 APPROVED → aging 800', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    setReturns('200');
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('800');
+    expect(result.aging.days1_30).toBe('800');
+  });
+
+  it('G14-03-02 C: invoice 1000 + alloc 300 + return 200 → aging 500', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '300', 10)]);
+    setReturns('200');
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('500');
+    expect(result.aging.days1_30).toBe('500');
+  });
+
+  it('G14-03-02 D: fully covered + return → aging 0, no negative bucket', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '1000', 10)]);
+    setReturns('200');
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('0');
+    expect(result.aging.days1_30).toBe('0');
+    expect(result.invoiceCount).toBe(0);
+  });
+
+  it('G14-03-02 E/F: cancelled/soft-deleted returns excluded (repo supplies only active)', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    setReturns(null);
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('1000');
+    expect(mockPrisma.purchaseReturn.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          supplierId,
+          companyId,
+          deletedAt: null,
+          status: { in: ['APPROVED', 'COMPLETED'] },
+        }),
+      }),
+    );
+  });
+
+  it('G14-03-02 G: multiple returns 100 + 150 → aging 750', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    setReturns('250');
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('750');
+  });
+
+  it('G14-03-02 H: return reduces the invoice bucket amount, keeps due-date classification', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 45)]);
+    setReturns('200');
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.aging.days31_60).toBe('800');
+    expect(result.aging.current).toBe('0');
+    expect(result.aging.days1_30).toBe('0');
+    expect(result.overdueInvoices[0]!.outstanding).toBe('800');
+  });
+
+  it('G14-03-02 tenant: return aggregate scoped to supplier+company', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    setReturns('500');
+    await service.getPaymentAging(supplierId, companyId);
+    expect(mockPrisma.purchaseReturn.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ supplierId, companyId, deletedAt: null }),
+      }),
     );
   });
 });

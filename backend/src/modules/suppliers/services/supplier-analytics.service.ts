@@ -714,6 +714,23 @@ export class SupplierAnalyticsService {
       ORDER BY pi."dueDate" ASC NULLS LAST, pi."invoiceDate" ASC
     `;
 
+    // G14-03-02: active returns reduce outstanding AP (canonical supplier AP
+    // = invoiced − allocated − returned). PurchaseReturn is supplier-level
+    // (no invoice link), so the return pool is applied oldest-due-first
+    // across outstanding invoices — the rows above are already ordered by
+    // dueDate ASC NULLS LAST. One batched aggregate, no N+1. No currency
+    // predicate, same mixed posture as the rest of aging (G14-03-03 scope).
+    const returnAgg = await this.prismaService.purchaseReturn.aggregate({
+      where: {
+        supplierId,
+        companyId,
+        deletedAt: null,
+        status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+      },
+      _sum: { grandTotal: true },
+    });
+    let returnPool = new Decimal(returnAgg._sum.grandTotal ?? 0);
+
     // 3. Compute aging buckets
     const agingBuckets = {
       current: new Decimal(0),
@@ -727,15 +744,28 @@ export class SupplierAnalyticsService {
     const overdueInvoices: OverdueInvoiceEntity[] = [];
     let invoiceCount = 0;
     let overdueCount = 0;
+    // G14-03-02: accumulated here so the total reflects the same floored,
+    // return-adjusted per-invoice outstanding as the buckets below.
+    let totalOutstanding = new Decimal(0);
 
     for (const row of invoiceRows) {
       const grandTotal = new Decimal(row.grandTotal?.toString() ?? '0');
       // G9-B1: Use allocations as canonical payment coverage
       const allocatedAmount = new Decimal(row.allocatedAmount?.toString() ?? '0');
-      const outstanding = grandTotal.sub(allocatedAmount);
+      let outstanding = grandTotal.sub(allocatedAmount);
 
-      if (outstanding.lte(0)) continue; // fully paid
+      // G14-03-02: apply the return pool oldest-first, floored per invoice
+      // at 0. Negative bucket amounts are never allowed; a fully
+      // covered invoice drops out via the lte(0) check below.
+      if (returnPool.gt(0) && outstanding.gt(0)) {
+        const applied = returnPool.lt(outstanding) ? returnPool : outstanding;
+        outstanding = outstanding.sub(applied);
+        returnPool = returnPool.sub(applied);
+      }
 
+      if (outstanding.lte(0)) continue; // fully paid / covered
+
+      totalOutstanding = totalOutstanding.add(outstanding);
       invoiceCount++;
       const dueDate = row.dueDate ? new Date(row.dueDate) : null;
 
@@ -785,16 +815,8 @@ export class SupplierAnalyticsService {
       return new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime();
     });
 
-    // G9-B1: Total outstanding uses allocations
-    const totalOutstanding = invoiceRows.reduce(
-      (sum, row) => sum.plus(
-        new Decimal(row.grandTotal?.toString() ?? '0').sub(
-          new Decimal(row.allocatedAmount?.toString() ?? '0'),
-        ),
-      ),
-      new Decimal(0),
-    );
-
+    // G9-B1: Total outstanding uses allocations; G14-03-02: accumulated
+    // in the loop above so returns are reflected exactly as in buckets.
     return {
       totalOutstanding: totalOutstanding.toString(),
       aging: {
