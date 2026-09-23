@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PurchaseInvoiceStatus, PurchaseReturnStatus } from '@prisma/client';
+import { Currency, PurchaseInvoiceStatus, PurchaseReturnStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
@@ -56,11 +56,15 @@ export class SupplierAnalyticsService {
       : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
 
     // 4. Invoice aggregation (APPROVED + PAID only)
+    // G14-03-03: base currency ONLY — amounts are labeled with the company
+    // base currency, so foreign-currency rows must not be mixed in.
+    const baseCurrency = currency as Currency;
     const invoiceWhere = {
       supplierId,
       companyId,
       deletedAt: null,
       status: { in: INVOICE_STATUSES },
+      currency: baseCurrency,
       invoiceDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
     };
 
@@ -108,11 +112,13 @@ export class SupplierAnalyticsService {
         : new Decimal(0);
 
     // 5. Returns aggregation (only APPROVED/COMPLETED — DRAFT must not reduce AP)
+    // G14-03-03: base currency ONLY, same as invoices above.
     const returnWhere = {
       supplierId,
       companyId,
       deletedAt: null,
       status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+      currency: baseCurrency,
       returnDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
     };
 
@@ -134,6 +140,7 @@ export class SupplierAnalyticsService {
         AND pi."companyId" = ${companyId}
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
+        AND pi."currency" = ${baseCurrency}::"Currency"
         AND pi."invoiceDate" >= ${effectiveDateFrom}
         AND pi."invoiceDate" <= ${effectiveDateTo}
       GROUP BY TO_CHAR(pi."invoiceDate", 'YYYY-MM')
@@ -146,22 +153,32 @@ export class SupplierAnalyticsService {
     }));
 
     // 7. Current financial status (not period-scoped)
+    // G14-03-03: base currency ONLY — same rule as the period aggregates.
     const currentInvoiceAgg = await this.prismaService.purchaseInvoice.aggregate({
       where: {
         supplierId,
         companyId,
         deletedAt: null,
         status: { in: INVOICE_STATUSES },
+        currency: baseCurrency,
       },
       _sum: { grandTotal: true },
     });
 
-    // G9-B1: Use allocations as canonical payment coverage
+    // G9-B1: Use allocations as canonical payment coverage.
+    // Allocations carry no currency field; scope to the base-currency
+    // context exactly like the canonical credit-summary model: allocations
+    // tied to base-currency invoices, plus supplier-level allocations with
+    // no invoice (payments are always recorded in base currency, G3-2).
     const currentAllocationAgg = await this.prismaService.supplierPaymentAllocation.aggregate({
       where: {
         supplierId,
         companyId,
         deletedAt: null,
+        OR: [
+          { purchaseInvoice: { currency: baseCurrency } },
+          { purchaseInvoiceId: null },
+        ],
       },
       _sum: { amount: true },
     });
@@ -172,6 +189,7 @@ export class SupplierAnalyticsService {
         companyId,
         deletedAt: null,
         status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+        currency: baseCurrency,
       },
       _sum: { grandTotal: true },
     });
@@ -674,6 +692,12 @@ export class SupplierAnalyticsService {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
 
+    // G14-03-03: base currency ONLY — aging totals feed base-currency AP
+    // semantics, so foreign-currency rows must not be mixed in.
+    const baseCurrency = (await this.companiesService.getBaseCurrency(
+      companyId,
+    )) as Currency;
+
     // 2. Get all outstanding invoices for this supplier
     //    Only APPROVED/PAID with outstanding balance > 0
     const today = new Date();
@@ -710,6 +734,7 @@ export class SupplierAnalyticsService {
         AND pi."companyId" = ${companyId}
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
+        AND pi."currency" = ${baseCurrency}::"Currency"
         AND (pi."grandTotal" - COALESCE(spa."allocatedAmount", 0)) > 0
       ORDER BY pi."dueDate" ASC NULLS LAST, pi."invoiceDate" ASC
     `;
@@ -718,14 +743,15 @@ export class SupplierAnalyticsService {
     // = invoiced − allocated − returned). PurchaseReturn is supplier-level
     // (no invoice link), so the return pool is applied oldest-due-first
     // across outstanding invoices — the rows above are already ordered by
-    // dueDate ASC NULLS LAST. One batched aggregate, no N+1. No currency
-    // predicate, same mixed posture as the rest of aging (G14-03-03 scope).
+    // dueDate ASC NULLS LAST. One batched aggregate, no N+1.
+    // G14-03-03: base currency ONLY, same rule as the invoice query above.
     const returnAgg = await this.prismaService.purchaseReturn.aggregate({
       where: {
         supplierId,
         companyId,
         deletedAt: null,
         status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+        currency: baseCurrency,
       },
       _sum: { grandTotal: true },
     });

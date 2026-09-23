@@ -2,8 +2,9 @@ import { NotFoundException } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
 import { SupplierAnalyticsService } from '../services/supplier-analytics.service';
 
-// Shared CompaniesService mock — currency is only resolved by getPurchaseSummary /
-// finance summary; other analytics methods never consume it.
+// Shared CompaniesService mock — base currency is resolved by getPurchaseSummary
+// and getPaymentAging (G14-03-03: base-only monetary aggregations); other
+// analytics methods never consume it.
 const mockCompaniesService: any = {
   getBaseCurrency: jest.fn().mockResolvedValue('KZT'),
 };
@@ -341,6 +342,52 @@ describe('SupplierAnalyticsService', () => {
     expect(result.totalInvoiced).toBe('1000000');
     expect(result.totalReturned).toBe('200000');
     expect(result.netPurchaseSpend).toBe('800000');
+  });
+
+  // ── G14-03-03: base-currency monetary aggregation ──
+  it('G14-03-03 Test 1: purchase summary scopes invoice/return aggregates to base currency', async () => {
+    mockPrisma.purchaseInvoice.aggregate.mockResolvedValue({
+      _sum: { grandTotal: '1000' },
+      _count: { id: 1 },
+      _min: { invoiceDate: new Date('2026-01-01') },
+      _max: { invoiceDate: new Date('2026-01-01') },
+    });
+    mockPrisma.purchaseInvoiceItem.aggregate.mockResolvedValue({ _sum: { quantity: 10 } });
+    mockPrisma.purchaseInvoiceItem.groupBy.mockResolvedValue([
+      { _sum: { quantity: 10, total: '1000' } },
+    ]);
+    mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+      _sum: { grandTotal: null },
+      _count: { id: 0 },
+    });
+    mockPrisma.$queryRaw.mockResolvedValue([{ month: '2026-01', amount: '1000' }]);
+
+    const result = await service.getPurchaseSummary(supplierId, companyId);
+
+    // Base currency comes from CompaniesService, never hardcoded.
+    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(companyId);
+    expect(result.currency).toBe('KZT');
+    expect(result.totalInvoiced).toBe('1000');
+    // Every invoice/return aggregate call carries the base-currency predicate.
+    for (const call of mockPrisma.purchaseInvoice.aggregate.mock.calls) {
+      expect(call[0].where).toEqual(expect.objectContaining({ currency: 'KZT' }));
+    }
+    for (const call of mockPrisma.purchaseReturn.aggregate.mock.calls) {
+      expect(call[0].where).toEqual(expect.objectContaining({ currency: 'KZT' }));
+    }
+    // Monthly spend raw SQL filters base currency (no KZT+USD mixing).
+    const monthlySql = String(mockPrisma.$queryRaw.mock.calls[0][0]);
+    expect(monthlySql).toContain('currency');
+    // Allocation coverage stays canonical (supplier-level OR base-invoice).
+    expect(mockPrisma.supplierPaymentAllocation.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          supplierId,
+          companyId,
+          deletedAt: null,
+        }),
+      }),
+    );
   });
 });
 
@@ -1201,6 +1248,70 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
     expect(mockPrisma.purchaseReturn.aggregate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ supplierId, companyId, deletedAt: null }),
+      }),
+    );
+  });
+
+  // ── G14-03-03: base-currency aging ──
+  it('G14-03-03 Test 2: aging invoice query filters base currency', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    setReturns(null);
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('1000');
+    // Base currency resolved per tenant, never hardcoded.
+    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(companyId);
+    // The invoice SQL carries the base-currency predicate (foreign rows excluded DB-side).
+    const invoiceSql = String(mockPrisma.$queryRaw.mock.calls[0][0]);
+    expect(invoiceSql).toContain('currency');
+  });
+
+  it('G14-03-03 Test 3: foreign return does not reduce base aging', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    // DB-side filtering simulated: a 200 USD return is excluded, pool sum is null.
+    setReturns(null);
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('1000');
+    expect(mockPrisma.purchaseReturn.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ currency: 'KZT' }),
+      }),
+    );
+  });
+
+  it('G14-03-03 Test 4: base return reduces base aging', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    setReturns('200');
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('800');
+  });
+
+  it('G14-03-03 Test 5: mixed invoices + mixed returns → base context only', async () => {
+    // DB-side filtering simulated: only the KZT invoice row and the KZT
+    // return sum reach the service; USD rows are excluded by predicates.
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    setReturns('200');
+    const result = await service.getPaymentAging(supplierId, companyId);
+    expect(result.totalOutstanding).toBe('800');
+    const invoiceSql = String(mockPrisma.$queryRaw.mock.calls[0][0]);
+    expect(invoiceSql).toContain('currency');
+    expect(mockPrisma.purchaseReturn.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ currency: 'KZT' }),
+      }),
+    );
+  });
+
+  it('G14-03-03 Test 6: base currency is tenant-specific, not hardcoded', async () => {
+    mockCompaniesService.getBaseCurrency.mockResolvedValueOnce('USD');
+    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    setReturns(null);
+    await service.getPaymentAging(supplierId, companyId);
+    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(companyId);
+    const invoiceSql = String(mockPrisma.$queryRaw.mock.calls[0][0]);
+    expect(invoiceSql).toContain('currency');
+    expect(mockPrisma.purchaseReturn.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ currency: 'USD' }),
       }),
     );
   });
