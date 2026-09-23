@@ -56,6 +56,13 @@ export class UpdatePurchaseReturnDto {
   @IsDateString()
   returnDate?: string;
 
+  @ApiPropertyOptional({
+    description: 'Expected rowVersion for optimistic concurrency (G14-03-05)',
+  })
+  @IsOptional()
+  @IsNumber()
+  rowVersion?: number;
+
   @ApiProperty({ description: 'Warehouse ID', required: false })
   @IsOptional()
   @IsString()

@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Prisma,
   PurchaseReturnStatus,
@@ -392,12 +396,12 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(baseReturn as any);
       mockRepo.update.mockResolvedValue({ ...baseReturn, notes: 'U' } as any);
-      expect(await service.update('pr-1', upd, companyId)).toBeDefined();
+      expect(await service.update('pr-1', upd, companyId, userId)).toBeDefined();
     });
 
     it('should throw when not found', async () => {
       mockRepo.findById.mockResolvedValue(null);
-      await expect(service.update('x', upd, companyId)).rejects.toThrow(
+      await expect(service.update('x', upd, companyId, userId)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -407,8 +411,450 @@ describe('PurchaseReturnService', () => {
         ...baseReturn,
         status: PurchaseReturnStatus.APPROVED,
       } as any);
-      await expect(service.update('pr-1', upd, companyId)).rejects.toThrow(
+      await expect(service.update('pr-1', upd, companyId, userId)).rejects.toThrow(
         BadRequestException,
+      );
+    });
+  });
+
+  // ── G14-03-05: procurement invariant + update parity ──
+  describe('G14-03-05 procurement coverage', () => {
+    const retItem = (productId: string, quantity: number) => ({
+      productId,
+      quantity,
+    });
+    // Mocks the two batched aggregates behind validateReturnableQuantities.
+    const procTx = (
+      received: Array<{ productId: string; qty: number }>,
+      consumed: Array<{ productId: string; qty: number }> = [],
+      extra: Record<string, unknown> = {},
+    ) => ({
+      purchaseReturnItem: {
+        findMany: jest.fn().mockResolvedValue(baseReturn.items),
+        groupBy: jest
+          .fn()
+          .mockResolvedValue(
+            consumed.map((r) => ({ productId: r.productId, _sum: { quantity: r.qty } })),
+          ),
+        deleteMany: jest.fn(),
+        createMany: jest.fn(),
+      },
+      goodsReceiptItem: {
+        groupBy: jest
+          .fn()
+          .mockResolvedValue(
+            received.map((r) => ({ productId: r.productId, _sum: { quantity: r.qty } })),
+          ),
+      },
+      ...extra,
+    });
+
+    // 1. PO 100 / GR 40 / return 50 → reject at APPROVED.
+    it('should reject APPROVED when return exceeds received quantity', async () => {
+      const items = [{ ...baseReturn.items[0], quantity: 50 }];
+      const mockTx = {
+        ...procTx([{ productId, qty: 40 }]),
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(items),
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.APPROVED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(/exceeds returnable quantity/);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // 2. PO 100 / GR 40 / return 40 → allow.
+    it('should allow APPROVED when return equals received quantity', async () => {
+      const items = [{ ...baseReturn.items[0], quantity: 40 }];
+      const mockTx = {
+        ...procTx([{ productId, qty: 40 }]),
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(items),
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseReturn,
+        status: PurchaseReturnStatus.APPROVED,
+      } as any);
+
+      const result = await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.APPROVED,
+        userId,
+        companyId,
+      );
+      expect(result).toBeDefined();
+    });
+
+    // 3. GR 30 + GR 20 (aggregated 50) / return 50 → allow.
+    it('should aggregate multiple receipts for returnable quantity', async () => {
+      const items = [{ ...baseReturn.items[0], quantity: 50 }];
+      const mockTx = {
+        ...procTx([{ productId, qty: 50 }]),
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(items),
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseReturn,
+        status: PurchaseReturnStatus.APPROVED,
+      } as any);
+
+      const result = await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.APPROVED,
+        userId,
+        companyId,
+      );
+      expect(result).toBeDefined();
+    });
+
+    // 4. Same receipts / return 51 → reject.
+    it('should reject when return exceeds aggregated receipts by one', async () => {
+      const items = [{ ...baseReturn.items[0], quantity: 51 }];
+      const mockTx = {
+        ...procTx([{ productId, qty: 50 }]),
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(items),
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.APPROVED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(/exceeds returnable quantity/);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // 5. Existing committed return consumes available quantity.
+    it('should reject when prior committed returns consume the received quantity', async () => {
+      const items = [{ ...baseReturn.items[0], quantity: 71 }];
+      const mockTx = {
+        ...procTx(
+          [{ productId, qty: 100 }],
+          [{ productId, qty: 30 }],
+        ),
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(items),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 30 } }]),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.APPROVED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(/already returned 30/);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // 6. Cancelled/deleted prior returns do not consume quantity.
+    it('should ignore cancelled and soft-deleted prior returns', async () => {
+      const mockTx = procTx([{ productId, qty: 100 }], []);
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseReturn,
+        status: PurchaseReturnStatus.APPROVED,
+      } as any);
+
+      const result = await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.APPROVED,
+        userId,
+        companyId,
+      );
+      expect(result).toBeDefined();
+      // The consumed-returns aggregate excludes everything but
+      // APPROVED|COMPLETED active rows (CANCELLED/deleted never counted).
+      const groupByMock = (mockTx.purchaseReturnItem as any).groupBy;
+      expect(groupByMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            productId: { in: [productId] },
+            purchaseReturn: expect.objectContaining({
+              supplierId,
+              companyId,
+              deletedAt: null,
+              status: { in: ['APPROVED', 'COMPLETED'] },
+              id: { not: 'pr-1' },
+            }),
+          }),
+        }),
+      );
+    });
+
+    // 7. Supplier A return against Supplier B receipt → reject.
+    it('should reject cross-supplier return with no received quantity', async () => {
+      const mockTx = procTx([], []);
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.APPROVED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(/exceeds returnable quantity/);
+      // Received lookup is scoped to the return supplier via the PO join.
+      const grMock = (mockTx.goodsReceiptItem as any).groupBy;
+      expect(grMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            goodsReceipt: expect.objectContaining({
+              purchaseOrder: expect.objectContaining({ supplierId }),
+            }),
+          }),
+        }),
+      );
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // 8. Never-received product with sufficient stock → reject at COMPLETED.
+    it('should reject COMPLETED for never-received product despite stock', async () => {
+      const approved = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
+      const mockTx = {
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(baseReturn.items),
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        goodsReceiptItem: {
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        stock: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 's-1',
+            quantity: 50,
+            reservedQuantity: 0,
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        stockMovement: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(approved as any);
+      mockRepo.completeIfApproved.mockResolvedValue(1);
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(/exceeds returnable quantity/);
+      expect(mockTx.stockMovement.create).not.toHaveBeenCalled();
+      expect(mockFinance.createPurchaseReturnJournal).not.toHaveBeenCalled();
+    });
+
+    // 9. Update to foreign product → reject, items preserved.
+    it('should reject update to foreign product without mutating items', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({ id: warehouseId }),
+        },
+        product: { findMany: jest.fn().mockResolvedValue([]) },
+        purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+        purchaseReturn: { updateMany: jest.fn(), findFirst: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.update(
+          'pr-1',
+          { items: [{ productId: 'foreign-product', quantity: 1 }] } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockTx.purchaseReturnItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.purchaseReturnItem.createMany).not.toHaveBeenCalled();
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // 10. Update to deleted product → reject, items preserved.
+    it('should reject update to deleted product without mutating items', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({ id: warehouseId }),
+        },
+        product: { findMany: jest.fn().mockResolvedValue([]) },
+        purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+        purchaseReturn: { updateMany: jest.fn(), findFirst: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.update(
+          'pr-1',
+          { items: [{ productId: 'deleted-product', quantity: 1 }] } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockTx.purchaseReturnItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // 11. Update with empty productId → reject.
+    it('should reject update with empty productId', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({ id: warehouseId }),
+        },
+        product: { findMany: jest.fn().mockResolvedValue([{ id: productId }]) },
+        purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+        purchaseReturn: { updateMany: jest.fn(), findFirst: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.update(
+          'pr-1',
+          { items: [{ quantity: 1 }] } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockTx.purchaseReturnItem.deleteMany).not.toHaveBeenCalled();
+    });
+
+    // 12. Update to foreign/deleted warehouse → reject.
+    it('should reject update to foreign warehouse', async () => {
+      const mockTx = {
+        warehouse: { findFirst: jest.fn().mockResolvedValue(null) },
+        product: {
+          findMany: jest.fn().mockResolvedValue([{ id: productId }]),
+        },
+        purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+        purchaseReturn: { updateMany: jest.fn(), findFirst: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.update(
+          'pr-1',
+          { warehouseId: 'foreign-warehouse' },
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // 13. Invalid update preserves old items (explicit, covered above —
+    // procurement variant: over-received replacement rejected pre-delete).
+    it('should reject update exceeding received quantity without mutating items', async () => {
+      const mockTx = {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({ id: warehouseId }),
+        },
+        product: { findMany: jest.fn().mockResolvedValue([{ id: productId }]) },
+        purchaseReturnItem: {
+          deleteMany: jest.fn(),
+          createMany: jest.fn(),
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        goodsReceiptItem: {
+          groupBy: jest.fn().mockResolvedValue([
+            { productId, _sum: { quantity: 5 } },
+          ]),
+        },
+        purchaseReturn: { updateMany: jest.fn(), findFirst: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.update(
+          'pr-1',
+          { items: [{ productId, quantity: 50 }] } as any,
+          companyId,
+          userId,
+        ),
+      ).rejects.toThrow(/exceeds returnable quantity/);
+      expect(mockTx.purchaseReturnItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.purchaseReturnItem.createMany).not.toHaveBeenCalled();
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // 14. Stale rowVersion → ConflictException + no mutation.
+    it('should reject stale rowVersion with ConflictException and no mutation', async () => {
+      const mockTx = {
+        purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+        purchaseReturn: {
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          findFirst: jest.fn().mockResolvedValue({ id: 'pr-1' }),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+
+      await expect(
+        service.update('pr-1', { notes: 'U', rowVersion: 5 }, companyId, userId),
+      ).rejects.toThrow(ConflictException);
+      expect(mockTx.purchaseReturnItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.purchaseReturnItem.createMany).not.toHaveBeenCalled();
+      expect(mockRepo.update).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    // 15. Successful update creates audit record.
+    it('should write audit record on successful update', async () => {
+      const mockTx = {
+        purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+      mockRepo.update.mockResolvedValue({ ...baseReturn, notes: 'U' } as any);
+
+      await service.update('pr-1', { notes: 'U' }, companyId, userId);
+
+      expect(mockAuditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: 'pr-1',
+          action: 'UPDATE',
+        }),
+        mockTx,
       );
     });
   });
@@ -448,6 +894,14 @@ describe('PurchaseReturnService', () => {
       const mockTx = {
         purchaseReturnItem: {
           findMany: jest.fn().mockResolvedValue(baseReturn.items),
+          // G14-03-05: no prior returns consumed.
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        // G14-03-05: received covers baseReturn.items (prod-1 x 5).
+        goodsReceiptItem: {
+          groupBy: jest.fn().mockResolvedValue([
+            { productId, _sum: { quantity: 5 } },
+          ]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -506,6 +960,14 @@ describe('PurchaseReturnService', () => {
       const mockTx = {
         purchaseReturnItem: {
           findMany: jest.fn().mockResolvedValue(baseReturn.items),
+          // G14-03-05: no prior returns consumed.
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        // G14-03-05: received covers baseReturn.items (prod-1 x 5).
+        goodsReceiptItem: {
+          groupBy: jest.fn().mockResolvedValue([
+            { productId, _sum: { quantity: 5 } },
+          ]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -539,6 +1001,14 @@ describe('PurchaseReturnService', () => {
       const mockTx = {
         purchaseReturnItem: {
           findMany: jest.fn().mockResolvedValue(baseReturn.items),
+          // G14-03-05: no prior returns consumed.
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        // G14-03-05: received covers baseReturn.items (prod-1 x 5).
+        goodsReceiptItem: {
+          groupBy: jest.fn().mockResolvedValue([
+            { productId, _sum: { quantity: 5 } },
+          ]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -687,6 +1157,7 @@ describe('PurchaseReturnService', () => {
           'pr-1',
           { currency: 'USD' as any },
           companyId,
+          userId,
         ),
       ).rejects.toThrow('does not match company currency');
     });
@@ -704,6 +1175,7 @@ describe('PurchaseReturnService', () => {
           'pr-1',
           { currency: 'USD' as any },
           companyId,
+          userId,
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -717,6 +1189,15 @@ describe('PurchaseReturnService', () => {
       const mockTx = {
         purchaseReturnItem: {
           findMany: jest.fn().mockResolvedValue(baseReturn.items),
+          // G14-03-05: procurement coverage — received covers the fixture
+          // items, no prior returns consumed.
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        // G14-03-05: received quantities cover baseReturn.items (prod-1 × 5).
+        goodsReceiptItem: {
+          groupBy: jest.fn().mockResolvedValue([
+            { productId, _sum: { quantity: 5 } },
+          ]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -963,6 +1444,14 @@ describe('PurchaseReturnService', () => {
       const mockTx = {
         purchaseReturnItem: {
           findMany: jest.fn().mockResolvedValue(baseReturn.items),
+          // G14-03-05: no prior returns consumed.
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        // G14-03-05: received quantities cover baseReturn.items (prod-1 × 5).
+        goodsReceiptItem: {
+          groupBy: jest.fn().mockResolvedValue([
+            { productId, _sum: { quantity: 5 } },
+          ]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -1050,6 +1539,11 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(twoItems as any);
       const mockTx = fifoCompleteTx();
       mockTx.purchaseReturnItem.findMany.mockResolvedValue(twoItems.items);
+      // G14-03-05: received covers both items (prod-1 x 5, prod-2 x 3).
+      mockTx.goodsReceiptItem.groupBy.mockResolvedValue([
+        { productId: 'prod-1', _sum: { quantity: 5 } },
+        { productId: 'prod-2', _sum: { quantity: 3 } },
+      ]);
 
       await service.transitionStatus(
         'pr-1',
@@ -1180,6 +1674,14 @@ describe('PurchaseReturnService', () => {
       gateTx = {
         purchaseReturnItem: {
           findMany: jest.fn().mockResolvedValue(baseReturn.items),
+          // G14-03-05: no prior returns consumed.
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        // G14-03-05: received covers baseReturn.items (prod-1 x 5).
+        goodsReceiptItem: {
+          groupBy: jest.fn().mockResolvedValue([
+            { productId, _sum: { quantity: 5 } },
+          ]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({

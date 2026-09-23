@@ -9,6 +9,7 @@ import {
 import {
   Prisma,
   PurchaseReturnStatus,
+  GoodsReceiptStatus,
   StockMovementType,
   Currency,
 } from '@prisma/client';
@@ -294,6 +295,7 @@ export class PurchaseReturnService {
     id: string,
     dto: UpdatePurchaseReturnDto,
     companyId: string,
+    userId: string,
   ): Promise<PurchaseReturnEntity> {
     return this.prismaService.$transaction(async (tx) => {
       const existing = await this.purchaseReturnRepository.findById(
@@ -312,8 +314,25 @@ export class PurchaseReturnService {
 
       const updateData: Prisma.PurchaseReturnUpdateInput = {};
       if (dto.returnDate) updateData.returnDate = new Date(dto.returnDate);
-      if (dto.warehouseId)
+      if (dto.warehouseId) {
+        // G14-03-05-B: revalidate warehouse on update (create-time check
+        // must not be bypassable by editing a valid DRAFT return).
+        const warehouse = await tx.warehouse.findFirst({
+          where: {
+            id: dto.warehouseId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        if (!warehouse) {
+          throw new NotFoundException(
+            `Warehouse with id ${dto.warehouseId} not found`,
+          );
+        }
         updateData.warehouse = { connect: { id: dto.warehouseId } };
+      }
       if (dto.notes !== undefined) updateData.notes = dto.notes;
       if (dto.currency) {
         const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
@@ -325,16 +344,54 @@ export class PurchaseReturnService {
         updateData.currency = dto.currency as Currency;
       }
 
+      // G14-03-05-B: map phase (no writes yet). Row write goes first so a
+      // CAS failure leaves nothing mutated — including the items below.
+      let itemsData:
+        | Array<{
+            purchaseReturnId: string;
+            productId: string;
+            quantity: number;
+            unitCost: Decimal;
+            discountPercent: Decimal | null;
+            discountAmount: Decimal;
+            taxPercent: Decimal | null;
+            taxAmount: Decimal;
+            subtotal: Decimal;
+            total: Decimal;
+            notes?: string | null;
+          }>
+        | null = null;
+
       if (dto.items) {
-        await tx.purchaseReturnItem.deleteMany({
-          where: { purchaseReturnId: id },
+        // G14-03-05-B: revalidate products BEFORE any item write — an invalid
+        // productId must reject the whole operation with old items intact
+        // (same batched tenant-scoped check as create; '' never matches).
+        const requestedProductIds = [
+          ...new Set(dto.items.map((i) => i.productId ?? '')),
+        ];
+        const foundProducts = await tx.product.findMany({
+          where: {
+            id: { in: requestedProductIds },
+            companyId,
+            deletedAt: null,
+          },
+          select: { id: true },
         });
+        const foundProductIds = new Set(foundProducts.map((p) => p.id));
+        const missingProductId = requestedProductIds.find(
+          (pid) => !foundProductIds.has(pid),
+        );
+        if (missingProductId !== undefined) {
+          throw new NotFoundException(
+            `Product with id ${missingProductId} not found`,
+          );
+        }
 
         let subtotal = new Decimal(0);
         let totalDiscount = new Decimal(0);
         let totalTax = new Decimal(0);
 
-        const itemsData = dto.items.map((item) => {
+        itemsData = dto.items.map((item) => {
           const unitCost = toDecimal(item.unitCost);
           const qty = new Decimal(item.quantity ?? 0);
           const discountPct = toDecimal(item.discountPercent);
@@ -368,21 +425,92 @@ export class PurchaseReturnService {
           };
         });
 
-        await tx.purchaseReturnItem.createMany({ data: itemsData });
-
         updateData.subtotal = subtotal;
         updateData.discountAmount = totalDiscount;
         updateData.taxAmount = totalTax;
         updateData.grandTotal = subtotal.sub(totalDiscount).add(totalTax);
+
+        // G14-03-05-B: re-check the procurement invariant for the replacement
+        // item set — a valid DRAFT must not become returnable-beyond-received
+        // through update. Supplier is immutable on update; self excluded.
+        await this.validateReturnableQuantities(
+          existing.supplierId,
+          companyId,
+          dto.items.map((i) => ({
+            productId: i.productId ?? '',
+            quantity: i.quantity ?? 1,
+          })),
+          tx,
+          id,
+        );
       }
 
-      const updated = await this.purchaseReturnRepository.update(
+      // G14-03-05-B: optimistic concurrency. When the caller supplies the
+      // rowVersion it observed, a concurrent modification fails the CAS and
+      // nothing is mutated. Without rowVersion the legacy path applies.
+      if (dto.rowVersion !== undefined) {
+        const casResult = await tx.purchaseReturn.updateMany({
+          where: { id, companyId, rowVersion: dto.rowVersion, deletedAt: null },
+          data: { ...updateData, rowVersion: { increment: 1 } },
+        });
+        if (casResult.count === 0) {
+          const stillThere = await tx.purchaseReturn.findFirst({
+            where: { id, companyId },
+            select: { id: true },
+          });
+          if (!stillThere) {
+            throw new NotFoundException(
+              `Purchase return with id ${id} not found`,
+            );
+          }
+          throw new ConflictException(
+            'Purchase return was modified by another user. Please refresh and retry.',
+          );
+        }
+      } else {
+        await this.purchaseReturnRepository.update(
+          id,
+          updateData,
+          companyId,
+          tx,
+        );
+      }
+
+      // Items are replaced only after the row write won, so a CAS failure
+      // leaves old items intact (in addition to the transaction rollback).
+      if (itemsData) {
+        await tx.purchaseReturnItem.deleteMany({
+          where: { purchaseReturnId: id },
+        });
+        await tx.purchaseReturnItem.createMany({ data: itemsData });
+      }
+
+      const updated = await this.purchaseReturnRepository.findById(
         id,
-        updateData,
         companyId,
         tx,
       );
-      return PurchaseReturnMapper.toEntity(updated);
+      if (!updated) {
+        throw new NotFoundException(
+          `Purchase return with id ${id} not found`,
+        );
+      }
+
+      // G14-03-05-B: update audit trail in the same transaction, same style
+      // as create/status transitions (a rollback leaves no audit row).
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: id,
+          action: 'UPDATE',
+          before: { status: existing.status },
+          after: { status: existing.status },
+        },
+        tx,
+      );
+      return PurchaseReturnMapper.toEntity(updated!);
     });
   }
 
@@ -433,6 +561,22 @@ export class PurchaseReturnService {
       if (!allowed || !allowed.includes(newStatus)) {
         throw new BadRequestException(
           `Cannot transition from ${current} to ${newStatus}. Allowed: ${(allowed ?? []).join(', ') || 'none'}`,
+        );
+      }
+
+      // G14-03-05: APPROVED returns already reduce AP in read models, so the
+      // procurement invariant applies here, not only at COMPLETED.
+      if (newStatus === PurchaseReturnStatus.APPROVED) {
+        const items = await tx.purchaseReturnItem.findMany({
+          where: { purchaseReturnId: id },
+          select: { productId: true, quantity: true },
+        });
+        await this.validateReturnableQuantities(
+          ret.supplierId,
+          companyId,
+          items,
+          tx,
+          id,
         );
       }
 
@@ -517,6 +661,22 @@ export class PurchaseReturnService {
         `Cannot transition from ${current} to COMPLETED. Allowed: ${(allowed ?? []).join(', ') || 'none'}`,
       );
     }
+
+    // G14-03-05: procurement invariant after the CAS win (covers rows
+    // approved before this guard existed) and before any stock mutation.
+    // The on-hand stock guard below remains as the second, independent
+    // layer: received quantity and physical stock are different checks.
+    const completeItems = await tx.purchaseReturnItem.findMany({
+      where: { purchaseReturnId: id },
+      select: { productId: true, quantity: true },
+    });
+    await this.validateReturnableQuantities(
+      ret.supplierId,
+      companyId,
+      completeItems,
+      tx,
+      id,
+    );
 
     // When COMPLETED, decrease stock
     const items = await tx.purchaseReturnItem.findMany({
@@ -685,6 +845,91 @@ export class PurchaseReturnService {
       tx,
     );
     return PurchaseReturnMapper.toEntity(completed!);
+  }
+
+  // G14-03-05: procurement coverage — a return must not exceed what was
+  // actually received through the GoodsReceipt flow. Canonical invariant:
+  //   returnable(product) = received(product) − alreadyReturned(product)
+  // Grouping is (supplier, product) company-scoped, NOT per-warehouse:
+  // stock transfers move goods between warehouses, so a per-warehouse
+  // received check would false-reject legitimate returns of transferred
+  // stock. The COMPLETED on-hand stock guard independently protects the
+  // return warehouse from going negative. One batched aggregate per side
+  // (no N+1). Runs inside the caller's transaction.
+  private async validateReturnableQuantities(
+    supplierId: string,
+    companyId: string,
+    items: Array<{ productId: string; quantity: number }>,
+    tx: Prisma.TransactionClient,
+    excludeReturnId?: string,
+  ): Promise<void> {
+    const requestedByProduct = new Map<string, number>();
+    for (const item of items) {
+      requestedByProduct.set(
+        item.productId,
+        (requestedByProduct.get(item.productId) ?? 0) + item.quantity,
+      );
+    }
+    const requestedProductIds = [...requestedByProduct.keys()];
+    if (requestedProductIds.length === 0) return;
+
+    // Received side: COMPLETED, non-deleted receipts whose PO belongs to
+    // the same supplier/company (PO quantity alone is NOT received).
+    const receivedRows = await tx.goodsReceiptItem.groupBy({
+      by: ['productId'],
+      where: {
+        productId: { in: requestedProductIds },
+        goodsReceipt: {
+          companyId,
+          deletedAt: null,
+          status: GoodsReceiptStatus.COMPLETED,
+          purchaseOrder: { supplierId, companyId, deletedAt: null },
+        },
+      },
+      _sum: { quantity: true },
+    });
+    const receivedByProduct = new Map<string, number>(
+      receivedRows.map((r) => [r.productId, r._sum.quantity ?? 0]),
+    );
+
+    // Consumed side: prior committed returns (APPROVED/COMPLETED only —
+    // DRAFT is mutable, CANCELLED/deleted never consumed). The return
+    // under validation is excluded so re-validation never counts itself.
+    const consumedRows = await tx.purchaseReturnItem.groupBy({
+      by: ['productId'],
+      where: {
+        productId: { in: requestedProductIds },
+        purchaseReturn: {
+          supplierId,
+          companyId,
+          deletedAt: null,
+          status: {
+            in: [
+              PurchaseReturnStatus.APPROVED,
+              PurchaseReturnStatus.COMPLETED,
+            ],
+          },
+          ...(excludeReturnId ? { id: { not: excludeReturnId } } : {}),
+        },
+      },
+      _sum: { quantity: true },
+    });
+    const consumedByProduct = new Map<string, number>(
+      consumedRows.map((r) => [r.productId, r._sum.quantity ?? 0]),
+    );
+
+    for (const productId of requestedProductIds) {
+      const requested = requestedByProduct.get(productId) ?? 0;
+      const received = receivedByProduct.get(productId) ?? 0;
+      const consumed = consumedByProduct.get(productId) ?? 0;
+      if (requested > received - consumed) {
+        throw new BadRequestException(
+          `Return quantity ${requested} for product ${productId} exceeds ` +
+            `returnable quantity ${received - consumed} ` +
+            `(received ${received}, already returned ${consumed})`,
+        );
+      }
+    }
   }
 
   async softDelete(id: string, companyId: string): Promise<void> {

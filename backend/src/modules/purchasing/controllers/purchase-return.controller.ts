@@ -114,7 +114,7 @@ export class PurchaseReturnController {
     @Body() dto: UpdatePurchaseReturnDto,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<PurchaseReturnEntity> {
-    return this.purchaseReturnService.update(id, dto, currentUser.companyId);
+    return this.purchaseReturnService.update(id, dto, currentUser.companyId, currentUser.userId);
   }
 
   @Delete(':id')
