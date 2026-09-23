@@ -140,6 +140,8 @@ describe('PurchaseOrderService', () => {
       const mockTx = {
         purchaseOrderItem: { createMany: jest.fn() },
         supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        // G14-03-04: tenant-scoped product validation now runs before create.
+        product: { findMany: jest.fn().mockResolvedValue([{ id: productId }]) },
       };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.create.mockResolvedValue(basePo as any);
@@ -214,6 +216,10 @@ describe('PurchaseOrderService', () => {
       const mockTx = {
         purchaseOrderItem: { createMany: jest.fn() },
         supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        // G14-03-04: both requested products resolve in-tenant.
+        product: {
+          findMany: jest.fn().mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]),
+        },
       };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
@@ -250,6 +256,162 @@ describe('PurchaseOrderService', () => {
 
       const result = await service.create(multiDto, userId, companyId);
       expect(result).toBeDefined();
+    });
+  });
+
+  // ── G14-03-04: PO item product tenant/active validation ──
+  describe('product validation (G14-03-04)', () => {
+    const productTx = (foundIds: string[]) => ({
+      purchaseOrderItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+      supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+      product: {
+        findMany: jest.fn().mockResolvedValue(foundIds.map((id) => ({ id }))),
+      },
+    });
+    const itemDto = (pid: string) => ({
+      productId: pid,
+      quantity: 2,
+      unitCost: 50.0,
+    });
+
+    // Test 1: same-company active product → create PASS.
+    it('should create PO with same-company active product', async () => {
+      const mockTx = productTx([productId]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue(basePo as any);
+
+      const result = await service.create(
+        { supplierId, items: [itemDto(productId)] },
+        userId,
+        companyId,
+      );
+      expect(result).toBeDefined();
+      expect(mockTx.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: { in: [productId] },
+            companyId,
+            deletedAt: null,
+          }),
+        }),
+      );
+    });
+
+    // Test 2: cross-company product → create NotFoundException.
+    it('should reject create with cross-company product', async () => {
+      const mockTx = productTx([]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+
+      await expect(
+        service.create(
+          { supplierId, items: [itemDto('foreign-product')] },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // Test 3: deleted same-company product → create NotFoundException.
+    it('should reject create with soft-deleted product', async () => {
+      const mockTx = productTx([]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+
+      await expect(
+        service.create(
+          { supplierId, items: [itemDto('deleted-product')] },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // Test 4: nonexistent product ID → create NotFoundException.
+    it('should reject create with nonexistent product ID', async () => {
+      const mockTx = productTx([]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+
+      await expect(
+        service.create(
+          { supplierId, items: [itemDto('no-such-product')] },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // Test 5: update to cross-company product → NotFoundException, items preserved.
+    it('should reject update to cross-company product without mutating items', async () => {
+      const mockTx = productTx([]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(
+        service.update(
+          'po-1',
+          { items: [itemDto('foreign-product')] } as any,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      // Validation runs BEFORE deleteMany: old items remain intact.
+      expect(mockTx.purchaseOrderItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.purchaseOrderItem.createMany).not.toHaveBeenCalled();
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // Test 6: update to deleted product → NotFoundException, items preserved.
+    it('should reject update to deleted product without mutating items', async () => {
+      const mockTx = productTx([]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(
+        service.update(
+          'po-1',
+          { items: [itemDto('deleted-product')] } as any,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockTx.purchaseOrderItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.purchaseOrderItem.createMany).not.toHaveBeenCalled();
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // Test 7: mixed valid + invalid product IDs → whole operation rejected.
+    it('should reject create with mixed valid and invalid product IDs', async () => {
+      const mockTx = productTx([productId]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+
+      await expect(
+        service.create(
+          { supplierId, items: [itemDto(productId), itemDto('foreign-product')] },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // Test 8: empty-string product ID on update → NotFoundException.
+    it('should reject update with empty-string product ID', async () => {
+      const mockTx = productTx([productId]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(
+        service.update(
+          'po-1',
+          { items: [{ productId: '', quantity: 1 }] } as any,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockTx.purchaseOrderItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockRepo.update).not.toHaveBeenCalled();
     });
   });
 
@@ -679,6 +841,8 @@ describe('PurchaseOrderService', () => {
       const mockTx = {
         purchaseOrderItem: { createMany: jest.fn() },
         supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        // G14-03-04: tenant-scoped product validation now runs before create.
+        product: { findMany: jest.fn().mockResolvedValue([{ id: productId }]) },
       };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockRepo.create.mockResolvedValue(basePo as any);

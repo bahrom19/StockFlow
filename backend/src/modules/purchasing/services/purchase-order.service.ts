@@ -115,6 +115,18 @@ export class PurchaseOrderService {
         );
       }
 
+      // G14-03-04: tenant-scoped product validation. PurchaseOrderItem.productId
+      // has no FK in the schema, so foreign-tenant, soft-deleted or nonexistent
+      // productIds would otherwise be silently accepted. One batched lookup
+      // (not N+1) covers all items: missing products are indistinguishable
+      // 404s — same semantics as the supplier check above. Runs before any
+      // PO item mutation, inside the same transaction.
+      await this.validateProductsBelongToCompany(
+        dto.items.map((i) => i.productId),
+        companyId,
+        tx,
+      );
+
       let subtotal = new Decimal(0);
       let totalDiscount = new Decimal(0);
       let totalTax = new Decimal(0);
@@ -323,6 +335,15 @@ export class PurchaseOrderService {
       }
 
       if (dto.items) {
+        // G14-03-04: validate BEFORE deleteMany — an invalid productId must
+        // reject the whole operation with old items intact (same batched
+        // tenant-scoped check as create; '' is never a valid product).
+        await this.validateProductsBelongToCompany(
+          dto.items.map((i) => i.productId ?? ''),
+          companyId,
+          tx,
+        );
+
         // Delete old items and recreate
         await tx.purchaseOrderItem.deleteMany({
           where: { purchaseOrderId: id },
@@ -681,5 +702,35 @@ export class PurchaseOrderService {
       DocumentSequenceType.PURCHASE_ORDER,
     );
     return nextOrderNumber(companyId, seq);
+  }
+
+  // G14-03-04: batched tenant-scoped product validation shared by create
+  // and update. Mirrors the purchase-return G9-E2 pattern: one query for
+  // all distinct requested ids (no N+1); missing, foreign-tenant and
+  // soft-deleted products are indistinguishable 404s. Follows deletedAt-only
+  // product reference semantics (isActive is not part of reference checks).
+  private async validateProductsBelongToCompany(
+    productIds: string[],
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const requestedProductIds = [...new Set(productIds)];
+    const foundProducts = await tx.product.findMany({
+      where: {
+        id: { in: requestedProductIds },
+        companyId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    const foundProductIds = new Set(foundProducts.map((p) => p.id));
+    const missingProductId = requestedProductIds.find(
+      (id) => !foundProductIds.has(id),
+    );
+    if (missingProductId !== undefined) {
+      throw new NotFoundException(
+        `Product with id ${missingProductId} not found`,
+      );
+    }
   }
 }
