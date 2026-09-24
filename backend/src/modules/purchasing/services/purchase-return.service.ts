@@ -12,6 +12,7 @@ import {
   GoodsReceiptStatus,
   StockMovementType,
   Currency,
+  JournalEntryStatus,
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
@@ -23,9 +24,11 @@ import { PurchaseReturnEntity } from '../entities/purchase-return.entity';
 import { PurchaseReturnMapper } from '../mappers/purchase-order.mapper';
 import { PurchaseReturnRepository } from '../repositories/purchase-return.repository';
 import { PurchaseReturnedEvent } from '../events/purchase-returned.event';
+import { PurchaseReturnCancelledEvent } from '../events/purchase-return-cancelled.event';
 import { CompaniesService } from '../../companies/services/companies.service';
 import { PurchasingFinanceService } from './purchasing-finance.service';
 import { CostingService } from '../../inventory/services/costing.service';
+import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
@@ -57,6 +60,7 @@ export class PurchaseReturnService {
     private readonly companiesService: CompaniesService,
     private readonly purchasingFinanceService: PurchasingFinanceService,
     private readonly costingService: CostingService,
+    private readonly glEngine: GlEngineService,
     private readonly auditLog: AuditLogService,
     private readonly idempotencyService: IdempotencyService,
   ) {}
@@ -909,6 +913,7 @@ export class PurchaseReturnService {
               PurchaseReturnStatus.COMPLETED,
             ],
           },
+          isCancelled: false,
           ...(excludeReturnId ? { id: { not: excludeReturnId } } : {}),
         },
       },
@@ -930,6 +935,274 @@ export class PurchaseReturnService {
         );
       }
     }
+  }
+
+  // G15-02-B: Cancel a COMPLETED purchase return — full atomic reversal of
+  // stock, FIFO cost layers, GL journal, with CAS concurrency protection.
+  // Status remains COMPLETED; the isCancelled flag records the reversal.
+  async cancelCompleted(
+    id: string,
+    userId: string,
+    companyId: string,
+  ): Promise<PurchaseReturnEntity> {
+    return this.prismaService.$transaction(async (tx) => {
+      // 1. Load return (tenant-scoped)
+      const ret = await this.purchaseReturnRepository.findById(
+        id,
+        companyId,
+        tx,
+      );
+      if (!ret) {
+        throw new NotFoundException(`Purchase return with id ${id} not found`);
+      }
+
+      // 2. Validate status
+      if (ret.status !== PurchaseReturnStatus.COMPLETED) {
+        throw new BadRequestException(
+          `Cannot cancel purchase return ${ret.returnNumber}: only COMPLETED returns can be cancelled. Current status: ${ret.status}`,
+        );
+      }
+
+      // 3. Validate not already cancelled
+      if (ret.isCancelled) {
+        throw new BadRequestException(
+          `Purchase return ${ret.returnNumber} has already been cancelled`,
+        );
+      }
+
+      // 4. CAS: atomically set isCancelled = true. Exactly one concurrent
+      // cancellation can win; the loser gets count = 0 → ConflictException.
+      // CAS runs BEFORE any side effects so a failed CAS incurs no cost.
+      const casCount = await this.purchaseReturnRepository.cancelIfCompleted(
+        id,
+        companyId,
+        userId,
+        tx,
+      );
+      if (casCount === 0) {
+        throw new ConflictException(
+          `Cannot cancel purchase return ${ret.returnNumber}: it was concurrently modified or already cancelled`,
+        );
+      }
+
+      // 5. Load items for restoration
+      const items = await tx.purchaseReturnItem.findMany({
+        where: { purchaseReturnId: id },
+      });
+
+      // 6. Restore stock + create reversal StockMovement for each item
+      for (const item of items) {
+        const stock = await tx.stock.findFirst({
+          where: {
+            productId: item.productId,
+            warehouseId: ret.warehouseId,
+            companyId,
+          },
+        });
+
+        // G15-02-B P2-01: a COMPLETED return must have a corresponding Stock
+        // row (completion decremented it). A missing row is an integrity
+        // violation — throw and roll back rather than creating an orphan
+        // StockMovement against a non-existent stock record.
+        if (!stock) {
+          throw new ConflictException(
+            `Cannot cancel return ${ret.returnNumber}: no stock record found for product ${item.productId} in warehouse ${ret.warehouseId}`,
+          );
+        }
+
+        const beforeQty = stock.quantity;
+
+        // Atomic increment
+        const result = await tx.stock.updateMany({
+          where: {
+            id: stock.id,
+            companyId,
+          },
+          data: {
+            quantity: { increment: item.quantity },
+            availableQuantity: { increment: item.quantity },
+            rowVersion: { increment: 1 },
+          },
+        });
+        if (result.count === 0) {
+          throw new ConflictException(
+            `Failed to restore stock for product ${item.productId}: concurrent modification`,
+          );
+        }
+
+        const afterQty = beforeQty + item.quantity;
+
+        await tx.stockMovement.create({
+          data: {
+            companyId,
+            productId: item.productId,
+            warehouseId: ret.warehouseId,
+            type: StockMovementType.ADJUSTMENT,
+            quantity: item.quantity,
+            beforeQuantity: beforeQty,
+            afterQuantity: afterQty,
+            referenceType: 'PURCHASE_RETURN_REVERSAL',
+            referenceId: id,
+            comment: `Reversal of return ${ret.returnNumber}`,
+            createdBy: userId,
+          },
+        });
+      }
+
+      // 7. Restore FIFO cost layers
+      //    Find the OUT CostLayers created during the original COMPLETED transition.
+      for (const item of items) {
+        const outLayers =
+          await this.costingService.findOutLayersByReferenceAndProduct(
+            companyId,
+            'PURCHASE_RETURN',
+            id,
+            item.productId,
+            tx,
+          );
+
+        if (outLayers.length === 0) {
+          // No OUT layers found — data anomaly. Throw and rollback.
+          throw new ConflictException(
+            `Cannot cancel return ${ret.returnNumber}: no FIFO OUT layers found for product ${item.productId}. ` +
+              `The original completion may have used a legacy cost path.`,
+          );
+        }
+
+        // Aggregate across all OUT layers for this product
+        let totalQty = 0;
+        let totalCost = new Decimal(0);
+        for (const layer of outLayers) {
+          totalQty += layer.quantity;
+          totalCost = totalCost.add(new Decimal(layer.totalCost.toString()));
+        }
+
+        if (totalQty !== item.quantity) {
+          throw new ConflictException(
+            `Cannot cancel return ${ret.returnNumber}: FIFO OUT layer quantity mismatch for product ${item.productId}. ` +
+              `Expected ${item.quantity}, found ${totalQty}`,
+          );
+        }
+
+        // Restore at weighted average unit cost
+        const avgUnitCost = totalQty > 0 ? totalCost.div(totalQty) : new Decimal(0);
+        await this.costingService.restoreLayer(
+          item.productId,
+          companyId,
+          totalQty,
+          avgUnitCost,
+          'PURCHASE_RETURN_REVERSAL',
+          id,
+          tx,
+        );
+      }
+
+      // 8. Find original GL journal
+      const originalJournal = await tx.journalEntry.findFirst({
+        where: {
+          companyId,
+          referenceType: 'PURCHASE_RETURN',
+          referenceId: ret.returnNumber,
+          status: JournalEntryStatus.POSTED,
+        },
+        include: { lines: true },
+      });
+
+      if (!originalJournal) {
+        throw new ConflictException(
+          `Cannot cancel return ${ret.returnNumber}: no posted journal entry found. ` +
+            `The original approval journal may have been manually reversed or removed.`,
+        );
+      }
+
+      // 9. Find current OPEN financial period
+      const openPeriod = await tx.financialPeriod.findFirst({
+        where: { companyId, status: 'OPEN' },
+        orderBy: { startDate: 'desc' },
+        select: { id: true },
+      });
+
+      if (!openPeriod) {
+        throw new BadRequestException(
+          `Cannot cancel return ${ret.returnNumber}: no open financial period found. ` +
+            `A GL reversal requires an OPEN period.`,
+        );
+      }
+
+      // 10. Construct exact negation of the original journal lines
+      const reversalLines = (originalJournal.lines ?? []).map((line) => ({
+        accountId: line.accountId,
+        debit: line.credit.toString(),
+        credit: line.debit.toString(),
+        description: `REVERSAL: ${line.description || `Return ${ret.returnNumber}`}`,
+      }));
+
+      // 11. Post reversal journal into the current OPEN period
+      await this.glEngine.post(
+        {
+          companyId,
+          financialPeriodId: openPeriod.id,
+          entryDate: new Date(),
+          description: `Reversal of purchase return: ${ret.returnNumber}`,
+          referenceType: 'PURCHASE_RETURN_REVERSAL',
+          referenceId: originalJournal.id,
+          createdBy: userId,
+          lines: reversalLines,
+        },
+        tx,
+      );
+
+      // 12. Mark original journal as REVERSED
+      await tx.journalEntry.update({
+        where: { id: originalJournal.id },
+        data: {
+          status: JournalEntryStatus.REVERSED,
+          rowVersion: { increment: 1 },
+        },
+      });
+
+      // 13. Audit log
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: id,
+          action: 'CANCELLED',
+          before: { status: PurchaseReturnStatus.COMPLETED, isCancelled: false },
+          after: { status: PurchaseReturnStatus.COMPLETED, isCancelled: true },
+        },
+        tx,
+      );
+
+      // 14. Publish event (non-critical — failure does not break transaction)
+      try {
+        await this.eventBus.publish(
+          new PurchaseReturnCancelledEvent({
+            purchaseReturnId: id,
+            companyId,
+            supplierId: ret.supplierId,
+            warehouseId: ret.warehouseId,
+            returnNumber: ret.returnNumber,
+            items: items.map((i) => ({
+              productId: i.productId,
+              quantity: i.quantity,
+            })),
+          }),
+          { context: { transactionClient: tx } },
+        );
+      } catch (_err) {
+        // Non-critical event
+      }
+
+      // 15. Re-fetch and return
+      const cancelled = await this.purchaseReturnRepository.findById(
+        id,
+        companyId,
+        tx,
+      );
+      return PurchaseReturnMapper.toEntity(cancelled!);
+    });
   }
 
   async softDelete(id: string, companyId: string): Promise<void> {

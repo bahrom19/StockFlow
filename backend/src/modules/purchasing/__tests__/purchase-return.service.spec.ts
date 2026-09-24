@@ -18,8 +18,8 @@ import { UpdatePurchaseReturnDto } from '../dto/update-purchase-return.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { CompaniesService } from '../../companies/services/companies.service';
 import { PurchasingFinanceService } from '../services/purchasing-finance.service';
-import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { CostingService } from '../../inventory/services/costing.service';
+import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 
@@ -47,6 +47,7 @@ const baseReturn = {
   approvedAt: null,
   cancelledBy: null,
   cancelledAt: null,
+  isCancelled: false,
   rowVersion: 0,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -78,7 +79,8 @@ describe('PurchaseReturnService', () => {
   let mockEventBus: { publish: jest.Mock };
   let mockFinance: { createPurchaseReturnJournal: jest.Mock };
   let mockAuditLog: jest.Mocked<AuditLogService>;
-  let mockCosting: { consumeFifoLayers: jest.Mock };
+  let mockCosting: { consumeFifoLayers: jest.Mock; restoreLayer: jest.Mock; findOutLayersByReferenceAndProduct: jest.Mock };
+  let mockGlEngine: { post: jest.Mock };
   let mockIdempotency: { reserve: jest.Mock; complete: jest.Mock; hashRequest: jest.Mock };
   const mockTransaction = jest.fn();
 
@@ -91,6 +93,7 @@ describe('PurchaseReturnService', () => {
       softDelete: jest.fn(),
       findByReturnNumber: jest.fn(),
       completeIfApproved: jest.fn().mockResolvedValue(1),
+      cancelIfCompleted: jest.fn().mockResolvedValue(1),
     } as any;
     mockEventBus = { publish: jest.fn().mockResolvedValue(undefined) };
     mockFinance = { createPurchaseReturnJournal: jest.fn().mockResolvedValue(undefined) };
@@ -105,6 +108,17 @@ describe('PurchaseReturnService', () => {
           layers: [],
           fallbackCost: new Decimal('0'),
         }),
+      restoreLayer: jest.fn().mockResolvedValue(undefined),
+      findOutLayersByReferenceAndProduct: jest.fn().mockResolvedValue([]),
+    };
+    mockGlEngine = {
+      post: jest.fn().mockResolvedValue({
+        id: 'je-reversal-1',
+        entryNumber: 100,
+        status: 'POSTED',
+        totalDebit: '100',
+        totalCredit: '100',
+      }),
     };
     mockIdempotency = {
       reserve: jest.fn().mockResolvedValue({ type: 'created', requestHash: 'hash' }),
@@ -122,6 +136,7 @@ describe('PurchaseReturnService', () => {
         { provide: EVENT_BUS, useValue: mockEventBus },
         { provide: PurchasingFinanceService, useValue: mockFinance },
         { provide: CostingService, useValue: mockCosting },
+        { provide: GlEngineService, useValue: mockGlEngine },
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: IdempotencyService, useValue: mockIdempotency },
       ],
@@ -576,6 +591,45 @@ describe('PurchaseReturnService', () => {
         ),
       ).rejects.toThrow(/already returned 30/);
       expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    // 5b. G15-02-B P1-01: cancelled COMPLETED returns are excluded from the
+    // consumed budget — their quantity becomes returnable again.
+    it('should exclude cancelled returns from the already-returned budget', async () => {
+      const items = [{ ...baseReturn.items[0], quantity: 40 }];
+      const groupBy = jest.fn().mockResolvedValue([]);
+      const mockTx = {
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(items),
+          groupBy,
+        },
+        goodsReceiptItem: {
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 100 } }]),
+        },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseReturn,
+        status: PurchaseReturnStatus.APPROVED,
+      } as any);
+
+      const result = await service.transitionStatus(
+        'pr-1',
+        PurchaseReturnStatus.APPROVED,
+        userId,
+        companyId,
+      );
+      expect(result).toBeDefined();
+      expect(groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            purchaseReturn: expect.objectContaining({ isCancelled: false }),
+          }),
+        }),
+      );
     });
 
     // 6. Cancelled/deleted prior returns do not consume quantity.
@@ -1859,6 +1913,463 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(null);
       await expect(service.softDelete('x', companyId)).rejects.toThrow(
         NotFoundException,
+      );
+    });
+  });
+
+  // ── G15-02-B: cancelCompleted (COMPLETED → isCancelled with full reversal) ──
+  describe('cancelCompleted', () => {
+    const completedReturn = {
+      ...baseReturn,
+      status: PurchaseReturnStatus.COMPLETED,
+      isCancelled: false,
+      cancelledBy: null,
+      cancelledAt: null,
+    };
+
+    const mockTx = () => ({
+      purchaseReturnItem: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'pri-1', purchaseReturnId: 'pr-1', productId, quantity: 5, unitCost: new Prisma.Decimal('20') },
+        ]),
+      },
+      stock: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'stock-1',
+          productId,
+          warehouseId,
+          companyId,
+          quantity: 50,
+          reservedQuantity: 0,
+          rowVersion: 1,
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      stockMovement: { create: jest.fn().mockResolvedValue({}) },
+      journalEntry: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'je-1',
+          companyId,
+          referenceType: 'PURCHASE_RETURN',
+          referenceId: 'PR-TEST-0001',
+          status: 'POSTED',
+          entryNumber: 42,
+          financialPeriodId: 'fp-1',
+          lines: [
+            { accountId: 'acc-2100', debit: new Prisma.Decimal('100'), credit: new Prisma.Decimal('0'), description: 'AP debit' },
+            { accountId: 'acc-1300', debit: new Prisma.Decimal('0'), credit: new Prisma.Decimal('100'), description: 'Inventory credit' },
+          ],
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      financialPeriod: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'fp-open-1' }),
+      },
+    });
+
+    it('should cancel a COMPLETED return and set isCancelled=true', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      const result = await service.cancelCompleted('pr-1', userId, companyId);
+      expect(result).toBeDefined();
+      expect(mockRepo.cancelIfCompleted).toHaveBeenCalledWith('pr-1', companyId, userId, tx);
+    });
+
+    it('should restore stock (quantity +availableQuantity) for each item', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await service.cancelCompleted('pr-1', userId, companyId);
+
+      expect(tx.stock.updateMany).toHaveBeenCalledWith({
+        where: { id: 'stock-1', companyId },
+        data: {
+          quantity: { increment: 5 },
+          availableQuantity: { increment: 5 },
+          rowVersion: { increment: 1 },
+        },
+      });
+    });
+
+    it('should create reversal StockMovement with ADJUSTMENT type and positive quantity', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await service.cancelCompleted('pr-1', userId, companyId);
+
+      expect(tx.stockMovement.create).toHaveBeenCalledWith({
+        data: {
+          companyId,
+          productId,
+          warehouseId,
+          type: StockMovementType.ADJUSTMENT,
+          quantity: 5,
+          beforeQuantity: 50,
+          afterQuantity: 55,
+          referenceType: 'PURCHASE_RETURN_REVERSAL',
+          referenceId: 'pr-1',
+          comment: 'Reversal of return PR-TEST-0001',
+          createdBy: userId,
+        },
+      });
+    });
+
+    it('should restore FIFO cost layer via restoreLayer at weighted average', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await service.cancelCompleted('pr-1', userId, companyId);
+
+      expect(mockCosting.restoreLayer).toHaveBeenCalledWith(
+        productId,
+        companyId,
+        5,
+        expect.any(Decimal),
+        'PURCHASE_RETURN_REVERSAL',
+        'pr-1',
+        tx,
+      );
+    });
+
+    it('should post exact GL reversal (negated debit/credit) into current OPEN period', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await service.cancelCompleted('pr-1', userId, companyId);
+
+      expect(mockGlEngine.post).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId,
+          financialPeriodId: 'fp-open-1',
+          referenceType: 'PURCHASE_RETURN_REVERSAL',
+          referenceId: 'je-1',
+          lines: expect.arrayContaining([
+            expect.objectContaining({ accountId: 'acc-2100', debit: '0', credit: '100' }),
+            expect.objectContaining({ accountId: 'acc-1300', debit: '100', credit: '0' }),
+          ]),
+        }),
+        tx,
+      );
+    });
+
+    it('should mark original journal as REVERSED', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await service.cancelCompleted('pr-1', userId, companyId);
+
+      expect(tx.journalEntry.update).toHaveBeenCalledWith({
+        where: { id: 'je-1' },
+        data: { status: 'REVERSED', rowVersion: { increment: 1 } },
+      });
+    });
+
+    it('should use current OPEN period (not original period)', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await service.cancelCompleted('pr-1', userId, companyId);
+
+      // Verify it looked for the OPEN period, not the original fp-1
+      expect(tx.financialPeriod.findFirst).toHaveBeenCalledWith({
+        where: { companyId, status: 'OPEN' },
+        orderBy: { startDate: 'desc' },
+        select: { id: true },
+      });
+    });
+
+    it('should reject duplicate cancellation (isCancelled=true)', async () => {
+      mockTransaction.mockImplementation((cb: any) => cb({}));
+      mockRepo.findById.mockResolvedValue({
+        ...completedReturn,
+        isCancelled: true,
+      } as any);
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject concurrent cancellation via CAS (ConflictException)', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById.mockResolvedValue(completedReturn as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(0); // CAS lost
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should reject DRAFT return', async () => {
+      mockTransaction.mockImplementation((cb: any) => cb({}));
+      mockRepo.findById.mockResolvedValue({
+        ...baseReturn,
+        status: PurchaseReturnStatus.DRAFT,
+      } as any);
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject APPROVED return', async () => {
+      mockTransaction.mockImplementation((cb: any) => cb({}));
+      mockRepo.findById.mockResolvedValue({
+        ...baseReturn,
+        status: PurchaseReturnStatus.APPROVED,
+      } as any);
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw when return not found', async () => {
+      mockTransaction.mockImplementation((cb: any) => cb({}));
+      mockRepo.findById.mockResolvedValue(null);
+
+      await expect(
+        service.cancelCompleted('x', userId, companyId),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should rollback when original journal is missing', async () => {
+      const tx = mockTx();
+      tx.journalEntry.findFirst.mockResolvedValue(null);
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById.mockResolvedValue(completedReturn as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should rollback when no OPEN period exists', async () => {
+      const tx = mockTx();
+      tx.financialPeriod.findFirst.mockResolvedValue(null);
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById.mockResolvedValue(completedReturn as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should write audit log with CANCELLED action and status pair', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await service.cancelCompleted('pr-1', userId, companyId);
+
+      expect(mockAuditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: 'pr-1',
+          action: 'CANCELLED',
+          before: { status: PurchaseReturnStatus.COMPLETED, isCancelled: false },
+          after: { status: PurchaseReturnStatus.COMPLETED, isCancelled: true },
+        }),
+        tx,
+      );
+    });
+
+    it('should publish PurchaseReturnCancelledEvent', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await service.cancelCompleted('pr-1', userId, companyId);
+
+      expect(mockEventBus.publish).toHaveBeenCalledTimes(1);
+      expect(mockEventBus.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            purchaseReturnId: 'pr-1',
+            companyId,
+            returnNumber: 'PR-TEST-0001',
+          }),
+        }),
+        expect.objectContaining({ context: { transactionClient: tx } }),
+      );
+    });
+
+    it('should not break transaction when event publish fails', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+      mockEventBus.publish.mockRejectedValueOnce(new Error('event failure'));
+
+      // Should not throw — event failure is non-critical
+      const result = await service.cancelCompleted('pr-1', userId, companyId);
+      expect(result).toBeDefined();
+    });
+
+    it('should rollback when GL posting fails', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById.mockResolvedValue(completedReturn as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+      mockGlEngine.post.mockRejectedValueOnce(new Error('GL failure'));
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow('GL failure');
+
+      // Verify original journal was NOT marked as REVERSED
+      expect(tx.journalEntry.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException when FIFO OUT layers are missing', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById.mockResolvedValue(completedReturn as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([]);
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw ConflictException when stock updateMany count is 0', async () => {
+      const tx = mockTx();
+      tx.stock.updateMany.mockResolvedValue({ count: 0 });
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById.mockResolvedValue(completedReturn as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    // G15-02-B P2-01: a COMPLETED return must have a Stock row (completion
+    // decremented it). A missing row is an integrity violation — the whole
+    // reversal rolls back and no orphan StockMovement may be created.
+    it('should throw ConflictException with no StockMovement/GL/audit when stock row is missing', async () => {
+      const tx = mockTx();
+      tx.stock.findFirst.mockResolvedValue(null);
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById.mockResolvedValue(completedReturn as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow(ConflictException);
+
+      // No orphan movement, no FIFO restore, no GL reversal, no audit.
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+      expect(mockCosting.restoreLayer).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+      expect(tx.journalEntry.update).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('should query OUT layers with PURCHASE_RETURN referenceType and return id', async () => {
+      const tx = mockTx();
+      mockTransaction.mockImplementation((cb: any) => cb(tx));
+      mockRepo.findById
+        .mockResolvedValueOnce(completedReturn as any)
+        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+      mockRepo.cancelIfCompleted.mockResolvedValue(1);
+      mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
+        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+      ]);
+
+      await service.cancelCompleted('pr-1', userId, companyId);
+
+      expect(mockCosting.findOutLayersByReferenceAndProduct).toHaveBeenCalledWith(
+        companyId,
+        'PURCHASE_RETURN',
+        'pr-1',
+        productId,
+        tx,
       );
     });
   });

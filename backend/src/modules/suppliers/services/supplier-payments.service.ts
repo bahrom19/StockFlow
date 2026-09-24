@@ -695,6 +695,7 @@ export class SupplierPaymentsService {
         companyId,
         deletedAt: null,
         status: { in: ['APPROVED', 'COMPLETED'] },
+        isCancelled: false,
       },
       _sum: { grandTotal: true },
     });

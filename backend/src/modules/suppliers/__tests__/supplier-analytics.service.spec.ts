@@ -580,6 +580,21 @@ describe('SupplierAnalyticsService.getProductPurchases', () => {
     expect(result.items).toHaveLength(0);
     expect(result.total).toBe(0);
   });
+
+  // G15-02-B P2-02: cancelled returns must be excluded from per-product
+  // return quantity/spend (third $queryRaw call = returns query).
+  it('should exclude cancelled returns from the per-product return query', async () => {
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ total: BigInt(0) }])
+      .mockResolvedValueOnce([]);
+
+    await service.getProductPurchases(supplierId, companyId);
+
+    expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(3);
+    const returnSql = String(mockPrisma.$queryRaw.mock.calls[2][0]);
+    expect(returnSql).toContain('pr."isCancelled" = false');
+  });
 });
 
 describe('SupplierAnalyticsService.getReliability', () => {
@@ -1427,6 +1442,16 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
 
     expect(result.topReturnedProducts).toHaveLength(0);
     expect(result.totalReturnedQuantity).toBe(0);
+  });
+
+  // G15-02-B P2-03: cancelled returns must be excluded from the top
+  // returned products query (first $queryRaw call = returns query).
+  it('should exclude cancelled returns from the top returned products query', async () => {
+    await service.getReturnSummary(supplierId, companyId);
+
+    expect(mockPrisma.$queryRaw).toHaveBeenCalled();
+    const returnSql = String(mockPrisma.$queryRaw.mock.calls[0][0]);
+    expect(returnSql).toContain('pr."isCancelled" = false');
   });
 
   it('should handle multiple return items for same product', async () => {

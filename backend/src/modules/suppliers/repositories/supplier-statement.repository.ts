@@ -138,6 +138,7 @@ export class SupplierStatementRepository {
       status: {
         in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED],
       },
+      isCancelled: false,
       returnDate: this.dateRange(dateFrom, dateTo),
       ...(currency ? { currency } : {}),
     };
@@ -217,6 +218,7 @@ export class SupplierStatementRepository {
         status: {
           in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED],
         },
+        isCancelled: false,
         returnDate: { lt: beforeDate },
         ...(currency ? { currency } : {}),
       },

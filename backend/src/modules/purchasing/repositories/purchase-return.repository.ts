@@ -177,4 +177,31 @@ export class PurchaseReturnRepository {
     });
     return result.count;
   }
+
+  // G15-02-B: atomic COMPLETED → isCancelled CAS for the void transition.
+  // Mirrors completeIfApproved — the WHERE clause carries id + companyId +
+  // status = COMPLETED + isCancelled = false, so exactly one concurrent
+  // cancellation can win; the loser gets count = 0 → ConflictException.
+  async cancelIfCompleted(
+    id: string,
+    companyId: string,
+    userId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await this.getClient(tx).purchaseReturn.updateMany({
+      where: {
+        id,
+        companyId,
+        deletedAt: null,
+        status: PurchaseReturnStatus.COMPLETED,
+        isCancelled: false,
+      },
+      data: {
+        isCancelled: true,
+        cancelledBy: userId,
+        cancelledAt: new Date(),
+      },
+    });
+    return result.count;
+  }
 }

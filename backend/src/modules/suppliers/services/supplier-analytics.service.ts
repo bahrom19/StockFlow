@@ -118,6 +118,7 @@ export class SupplierAnalyticsService {
       companyId,
       deletedAt: null,
       status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+      isCancelled: false,
       currency: baseCurrency,
       returnDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
     };
@@ -189,6 +190,7 @@ export class SupplierAnalyticsService {
         companyId,
         deletedAt: null,
         status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+        isCancelled: false,
         currency: baseCurrency,
       },
       _sum: { grandTotal: true },
@@ -348,6 +350,7 @@ export class SupplierAnalyticsService {
         AND pr."companyId" = ${companyId}
         AND pr."deletedAt" IS NULL
         AND pr."status" IN ('APPROVED', 'COMPLETED')
+        AND pr."isCancelled" = false
         AND pr."returnDate" >= ${effectiveDateFrom}
         AND pr."returnDate" <= ${effectiveDateTo}
       GROUP BY pri."productId"
@@ -751,6 +754,7 @@ export class SupplierAnalyticsService {
         companyId,
         deletedAt: null,
         status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+        isCancelled: false,
         currency: baseCurrency,
       },
       _sum: { grandTotal: true },
@@ -887,6 +891,7 @@ export class SupplierAnalyticsService {
         companyId,
         deletedAt: null,
         status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+        isCancelled: false,
         returnDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
       },
       _sum: { grandTotal: true },
@@ -916,6 +921,7 @@ export class SupplierAnalyticsService {
         AND pr."companyId" = ${companyId}
         AND pr."deletedAt" IS NULL
         AND pr."status" IN ('APPROVED', 'COMPLETED')
+        AND pr."isCancelled" = false
         AND pr."returnDate" >= ${effectiveDateFrom}
         AND pr."returnDate" <= ${effectiveDateTo}
       GROUP BY pri."productId"

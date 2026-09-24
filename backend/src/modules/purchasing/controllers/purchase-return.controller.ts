@@ -156,4 +156,25 @@ export class PurchaseReturnController {
       idempotencyKey,
     );
   }
+
+  // G15-02-B: Cancel a COMPLETED purchase return with full reversal
+  @Post(':id/cancel')
+  @RequirePermission('purchasing:update')
+  @ApiOperation({ summary: 'Cancel a completed purchase return (full reversal)' })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Completed purchase return cancelled with full reversal',
+    type: PurchaseReturnEntity,
+  })
+  async cancelCompleted(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: JwtPayload,
+  ): Promise<PurchaseReturnEntity> {
+    return this.purchaseReturnService.cancelCompleted(
+      id,
+      currentUser.userId,
+      currentUser.companyId,
+    );
+  }
 }

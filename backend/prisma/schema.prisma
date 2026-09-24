@@ -1227,6 +1227,7 @@ model PurchaseReturn {
   approvedAt      DateTime?
   cancelledBy     String?             @db.Uuid
   cancelledAt     DateTime?
+  isCancelled     Boolean             @default(false)
   rowVersion      Int                 @default(0)
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -1246,6 +1247,7 @@ model PurchaseReturn {
   @@index([companyId, deletedAt])
   @@index([companyId, status])
   @@index([companyId, returnDate])
+  @@index([companyId, status, isCancelled])
   @@unique([companyId, returnNumber])
 }
 

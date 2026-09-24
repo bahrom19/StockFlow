@@ -15,6 +15,10 @@ export {
   PurchaseReturnedPayload,
 } from './purchase-returned.event';
 export {
+  PurchaseReturnCancelledEvent,
+  PurchaseReturnCancelledPayload,
+} from './purchase-return-cancelled.event';
+export {
   PurchaseInvoicePostedEvent,
   PurchaseInvoicePostedPayload,
 } from './purchase-invoice-posted.event';

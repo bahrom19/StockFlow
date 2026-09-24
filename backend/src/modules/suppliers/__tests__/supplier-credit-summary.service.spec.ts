@@ -185,6 +185,8 @@ describe('SupplierCreditSummaryService', () => {
           deletedAt: null,
           currency: KZT,
           status: { in: ['APPROVED', 'COMPLETED'] },
+          // G15-02-B P2-04: voided COMPLETED returns must not reduce AP.
+          isCancelled: false,
         }),
       }),
     );

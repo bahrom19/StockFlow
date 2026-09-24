@@ -80,9 +80,11 @@ export class SupplierCreditSummaryRepository {
           deletedAt: null,
           // Only APPROVED/COMPLETED returns reduce AP — DRAFT/CANCELLED
           // must not (canonical return accounting, unchanged).
+          // G15-02-B: voided COMPLETED returns (isCancelled) must not reduce AP.
           status: {
             in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED],
           },
+          isCancelled: false,
           currency: baseCurrency,
         },
         _sum: { grandTotal: true },
