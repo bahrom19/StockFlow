@@ -1,14 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ReportQueryDto } from '../dto/report-query.dto';
 import {
   REVENUE_SALE_STATUSES,
   ReportsRepository,
 } from '../repositories/reports.repository';
+import { LedgerQueryService } from '../../finance/services/ledger-query.service';
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly repo: ReportsRepository) {}
+  constructor(
+    private readonly repo: ReportsRepository,
+    @Inject(LedgerQueryService)
+    private readonly ledgerQuery: LedgerQueryService,
+  ) {}
 
   /**
    * G11-B: canonical per-sale COGS for reports — mirrors Finance's
@@ -650,113 +655,115 @@ export class ReportsService {
 
   // ── Profit Report ───────────────────────────────────────────────
 
+  /**
+   * G15-06b-02: GL-backed Profit & Loss report.
+   *
+   * Replaces operational Sale/CostLayer queries with GL aggregation from
+   * JournalEntry + JournalLine. Revenue, COGS, and expenses are derived
+   * directly from posted GL lines classified by ChartOfAccount accountType.
+   *
+   * Manual journals (Dr Revenue/Cr Cash, Dr Expense/Cr Cash, Dr COGS/Cr Inventory)
+   * appear automatically when POSTED — no special handling needed.
+   *
+   * Refunds are NOT double-counted: refund journals already reverse Revenue and
+   * COGS in the GL, so the GL balance is the sole accounting source.
+   */
   async getProfitReport(companyId: string, query: ReportQueryDto) {
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : undefined;
     const dateTo = query.dateTo ? new Date(query.dateTo) : undefined;
-    const currency = await this.resolveCurrency(companyId, query.currency);
-    const where = this.repo.buildSaleWhere(
+
+    const gl = await this.ledgerQuery.getPnlReport({
       companyId,
       dateFrom,
       dateTo,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      currency,
-    );
-    const sales = await this.repo.profitReportData(companyId, where);
-    // Canonical FIFO COGS (CostLayer OUT — same basis as the GL), resolved in
-    // ONE batched query; per-sale legacy fallback keeps buckets consistent.
-    const fifoCosts = await this.repo.saleFifoCosts(
-      companyId,
-      sales.map((s) => s.id),
-    );
-    // G11-F1: per-sale refund deductions (revenue + FIFO cost) — one grouped
-    // query, applied identically to the totals and the daily/weekly/monthly
-    // buckets so every view mirrors the GL economy.
-    const refundDeductions = await this.saleRefundDeductions(
-      companyId,
-      sales.map((s) => s.id),
-    );
+    });
 
-    let revenue = new Prisma.Decimal(0);
-    let cost = new Prisma.Decimal(0);
-    const daily: Record<
-      string,
-      { revenue: Prisma.Decimal; cost: Prisma.Decimal }
-    > = {};
-    const weekly: Record<
-      string,
-      { revenue: Prisma.Decimal; cost: Prisma.Decimal }
-    > = {};
-    const monthly: Record<
-      string,
-      { revenue: Prisma.Decimal; cost: Prisma.Decimal }
-    > = {};
-
-    for (const sale of sales) {
-      // G11-F1: net this sale by its completed refunds (revenue + FIFO cost)
-      // before contributing to the totals and the time buckets.
-      const refunds = refundDeductions.get(sale.id);
-      const refundTotal = refunds?.refundTotal ?? new Prisma.Decimal(0);
-      const refundFifo = refunds?.refundFifoCost ?? new Prisma.Decimal(0);
-      const saleTotal = new Prisma.Decimal(sale.total.toString()).sub(refundTotal);
-      revenue = revenue.add(saleTotal);
-      const saleCost = this.canonicalSaleCost(sale, fifoCosts.get(sale.id)).sub(refundFifo);
-      cost = cost.add(saleCost);
-
-      const dayKey = sale.createdAt.toISOString().slice(0, 10);
-      const date = new Date(sale.createdAt);
-      const weekStart = new Date(date);
-      weekStart.setDate(date.getDate() - date.getDay());
-      const weekKey = weekStart.toISOString().slice(0, 10);
-      const monthKey = sale.createdAt.toISOString().slice(0, 7);
-
-      if (!daily[dayKey])
-        daily[dayKey] = {
-          revenue: new Prisma.Decimal(0),
-          cost: new Prisma.Decimal(0),
-        };
-      daily[dayKey].revenue = daily[dayKey].revenue.add(saleTotal);
-      daily[dayKey].cost = daily[dayKey].cost.add(saleCost);
-      if (!weekly[weekKey])
-        weekly[weekKey] = {
-          revenue: new Prisma.Decimal(0),
-          cost: new Prisma.Decimal(0),
-        };
-      weekly[weekKey].revenue = weekly[weekKey].revenue.add(saleTotal);
-      weekly[weekKey].cost = weekly[weekKey].cost.add(saleCost);
-      if (!monthly[monthKey])
-        monthly[monthKey] = {
-          revenue: new Prisma.Decimal(0),
-          cost: new Prisma.Decimal(0),
-        };
-      monthly[monthKey].revenue = monthly[monthKey].revenue.add(saleTotal);
-      monthly[monthKey].cost = monthly[monthKey].cost.add(saleCost);
-    }
-
+    const revenue = gl.revenue;
+    const cost = gl.cogs;
+    const expenses = gl.expenses;
     const grossProfit = revenue.sub(cost);
+    const netProfit = grossProfit.sub(expenses);
     const margin = revenue.gt(0)
       ? grossProfit.div(revenue).mul(100)
       : new Prisma.Decimal(0);
-    const fmt = (r: Prisma.Decimal, c: Prisma.Decimal) => ({
+
+    const fmt = (
+      r: Prisma.Decimal,
+      c: Prisma.Decimal,
+      e: Prisma.Decimal,
+    ) => ({
       revenue: r.toString(),
       cost: c.toString(),
+      expenses: e.toString(),
       profit: r.sub(c).toString(),
+      netProfit: r.sub(c).sub(e).toString(),
       margin: r.gt(0) ? r.sub(c).div(r).mul(100).toString() : '0.0000',
     });
 
+    // Build daily/weekly/monthly from GL daily buckets.
+    const dailyEntries = Object.entries(gl.daily)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => ({ date: k, ...fmt(v.revenue, v.cogs, v.expenses) }));
+
+    const weeklyBuckets: Record<
+      string,
+      { revenue: Prisma.Decimal; cogs: Prisma.Decimal; expenses: Prisma.Decimal }
+    > = {};
+    for (const [k, v] of Object.entries(gl.daily)) {
+      const d = new Date(k);
+      const weekStart = new Date(d);
+      weekStart.setDate(d.getDate() - d.getDay());
+      const weekKey = weekStart.toISOString().slice(0, 10);
+      if (!weeklyBuckets[weekKey])
+        weeklyBuckets[weekKey] = {
+          revenue: new Prisma.Decimal(0),
+          cogs: new Prisma.Decimal(0),
+          expenses: new Prisma.Decimal(0),
+        };
+      weeklyBuckets[weekKey].revenue = weeklyBuckets[weekKey].revenue.add(
+        v.revenue,
+      );
+      weeklyBuckets[weekKey].cogs = weeklyBuckets[weekKey].cogs.add(v.cogs);
+      weeklyBuckets[weekKey].expenses = weeklyBuckets[weekKey].expenses.add(
+        v.expenses,
+      );
+    }
+
+    const monthlyBuckets: Record<
+      string,
+      { revenue: Prisma.Decimal; cogs: Prisma.Decimal; expenses: Prisma.Decimal }
+    > = {};
+    for (const [k, v] of Object.entries(gl.daily)) {
+      const monthKey = k.slice(0, 7);
+      if (!monthlyBuckets[monthKey])
+        monthlyBuckets[monthKey] = {
+          revenue: new Prisma.Decimal(0),
+          cogs: new Prisma.Decimal(0),
+          expenses: new Prisma.Decimal(0),
+        };
+      monthlyBuckets[monthKey].revenue = monthlyBuckets[monthKey].revenue.add(
+        v.revenue,
+      );
+      monthlyBuckets[monthKey].cogs = monthlyBuckets[monthKey].cogs.add(
+        v.cogs,
+      );
+      monthlyBuckets[monthKey].expenses = monthlyBuckets[monthKey].expenses.add(
+        v.expenses,
+      );
+    }
+
     return {
-      summary: fmt(revenue, cost),
-      daily: Object.entries(daily)
+      summary: fmt(revenue, cost, expenses),
+      daily: dailyEntries,
+      weekly: Object.entries(weeklyBuckets)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => ({ date: k, ...fmt(v.revenue, v.cost) })),
-      weekly: Object.entries(weekly)
+        .map(([k, v]) => ({ week: k, ...fmt(v.revenue, v.cogs, v.expenses) })),
+      monthly: Object.entries(monthlyBuckets)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => ({ week: k, ...fmt(v.revenue, v.cost) })),
-      monthly: Object.entries(monthly)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => ({ month: k, ...fmt(v.revenue, v.cost) })),
+        .map(([k, v]) => ({
+          month: k,
+          ...fmt(v.revenue, v.cogs, v.expenses),
+        })),
     };
   }
 }

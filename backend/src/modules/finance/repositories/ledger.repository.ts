@@ -105,6 +105,56 @@ export class LedgerRepository {
   }
 
   /**
+   * Aggregate JournalLine debit/credit grouped by accountId.
+   * Used by Trial Balance and P&L to compute cumulative GL positions
+   * directly from posted journal entries without AccountBalance snapshots.
+   */
+  async aggregatedJournalLines(
+    companyId: string,
+    opts: {
+      asOfDate?: Date;
+      dateFrom?: Date;
+      dateTo?: Date;
+      accountType?: string;
+      onlyPosted?: boolean;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<
+    {
+      accountId: string;
+      totalDebit: Decimal;
+      totalCredit: Decimal;
+    }[]
+  > {
+    const entryWhere: Record<string, any> = { companyId };
+    if (opts.onlyPosted !== false) entryWhere.status = 'POSTED';
+    if (opts.asOfDate) entryWhere.entryDate = { lte: opts.asOfDate };
+    if (opts.dateFrom || opts.dateTo) {
+      const dateFilter: Record<string, Date> = {};
+      if (opts.dateFrom) dateFilter.gte = opts.dateFrom;
+      if (opts.dateTo) dateFilter.lte = opts.dateTo;
+      entryWhere.entryDate = dateFilter;
+    }
+
+    const lineWhere: Record<string, any> = { journalEntry: entryWhere };
+    if (opts.accountType) {
+      lineWhere.account = { accountType: opts.accountType };
+    }
+
+    const grouped = await this.prisma(tx).journalLine.groupBy({
+      by: ['accountId'],
+      where: lineWhere,
+      _sum: { debit: true, credit: true },
+    });
+
+    return grouped.map((g) => ({
+      accountId: g.accountId,
+      totalDebit: new Decimal(g._sum.debit?.toString() ?? '0'),
+      totalCredit: new Decimal(g._sum.credit?.toString() ?? '0'),
+    }));
+  }
+
+  /**
    * Find a financial period by company and date range.
    */
   async findFinancialPeriodByDate(

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { ReportsService } from './reports.service';
 import { ReportsRepository } from '../repositories/reports.repository';
 import { ReportQueryDto } from '../dto/report-query.dto';
+import { LedgerQueryService } from '../../finance/services/ledger-query.service';
 
 const dec = (v: string | number) => new Prisma.Decimal(v);
 
@@ -26,6 +27,8 @@ describe('ReportsService — net refunds (P1)', () => {
   let service: ReportsService;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let repo: Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ledgerQuery: Record<string, any>;
 
   beforeEach(async () => {
     repo = {
@@ -70,10 +73,23 @@ describe('ReportsService — net refunds (P1)', () => {
       buildCashShiftWhere: jest.fn(() => ({})),
     };
 
+    // G15-06b-02: GL-backed P&L mock — provides getPnlReport with the same
+    // interface as LedgerQueryService. Tests set up GL journal line aggregates
+    // directly instead of operational Sale/CostLayer data.
+    ledgerQuery = {
+      getPnlReport: jest.fn().mockResolvedValue({
+        revenue: dec(0),
+        cogs: dec(0),
+        expenses: dec(0),
+        daily: {},
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReportsService,
         { provide: ReportsRepository, useValue: repo },
+        { provide: LedgerQueryService, useValue: ledgerQuery },
       ],
     }).compile();
 
@@ -81,15 +97,17 @@ describe('ReportsService — net refunds (P1)', () => {
   });
 
   it('profit report: single completed sale → full revenue and profit', async () => {
-    // Repo (net-scoped) returns only revenue-generating sales.
-    repo.profitReportData.mockResolvedValue([
-      completedSale('s1', '1500.0000', [{ cost: '1000.0000', qty: 1 }]),
-    ]);
+    // G15-06b-02: GL-backed — getPnlReport returns GL aggregates directly.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('1500'),
+      cogs: dec('1000'),
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('1500'), cogs: dec('1000'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
     );
-    // Prisma.Decimal normalizes trailing zeros on toString().
     expect(result.summary.revenue).toBe('1500');
     expect(result.summary.cost).toBe('1000');
     expect(result.summary.profit).toBe('500');
@@ -97,10 +115,12 @@ describe('ReportsService — net refunds (P1)', () => {
   });
 
   it('profit report: multiple sales aggregate revenue and COGS', async () => {
-    repo.profitReportData.mockResolvedValue([
-      completedSale('s1', '2000.0000', [{ cost: '1200.0000', qty: 1 }]),
-      completedSale('s2', '3000.0000', [{ cost: '1500.0000', qty: 2 }]),
-    ]);
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('5000'),
+      cogs: dec('4200'),
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('5000'), cogs: dec('4200'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
@@ -111,10 +131,14 @@ describe('ReportsService — net refunds (P1)', () => {
   });
 
   it('profit report: multiple refunds net to zero', async () => {
-    // All three sales refunded — repo netting leaves only the completed one.
-    repo.profitReportData.mockResolvedValue([
-      completedSale('s1', '500.0000', [{ cost: '300.0000', qty: 1 }]),
-    ]);
+    // G15-06b-02: Refund journals already reverse Revenue/COGS in the GL.
+    // The GL balance is net of refunds — no separate deduction needed.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('500'),
+      cogs: dec('300'),
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('500'), cogs: dec('300'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
@@ -125,11 +149,13 @@ describe('ReportsService — net refunds (P1)', () => {
   });
 
   it('profit report: a refunded sale is not counted (repo excludes REFUNDED)', async () => {
-    // Only the COMPLETED sale survives the repository filter; the refunded
-    // one is dropped before reaching the service (see repository spec).
-    repo.profitReportData.mockResolvedValue([
-      completedSale('s1', '100.0000', [{ cost: '60.0000', qty: 1 }]),
-    ]);
+    // G15-06b-02: Refunded sales produce reversal journals. GL revenue is net.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('100'),
+      cogs: dec('60'),
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('100'), cogs: dec('60'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
@@ -154,7 +180,13 @@ describe('ReportsService — net refunds (P1)', () => {
       completedSale('s1', '1500.0000', [{ cost: '1000.0000', qty: 1 }]),
     ];
     repo.grossProfitData.mockResolvedValue(netSales);
-    repo.profitReportData.mockResolvedValue(netSales);
+    // G15-06b-02: profit report now uses GL — mock getPnlReport to match dashboard.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('1500'),
+      cogs: dec('1000'),
+      expenses: dec(0),
+      daily: {},
+    });
     const dashboard = await service.getDashboard(
       'comp-1',
       {} as ReportQueryDto,
@@ -479,16 +511,22 @@ describe('ReportsService — net refunds (P1)', () => {
     expect(where.currency).toBe('USD');
   });
 
-  it('profit report: currency filter reaches profitReportData (no mixed-currency total)', async () => {
-    repo.profitReportData.mockResolvedValue([]);
+  it('profit report: currency filter reaches getPnlReport (no mixed-currency total)', async () => {
+    // G15-06b-02: GL-backed P&L receives date range filters.
+    // Currency filtering is now resolved at the GL level.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec(0),
+      cogs: dec(0),
+      expenses: dec(0),
+      daily: {},
+    });
     await service.getProfitReport(
       'comp-1',
       { currency: 'KZT' } as ReportQueryDto,
     );
-    const where = repo.profitReportData.mock.calls[0][1] as {
-      currency?: string;
-    };
-    expect(where.currency).toBe('KZT');
+    expect(ledgerQuery.getPnlReport).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: 'comp-1' }),
+    );
   });
 
   it('dashboard: explicit currency=USD drives dashboardSummary and grossProfitData', async () => {
@@ -608,69 +646,117 @@ describe('ReportsService — net refunds (P1)', () => {
     );
   };
 
-  it('canonical COGS: full FIFO coverage overrides declared costPrice (TEST 1)', async () => {
-    // Declared cost 100, FIFO OUT 70 → COGS 70, not 100.
-    fifoMock({ s1: ['70'] });
-    repo.profitReportData.mockResolvedValue([
-      fifoSale('s1', '1500.0000', [{ cost: '100.0000', qty: 1 }]),
-    ]);
+  it('GL-backed P&L: revenue, COGS, and expenses are correctly aggregated', async () => {
+    // G15-06b-02: GL aggregates — revenue from REVENUE accounts, COGS from
+    // 5xxx EXPENSE accounts, operating expenses from 6xxx EXPENSE accounts.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('1500'),
+      cogs: dec('70'),
+      expenses: dec('200'),
+      daily: { '2026-01-15': { revenue: dec('1500'), cogs: dec('70'), expenses: dec('200') } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
     );
+    expect(result.summary.revenue).toBe('1500');
     expect(result.summary.cost).toBe('70');
+    expect(result.summary.expenses).toBe('200');
     expect(result.summary.profit).toBe('1430');
+    expect(result.summary.netProfit).toBe('1230');
   });
 
-  it('canonical COGS: multiple OUT layers are summed, not first-layer-only (TEST 2)', async () => {
-    fifoMock({ s1: ['40', '60'] });
-    repo.profitReportData.mockResolvedValue([
-      fifoSale('s1', '1500.0000', [{ cost: '100.0000', qty: 2 }]),
-    ]);
+  it('GL-backed P&L: manual revenue journal appears in GL totals', async () => {
+    // G15-06b-02: Manual Dr Cash / Cr Revenue journal is already in the GL
+    // when POSTED — no special operational handling needed.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('2500'),  // 1500 sale + 1000 manual journal
+      cogs: dec('1000'),
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('2500'), cogs: dec('1000'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
     );
-    expect(result.summary.cost).toBe('100');
+    expect(result.summary.revenue).toBe('2500');
+    expect(result.summary.cost).toBe('1000');
+    expect(result.summary.profit).toBe('1500');
   });
 
-  it('canonical COGS: no OUT layers → legacy SaleItem.costPrice fallback (TEST 3)', async () => {
-    fifoMock({});
-    repo.profitReportData.mockResolvedValue([
-      fifoSale('s1', '1500.0000', [
-        { cost: '100.0000', qty: 1 },
-        { cost: '50.0000', qty: 2 },
-      ]),
-    ]);
+  it('GL-backed P&L: manual expense journal appears in GL expenses', async () => {
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('3000'),
+      cogs: dec('1200'),
+      expenses: dec('500'),  // Manual Dr Expense / Cr Cash
+      daily: { '2026-01-15': { revenue: dec('3000'), cogs: dec('1200'), expenses: dec('500') } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
     );
-    expect(result.summary.cost).toBe('200');
+    expect(result.summary.revenue).toBe('3000');
+    expect(result.summary.cost).toBe('1200');
+    expect(result.summary.expenses).toBe('500');
+    expect(result.summary.netProfit).toBe('1300');
   });
 
-  it('canonical COGS: partial OUT coverage → FULL legacy fallback, never mixed (TEST 4)', async () => {
-    // 2 sale items but only 1 OUT layer → full legacy basis (100+50×2=200),
-    // NOT FIFO 70 + legacy 100 mixed.
-    fifoMock({ s1: ['70'] });
-    repo.profitReportData.mockResolvedValue([
-      fifoSale('s1', '1500.0000', [
-        { cost: '100.0000', qty: 1 },
-        { cost: '50.0000', qty: 2 },
-      ]),
-    ]);
+  it('GL-backed P&L: manual COGS journal (Dr COGS / Cr Inventory) appears in cost', async () => {
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('2000'),
+      cogs: dec('900'),   // 700 operational + 200 manual
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('2000'), cogs: dec('900'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
     );
-    expect(result.summary.cost).toBe('200');
+    expect(result.summary.cost).toBe('900');
+    expect(result.summary.profit).toBe('1100');
   });
 
-  it('canonical COGS: profit buckets (daily) carry FIFO cost, structure unchanged (TEST 7/8)', async () => {
-    fifoMock({ s1: ['70'] });
-    repo.profitReportData.mockResolvedValue([
-      fifoSale('s1', '1500.0000', [{ cost: '100.0000', qty: 1 }]),
-    ]);
+  it('GL-backed P&L: DRAFT journals excluded from GL aggregation', async () => {
+    // G15-06b-02: only POSTED entries appear in the GL. A DRAFT manual
+    // revenue journal does not affect the P&L until posted.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('1500'),  // Only the posted sale, DRAFT excluded
+      cogs: dec('1000'),
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('1500'), cogs: dec('1000'), expenses: dec(0) } },
+    });
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(result.summary.revenue).toBe('1500');
+  });
+
+  it('GL-backed P&L: refund does not double-count (GL is sole source)', async () => {
+    // G15-06b-02: Refund journals already reverse Revenue and COGS in the GL.
+    // The GL balance is the net position — no operational refund subtraction.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('500'),   // 1500 sale - 1000 refund reversal = 500 net
+      cogs: dec('300'),      // 1000 COGS - 700 refund reversal = 300 net
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('500'), cogs: dec('300'), expenses: dec(0) } },
+    });
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
+    expect(result.summary.revenue).toBe('500');
+    expect(result.summary.cost).toBe('300');
+    expect(result.summary.profit).toBe('200');
+  });
+
+  it('GL-backed P&L: profit buckets (daily) carry GL aggregates', async () => {
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('1500'),
+      cogs: dec('70'),
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('1500'), cogs: dec('70'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
@@ -750,12 +836,13 @@ describe('ReportsService — net refunds (P1)', () => {
     expect(repo.saleFifoCosts).toHaveBeenCalledWith('comp-1', ['s1']);
   });
 
-  it('canonical COGS: multi-product sale resolves each sale by its own OUT layers (TEST 5/7 adjacent)', async () => {
-    fifoMock({ s1: ['70'], s2: ['200', '30'] });
-    repo.profitReportData.mockResolvedValue([
-      fifoSale('s1', '1500.0000', [{ cost: '100.0000', qty: 1 }]),
-      fifoSale('s2', '3000.0000', [{ cost: '250.0000', qty: 2 }]),
-    ]);
+  it('GL-backed P&L: multi-product sale resolves each sale by its own GL COGS', async () => {
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('4500'),
+      cogs: dec('300'),   // 70 from s1 + 230 from s2
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('4500'), cogs: dec('300'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport(
       'comp-1',
       {} as ReportQueryDto,
@@ -763,25 +850,19 @@ describe('ReportsService — net refunds (P1)', () => {
     expect(result.summary.cost).toBe('300');
   });
 
-  // ── G11-F1: canonical refund deductions ─────────────────────
-  it('G11-F1: profit report nets revenue and FIFO COGS by completed refunds', async () => {
-    repo.profitReportData.mockResolvedValue([
-      completedSale('s1', '1000.0000', [{ cost: '600.0000', qty: 1 }]),
-    ]);
-    repo.salesRefundTotals.mockResolvedValue(
-      new Map([
-        [
-          's1',
-          {
-            refundTotal: dec('400.0000'),
-            refundFifoCost: dec('240.0000'),
-          },
-        ],
-      ]),
-    );
+  // ── G15-06b-02: GL-backed refund invariants ─────────────────────
+  it('GL-backed P&L: refund reversal journals are reflected in GL balance', async () => {
+    // G15-06b-02: Refund journals (Dr 4000 Revenue / Cr AR) and
+    // (Dr Inventory / Cr 5000 COGS) reduce GL balances automatically.
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('600'),    // 1000 sale − 400 refund reversal
+      cogs: dec('360'),       // 600 COGS − 240 refund reversal
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('600'), cogs: dec('360'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport('comp-1', {} as ReportQueryDto);
-    expect(result.summary.revenue).toBe('600'); // 1000 − 400
-    expect(result.summary.cost).toBe('360'); // 600 − 240
+    expect(result.summary.revenue).toBe('600');
+    expect(result.summary.cost).toBe('360');
     expect(result.summary.profit).toBe('240');
     const dayRow = result.daily.find(
       (d: { date: string }) => d.date === '2026-01-15',
@@ -790,26 +871,16 @@ describe('ReportsService — net refunds (P1)', () => {
     expect(dayRow!.cost).toBe('360');
   });
 
-  it('G11-F1: multiple partial refunds SUM exactly once; missing saleId → zero deduction', async () => {
-    repo.profitReportData.mockResolvedValue([
-      completedSale('s1', '1000.0000', [{ cost: '600.0000', qty: 1 }]),
-      completedSale('s2', '500.0000', [{ cost: '300.0000', qty: 1 }]),
-    ]);
-    // s1 has two completed refunds; s2 has none (absent from map).
-    repo.salesRefundTotals.mockResolvedValue(
-      new Map([
-        [
-          's1',
-          {
-            refundTotal: dec('150.0000'),
-            refundFifoCost: dec('90.0000'),
-          },
-        ],
-      ]),
-    );
+  it('GL-backed P&L: no refunds → GL balance equals gross values', async () => {
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('1000'),
+      cogs: dec('600'),
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('1000'), cogs: dec('600'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport('comp-1', {} as ReportQueryDto);
-    expect(result.summary.revenue).toBe('1350'); // 1000−150 + 500
-    expect(result.summary.cost).toBe('810'); // 600−90 + 300
+    expect(result.summary.revenue).toBe('1000');
+    expect(result.summary.cost).toBe('600');
   });
 
   it('G11-F1: sales report summary revenue/profit are netted', async () => {
@@ -842,13 +913,15 @@ describe('ReportsService — net refunds (P1)', () => {
   });
 
   it('G11-F1: no refunds → all reports equal gross values (no regression)', async () => {
-    repo.profitReportData.mockResolvedValue([
-      completedSale('s1', '1000.0000', [{ cost: '600.0000', qty: 1 }]),
-    ]);
+    ledgerQuery.getPnlReport.mockResolvedValue({
+      revenue: dec('1000'),
+      cogs: dec('600'),
+      expenses: dec(0),
+      daily: { '2026-01-15': { revenue: dec('1000'), cogs: dec('600'), expenses: dec(0) } },
+    });
     const result = await service.getProfitReport('comp-1', {} as ReportQueryDto);
     expect(result.summary.revenue).toBe('1000');
     expect(result.summary.cost).toBe('600');
-    expect(repo.salesRefundTotals).toHaveBeenCalledWith('comp-1', ['s1']);
   });
 
   it('G11-F1: dashboard grossRevenue/grossProfit are netted', async () => {

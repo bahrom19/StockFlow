@@ -183,6 +183,10 @@ export class LedgerQueryService {
   /**
    * Generate a trial balance as of a specific date.
    * Returns all active accounts with their net debit/credit balances.
+   *
+   * G15-06b-01: Uses JournalLine-direct cumulative aggregation instead of
+   * AccountBalance snapshots. The opening position is derived from historical
+   * POSTED JournalLines up to asOfDate — no snapshot dependency.
    */
   async getTrialBalance(params: {
     companyId: string;
@@ -209,32 +213,20 @@ export class LedgerQueryService {
       return { rows: [], totalDebit: '0.0000', totalCredit: '0.0000' };
     }
 
-    // Get balance snapshots for the most recent period
-    const balanceWhere: Record<string, any> = {
-      companyId,
-      accountId: { in: accounts.map((a) => a.id) },
-    };
-    if (asOfDate) {
-      const period = await this.ledgerRepository.findFinancialPeriodByDate(
-        {
-          companyId,
-          startDate: { lte: asOfDate },
-          endDate: { gte: asOfDate },
-        },
-        undefined,
-        { id: true },
-      );
-      if (period) balanceWhere.financialPeriodId = period.id;
-    }
-
-    const balances =
-      await this.ledgerRepository.findAccountBalancesBulk(balanceWhere);
+    // G15-06b-01: Cumulative balance from POSTED JournalLines up to asOfDate.
+    // Replaces AccountBalance snapshot lookup — historical journals without
+    // snapshots now correctly affect the Trial Balance.
+    const aggregated =
+      await this.ledgerRepository.aggregatedJournalLines(companyId, {
+        asOfDate,
+        onlyPosted: true,
+      });
 
     const balanceMap = new Map<string, { debit: Decimal; credit: Decimal }>();
-    for (const b of balances) {
-      balanceMap.set(b.accountId, {
-        debit: new Decimal(b.closingDebit.toString()),
-        credit: new Decimal(b.closingCredit.toString()),
+    for (const agg of aggregated) {
+      balanceMap.set(agg.accountId, {
+        debit: agg.totalDebit,
+        credit: agg.totalCredit,
       });
     }
 
@@ -289,6 +281,141 @@ export class LedgerQueryService {
       rows,
       totalDebit: totalDebit.toFixed(4),
       totalCredit: totalCredit.toFixed(4),
+    };
+  }
+
+  /**
+   * G15-06b-02: GL-backed Profit & Loss aggregation.
+   *
+   * Aggregates POSTED JournalLines by account type within a date range,
+   * producing revenue, COGS, and operating expenses directly from the GL.
+   * Replaces operational Sale/CostLayer queries as the accounting source.
+   *
+   * Revenue: accountType=REVENUE, net = credit − debit (normal credit balance)
+   * COGS:    accountType=EXPENSE, code starts with '5', net = debit − credit
+   * Expenses: accountType=EXPENSE, code starts with '6', net = debit − credit
+   */
+  async getPnlReport(params: {
+    companyId: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Promise<{
+    revenue: Decimal;
+    cogs: Decimal;
+    expenses: Decimal;
+    daily: Record<
+      string,
+      { revenue: Decimal; cogs: Decimal; expenses: Decimal }
+    >;
+  }> {
+    const { companyId, dateFrom, dateTo } = params;
+
+    // Fetch all active accounts to classify by code pattern.
+    const accounts = await this.ledgerRepository.findChartOfAccounts({
+      companyId,
+      isActive: true,
+      deletedAt: null,
+    });
+
+    // Aggregate JournalLines for REVENUE and EXPENSE accounts in date range.
+    const [revenueAgg, expenseAgg] = await Promise.all([
+      this.ledgerRepository.aggregatedJournalLines(companyId, {
+        dateFrom,
+        dateTo,
+        accountType: 'REVENUE',
+        onlyPosted: true,
+      }),
+      this.ledgerRepository.aggregatedJournalLines(companyId, {
+        dateFrom,
+        dateTo,
+        accountType: 'EXPENSE',
+        onlyPosted: true,
+      }),
+    ]);
+
+    // Build account lookup for code-based COGS/expense classification.
+    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
+    let totalRevenue = new Decimal(0);
+    let totalCogs = new Decimal(0);
+    let totalExpenses = new Decimal(0);
+
+    // REVENUE: net = credit − debit (normal credit balance)
+    for (const agg of revenueAgg) {
+      totalRevenue = totalRevenue.add(agg.totalCredit.sub(agg.totalDebit));
+    }
+
+    // EXPENSE: classify by account code prefix.
+    // 5xxx = COGS, 6xxx = operating expenses (matching seed chart of accounts).
+    for (const agg of expenseAgg) {
+      const account = accountMap.get(agg.accountId);
+      const net = agg.totalDebit.sub(agg.totalCredit); // normal debit balance
+      if (account?.code.startsWith('5')) {
+        totalCogs = totalCogs.add(net);
+      } else {
+        totalExpenses = totalExpenses.add(net);
+      }
+    }
+
+    // Daily breakdown — re-aggregate by entry date.
+    const lineWhere: Record<string, any> = {
+      journalEntry: {
+        companyId,
+        status: 'POSTED',
+        entryDate: {
+          ...(dateFrom ? { gte: dateFrom } : {}),
+          ...(dateTo ? { lte: dateTo } : {}),
+        },
+      },
+      account: { accountType: { in: ['REVENUE', 'EXPENSE'] } },
+    };
+
+    const dailyMap: Record<
+      string,
+      { revenue: Decimal; cogs: Decimal; expenses: Decimal }
+    > = {};
+
+    // Aggregate per-line with entry date for daily buckets.
+    const lines = await this.ledgerRepository.findJournalLinesWithEntry(
+      lineWhere,
+      { skip: 0, take: 100000 },
+    );
+
+    for (const line of lines) {
+      const dayKey = line.journalEntry.entryDate.toISOString().slice(0, 10);
+      if (!dailyMap[dayKey]) {
+        dailyMap[dayKey] = {
+          revenue: new Decimal(0),
+          cogs: new Decimal(0),
+          expenses: new Decimal(0),
+        };
+      }
+
+      const account = accountMap.get(line.accountId);
+      if (!account) continue;
+
+      const debit = new Decimal(line.debit.toString());
+      const credit = new Decimal(line.credit.toString());
+
+      if (account.accountType === 'REVENUE') {
+        dailyMap[dayKey].revenue = dailyMap[dayKey].revenue
+          .add(credit)
+          .sub(debit);
+      } else if (account.accountType === 'EXPENSE') {
+        const net = debit.sub(credit);
+        if (account.code.startsWith('5')) {
+          dailyMap[dayKey].cogs = dailyMap[dayKey].cogs.add(net);
+        } else {
+          dailyMap[dayKey].expenses = dailyMap[dayKey].expenses.add(net);
+        }
+      }
+    }
+
+    return {
+      revenue: totalRevenue,
+      cogs: totalCogs,
+      expenses: totalExpenses,
+      daily: dailyMap,
     };
   }
 
