@@ -15,6 +15,7 @@ import { JournalEntriesRepository } from '../repositories/journal-entries.reposi
 import { FinancialPeriodsRepository } from '../repositories/financial-periods.repository';
 import { PrismaService } from '../../../common/prisma';
 import { AuditLogService } from '../../shared/services/audit-log.service';
+import { GlEngineService } from './gl-engine.service';
 
 @Injectable()
 export class JournalEntriesService {
@@ -23,6 +24,7 @@ export class JournalEntriesService {
     private readonly periodsRepository: FinancialPeriodsRepository,
     private readonly prismaService: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly glEngine: GlEngineService,
   ) {}
 
   async create(
@@ -212,6 +214,21 @@ export class JournalEntriesService {
         data,
         currentUser.companyId,
         before.rowVersion,
+        tx,
+      );
+      // G15-06a: apply the posted lines to AccountBalance snapshots using
+      // the canonical engine logic. Persisted lines only (never the DTO),
+      // same company/period, inside the same transaction and strictly after
+      // the CAS win — a failure rolls the journal flip back with them.
+      await this.glEngine.updateAccountBalances(
+        currentUser.companyId,
+        before.financialPeriodId,
+        result.entryDate ?? before.entryDate,
+        (result.lines ?? []).map((l) => ({
+          accountId: l.accountId,
+          debit: l.debit.toString(),
+          credit: l.credit.toString(),
+        })),
         tx,
       );
       await this.auditLog.log(

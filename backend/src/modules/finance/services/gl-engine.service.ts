@@ -308,8 +308,13 @@ export class GlEngineService {
    * Creates or updates AccountBalance records for each account
    * affected by the journal entry. This enables fast account statement
    * and trial balance queries without scanning millions of journal lines.
+   *
+   * Public (G15-06a) so manual journal posting reuses the exact same
+   * canonical logic instead of duplicating it. Accounting semantics are
+   * unchanged: callers must pass persisted lines inside the posting
+   * transaction, after winning the state CAS.
    */
-  private async updateAccountBalances(
+  async updateAccountBalances(
     companyId: string,
     financialPeriodId: string,
     entryDate: Date,
