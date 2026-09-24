@@ -4,6 +4,10 @@ import { ProductsService } from '../services/products.service';
 import { ProductsRepository } from '../repositories/products.repository';
 import { ProductMapper } from '../mappers/product.mapper';
 import { StockService } from '../../inventory/services';
+import { CostingService } from '../../inventory/services/costing.service';
+import { GlEngineService } from '../../finance/services/gl-engine.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 
 /**
@@ -54,7 +58,6 @@ describe('ProductsService — NTIN', () => {
       softDelete: jest.fn(),
       findOrCreateUnitByName: jest.fn(),
       findDefaultWarehouse: jest.fn(),
-      createInitialStock: jest.fn(),
       findActiveBySkuAndCompany: jest.fn(),
       findActiveByBarcodeAndCompany: jest.fn(),
     } as unknown as jest.Mocked<ProductsRepository>;
@@ -65,6 +68,35 @@ describe('ProductsService — NTIN', () => {
         { provide: ProductsRepository, useValue: mockRepo },
         // NTIN tests never send stockQuantity, so a no-op StockService is enough.
         { provide: StockService, useValue: { adjustStock: jest.fn() } },
+        // G15-05: create() always routes through runWithIdempotency.
+        {
+          provide: PrismaService,
+          useValue: {
+            $transaction: jest.fn((cb: any) =>
+              cb({
+                stock: { findFirst: jest.fn(), upsert: jest.fn() },
+                stockMovement: { create: jest.fn() },
+                chartOfAccount: { findFirst: jest.fn() },
+                financialPeriod: { findFirst: jest.fn() },
+              }),
+            ),
+          },
+        },
+        {
+          provide: IdempotencyService,
+          useValue: {
+            hashRequest: jest.fn().mockReturnValue('hash-ntin'),
+            reserve: jest
+              .fn()
+              .mockResolvedValue({ type: 'created', requestHash: 'hash-ntin' }),
+            complete: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        { provide: GlEngineService, useValue: { post: jest.fn() } },
+        {
+          provide: CostingService,
+          useValue: { recordInboundLayer: jest.fn() },
+        },
       ],
     }).compile();
 

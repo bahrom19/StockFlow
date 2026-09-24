@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -27,15 +28,18 @@ import { ProductsService } from '../services/products.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+import { RequirePermission } from '../../rbac/decorators/require-permission.decorator';
+import { RolesGuard } from '../../rbac/guards/roles.guard';
 
 @ApiTags('products')
 @Controller('products')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @RequirePermission('products:create')
   @ApiOperation({
     summary: 'Create a product',
     description:
@@ -58,8 +62,13 @@ export class ProductsController {
   async create(
     @Body() createProductDto: CreateProductDto,
     @CurrentUser() currentUser: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<ProductEntity> {
-    return this.productsService.create(createProductDto, currentUser);
+    return this.productsService.create(
+      createProductDto,
+      currentUser,
+      idempotencyKey,
+    );
   }
 
   @Get()
@@ -101,6 +110,7 @@ export class ProductsController {
   }
 
   @Patch(':id')
+  @RequirePermission('products:update')
   @ApiOperation({ summary: 'Update a product' })
   @ApiBody({ type: UpdateProductDto })
   @ApiResponse({

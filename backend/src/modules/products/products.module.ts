@@ -8,9 +8,14 @@ import { ProductsRepository } from './repositories/products.repository';
 // directly. There is no circular dependency: nothing in InventoryModule's
 // dependency subtree imports ProductsModule.
 import { InventoryModule } from '../inventory/inventory.module';
+// FinanceModule exposes GlEngineService so product creation can post the
+// canonical Opening Balance journal (Dr 1300 / Cr 3000) in the same
+// transaction. One-directional: nothing in FinanceModule imports
+// ProductsModule.
+import { FinanceModule } from '../finance/finance.module';
 
 @Module({
-  imports: [InventoryModule],
+  imports: [InventoryModule, FinanceModule],
   controllers: [ProductsController],
   providers: [ProductsService, ProductsRepository],
 })

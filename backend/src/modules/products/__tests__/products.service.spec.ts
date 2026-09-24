@@ -9,12 +9,21 @@ import { Prisma } from '@prisma/client';
 import { ProductsService } from '../services/products.service';
 import { ProductsRepository } from '../repositories/products.repository';
 import { StockService } from '../../inventory/services';
+import { CostingService } from '../../inventory/services/costing.service';
+import { GlEngineService } from '../../finance/services/gl-engine.service';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 
 describe('ProductsService', () => {
   let service: ProductsService;
   let mockRepo: jest.Mocked<ProductsRepository>;
   let mockStockService: { adjustStock: jest.Mock };
+  let mockTx: any;
+  let mockPrisma: any;
+  let mockIdempotency: any;
+  let mockGlEngine: { post: jest.Mock };
+  let mockCosting: { recordInboundLayer: jest.Mock };
 
   const currentUser: JwtPayload = {
     userId: 'me',
@@ -55,18 +64,60 @@ describe('ProductsService', () => {
       softDelete: jest.fn(),
       findOrCreateUnitByName: jest.fn(),
       findDefaultWarehouse: jest.fn(),
-      createInitialStock: jest.fn(),
       findActiveBySkuAndCompany: jest.fn(),
       findActiveByBarcodeAndCompany: jest.fn(),
     } as unknown as jest.Mocked<ProductsRepository>;
 
     mockStockService = { adjustStock: jest.fn() };
 
+    // G15-05: transaction + idempotency + opening GL/valuation mocks.
+    // runWithIdempotency legacy path (no key) runs work(tx) in a single
+    // transaction; tx-level stock/CoA/period writes are asserted on mockTx.
+    mockTx = {
+      stock: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+      stockMovement: { create: jest.fn().mockResolvedValue({}) },
+      chartOfAccount: {
+        findFirst: jest.fn().mockImplementation(({ where }: any) =>
+          Promise.resolve(
+            where.code === '3000'
+              ? { id: 'acc-3000' }
+              : where.code === '1300'
+                ? { id: 'acc-1300' }
+                : null,
+          ),
+        ),
+      },
+      financialPeriod: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'fp-open-1' }),
+      },
+    };
+    mockPrisma = {
+      $transaction: jest.fn((cb: any) => cb(mockTx)),
+    };
+    mockIdempotency = {
+      hashRequest: jest.fn().mockReturnValue('hash-1'),
+      reserve: jest
+        .fn()
+        .mockResolvedValue({ type: 'created', requestHash: 'hash-1' }),
+      complete: jest.fn().mockResolvedValue(undefined),
+    };
+    mockGlEngine = {
+      post: jest.fn().mockResolvedValue({ id: 'je-open-1' }),
+    };
+    mockCosting = { recordInboundLayer: jest.fn().mockResolvedValue(undefined) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductsService,
         { provide: ProductsRepository, useValue: mockRepo },
         { provide: StockService, useValue: mockStockService },
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: IdempotencyService, useValue: mockIdempotency },
+        { provide: GlEngineService, useValue: mockGlEngine },
+        { provide: CostingService, useValue: mockCosting },
       ],
     }).compile();
 
@@ -87,6 +138,7 @@ describe('ProductsService', () => {
     expect(result.name).toBe('Test Product');
     expect(mockRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ company: { connect: { id: 'comp-1' } } }),
+      expect.anything(),
     );
   });
 
@@ -102,9 +154,11 @@ describe('ProductsService', () => {
     expect(mockRepo.findOrCreateUnitByName).toHaveBeenCalledWith(
       'kg',
       'comp-1',
+      expect.anything(),
     );
     expect(mockRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ unit: { connect: { id: 'uom-1' } } }),
+      expect.anything(),
     );
   });
 
@@ -133,16 +187,31 @@ describe('ProductsService', () => {
       currentUser,
     );
 
-    expect(mockRepo.findDefaultWarehouse).toHaveBeenCalledWith('comp-1');
+    expect(mockRepo.findDefaultWarehouse).toHaveBeenCalledWith(
+      'comp-1',
+      expect.anything(),
+    );
     // The warehouse is resolved BEFORE the product is created (fail fast).
     expect(mockRepo.create).toHaveBeenCalled();
-    expect(mockRepo.createInitialStock).toHaveBeenCalledWith({
-      productId: 'prod-1',
-      warehouseId: 'wh-1',
-      companyId: 'comp-1',
-      quantity: 15,
-      userId: 'me',
-    });
+    // G15-05-B: opening stock is written atomically in-transaction (stock
+    // upsert + OPENING_BALANCE movement + CostLayer + Dr1300/Cr3000 journal).
+    expect(mockTx.stock.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          productId_warehouseId: { productId: 'prod-1', warehouseId: 'wh-1' },
+        },
+      }),
+    );
+    expect(mockTx.stockMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'OPENING_BALANCE',
+          quantity: 15,
+          referenceType: 'PRODUCT',
+          referenceId: 'prod-1',
+        }),
+      }),
+    );
     // Response reflects the persisted stock + unit name.
     expect(result.stockQuantity).toBe(15);
     expect(result.unit).toBe('kg');
@@ -161,7 +230,8 @@ describe('ProductsService', () => {
 
     // Fail fast: the product must NOT be created, and no stock row written.
     expect(mockRepo.create).not.toHaveBeenCalled();
-    expect(mockRepo.createInitialStock).not.toHaveBeenCalled();
+    expect(mockTx.stock.upsert).not.toHaveBeenCalled();
+    expect(mockGlEngine.post).not.toHaveBeenCalled();
   });
 
   it('should not create stock when stockQuantity is zero/absent (warehouse not needed)', async () => {
@@ -170,7 +240,8 @@ describe('ProductsService', () => {
     await service.create({ name: 'Rice', price: 50 } as any, currentUser);
 
     expect(mockRepo.findDefaultWarehouse).not.toHaveBeenCalled();
-    expect(mockRepo.createInitialStock).not.toHaveBeenCalled();
+    expect(mockTx.stock.upsert).not.toHaveBeenCalled();
+    expect(mockGlEngine.post).not.toHaveBeenCalled();
   });
 
   it('should still create product without warehouse when stockQuantity is 0', async () => {
@@ -524,6 +595,7 @@ describe('ProductsService', () => {
       );
       expect(mockRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ sku: 'TRIMMED' }),
+        expect.anything(),
       );
     });
   });
@@ -703,6 +775,155 @@ describe('ProductsService', () => {
       );
       expect(mockRepo.findActiveBySkuAndCompany).not.toHaveBeenCalled();
       expect(mockRepo.findActiveByBarcodeAndCompany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── G15-05-B: opening inventory (Dr 1300 / Cr 3000 OBE) ──────────────
+  describe('create — opening inventory', () => {
+    const openProduct = { ...baseProduct, id: 'prod-1' };
+
+    beforeEach(() => {
+      mockRepo.create.mockResolvedValue(openProduct as any);
+      mockRepo.findById.mockResolvedValue({
+        ...openProduct,
+        stocks: [{ quantity: 10 }],
+      } as any);
+      mockRepo.findDefaultWarehouse.mockResolvedValue({ id: 'wh-1' });
+    });
+
+    it('posts Dr 1300 / Cr 3000 for valued opening stock', async () => {
+      await service.create(
+        { name: 'Rice', price: 50, costPrice: 20, stockQuantity: 10 } as any,
+        currentUser,
+      );
+
+      // CostLayer at declared costPrice.
+      expect(mockCosting.recordInboundLayer).toHaveBeenCalledTimes(1);
+      const layerCall = mockCosting.recordInboundLayer.mock.calls[0];
+      expect(layerCall.slice(0, 3)).toEqual(['prod-1', 'comp-1', 10]);
+      expect(layerCall[3].toString()).toBe('20');
+      expect(layerCall.slice(4, 7)).toEqual([
+        'OPENING_BALANCE',
+        'prod-1',
+        undefined,
+      ]);
+      // Canonical GL posting with exact negation legs.
+      expect(mockGlEngine.post).toHaveBeenCalledTimes(1);
+      const [input, txArg] = mockGlEngine.post.mock.calls[0];
+      expect(input).toEqual(
+        expect.objectContaining({
+          companyId: 'comp-1',
+          financialPeriodId: 'fp-open-1',
+          referenceType: 'OPENING_BALANCE',
+          referenceId: 'prod-1',
+          createdBy: 'me',
+        }),
+      );
+      expect(input.lines).toEqual([
+        expect.objectContaining({
+          accountId: 'acc-1300',
+          debit: '200',
+          credit: '0',
+        }),
+        expect.objectContaining({
+          accountId: 'acc-3000',
+          debit: '0',
+          credit: '200',
+        }),
+      ]);
+      expect(txArg).toBe(mockTx);
+    });
+
+    it('writes stock without layer/GL when costPrice is absent', async () => {
+      await service.create(
+        { name: 'Rice', price: 50, stockQuantity: 10 } as any,
+        currentUser,
+      );
+
+      expect(mockTx.stock.upsert).toHaveBeenCalled();
+      expect(mockTx.stockMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'OPENING_BALANCE' }),
+        }),
+      );
+      expect(mockCosting.recordInboundLayer).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when OBE 3000 is missing (never falls back to 5100)', async () => {
+      mockTx.chartOfAccount.findFirst.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.code === '1300' ? { id: 'acc-1300' } : null,
+        ),
+      );
+
+      await expect(
+        service.create(
+          { name: 'Rice', price: 50, costPrice: 20, stockQuantity: 10 } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(/Opening Balance Equity.*3000/);
+
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+    });
+
+    it('rolls back product creation when opening GL fails', async () => {
+      mockGlEngine.post.mockRejectedValueOnce(
+        new BadRequestException('posting failed'),
+      );
+
+      await expect(
+        service.create(
+          { name: 'Rice', price: 50, costPrice: 20, stockQuantity: 10 } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow('posting failed');
+    });
+
+    it('replays stored response for the same idempotency key (no duplicate opening)', async () => {
+      const storedBody = { id: 'prod-1', name: 'Rice' };
+      mockIdempotency.reserve.mockResolvedValueOnce({
+        type: 'replayed',
+        status: 201,
+        body: storedBody,
+      });
+
+      const result = await service.create(
+        { name: 'Rice', price: 50, costPrice: 20, stockQuantity: 10 } as any,
+        currentUser,
+        'key-1',
+      );
+
+      expect(result).toEqual(storedBody);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+      expect(mockTx.stock.upsert).not.toHaveBeenCalled();
+      expect(mockCosting.recordInboundLayer).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+    });
+
+    it('scopes OBE lookup, period lookup and journal to the company', async () => {
+      await service.create(
+        { name: 'Rice', price: 50, costPrice: 20, stockQuantity: 10 } as any,
+        currentUser,
+      );
+
+      const coaCalls = mockTx.chartOfAccount.findFirst.mock.calls;
+      expect(coaCalls.length).toBeGreaterThanOrEqual(2);
+      for (const [params] of coaCalls) {
+        expect(params).toEqual(
+          expect.objectContaining({
+            where: expect.objectContaining({ companyId: 'comp-1' }),
+          }),
+        );
+      }
+      expect(mockTx.financialPeriod.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            companyId: 'comp-1',
+            status: 'OPEN',
+          }),
+        }),
+      );
     });
   });
 });

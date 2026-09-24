@@ -1,6 +1,7 @@
 import { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../rbac/guards/roles.guard';
 import { ProductsController } from '../controllers/products.controller';
 import { ProductsService } from '../services/products.service';
 
@@ -51,6 +52,8 @@ describe('Products routes — stockQuantity fail-fast (regression)', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useValue(authGuard)
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
       .compile();
 
     app = moduleRef.createNestApplication();

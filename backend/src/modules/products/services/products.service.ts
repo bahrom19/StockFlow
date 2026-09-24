@@ -1,10 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { ProductQueryDto } from '../dto/product-query.dto';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
@@ -12,11 +15,16 @@ import { ProductEntity } from '../entities/product.entity';
 import { ProductMapper } from '../mappers/product.mapper';
 import { ProductsRepository } from '../repositories/products.repository';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+import { PrismaService } from '../../../common/prisma';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
+import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
+import { GlEngineService } from '../../finance/services/gl-engine.service';
 // Reused so PATCH /products/:id with stockQuantity goes through the SAME
 // adjustment mechanism as POST /inventory/stock/adjust (ADJUSTMENT ledger
 // movement, strict no-negative-stock policy, cost layer sync) instead of a
 // parallel direct write to the Stock table.
 import { StockService } from '../../inventory/services';
+import { CostingService } from '../../inventory/services';
 
 /**
  * Normalize a product identifier (SKU / barcode):
@@ -37,11 +45,37 @@ export class ProductsService {
   constructor(
     private readonly productsRepository: ProductsRepository,
     private readonly stockService: StockService,
+    private readonly prismaService: PrismaService,
+    private readonly idempotencyService: IdempotencyService,
+    private readonly glEngine: GlEngineService,
+    private readonly costingService: CostingService,
   ) {}
 
   async create(
     createProductDto: CreateProductDto,
     currentUser: JwtPayload,
+    idempotencyKey?: string,
+  ): Promise<ProductEntity> {
+    // G15-05-C: product creation (including opening stock) runs inside one
+    // idempotent transaction so a timeout/retry never duplicates the product,
+    // the opening stock, its cost layer or its GL posting.
+    const result = await runWithIdempotency({
+      prisma: this.prismaService,
+      idempotency: this.idempotencyService,
+      companyId: currentUser.companyId,
+      idempotencyKey,
+      endpoint: 'product-create',
+      requestHashPayload: { ...createProductDto, userId: currentUser.userId },
+      status: HttpStatus.CREATED,
+      work: (tx) => this.applyCreateProduct(createProductDto, currentUser, tx),
+    });
+    return result.body as ProductEntity;
+  }
+
+  private async applyCreateProduct(
+    createProductDto: CreateProductDto,
+    currentUser: JwtPayload,
+    tx: Prisma.TransactionClient,
   ): Promise<ProductEntity> {
     this.assertCompanyId(createProductDto.companyId, currentUser.companyId);
 
@@ -52,10 +86,13 @@ export class ProductsService {
     // Application-level duplicate pre-check (DB unique index is the safety net
     // for race conditions, but this provides a user-friendly error message).
     if (sku) {
-      const conflict = await this.productsRepository.findActiveBySkuAndCompany(
-        sku,
-        currentUser.companyId,
-      );
+      const conflict =
+        await this.productsRepository.findActiveBySkuAndCompany(
+          sku,
+          currentUser.companyId,
+          undefined,
+          tx,
+        );
       if (conflict) {
         throw new ConflictException(
           `A product with SKU "${sku}" already exists (${conflict.name}).`,
@@ -67,6 +104,8 @@ export class ProductsService {
         await this.productsRepository.findActiveByBarcodeAndCompany(
           barcode,
           currentUser.companyId,
+          undefined,
+          tx,
         );
       if (conflict) {
         throw new ConflictException(
@@ -83,6 +122,7 @@ export class ProductsService {
       const unit = await this.productsRepository.findOrCreateUnitByName(
         createProductDto.unit,
         currentUser.companyId,
+        tx,
       );
       unitId = unit.id;
     }
@@ -97,6 +137,7 @@ export class ProductsService {
     if (createProductDto.stockQuantity && createProductDto.stockQuantity > 0) {
       targetWarehouse = await this.productsRepository.findDefaultWarehouse(
         currentUser.companyId,
+        tx,
       );
       if (!targetWarehouse) {
         throw new UnprocessableEntityException(
@@ -107,43 +148,179 @@ export class ProductsService {
       }
     }
 
-    const product = await this.productsRepository.create({
-      name: createProductDto.name,
-      description: createProductDto.description,
-      sku,
-      barcode,
-      ntin: createProductDto.ntin,
-      price: createProductDto.price,
-      costPrice: createProductDto.costPrice,
-      unit: unitId ? { connect: { id: unitId } } : undefined,
-      category: createProductDto.category,
-      brand: createProductDto.brand,
-      isActive: createProductDto.isActive ?? true,
-      company: {
-        connect: { id: currentUser.companyId },
+    const product = await this.productsRepository.create(
+      {
+        name: createProductDto.name,
+        description: createProductDto.description,
+        sku,
+        barcode,
+        ntin: createProductDto.ntin,
+        price: createProductDto.price,
+        costPrice: createProductDto.costPrice,
+        unit: unitId ? { connect: { id: unitId } } : undefined,
+        category: createProductDto.category,
+        brand: createProductDto.brand,
+        isActive: createProductDto.isActive ?? true,
+        company: {
+          connect: { id: currentUser.companyId },
+        },
       },
-    });
+      tx,
+    );
 
     // Persist the initial stock quantity when requested, attributed to the
-    // warehouse resolved above (default or first active one).
+    // warehouse resolved above (default or first active one). G15-05-B: stock,
+    // movement, cost layer and opening GL post in this SAME transaction.
     let created: typeof product = product;
     if (targetWarehouse) {
-      await this.productsRepository.createInitialStock({
-        productId: product.id,
-        warehouseId: targetWarehouse.id,
-        companyId: currentUser.companyId,
-        quantity: createProductDto.stockQuantity as number,
-        userId: currentUser.userId,
-      });
+      await this.applyOpeningStock(
+        product.id,
+        targetWarehouse.id,
+        currentUser,
+        createProductDto.stockQuantity as number,
+        createProductDto.costPrice,
+        tx,
+      );
       // Re-read with relations so the response reflects the persisted stock.
       const refreshed = await this.productsRepository.findById(
         product.id,
         currentUser.companyId,
+        tx,
       );
       if (refreshed) created = refreshed;
     }
 
     return ProductMapper.toEntity(created);
+  }
+
+  /**
+   * G15-05-B: recognize opening inventory for a newly created product.
+   * Uniform semantics — initial stock supplied without a purchase document is
+   * an Opening Balance event regardless of company age. Stock + movement are
+   * always written; CostLayer + GL (Dr 1300 / Cr 3000 Opening Balance Equity)
+   * require a costPrice basis, otherwise they are explicitly skipped (never
+   * invented). A missing 3000 account fails closed — never falls back to 5100.
+   */
+  private async applyOpeningStock(
+    productId: string,
+    warehouseId: string,
+    currentUser: JwtPayload,
+    quantity: number,
+    costPrice: number | string | undefined,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const companyId = currentUser.companyId;
+
+    const existing = await tx.stock.findFirst({
+      where: { productId, warehouseId, companyId },
+    });
+    const beforeQuantity = existing?.quantity ?? 0;
+
+    await tx.stock.upsert({
+      where: {
+        productId_warehouseId: { productId, warehouseId },
+      },
+      create: {
+        companyId,
+        productId,
+        warehouseId,
+        quantity,
+        reservedQuantity: 0,
+        availableQuantity: quantity,
+      },
+      update: {
+        quantity: { increment: quantity },
+        availableQuantity: { increment: quantity },
+      },
+    });
+
+    await tx.stockMovement.create({
+      data: {
+        companyId,
+        productId,
+        warehouseId,
+        type: 'OPENING_BALANCE',
+        quantity,
+        beforeQuantity,
+        afterQuantity: beforeQuantity + quantity,
+        referenceType: 'PRODUCT',
+        referenceId: productId,
+        comment: 'Initial stock on product creation',
+        createdBy: currentUser.userId,
+      },
+    });
+
+    if (costPrice === undefined || costPrice === null) return;
+
+    const unitCost = new Decimal(costPrice);
+    const amount = unitCost.mul(quantity);
+    if (amount.isZero()) return;
+
+    await this.costingService.recordInboundLayer(
+      productId,
+      companyId,
+      quantity,
+      unitCost,
+      'OPENING_BALANCE',
+      productId,
+      undefined,
+      tx,
+    );
+
+    const inventoryAccount = await tx.chartOfAccount.findFirst({
+      where: { companyId, code: '1300', isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    const obeAccount = await tx.chartOfAccount.findFirst({
+      where: { companyId, code: '3000', isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    if (!inventoryAccount || !obeAccount) {
+      throw new BadRequestException(
+        'Opening Balance Equity account (3000) is required to recognize ' +
+          'opening inventory. Create the account first, or create the ' +
+          'product without stockQuantity.',
+      );
+    }
+
+    const openPeriod = await tx.financialPeriod.findFirst({
+      where: { companyId, status: 'OPEN' },
+      orderBy: { startDate: 'desc' },
+      select: { id: true },
+    });
+    if (!openPeriod) {
+      throw new BadRequestException(
+        'No open financial period found for opening inventory. ' +
+          'A GL posting requires an OPEN period.',
+      );
+    }
+
+    await this.glEngine.post(
+      {
+        companyId,
+        financialPeriodId: openPeriod.id,
+        entryDate: new Date(),
+        description: `Opening inventory for product ${productId}`,
+        referenceType: 'OPENING_BALANCE',
+        referenceId: productId,
+        createdBy: currentUser.userId,
+        lines: [
+          {
+            accountId: inventoryAccount.id,
+            debit: amount.toString(),
+            credit: '0',
+            description: `Opening inventory: ${productId}`,
+          },
+          {
+            accountId: obeAccount.id,
+            debit: '0',
+            credit: amount.toString(),
+            description: `Opening balance equity: ${productId}`,
+          },
+        ],
+      },
+      tx,
+    );
   }
 
   async findAll(

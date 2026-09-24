@@ -783,6 +783,20 @@ export class AuthService {
         isSystem: true,
         sortOrder: 10,
       },
+      {
+        // G15-05-B: Opening Balance Equity — offset account for Opening
+        // Inventory recognition (Dr 1300 / Cr 3000). Permanent EQUITY
+        // balance: never touched by fiscal close (revenue/expense only).
+        // Appended (not re-sorted) so existing companies' display order
+        // is unaffected; existing companies create it manually.
+        code: '3000',
+        name: 'Opening Balance Equity',
+        description: 'Equity offset for opening balances (initial inventory)',
+        accountType: AccountType.EQUITY,
+        normalBalance: NormalBalance.CREDIT,
+        isSystem: true,
+        sortOrder: 11,
+      },
     ];
 
     for (const account of defaultAccounts) {

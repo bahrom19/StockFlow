@@ -62,8 +62,12 @@ export class ProductsRepository {
     return payload as T;
   }
 
-  async create(data: Prisma.ProductCreateInput): Promise<Product> {
-    return this.prismaService.product.create({
+  async create(
+    data: Prisma.ProductCreateInput,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Product> {
+    const client = tx ?? this.prismaService;
+    return client.product.create({
       data: this.normalizeDecimalPayload(data) as Prisma.ProductCreateInput,
       include: PRODUCT_INCLUDE,
     });
@@ -259,6 +263,7 @@ export class ProductsRepository {
     sku: string,
     companyId: string,
     excludeProductId?: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<{ id: string; name: string } | null> {
     const where: Prisma.ProductWhereInput = {
       sku,
@@ -268,7 +273,8 @@ export class ProductsRepository {
     if (excludeProductId) {
       where.id = { not: excludeProductId };
     }
-    return this.prismaService.product.findFirst({
+    const client = tx ?? this.prismaService;
+    return client.product.findFirst({
       where,
       select: { id: true, name: true },
     });
@@ -283,6 +289,7 @@ export class ProductsRepository {
     barcode: string,
     companyId: string,
     excludeProductId?: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<{ id: string; name: string } | null> {
     const where: Prisma.ProductWhereInput = {
       barcode,
@@ -292,7 +299,8 @@ export class ProductsRepository {
     if (excludeProductId) {
       where.id = { not: excludeProductId };
     }
-    return this.prismaService.product.findFirst({
+    const client = tx ?? this.prismaService;
+    return client.product.findFirst({
       where,
       select: { id: true, name: true },
     });
@@ -305,14 +313,16 @@ export class ProductsRepository {
   async findOrCreateUnitByName(
     name: string,
     companyId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<{ id: string }> {
-    const existing = await this.prismaService.unitOfMeasure.findFirst({
+    const client = tx ?? this.prismaService;
+    const existing = await client.unitOfMeasure.findFirst({
       where: { companyId, name, deletedAt: null },
       select: { id: true },
     });
     if (existing) return existing;
 
-    return this.prismaService.unitOfMeasure.create({
+    return client.unitOfMeasure.create({
       data: {
         companyId,
         name,
@@ -330,67 +340,14 @@ export class ProductsRepository {
    */
   async findDefaultWarehouse(
     companyId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Pick<Warehouse, 'id'> | null> {
-    return this.prismaService.warehouse.findFirst({
+    const client = tx ?? this.prismaService;
+    return client.warehouse.findFirst({
       where: { companyId, deletedAt: null, isActive: true },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
       select: { id: true },
     });
   }
 
-  /**
-   * Create (or top up) the Stock row for a product+warehouse and record an
-   * OPENING_BALANCE movement. Used to persist the initial stockQuantity sent
-   * with CreateProductDto.
-   */
-  async createInitialStock(params: {
-    productId: string;
-    warehouseId: string;
-    companyId: string;
-    quantity: number;
-    userId?: string;
-  }): Promise<void> {
-    const { productId, warehouseId, companyId, quantity, userId } = params;
-
-    await this.prismaService.$transaction(async (tx) => {
-      const existing = await tx.stock.findFirst({
-        where: { productId, warehouseId, companyId },
-      });
-      const beforeQuantity = existing?.quantity ?? 0;
-
-      await tx.stock.upsert({
-        where: {
-          productId_warehouseId: { productId, warehouseId },
-        },
-        create: {
-          companyId,
-          productId,
-          warehouseId,
-          quantity,
-          reservedQuantity: 0,
-          availableQuantity: quantity,
-        },
-        update: {
-          quantity: { increment: quantity },
-          availableQuantity: { increment: quantity },
-        },
-      });
-
-      await tx.stockMovement.create({
-        data: {
-          companyId,
-          productId,
-          warehouseId,
-          type: 'OPENING_BALANCE',
-          quantity,
-          beforeQuantity,
-          afterQuantity: beforeQuantity + quantity,
-          referenceType: 'PRODUCT',
-          referenceId: productId,
-          comment: 'Initial stock on product creation',
-          createdBy: userId,
-        },
-      });
-    });
-  }
 }
