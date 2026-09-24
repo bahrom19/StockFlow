@@ -174,6 +174,123 @@ describe('GlEngineService — atomic AccountBalance upsert (M1)', () => {
 });
 
 /**
+ * L1-a regression — AccountBalance calendar identity must be UTC.
+ *
+ * `updateAccountBalances` previously derived the denormalised year/month with
+ * server-local getFullYear()/getMonth(), which disagrees with the UTC period
+ * boundaries for boundary-instant postings and (on a non-UTC host) labels the
+ * snapshot with a different accounting month than the period it belongs to.
+ *
+ * The mid-month fixture used by the M1 suite above cannot detect this, so these
+ * tests deliberately use boundary instants and a forced non-UTC process TZ.
+ */
+describe('GlEngineService — L1-a UTC AccountBalance identity', () => {
+  let service: GlEngineService;
+  let tx: { accountBalance: { upsert: jest.Mock } };
+
+  const companyId = 'comp-1';
+  const financialPeriodId = 'fp-2026-09';
+  const lines = [{ accountId: 'acct-1', debit: '100', credit: '0' }];
+
+  beforeEach(() => {
+    tx = { accountBalance: { upsert: jest.fn().mockResolvedValue({}) } };
+
+    service = new GlEngineService(
+      {} as JournalEntriesRepository,
+      {} as PostingValidationService,
+      {} as PrismaService,
+      {} as AuditLogService,
+      {} as never,
+    );
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  /**
+   * Simulate a host whose local calendar disagrees with UTC for a given instant.
+   * process.env.TZ is not usable here — Jest/V8 does not re-read it at runtime
+   * (verified), and CI runs at UTC where this defect is invisible. Only the
+   * local getters are stubbed, so the UTC getters stay truthful — which is
+   * exactly the distinction under test.
+   */
+  const simulateLocalZone = (localYear: number, localMonth: number) => {
+    jest.spyOn(Date.prototype, 'getFullYear').mockReturnValue(localYear);
+    jest.spyOn(Date.prototype, 'getMonth').mockReturnValue(localMonth - 1);
+  };
+
+  const invoke = (entryDate: Date) =>
+    (
+      service as unknown as {
+        updateAccountBalances: (
+          c: string,
+          p: string,
+          d: Date,
+          l: typeof lines,
+          t: typeof tx,
+        ) => Promise<void>;
+      }
+    ).updateAccountBalances(
+      companyId,
+      financialPeriodId,
+      entryDate,
+      lines,
+      tx,
+    );
+
+  it('uses the UTC month for an east-of-UTC boundary instant', async () => {
+    // 2026-10-01T00:30+05:00 === 2026-09-30T19:30Z.
+    const entryDate = new Date('2026-10-01T00:30:00+05:00');
+    expect(entryDate.getUTCFullYear()).toBe(2026);
+    expect(entryDate.getUTCMonth() + 1).toBe(9);
+
+    // Simulate a UTC+5 host (Asia/Almaty): local October, UTC September.
+    simulateLocalZone(2026, 10);
+    // Sanity: local and UTC disagree, so this fixture can detect the defect.
+    expect(entryDate.getFullYear()).toBe(2026);
+    expect(entryDate.getMonth() + 1).toBe(10);
+
+    await invoke(entryDate);
+
+    const call = tx.accountBalance.upsert.mock.calls[0][0];
+    expect(call.create.year).toBe(2026);
+    expect(call.create.month).toBe(9);
+  });
+
+  it('uses the UTC year for a west-of-UTC boundary instant that crosses the year', async () => {
+    // 2025-12-31T20:00-05:00 === 2026-01-01T01:00Z.
+    const entryDate = new Date('2025-12-31T20:00:00-05:00');
+    expect(entryDate.getUTCFullYear()).toBe(2026);
+    expect(entryDate.getUTCMonth() + 1).toBe(1);
+
+    // Simulate a UTC-5 host (America/New_York): local 2025/12, UTC 2026/01.
+    simulateLocalZone(2025, 12);
+    expect(entryDate.getFullYear()).toBe(2025);
+    expect(entryDate.getMonth() + 1).toBe(12);
+
+    await invoke(entryDate);
+
+    const call = tx.accountBalance.upsert.mock.calls[0][0];
+    expect(call.create.year).toBe(2026);
+    expect(call.create.month).toBe(1);
+  });
+
+  it('keeps the mid-month identity unchanged (no reporting semantic shift)', async () => {
+    // Even under a simulated non-UTC host zone, a mid-month instant keeps its
+    // UTC identity, so existing reporting semantics do not shift.
+    simulateLocalZone(2026, 8);
+    const entryDate = new Date('2026-08-15T10:00:00Z');
+
+    await invoke(entryDate);
+
+    const call = tx.accountBalance.upsert.mock.calls[0][0];
+    expect(call.create.year).toBe(2026);
+    expect(call.create.month).toBe(8);
+  });
+});
+
+/**
  * G15-03-02 regression — concurrent GL reverse CAS protection.
  *
  * Previously `reverse()` did find → if POSTED → plain update: two concurrent

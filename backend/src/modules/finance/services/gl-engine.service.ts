@@ -321,8 +321,11 @@ export class GlEngineService {
     lines: Array<{ accountId: string; debit: string; credit: string }>,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const year = entryDate.getFullYear();
-    const month = entryDate.getMonth() + 1;
+    // L1-a: the AccountBalance calendar identity must match the UTC period
+    // boundaries used everywhere else. Server-local getFullYear/getMonth would
+    // denormalise a different (year, month) for boundary-instant postings.
+    const year = entryDate.getUTCFullYear();
+    const month = entryDate.getUTCMonth() + 1;
 
     for (const line of lines) {
       const debit = new Decimal(line.debit || '0');

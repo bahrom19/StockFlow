@@ -499,4 +499,171 @@ describe('AuthService', () => {
       expect(result.message).toBe('Logged out successfully');
     });
   });
+
+  // ─────────────────────────────────────────────
+  // L1-a — UTC calendar identity for FinancialPeriod
+  // ─────────────────────────────────────────────
+  describe('register — L1-a UTC financial period identity', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+      jest.useRealTimers();
+    });
+
+    /**
+     * Simulate a host whose local calendar disagrees with UTC for the pinned
+     * instant. process.env.TZ is not usable here — Jest/V8 does not re-read it
+     * at runtime (verified), and CI runs at UTC where this defect is invisible.
+     * Only the local getters are stubbed, so the UTC getters stay truthful;
+     * that is exactly the distinction under test.
+     */
+    const simulateLocalZone = (localYear: number, localMonth: number) => {
+      jest.spyOn(Date.prototype, 'getFullYear').mockReturnValue(localYear);
+      jest.spyOn(Date.prototype, 'getMonth').mockReturnValue(localMonth - 1);
+    };
+
+    it('assigns a boundary instant to the UTC accounting month, not the simulated server-local month', async () => {
+      // Accounting calendar invariant (L1-a): FinancialPeriod identity is
+      // derived from UTC calendar dates. Regression guard: `seedFinancialPeriod`
+      // previously used getFullYear()/getMonth() (server-local), which disagreed
+      // with the Date.UTC() boundaries it wrote in the same statement.
+      //
+      // 2026-10-01T00:30+05:00 === 2026-09-30T19:30Z. A host at UTC+5
+      // (Asia/Almaty) sees local October while the UTC accounting month is
+      // September.
+      const instant = new Date('2026-10-01T00:30:00+05:00');
+      jest.useFakeTimers({ now: instant });
+
+      expect(instant.getUTCFullYear()).toBe(2026);
+      expect(instant.getUTCMonth() + 1).toBe(9);
+
+      // Simulate the UTC+5 host zone.
+      simulateLocalZone(2026, 10);
+
+      // Sanity: local and UTC genuinely disagree, otherwise this test could not
+      // detect the defect.
+      const boundaryNow = new Date();
+      expect(boundaryNow.getFullYear()).toBe(2026);
+      expect(boundaryNow.getMonth() + 1).toBe(10);
+      expect(boundaryNow.getUTCMonth() + 1).toBe(9);
+
+      const dto = {
+        email: 'utc@example.com',
+        password: 'Password123!',
+        firstName: 'John',
+        lastName: 'Doe',
+        companyName: 'UTCCorp',
+      };
+
+      mockAuthRepo.findUserByEmail.mockResolvedValue(null);
+      mockAuthRepo.createCompany.mockResolvedValue({ id: 'comp-1' } as any);
+      mockAuthRepo.createUser.mockResolvedValue({ id: 'user-1' } as any);
+      mockAuthRepo.createCompanyMember.mockResolvedValue({ id: 'cm-1' } as any);
+      mockAuthRepo.createRefreshToken.mockResolvedValue({} as any);
+      mockJwtService.signAsync.mockResolvedValue('access-token');
+      mockConfigService.get.mockReturnValue('15m');
+
+      const financialPeriod = {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'fp-1' }),
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) =>
+        cb({
+          chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
+          role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
+          permission: { findMany: jest.fn().mockResolvedValue([]) },
+          rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          userRole: { create: jest.fn().mockResolvedValue({}) },
+          financialPeriod,
+        }),
+      );
+
+      await service.register(dto);
+
+      expect(financialPeriod.create).toHaveBeenCalledTimes(1);
+      const data = financialPeriod.create.mock.calls[0][0].data;
+
+      // UTC calendar identity, not the server-local October.
+      expect(data.year).toBe(2026);
+      expect(data.month).toBe(9);
+      expect(data.name).toBe('2026-09');
+
+      // The period must actually contain the instant it was created for.
+      expect(data.startDate).toEqual(new Date('2026-09-01T00:00:00.000Z'));
+      expect(data.endDate).toEqual(new Date('2026-09-30T23:59:59.999Z'));
+      expect(data.startDate.getTime()).toBeLessThanOrEqual(instant.getTime());
+      expect(data.endDate.getTime()).toBeGreaterThanOrEqual(instant.getTime());
+
+      // Idempotency lookup must use the same UTC identity.
+      expect(financialPeriod.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            companyId: 'comp-1',
+            year: 2026,
+            month: 9,
+          }),
+        }),
+      );
+    });
+
+    it('handles a west-of-UTC boundary that crosses the UTC year', async () => {
+      // 2025-12-31T20:00-05:00 === 2026-01-01T01:00Z: the UTC accounting year is
+      // 2026 while a host at UTC-5 (America/New_York) is still in 2025.
+      const instant = new Date('2025-12-31T20:00:00-05:00');
+      jest.useFakeTimers({ now: instant });
+
+      expect(instant.getUTCFullYear()).toBe(2026);
+      expect(instant.getUTCMonth() + 1).toBe(1);
+
+      // Simulate the UTC-5 host zone.
+      simulateLocalZone(2025, 12);
+
+      const boundaryNow = new Date();
+      expect(boundaryNow.getFullYear()).toBe(2025);
+      expect(boundaryNow.getMonth() + 1).toBe(12);
+      expect(boundaryNow.getUTCFullYear()).toBe(2026);
+
+      const dto = {
+        email: 'utc2@example.com',
+        password: 'Password123!',
+        firstName: 'John',
+        lastName: 'Doe',
+        companyName: 'UTCCorp2',
+      };
+
+      mockAuthRepo.findUserByEmail.mockResolvedValue(null);
+      mockAuthRepo.createCompany.mockResolvedValue({ id: 'comp-1' } as any);
+      mockAuthRepo.createUser.mockResolvedValue({ id: 'user-1' } as any);
+      mockAuthRepo.createCompanyMember.mockResolvedValue({ id: 'cm-1' } as any);
+      mockAuthRepo.createRefreshToken.mockResolvedValue({} as any);
+      mockJwtService.signAsync.mockResolvedValue('access-token');
+      mockConfigService.get.mockReturnValue('15m');
+
+      const financialPeriod = {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'fp-1' }),
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) =>
+        cb({
+          chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
+          role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
+          permission: { findMany: jest.fn().mockResolvedValue([]) },
+          rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          userRole: { create: jest.fn().mockResolvedValue({}) },
+          financialPeriod,
+        }),
+      );
+
+      await service.register(dto);
+
+      const data = financialPeriod.create.mock.calls[0][0].data;
+      // UTC calendar identity: 2026/01, not the simulated local 2025/12.
+      expect(data.year).toBe(2026);
+      expect(data.month).toBe(1);
+      expect(data.name).toBe('2026-01');
+      expect(data.startDate).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+      expect(data.endDate).toEqual(new Date('2026-01-31T23:59:59.999Z'));
+      expect(data.startDate.getTime()).toBeLessThanOrEqual(instant.getTime());
+      expect(data.endDate.getTime()).toBeGreaterThanOrEqual(instant.getTime());
+    });
+  });
 });

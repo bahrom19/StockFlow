@@ -644,8 +644,11 @@ export class AuthService {
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
+    // L1-a: accounting calendar identity is UTC (see the timezone design
+    // decision). Server-local getFullYear/getMonth could disagree with the
+    // Date.UTC boundaries below and select a different accounting month.
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth() + 1;
 
     const existing = await tx.financialPeriod.findFirst({
       where: { companyId, year, month },
