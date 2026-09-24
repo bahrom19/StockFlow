@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { JournalEntryStatus, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
@@ -223,7 +223,8 @@ export class GlEngineService {
     reason?: string,
   ): Promise<ReversalResult> {
     return this.prismaService.$transaction(async (tx) => {
-      // Find the original entry
+      // Read the original entry for the existence check and the reversal
+      // payload (read-only — no side effects, not a guard).
       const original = await this.journalRepository.findById(
         originalEntryId,
         companyId,
@@ -234,20 +235,27 @@ export class GlEngineService {
           `Journal entry ${originalEntryId} not found`,
         );
       }
-      if (original.status !== JournalEntryStatus.POSTED) {
-        throw new NotFoundException(
-          `Only POSTED entries can be reversed. Entry ${originalEntryId} is "${original.status}".`,
-        );
-      }
 
-      // Mark original as REVERSED
-      await tx.journalEntry.update({
-        where: { id: originalEntryId },
+      // G15-03-02: CAS-claim POSTED → REVERSED as the single linearization
+      // point. The conditional update (id + companyId + status) is the
+      // source of truth for concurrent protection: exactly one concurrent
+      // reverse can win; the loser gets count = 0 and must create nothing.
+      const claimed = await tx.journalEntry.updateMany({
+        where: {
+          id: originalEntryId,
+          companyId,
+          status: JournalEntryStatus.POSTED,
+        },
         data: {
           status: JournalEntryStatus.REVERSED,
           rowVersion: { increment: 1 },
         },
       });
+      if (claimed.count === 0) {
+        throw new ConflictException(
+          `Journal entry ${originalEntryId} cannot be reversed: it is "${original.status}" or was concurrently modified. Only POSTED entries can be reversed.`,
+        );
+      }
 
       // Create reversal entry — negate all debits/credits
       const reversalLines = (original.lines ?? []).map((line) => ({
