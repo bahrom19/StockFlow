@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { FiscalYearCloseService } from '../services/fiscal-year-close.service';
 import { PostingValidationService } from '../services/posting-validation.service';
 
@@ -34,7 +34,11 @@ describe('FiscalYearCloseService (G15-01)', () => {
 
   beforeEach(() => {
     mockTx = {
-      fiscalYear: { findFirst: jest.fn(), update: jest.fn() },
+      fiscalYear: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       financialPeriod: { findMany: jest.fn(), update: jest.fn() },
       chartOfAccount: { findFirst: jest.fn(), findMany: jest.fn() },
       accountBalance: { findMany: jest.fn().mockResolvedValue([]) },
@@ -177,6 +181,144 @@ describe('FiscalYearCloseService (G15-01)', () => {
     expect(mockGlEngine.post).toHaveBeenCalledWith(
       expect.objectContaining({ companyId }),
       expect.anything(),
+    );
+  });
+});
+
+/**
+ * G15-03-01 regression — fiscal-year close CAS claim.
+ *
+ * Previously `closeFiscalYear()` checked `isClosed` with a plain read and
+ * marked the year closed with a plain update at the end: two concurrent
+ * closes both passed the check and both posted a FISCAL_YEAR_CLOSE journal.
+ * The fix is a conditional CAS claim (id + companyId + isClosed=false) as
+ * the first mutation inside the existing transaction: exactly one
+ * concurrent close wins, the loser gets count = 0 and posts nothing.
+ */
+describe('FiscalYearCloseService CAS claim (G15-03-01)', () => {
+  let service: FiscalYearCloseService;
+  let mockTx: any;
+  let mockPrisma: any;
+  let mockGlEngine: any;
+  let mockAuditLog: any;
+
+  beforeEach(() => {
+    mockTx = {
+      fiscalYear: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      financialPeriod: {
+        findMany: jest.fn().mockResolvedValue([openPeriod(12)]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      chartOfAccount: {
+        findFirst: jest.fn().mockResolvedValue({ id: 're-3200' }),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'rev-1', accountType: 'REVENUE' },
+          { id: 'exp-1', accountType: 'EXPENSE' },
+        ]),
+      },
+      accountBalance: {
+        findMany: jest.fn().mockResolvedValue([
+          { accountId: 'rev-1', closingDebit: '0', closingCredit: '1000.0000' },
+          { accountId: 'exp-1', closingDebit: '200.0000', closingCredit: '0' },
+        ]),
+      },
+    };
+    mockPrisma = {
+      $transaction: jest.fn((cb: (tx: any) => any) => cb(mockTx)),
+    };
+    mockGlEngine = {
+      post: jest.fn().mockResolvedValue({ id: 'je-close-1' }),
+    };
+    mockAuditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    service = new FiscalYearCloseService(mockPrisma, mockGlEngine, mockAuditLog);
+    mockTx.fiscalYear.findFirst.mockResolvedValue({ ...baseYear });
+    mockTx.fiscalYear.update.mockResolvedValue({});
+  });
+
+  // 1. Normal close claims once and posts exactly one closing journal.
+  it('should CAS-claim the year before posting exactly one closing journal', async () => {
+    const result = await service.closeFiscalYear(companyId, 2026, userId);
+
+    expect(mockTx.fiscalYear.updateMany).toHaveBeenCalledWith({
+      where: { id: 'fy-1', companyId, isClosed: false },
+      data: { rowVersion: { increment: 1 } },
+    });
+    expect(mockGlEngine.post).toHaveBeenCalledTimes(1);
+    expect(mockGlEngine.post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referenceType: 'FISCAL_YEAR_CLOSE',
+        referenceId: 'fy-1',
+      }),
+      mockTx,
+    );
+    expect(result.retainedEarningsEntryId).toBe('je-close-1');
+    // CAS ran before any side effect.
+    expect(
+      mockTx.fiscalYear.updateMany.mock.invocationCallOrder[0]!,
+    ).toBeLessThan(mockGlEngine.post.mock.invocationCallOrder[0]!);
+  });
+
+  // 2. Concurrent loser (CAS count=0) gets ConflictException, posts nothing.
+  it('should reject a concurrent close with ConflictException and no journal', async () => {
+    mockTx.fiscalYear.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.closeFiscalYear(companyId, 2026, userId),
+    ).rejects.toThrow(ConflictException);
+
+    expect(mockGlEngine.post).not.toHaveBeenCalled();
+    expect(mockTx.financialPeriod.update).not.toHaveBeenCalled();
+    expect(mockTx.fiscalYear.update).not.toHaveBeenCalled();
+    expect(mockAuditLog.log).not.toHaveBeenCalled();
+  });
+
+  // 3. Two sequential attempts: winner closes, replay sees closed (no duplicate).
+  it('should not post a second journal when the year is already closed', async () => {
+    await service.closeFiscalYear(companyId, 2026, userId);
+    expect(mockGlEngine.post).toHaveBeenCalledTimes(1);
+
+    mockTx.fiscalYear.findFirst.mockResolvedValue({
+      ...baseYear,
+      isClosed: true,
+    });
+    await expect(
+      service.closeFiscalYear(companyId, 2026, userId),
+    ).rejects.toThrow(BadRequestException);
+    expect(mockGlEngine.post).toHaveBeenCalledTimes(1);
+    // Fast path rejects before the CAS claim.
+    expect(mockTx.fiscalYear.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  // 4. Rollback: CAS won but posting fails — no final mutations committed.
+  it('should leave no final close mutations when posting fails after CAS', async () => {
+    mockGlEngine.post.mockRejectedValue(
+      new BadRequestException('posting failed'),
+    );
+
+    await expect(
+      service.closeFiscalYear(companyId, 2026, userId),
+    ).rejects.toThrow('posting failed');
+
+    // The claim ran (rolls back with the shared transaction in production),
+    // but no final year update, period close, or audit was reached.
+    expect(mockTx.fiscalYear.updateMany).toHaveBeenCalledTimes(1);
+    expect(mockTx.fiscalYear.update).not.toHaveBeenCalled();
+    expect(mockTx.financialPeriod.update).not.toHaveBeenCalled();
+    expect(mockAuditLog.log).not.toHaveBeenCalled();
+  });
+
+  // 5. Tenant isolation: CAS is scoped to the caller's company.
+  it('should scope the CAS claim to the company', async () => {
+    await service.closeFiscalYear(companyId, 2026, userId);
+
+    expect(mockTx.fiscalYear.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'fy-1', companyId }),
+      }),
     );
   });
 });

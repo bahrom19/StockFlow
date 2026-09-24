@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -67,6 +68,29 @@ export class FiscalYearCloseService {
       }
       if (fiscalYear.isClosed) {
         throw new BadRequestException(`Fiscal year ${year} is already closed`);
+      }
+
+      // G15-03-01: CAS-claim the close as the single linearization point.
+      // The conditional update (id + companyId + isClosed=false) is the
+      // source of truth for concurrent protection: exactly one concurrent
+      // close can win; the loser gets count = 0 and must post nothing.
+      // Runs inside the existing transaction BEFORE any business mutation,
+      // so a later failure rolls the claim back together with everything
+      // else (the year stays open and retryable).
+      const claimed = await tx.fiscalYear.updateMany({
+        where: {
+          id: fiscalYear.id,
+          companyId,
+          isClosed: false,
+        },
+        data: {
+          rowVersion: { increment: 1 },
+        },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException(
+          `Fiscal year ${year} is already closed or is being closed concurrently`,
+        );
       }
 
       // 2. Find all financial periods for this year
