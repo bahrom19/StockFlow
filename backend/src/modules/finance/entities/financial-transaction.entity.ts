@@ -68,6 +68,18 @@ export class FinancialTransactionEntity {
   bankAccountId!: string | null;
 
   @ApiPropertyOptional()
+  destinationBankAccountId!: string | null;
+
+  @ApiPropertyOptional({ enum: ['DRAFT', 'POSTED', 'REVERSED'] })
+  postingStatus!: string;
+
+  @ApiPropertyOptional()
+  journalEntryId!: string | null;
+
+  @ApiPropertyOptional()
+  idempotencyKey!: string | null;
+
+  @ApiPropertyOptional()
   referenceType!: string | null;
 
   @ApiPropertyOptional()

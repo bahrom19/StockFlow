@@ -43,6 +43,12 @@ export class FinancialTransactionQueryDto {
   @IsString()
   bankAccountId?: string;
 
+  @ApiPropertyOptional({ enum: ['DRAFT', 'POSTED', 'REVERSED'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['DRAFT', 'POSTED', 'REVERSED'])
+  postingStatus?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Boolean)

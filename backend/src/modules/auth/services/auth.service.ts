@@ -786,6 +786,51 @@ export class AuthService {
         isSystem: true,
         sortOrder: 12,
       },
+      {
+        // G15-07-C3-A: Fee Expense — counterpart for FinancialTransaction FEE
+        // postings (Dr 6100). Appended (not re-sorted); existing companies are
+        // provisioned by the G15-07-C3-A backfill migration.
+        code: '6100',
+        name: 'Fee Expense',
+        description: 'Bank and cash transaction fees (G15-07-C3-A)',
+        accountType: AccountType.EXPENSE,
+        normalBalance: NormalBalance.DEBIT,
+        isSystem: true,
+        sortOrder: 13,
+      },
+      {
+        // G15-07-C3-A: Interest Income — counterpart for FinancialTransaction
+        // INTEREST postings (Cr 4200). Same provisioning policy as 6100.
+        code: '4200',
+        name: 'Interest Income',
+        description: 'Interest earned on cash and bank balances (G15-07-C3-A)',
+        accountType: AccountType.REVENUE,
+        normalBalance: NormalBalance.CREDIT,
+        isSystem: true,
+        sortOrder: 14,
+      },
+      {
+        // G15-07-C3-A: Cash Shortage — drawer shortages on cash-shift close
+        // (Dr 6200, consumed by the C3-B shift → GL workstream).
+        code: '6200',
+        name: 'Cash Shortage',
+        description: 'Cash drawer shortages on shift close (G15-07-C3-A)',
+        accountType: AccountType.EXPENSE,
+        normalBalance: NormalBalance.DEBIT,
+        isSystem: true,
+        sortOrder: 15,
+      },
+      {
+        // G15-07-C3-A: Cash Overage Gain — drawer overages on cash-shift
+        // close (Cr 4210, consumed by the C3-B shift → GL workstream).
+        code: '4210',
+        name: 'Cash Overage Gain',
+        description: 'Cash drawer overages on shift close (G15-07-C3-A)',
+        accountType: AccountType.REVENUE,
+        normalBalance: NormalBalance.CREDIT,
+        isSystem: true,
+        sortOrder: 16,
+      },
     ];
 
     for (const account of defaultAccounts) {

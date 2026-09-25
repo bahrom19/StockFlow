@@ -54,6 +54,7 @@ export class FinancialTransactionsRepository {
     cashAccountId?: string;
     bankAccountId?: string;
     isReconciled?: boolean;
+    postingStatus?: string;
     search?: string;
     page?: number;
     limit?: number;
@@ -69,6 +70,7 @@ export class FinancialTransactionsRepository {
       cashAccountId,
       bankAccountId,
       isReconciled,
+      postingStatus,
       search,
       page = 1,
       limit = 20,
@@ -90,6 +92,12 @@ export class FinancialTransactionsRepository {
       ...(cashAccountId ? { cashAccountId } : {}),
       ...(bankAccountId ? { bankAccountId } : {}),
       ...(isReconciled !== undefined ? { isReconciled } : {}),
+      ...(postingStatus
+        ? {
+            postingStatus:
+              postingStatus as Prisma.EnumFinancialTransactionPostingStatusFilter['equals'],
+          }
+        : {}),
       ...(dateFrom || dateTo
         ? {
             transactionDate: {
@@ -149,5 +157,46 @@ export class FinancialTransactionsRepository {
     return prisma.financialTransaction.findFirst({
       where: { id },
     }) as unknown as FinancialTransaction;
+  }
+
+  /**
+   * G15-07-C3-A — CAS-claim a posting lifecycle transition.
+   *
+   * The conditional update (id + companyId + postingStatus + rowVersion) is
+   * the single linearization point: exactly one concurrent post/reverse can
+   * win; losers get count = 0 and must post nothing. Runs inside the caller's
+   * transaction so a later failure rolls the claim back together with
+   * everything else (the row returns to its previous status and stays
+   * retryable).
+   */
+  async claimPostingStatus(
+    id: string,
+    companyId: string,
+    from: Prisma.EnumFinancialTransactionPostingStatusFilter['equals'],
+    to: Prisma.EnumFinancialTransactionPostingStatusFilter['equals'],
+    rowVersion: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.financialTransaction.updateMany({
+      where: { id, companyId, postingStatus: from, rowVersion },
+      data: { postingStatus: to, rowVersion: { increment: 1 } },
+    });
+    return result.count;
+  }
+
+  /**
+   * G15-07-C3-A — persist the FinancialTransaction → JournalEntry linkage
+   * after GlEngineService.post() succeeds inside the same transaction.
+   */
+  async linkJournalEntry(
+    id: string,
+    companyId: string,
+    journalEntryId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.financialTransaction.updateMany({
+      where: { id, companyId },
+      data: { journalEntryId, rowVersion: { increment: 1 } },
+    });
   }
 }

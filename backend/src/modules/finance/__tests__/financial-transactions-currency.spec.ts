@@ -5,6 +5,9 @@ import { FinancialTransactionsRepository } from '../repositories/financial-trans
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { CompaniesService } from '../../companies/services/companies.service';
+import { GlEngineService } from '../services/gl-engine.service';
+import { FiscalCalendarService } from '../services/fiscal-calendar.service';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -64,6 +67,12 @@ describe('FinancialTransactionsService — currency enforcement', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: CompaniesService, useValue: makeCompaniesService('KZT') },
+        { provide: GlEngineService, useValue: { post: jest.fn() } },
+        {
+          provide: FiscalCalendarService,
+          useValue: { ensureCurrentCalendar: jest.fn() },
+        },
+        { provide: IdempotencyService, useValue: {} },
       ],
     }).compile();
 
@@ -136,6 +145,12 @@ describe('FinancialTransactionsService — company USD', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: CompaniesService, useValue: makeCompaniesService('USD') },
+        { provide: GlEngineService, useValue: { post: jest.fn() } },
+        {
+          provide: FiscalCalendarService,
+          useValue: { ensureCurrentCalendar: jest.fn() },
+        },
+        { provide: IdempotencyService, useValue: {} },
       ],
     }).compile();
 

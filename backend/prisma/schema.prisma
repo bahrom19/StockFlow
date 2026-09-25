@@ -1650,6 +1650,12 @@ enum TransactionDirection {
   OUTFLOW
 }
 
+enum FinancialTransactionPostingStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
 enum FinancialTransactionType {
   CASH_IN
   CASH_OUT
@@ -2024,6 +2030,7 @@ model BankAccount {
   company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   chartOfAccount   ChartOfAccount? @relation(fields: [chartOfAccountId], references: [id], onDelete: SetNull)
   transactions     FinancialTransaction[] @relation("BankAccountTransactions")
+  destinationTransactions FinancialTransaction[] @relation("DestinationBankTransactions")
   supplierPayments SupplierPayment[]
 
   @@unique([companyId, accountNumber])
@@ -2060,6 +2067,7 @@ model JournalEntry {
   lines             JournalLine[]
   postedByUser      User?              @relation("PostedJournalEntries", fields: [postedBy], references: [id], onDelete: SetNull)
   createdByUser     User?              @relation("CreatedJournalEntries", fields: [createdBy], references: [id], onDelete: SetNull)
+  financialTransactions FinancialTransaction[] @relation("FinancialTransactionPosting")
 
   @@unique([companyId, financialPeriodId, entryNumber])
   @@index([companyId])
@@ -2107,8 +2115,17 @@ model FinancialTransaction {
   reconciledAt    DateTime?
   cashAccountId   String?                   @db.Uuid
   bankAccountId   String?                   @db.Uuid
+  // G15-07-C3-A: second bank leg for BANK_TRANSFER (source = bankAccountId).
+  destinationBankAccountId String?          @db.Uuid
   referenceType   String?                   @db.VarChar(100)
   referenceId     String?                   @db.VarChar(100)
+  // G15-07-C3-A: canonical GL linkage. postingStatus is the freeze gate;
+  // journalEntryId points at the single JE created by GlEngineService.post().
+  postingStatus   FinancialTransactionPostingStatus @default(DRAFT)
+  journalEntryId  String?                   @db.Uuid
+  // G15-07-C3-A: request traceability. Uniqueness is owned by the
+  // IdempotencyRecord (companyId, idempotencyKey) table, not by this column.
+  idempotencyKey  String?                   @db.VarChar(100)
   createdBy       String?                   @db.Uuid
   rowVersion      Int                       @default(0)
   createdAt       DateTime                  @default(now())
@@ -2116,6 +2133,8 @@ model FinancialTransaction {
   company         Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   cashAccount     CashAccount?              @relation("CashAccountTransactions", fields: [cashAccountId], references: [id], onDelete: SetNull)
   bankAccount     BankAccount?              @relation("BankAccountTransactions", fields: [bankAccountId], references: [id], onDelete: SetNull)
+  destinationBankAccount BankAccount?       @relation("DestinationBankTransactions", fields: [destinationBankAccountId], references: [id], onDelete: SetNull)
+  journalEntry    JournalEntry?             @relation("FinancialTransactionPosting", fields: [journalEntryId], references: [id], onDelete: SetNull)
   createdByUser   User?                     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([companyId])
@@ -2124,10 +2143,14 @@ model FinancialTransaction {
   @@index([transactionDate])
   @@index([cashAccountId])
   @@index([bankAccountId])
+  @@index([destinationBankAccountId])
+  @@index([postingStatus])
+  @@index([journalEntryId])
   @@index([isReconciled])
   @@index([createdBy])
   @@index([createdAt])
   @@index([companyId, transactionDate])
+  @@index([companyId, postingStatus])
   @@index([companyId, type, transactionDate])
   @@index([companyId, referenceType, referenceId])
   @@index([companyId, transactionDate, direction])

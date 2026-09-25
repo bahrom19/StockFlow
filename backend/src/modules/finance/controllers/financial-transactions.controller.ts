@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -21,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { CreateFinancialTransactionDto } from '../dto/create-financial-transaction.dto';
 import { UpdateFinancialTransactionDto } from '../dto/update-financial-transaction.dto';
+import { ReverseFinancialTransactionDto } from '../dto/reverse-financial-transaction.dto';
 import { FinancialTransactionQueryDto } from '../dto/financial-transaction-query.dto';
 import { FinancialTransactionEntity } from '../entities/financial-transaction.entity';
 import { FinancialTransactionsService } from '../services/financial-transactions.service';
@@ -52,8 +54,13 @@ export class FinancialTransactionsController {
   async create(
     @Body() dto: CreateFinancialTransactionDto,
     @CurrentUser() currentUser: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<FinancialTransactionEntity> {
-    return this.financialTransactionsService.create(dto, currentUser);
+    return this.financialTransactionsService.create(
+      dto,
+      currentUser,
+      idempotencyKey,
+    );
   }
 
   @Get()
@@ -68,6 +75,11 @@ export class FinancialTransactionsController {
   @ApiQuery({ name: 'cashAccountId', required: false })
   @ApiQuery({ name: 'bankAccountId', required: false })
   @ApiQuery({ name: 'isReconciled', required: false })
+  @ApiQuery({
+    name: 'postingStatus',
+    required: false,
+    enum: ['DRAFT', 'POSTED', 'REVERSED'],
+  })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -82,6 +94,58 @@ export class FinancialTransactionsController {
     @CurrentUser() currentUser: JwtPayload,
   ) {
     return this.financialTransactionsService.findAll(query, currentUser);
+  }
+
+  @Post(':id/post')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('finance:create')
+  @ApiOperation({
+    summary:
+      'Post a DRAFT financial transaction to the GL (explicit, idempotent)',
+  })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Financial transaction posted with its journal entry',
+    type: FinancialTransactionEntity,
+  })
+  async post(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ): Promise<FinancialTransactionEntity> {
+    return this.financialTransactionsService.post(
+      id,
+      currentUser,
+      idempotencyKey,
+    );
+  }
+
+  @Post(':id/reverse')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('finance:update')
+  @ApiOperation({
+    summary: 'Reverse a POSTED financial transaction (compensating entries)',
+  })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiBody({ type: ReverseFinancialTransactionDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Compensating financial transaction with its journal entry',
+    type: FinancialTransactionEntity,
+  })
+  async reverse(
+    @Param('id') id: string,
+    @Body() dto: ReverseFinancialTransactionDto,
+    @CurrentUser() currentUser: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ): Promise<FinancialTransactionEntity> {
+    return this.financialTransactionsService.reverse(
+      id,
+      currentUser,
+      dto?.reason,
+      idempotencyKey,
+    );
   }
 
   @Get(':id')

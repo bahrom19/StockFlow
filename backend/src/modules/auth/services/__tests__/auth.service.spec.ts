@@ -287,9 +287,13 @@ describe('AuthService', () => {
         '5200',
         '3000',
         '3200',
+        '6100',
+        '4200',
+        '6200',
+        '4210',
       ]);
       expect(seeded.map((a: any) => a.sortOrder)).toEqual([
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
       ]);
 
       const retainedEarnings = seeded.find((a: any) => a.code === '3200');
@@ -317,6 +321,41 @@ describe('AuthService', () => {
           normalBalance: 'CREDIT',
           isSystem: true,
           sortOrder: 11,
+        }),
+      );
+      // G15-07-C3-A cash-GL accounts are seeded with canonical semantics.
+      expect(seeded.find((a: any) => a.code === '6100')).toEqual(
+        expect.objectContaining({
+          name: 'Fee Expense',
+          accountType: 'EXPENSE',
+          normalBalance: 'DEBIT',
+          isSystem: true,
+          sortOrder: 13,
+        }),
+      );
+      expect(seeded.find((a: any) => a.code === '4200')).toEqual(
+        expect.objectContaining({
+          name: 'Interest Income',
+          accountType: 'REVENUE',
+          normalBalance: 'CREDIT',
+          isSystem: true,
+          sortOrder: 14,
+        }),
+      );
+      expect(seeded.find((a: any) => a.code === '6200')).toEqual(
+        expect.objectContaining({
+          accountType: 'EXPENSE',
+          normalBalance: 'DEBIT',
+          isSystem: true,
+          sortOrder: 15,
+        }),
+      );
+      expect(seeded.find((a: any) => a.code === '4210')).toEqual(
+        expect.objectContaining({
+          accountType: 'REVENUE',
+          normalBalance: 'CREDIT',
+          isSystem: true,
+          sortOrder: 16,
         }),
       );
       expect(seeded.find((a: any) => a.code === '1010')).toEqual(

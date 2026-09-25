@@ -95,6 +95,14 @@ export class CreateFinancialTransactionDto {
   @IsString()
   bankAccountId?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Second bank leg for BANK_TRANSFER (source leg is bankAccountId)',
+  })
+  @IsOptional()
+  @IsString()
+  destinationBankAccountId?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
