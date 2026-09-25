@@ -3,6 +3,7 @@ import { SharedModule } from '../shared/shared.module';
 import { IdempotencyModule } from '../../infrastructure/idempotency/idempotency.module';
 import { CompaniesModule } from '../companies/companies.module';
 import { CrmModule } from '../crm/crm.module';
+import { FinanceModule } from '../finance/finance.module';
 import { CashShiftController } from './controllers/cash-shift.controller';
 import { SalesController } from './controllers/sales.controller';
 import { CashShiftRepository } from './repositories/cash-shift.repository';
@@ -11,7 +12,10 @@ import { CashShiftService } from './services/cash-shift.service';
 import { SalesService } from './services/sales.service';
 
 @Module({
-  imports: [SharedModule, IdempotencyModule, CompaniesModule, CrmModule],
+  // G15-07-C3-B: FinanceModule exposes GlEngineService/FiscalCalendarService
+  // for cash-shift GL posting. One-directional: nothing in FinanceModule's
+  // subtree imports SalesModule, so there is no cycle.
+  imports: [SharedModule, IdempotencyModule, CompaniesModule, CrmModule, FinanceModule],
   // CashShiftController must be registered BEFORE SalesController so that the
   // literal route `sales/cash-shifts` wins over the parameterized `sales/:id`.
   // Otherwise `GET /sales/cash-shifts` binds id="cash-shifts" and sale.findFirst()

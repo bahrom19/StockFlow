@@ -48,4 +48,14 @@ export class CashInOutDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Explicit GL counterpart account for the movement. ' +
+      'Same-company, active EXPENSE/REVENUE account; validated server-side. ' +
+      'Posting fails closed without a valid counterpart.',
+  })
+  @IsOptional()
+  @IsString()
+  counterpartAccountId?: string;
 }

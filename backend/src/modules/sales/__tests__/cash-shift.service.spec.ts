@@ -6,6 +6,9 @@ import { CashShiftRepository } from '../repositories/cash-shift.repository';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { CompaniesService } from '../../companies/services/companies.service';
+import { GlEngineService } from '../../finance/services/gl-engine.service';
+import { FiscalCalendarService } from '../../finance/services/fiscal-calendar.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -63,6 +66,42 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
       refundPaymentAllocation: {
         aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
       },
+      // G15-07-C3-B: GL posting doubles — no warehouse registers by default
+      // (family 1010 fallback), OPEN period present.
+      cashAccount: { findMany: jest.fn().mockResolvedValue([]) },
+      chartOfAccount: {
+        findFirst: jest.fn().mockImplementation(async ({ where }: any) => {
+          // Code-aware stub: 6xxx behaves as EXPENSE, 4xxx as REVENUE,
+          // 1xxx as ASSET cash — mirrors the seeder conventions. Id lookups
+          // resolve to a live EXPENSE row (counterpart fence input).
+          if (where?.id && !where?.code) {
+            return {
+              id: where.id,
+              code: '6000',
+              accountType: 'EXPENSE',
+              isActive: true,
+              deletedAt: null,
+              isCashOrBank: false,
+            };
+          }
+          if (!where?.code) return null;
+          const code: string = where.code;
+          const accountType = code.startsWith('6')
+            ? 'EXPENSE'
+            : code.startsWith('4')
+              ? 'REVENUE'
+              : 'ASSET';
+          return {
+            id: `acc-${code}`,
+            code,
+            accountType,
+            isActive: true,
+            deletedAt: null,
+            isCashOrBank: code === '1010' || code === '1020',
+          };
+        }),
+      },
+      financialPeriod: { findFirst: jest.fn().mockResolvedValue({ id: 'fp-1' }) },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -75,6 +114,12 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
           provide: IdempotencyService,
           useValue: { hashRequest: jest.fn().mockReturnValue('hash') },
         },
+        { provide: GlEngineService, useValue: { post: jest.fn().mockResolvedValue({ id: 'je-1' }) } },
+        {
+          provide: FiscalCalendarService,
+          useValue: { ensureCurrentCalendar: jest.fn().mockResolvedValue({}) },
+        },
+        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -262,7 +307,12 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
       cashIn: new Prisma.Decimal('15'),
     });
 
-    await service.cashIn({ amount: 5 }, userId, companyId, warehouseId);
+    await service.cashIn(
+      { amount: 5, counterpartAccountId: 'acc-6000' },
+      userId,
+      companyId,
+      warehouseId,
+    );
 
     expect(repo.update).toHaveBeenCalledWith(
       'shift-1',
@@ -287,7 +337,12 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
       cashOut: new Prisma.Decimal('8'),
     });
 
-    await service.cashOut({ amount: 5 }, userId, companyId, warehouseId);
+    await service.cashOut(
+      { amount: 5, counterpartAccountId: 'acc-6000' },
+      userId,
+      companyId,
+      warehouseId,
+    );
 
     expect(repo.update).toHaveBeenCalledWith(
       'shift-1',
@@ -305,7 +360,12 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
     );
 
     await expect(
-      service.cashIn({ amount: 5 }, userId, companyId, warehouseId),
+      service.cashIn(
+        { amount: 5, counterpartAccountId: 'acc-6000' },
+        userId,
+        companyId,
+        warehouseId,
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -313,7 +373,19 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
     repo.findOpenShift.mockResolvedValue(baseShift);
     await expect(
       service.cashIn({ amount: -5 }, userId, companyId, warehouseId),
-    ).rejects.toThrow('Amount must not be negative');
+    ).rejects.toThrow('Amount must be positive');
+  });
+
+  it('cashIn: rejects zero amounts (no zero-value JE)', async () => {
+    repo.findOpenShift.mockResolvedValue(baseShift);
+    await expect(
+      service.cashIn(
+        { amount: 0, counterpartAccountId: 'acc-6000' },
+        userId,
+        companyId,
+        warehouseId,
+      ),
+    ).rejects.toThrow('Amount must be positive');
   });
 
   // ── CURRENCY ────────────────────────────────
