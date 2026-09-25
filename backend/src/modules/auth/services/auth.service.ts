@@ -800,6 +800,22 @@ export class AuthService {
         isSystem: true,
         sortOrder: 11,
       },
+      {
+        // G15-07-C1: Retained Earnings — destination of the fiscal-year
+        // close (revenue/expense balances are transferred here). System
+        // account: it must not be deletable or re-typed through the API.
+        // Appended (not re-sorted) so existing companies' display order is
+        // unaffected; existing companies are provisioned by the G15-07-C1
+        // migration.
+        code: '3200',
+        name: 'Retained Earnings',
+        description:
+          'Accumulated profit and loss transferred at fiscal year close',
+        accountType: AccountType.EQUITY,
+        normalBalance: NormalBalance.CREDIT,
+        isSystem: true,
+        sortOrder: 12,
+      },
     ];
 
     for (const account of defaultAccounts) {

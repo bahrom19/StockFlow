@@ -25,6 +25,21 @@ const baseYear = {
   retainedEarningsAccountId: null,
 };
 
+// G15-07-C1: the retained earnings account must be a credit-normal EQUITY
+// account; the resolution mock therefore carries its full canonical shape.
+const retainedEarningsAccount = (over: Record<string, any> = {}) => ({
+  id: 're-3200',
+  companyId,
+  code: '3200',
+  name: 'Retained Earnings',
+  accountType: 'EQUITY',
+  normalBalance: 'CREDIT',
+  isActive: true,
+  isSystem: true,
+  deletedAt: null,
+  ...over,
+});
+
 describe('FiscalYearCloseService (G15-01)', () => {
   let service: FiscalYearCloseService;
   let mockTx: any;
@@ -71,7 +86,7 @@ describe('FiscalYearCloseService (G15-01)', () => {
 
   // 1. Positive P&L closes successfully with a POSTED closing journal.
   it('should close a profitable year: post journal, close periods and year', async () => {
-    mockTx.chartOfAccount.findFirst.mockResolvedValue({ id: 're-3200' });
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(retainedEarningsAccount());
     balances('1000.0000', '200.0000');
     mockTx.fiscalYear.update.mockResolvedValue({});
 
@@ -103,7 +118,7 @@ describe('FiscalYearCloseService (G15-01)', () => {
 
   // 2. Negative P&L closes with debit retained-earnings leg.
   it('should close a loss year with debit retained earnings', async () => {
-    mockTx.chartOfAccount.findFirst.mockResolvedValue({ id: 're-3200' });
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(retainedEarningsAccount());
     balances('200.0000', '1000.0000');
     mockTx.fiscalYear.update.mockResolvedValue({});
 
@@ -117,7 +132,7 @@ describe('FiscalYearCloseService (G15-01)', () => {
 
   // 3. Zero P&L closes with no journal.
   it('should close a zero-P&L year without a closing journal', async () => {
-    mockTx.chartOfAccount.findFirst.mockResolvedValue({ id: 're-3200' });
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(retainedEarningsAccount());
     balances('500.0000', '500.0000');
     mockTx.fiscalYear.update.mockResolvedValue({});
 
@@ -155,7 +170,7 @@ describe('FiscalYearCloseService (G15-01)', () => {
 
   // 7. Rollback: journal failure leaves year open and periods untouched.
   it('should roll back everything when the closing journal fails', async () => {
-    mockTx.chartOfAccount.findFirst.mockResolvedValue({ id: 're-3200' });
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(retainedEarningsAccount());
     balances('1000.0000', '200.0000');
     mockGlEngine.post.mockRejectedValue(new BadRequestException('posting failed'));
 
@@ -169,7 +184,7 @@ describe('FiscalYearCloseService (G15-01)', () => {
 
   // 8. Tenant isolation: everything is scoped to the caller's company.
   it('should scope fiscal year, periods and journal to the company', async () => {
-    mockTx.chartOfAccount.findFirst.mockResolvedValue({ id: 're-3200' });
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(retainedEarningsAccount());
     balances('1000.0000', '200.0000');
     mockTx.fiscalYear.update.mockResolvedValue({});
 
@@ -214,7 +229,7 @@ describe('FiscalYearCloseService CAS claim (G15-03-01)', () => {
         update: jest.fn().mockResolvedValue({}),
       },
       chartOfAccount: {
-        findFirst: jest.fn().mockResolvedValue({ id: 're-3200' }),
+        findFirst: jest.fn().mockResolvedValue(retainedEarningsAccount()),
         findMany: jest.fn().mockResolvedValue([
           { id: 'rev-1', accountType: 'REVENUE' },
           { id: 'exp-1', accountType: 'EXPENSE' },
@@ -320,6 +335,186 @@ describe('FiscalYearCloseService CAS claim (G15-03-01)', () => {
         where: expect.objectContaining({ id: 'fy-1', companyId }),
       }),
     );
+  });
+});
+
+/**
+ * G15-07-C1 — retained earnings account validation.
+ *
+ * The close resolves the retained earnings account either from
+ * FiscalYear.retainedEarningsAccountId (override) or by code 3200, and now
+ * validates it before use: company-scoped, active, non-deleted, EQUITY,
+ * CREDIT. isSystem is deliberately NOT required — a valid manually-created
+ * EQUITY/CREDIT account may serve the same role.
+ */
+describe('FiscalYearCloseService retained-earnings validation (G15-07-C1)', () => {
+  let service: FiscalYearCloseService;
+  let mockTx: any;
+  let mockPrisma: any;
+  let mockGlEngine: any;
+  let mockAuditLog: any;
+
+  beforeEach(() => {
+    mockTx = {
+      fiscalYear: {
+        findFirst: jest.fn().mockResolvedValue({ ...baseYear }),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      financialPeriod: {
+        findMany: jest.fn().mockResolvedValue([openPeriod(12)]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      chartOfAccount: { findFirst: jest.fn(), findMany: jest.fn() },
+      accountBalance: {
+        findMany: jest.fn().mockResolvedValue([
+          { accountId: 'rev-1', closingDebit: '0', closingCredit: '1000.0000' },
+          { accountId: 'exp-1', closingDebit: '200.0000', closingCredit: '0' },
+        ]),
+      },
+    };
+    mockPrisma = { $transaction: jest.fn((cb: (tx: any) => any) => cb(mockTx)) };
+    mockGlEngine = { post: jest.fn().mockResolvedValue({ id: 'je-1' }) };
+    mockAuditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    service = new FiscalYearCloseService(mockPrisma, mockGlEngine, mockAuditLog);
+    mockTx.chartOfAccount.findMany.mockResolvedValue([
+      { id: 'rev-1', accountType: 'REVENUE' },
+      { id: 'exp-1', accountType: 'EXPENSE' },
+    ]);
+  });
+
+  // 1. A valid code-3200 EQUITY/CREDIT account resolves and is posted to.
+  it('resolves a valid code-3200 EQUITY/CREDIT account, company-scoped', async () => {
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(
+      retainedEarningsAccount(),
+    );
+
+    await service.closeFiscalYear(companyId, 2026, userId);
+
+    expect(mockTx.chartOfAccount.findFirst).toHaveBeenCalledWith({
+      where: { companyId, code: '3200', isActive: true, deletedAt: null },
+    });
+    const postedLines = mockGlEngine.post.mock.calls[0][0].lines;
+    expect(postedLines.some((l: any) => l.accountId === 're-3200')).toBe(true);
+  });
+
+  // 2. Wrong accountType is rejected and nothing is posted.
+  it('rejects a 3200 account with the wrong accountType', async () => {
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(
+      retainedEarningsAccount({ accountType: 'ASSET' }),
+    );
+
+    await expect(
+      service.closeFiscalYear(companyId, 2026, userId),
+    ).rejects.toThrow(/EQUITY/);
+    expect(mockGlEngine.post).not.toHaveBeenCalled();
+    expect(mockTx.financialPeriod.update).not.toHaveBeenCalled();
+  });
+
+  // 3. Wrong normalBalance is rejected.
+  it('rejects a 3200 account with the wrong normalBalance', async () => {
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(
+      retainedEarningsAccount({ normalBalance: 'DEBIT' }),
+    );
+
+    await expect(
+      service.closeFiscalYear(companyId, 2026, userId),
+    ).rejects.toThrow(/CREDIT/);
+    expect(mockGlEngine.post).not.toHaveBeenCalled();
+  });
+
+  // 4. Inactive/deleted 3200 is invisible to the scoped lookup → rejected.
+  it('rejects when the 3200 account is inactive or soft-deleted', async () => {
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.closeFiscalYear(companyId, 2026, userId),
+    ).rejects.toThrow(/retained earnings/i);
+    expect(mockTx.chartOfAccount.findFirst).toHaveBeenCalledWith({
+      where: { companyId, code: '3200', isActive: true, deletedAt: null },
+    });
+    expect(mockGlEngine.post).not.toHaveBeenCalled();
+  });
+
+  // 5. A valid override is resolved scoped to the company and posted to.
+  it('validates and uses a retainedEarningsAccountId override', async () => {
+    mockTx.fiscalYear.findFirst.mockResolvedValue({
+      ...baseYear,
+      retainedEarningsAccountId: 're-custom',
+    });
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(
+      retainedEarningsAccount({
+        id: 're-custom',
+        code: '3900',
+        isSystem: false,
+      }),
+    );
+
+    await service.closeFiscalYear(companyId, 2026, userId);
+
+    expect(mockTx.chartOfAccount.findFirst).toHaveBeenCalledWith({
+      where: { id: 're-custom', companyId, isActive: true, deletedAt: null },
+    });
+    const postedLines = mockGlEngine.post.mock.calls[0][0].lines;
+    expect(postedLines.some((l: any) => l.accountId === 're-custom')).toBe(
+      true,
+    );
+  });
+
+  // 6. An override with the wrong account type is rejected.
+  it('rejects an override whose account is of the wrong type', async () => {
+    mockTx.fiscalYear.findFirst.mockResolvedValue({
+      ...baseYear,
+      retainedEarningsAccountId: 're-custom',
+    });
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(
+      retainedEarningsAccount({
+        id: 're-custom',
+        code: '3900',
+        accountType: 'LIABILITY',
+      }),
+    );
+
+    await expect(
+      service.closeFiscalYear(companyId, 2026, userId),
+    ).rejects.toThrow(/EQUITY/);
+    expect(mockGlEngine.post).not.toHaveBeenCalled();
+  });
+
+  // 7. An override whose account is inactive/deleted is rejected.
+  it('rejects an override whose account is inactive or soft-deleted', async () => {
+    mockTx.fiscalYear.findFirst.mockResolvedValue({
+      ...baseYear,
+      retainedEarningsAccountId: 're-gone',
+    });
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.closeFiscalYear(companyId, 2026, userId),
+    ).rejects.toThrow(BadRequestException);
+    expect(mockGlEngine.post).not.toHaveBeenCalled();
+  });
+
+  // 8. A cross-company override is rejected by the company-scoped lookup.
+  it('rejects a cross-company override', async () => {
+    mockTx.fiscalYear.findFirst.mockResolvedValue({
+      ...baseYear,
+      retainedEarningsAccountId: 're-other-company',
+    });
+    mockTx.chartOfAccount.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.closeFiscalYear(companyId, 2026, userId),
+    ).rejects.toThrow(/another company/i);
+    expect(mockTx.chartOfAccount.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 're-other-company',
+        companyId,
+        isActive: true,
+        deletedAt: null,
+      },
+    });
+    expect(mockGlEngine.post).not.toHaveBeenCalled();
   });
 });
 

@@ -226,6 +226,105 @@ describe('AuthService', () => {
         } as any),
       ).rejects.toThrow(ConflictException);
     });
+
+    // G15-07-C1: provisioning of the Retained Earnings system account.
+    it('should seed the Retained Earnings system account (3200) on registration', async () => {
+      const dto = {
+        email: 'coa@example.com',
+        password: 'Password123!',
+        firstName: 'John',
+        lastName: 'Doe',
+        companyName: 'CoACorp',
+      };
+
+      mockAuthRepo.findUserByEmail.mockResolvedValue(null);
+      mockAuthRepo.createCompany.mockResolvedValue({ id: 'comp-1' } as any);
+      mockAuthRepo.createUser.mockResolvedValue({ id: 'user-1' } as any);
+      mockAuthRepo.createCompanyMember.mockResolvedValue({ id: 'cm-1' } as any);
+      mockAuthRepo.createRefreshToken.mockResolvedValue({} as any);
+      mockJwtService.signAsync.mockResolvedValue('access-token');
+      mockConfigService.get.mockReturnValue('15m');
+
+      const chartOfAccount = { create: jest.fn().mockResolvedValue({}) };
+      const financialPeriod = {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'fp-1' }),
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) =>
+        cb({
+          chartOfAccount,
+          role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
+          permission: { findMany: jest.fn().mockResolvedValue([]) },
+          rolePermission: {
+            createMany: jest.fn().mockResolvedValue({ count: 0 }),
+          },
+          userRole: { create: jest.fn().mockResolvedValue({}) },
+          financialPeriod,
+        }),
+      );
+
+      await service.register(dto);
+
+      const seeded = chartOfAccount.create.mock.calls.map(
+        (call: any) => call[0].data,
+      );
+
+      // All accounts are created; the new 3200 is appended, not reordered.
+      expect(seeded.map((a: any) => a.code)).toEqual([
+        '1010',
+        '1020',
+        '1200',
+        '1300',
+        '2100',
+        '2110',
+        '4000',
+        '5000',
+        '5100',
+        '5200',
+        '3000',
+        '3200',
+      ]);
+      expect(seeded.map((a: any) => a.sortOrder)).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+      ]);
+
+      const retainedEarnings = seeded.find((a: any) => a.code === '3200');
+      expect(retainedEarnings).toEqual(
+        expect.objectContaining({
+          code: '3200',
+          name: 'Retained Earnings',
+          description:
+            'Accumulated profit and loss transferred at fiscal year close',
+          accountType: 'EQUITY',
+          normalBalance: 'CREDIT',
+          isSystem: true,
+          sortOrder: 12,
+          companyId: 'comp-1',
+          isActive: true,
+          level: 0,
+        }),
+      );
+
+      // The pre-existing accounts keep their canonical shape (spot-check).
+      expect(seeded.find((a: any) => a.code === '3000')).toEqual(
+        expect.objectContaining({
+          name: 'Opening Balance Equity',
+          accountType: 'EQUITY',
+          normalBalance: 'CREDIT',
+          isSystem: true,
+          sortOrder: 11,
+        }),
+      );
+      expect(seeded.find((a: any) => a.code === '1010')).toEqual(
+        expect.objectContaining({
+          accountType: 'ASSET',
+          normalBalance: 'DEBIT',
+          isCashOrBank: true,
+          isSystem: true,
+          sortOrder: 1,
+        }),
+      );
+    });
   });
 
   // ─────────────────────────────────────────────

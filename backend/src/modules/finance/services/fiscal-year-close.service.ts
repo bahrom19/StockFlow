@@ -50,6 +50,31 @@ export class FiscalYearCloseService {
   ) {}
 
   /**
+   * G15-07-C1: retained earnings must be a credit-normal EQUITY account.
+   * Validates semantics only — never repairs the account. isSystem is
+   * deliberately NOT required: a valid manually-created EQUITY/CREDIT
+   * account may serve the same role.
+   */
+  private assertValidRetainedEarningsAccount(account: {
+    code: string;
+    accountType: string;
+    normalBalance: string;
+  }): void {
+    if (account.accountType !== 'EQUITY') {
+      throw new BadRequestException(
+        `Retained earnings account "${account.code}" must be of type EQUITY ` +
+          `(found ${account.accountType}).`,
+      );
+    }
+    if (account.normalBalance !== 'CREDIT') {
+      throw new BadRequestException(
+        `Retained earnings account "${account.code}" must have a CREDIT ` +
+          `normal balance (found ${account.normalBalance}).`,
+      );
+    }
+  }
+
+  /**
    * Close a fiscal year.
    * Transfers all revenue and expense balances to retained earnings.
    */
@@ -129,8 +154,30 @@ export class FiscalYearCloseService {
       };
 
       // 4. Find retained earnings account
-      let retainedEarningsAccountId = fiscalYear.retainedEarningsAccountId;
-      if (!retainedEarningsAccountId) {
+      // G15-07-C1: resolve and semantically validate the account before use.
+      // Resolution is always company-scoped and filters inactive/deleted
+      // rows; a cross-company or unusable account fails fast and is never
+      // silently repaired.
+      let retainedEarningsAccountId: string;
+      if (fiscalYear.retainedEarningsAccountId) {
+        const override = await tx.chartOfAccount.findFirst({
+          where: {
+            id: fiscalYear.retainedEarningsAccountId,
+            companyId,
+            isActive: true,
+            deletedAt: null,
+          },
+        });
+        if (!override) {
+          throw new BadRequestException(
+            `The configured retained earnings account ` +
+              `(${fiscalYear.retainedEarningsAccountId}) was not found, is ` +
+              `inactive or belongs to another company.`,
+          );
+        }
+        this.assertValidRetainedEarningsAccount(override);
+        retainedEarningsAccountId = override.id;
+      } else {
         const reAccount = await tx.chartOfAccount.findFirst({
           where: {
             companyId,
@@ -144,6 +191,7 @@ export class FiscalYearCloseService {
             `No retained earnings account found. Please create account with code "${this.RETAINED_EARNINGS_CODE}" first.`,
           );
         }
+        this.assertValidRetainedEarningsAccount(reAccount);
         retainedEarningsAccountId = reAccount.id;
       }
 

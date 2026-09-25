@@ -46,7 +46,18 @@ export class CreateChartOfAccountDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiPropertyOptional()
+  /**
+   * Server-controlled flag. Kept in the DTO only because the API currently
+   * exposes it and UpdateChartOfAccountDto derives from this class; the
+   * service never persists a client-supplied value (create forces false,
+   * update rejects any change). Clients cannot create or convert system
+   * accounts.
+   */
+  @ApiPropertyOptional({
+    description:
+      'Server-controlled. Read-only: clients cannot set this to true on create or change it on update.',
+    readOnly: true,
+  })
   @IsOptional()
   @IsBoolean()
   isSystem?: boolean;

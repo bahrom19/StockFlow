@@ -26,6 +26,15 @@ export class ChartOfAccountsService {
     dto: CreateChartOfAccountDto,
     currentUser: JwtPayload,
   ): Promise<ChartOfAccountEntity> {
+    // G15-07-C1: isSystem is server-controlled. Clients must not be able to
+    // create a system account; the persisted value is always forced to false
+    // regardless of what the client sent (false, undefined or true-rejected).
+    if (dto.isSystem === true) {
+      throw new BadRequestException(
+        'System accounts cannot be created through the API',
+      );
+    }
+
     const data: Prisma.ChartOfAccountCreateInput = {
       code: dto.code,
       name: dto.name,
@@ -33,7 +42,7 @@ export class ChartOfAccountsService {
       accountType: dto.accountType as AccountType,
       normalBalance: dto.normalBalance as NormalBalance,
       isActive: dto.isActive ?? true,
-      isSystem: dto.isSystem ?? false,
+      isSystem: false,
       isCashOrBank: dto.isCashOrBank ?? false,
       parent: dto.parentId ? { connect: { id: dto.parentId } } : undefined,
       level: dto.level ?? 0,
@@ -120,7 +129,14 @@ export class ChartOfAccountsService {
     if (dto.normalBalance !== undefined)
       data.normalBalance = dto.normalBalance as NormalBalance;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
-    if (dto.isSystem !== undefined) data.isSystem = dto.isSystem;
+    // G15-07-C1: isSystem is server-controlled. A client may echo the current
+    // value (accepted as a no-op) but must never change it, and a
+    // client-supplied value is never written.
+    if (dto.isSystem !== undefined && dto.isSystem !== before.isSystem) {
+      throw new BadRequestException(
+        'The system-account flag cannot be changed through the API',
+      );
+    }
     if (dto.isCashOrBank !== undefined) data.isCashOrBank = dto.isCashOrBank;
     if (dto.parentId !== undefined) {
       data.parent = dto.parentId
@@ -161,6 +177,14 @@ export class ChartOfAccountsService {
   ): Promise<ChartOfAccountEntity> {
     const before = await this.repository.findById(id, currentUser.companyId);
     if (!before) throw new NotFoundException('Chart of account not found');
+
+    // G15-07-C1: system accounts are protected from deletion. Soft-deleting a
+    // system account would be unrecoverable: the scoped lookups filter
+    // deletedAt, so the row becomes invisible to the API while the plain
+    // unique (companyId, code) constraint still blocks recreating the code.
+    if (before.isSystem) {
+      throw new BadRequestException('System accounts cannot be deleted');
+    }
 
     const [deleted] = await this.prismaService.$transaction(async (tx) => {
       const result = await this.repository.softDelete(
