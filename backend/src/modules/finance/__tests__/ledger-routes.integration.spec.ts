@@ -10,8 +10,8 @@ import { LedgerQueryService } from '../services/ledger-query.service';
  * `GET /finance/ledger/trial-balance` resolve to `@Get(':accountId')` (binding
  * accountId="trial-balance") and throw a Prisma UUID error.
  *
- * Literal routes (`balances/account`, `trial-balance`) MUST be declared before
- * the parameterized `:accountId` route.
+ * Literal routes (`balances/account`, `trial-balance`, `balance-sheet`) MUST be
+ * declared before the parameterized `:accountId` route.
  */
 
 /** Pass-through guard that also injects a fake authenticated user. */
@@ -35,6 +35,7 @@ describe('Ledger routes — literal vs param ordering (regression)', () => {
     getLedger: jest.fn(),
     getAccountBalance: jest.fn(),
     getTrialBalance: jest.fn(),
+    getBalanceSheet: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -95,6 +96,29 @@ describe('Ledger routes — literal vs param ordering (regression)', () => {
 
     expect(res.status).toBe(200);
     expect(ledgerQuery.getAccountBalance).toHaveBeenCalled();
+    expect(ledgerQuery.getLedger).not.toHaveBeenCalled();
+  });
+
+  it('GET /finance/ledger/balance-sheet resolves to getBalanceSheet (NOT :accountId)', async () => {
+    ledgerQuery.getBalanceSheet.mockResolvedValue({
+      asOfDate: '2026-09-25T00:00:00.000Z',
+      assets: { rows: [], total: '0.0000' },
+      liabilities: { rows: [], total: '0.0000' },
+      equity: { rows: [], total: '0.0000' },
+      currentEarnings: '0.0000',
+      totalLiabilitiesAndEquity: '0.0000',
+      balanced: true,
+    });
+    ledgerQuery.getLedger.mockRejectedValue(
+      new Error('getLedger must NOT handle /finance/ledger/balance-sheet'),
+    );
+
+    const res = await fetch(`${baseUrl}/finance/ledger/balance-sheet`);
+
+    expect(res.status).toBe(200);
+    expect(ledgerQuery.getBalanceSheet).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: 'comp-1' }),
+    );
     expect(ledgerQuery.getLedger).not.toHaveBeenCalled();
   });
 

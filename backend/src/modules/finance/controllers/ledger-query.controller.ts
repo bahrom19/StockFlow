@@ -20,11 +20,12 @@ export class LedgerQueryController {
   constructor(private readonly ledgerQuery: LedgerQueryService) {}
 
   /**
-   * NOTE: literal routes (`balances/account`, `trial-balance`) MUST be declared
-   * BEFORE the parameterized `:accountId` route. NestJS matches routes in
-   * declaration order — otherwise `GET /finance/ledger/trial-balance` binds
-   * accountId="trial-balance" and journalLine.findMany() throws a Prisma UUID
-   * error ("Inconsistent column data").
+   * NOTE: literal routes (`balances/account`, `trial-balance`, `balance-sheet`)
+   * MUST be declared BEFORE the parameterized `:accountId` route. NestJS
+   * matches routes in declaration order — otherwise
+   * `GET /finance/ledger/trial-balance` binds accountId="trial-balance" and
+   * journalLine.findMany() throws a Prisma UUID error
+   * ("Inconsistent column data").
    */
 
   @Get('balances/account')
@@ -74,6 +75,25 @@ export class LedgerQueryController {
       companyId: user.companyId,
       asOfDate: asOfDate ? new Date(asOfDate) : undefined,
       accountType,
+    });
+  }
+
+  @Get('balance-sheet')
+  @RequirePermission('finance:read')
+  @ApiOperation({ summary: 'Generate GL-based balance sheet' })
+  @ApiQuery({
+    name: 'asOfDate',
+    required: false,
+    description: 'Date to calculate balance as of',
+  })
+  @ApiResponse({ status: 200, description: 'Balance sheet sections' })
+  async getBalanceSheet(
+    @Query('asOfDate') asOfDate: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.ledgerQuery.getBalanceSheet({
+      companyId: user.companyId,
+      asOfDate: asOfDate ? new Date(asOfDate) : undefined,
     });
   }
 

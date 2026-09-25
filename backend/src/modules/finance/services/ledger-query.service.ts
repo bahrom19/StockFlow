@@ -40,6 +40,30 @@ export interface TrialBalanceRow {
   credit: string;
 }
 
+export interface BalanceSheetRow {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  accountType: 'ASSET' | 'LIABILITY' | 'EQUITY';
+  level: number;
+  balance: string;
+}
+
+export interface BalanceSheetSection {
+  rows: BalanceSheetRow[];
+  total: string;
+}
+
+export interface BalanceSheetResult {
+  asOfDate: string;
+  assets: BalanceSheetSection;
+  liabilities: BalanceSheetSection;
+  equity: BalanceSheetSection;
+  currentEarnings: string;
+  totalLiabilitiesAndEquity: string;
+  balanced: boolean;
+}
+
 /**
  * General Ledger query service.
  *
@@ -281,6 +305,139 @@ export class LedgerQueryService {
       rows,
       totalDebit: totalDebit.toFixed(4),
       totalCredit: totalCredit.toFixed(4),
+    };
+  }
+
+  /**
+   * G15-07-C2: GL-backed Balance Sheet as of a specific date.
+   *
+   * Sources POSTED JournalLines cumulatively up to asOfDate (same canonical
+   * source as the Trial Balance) — never AccountBalance snapshots and never
+   * operational tables.
+   *
+   * Permanent accounts (ASSET/LIABILITY/EQUITY) carry their cumulative
+   * balance. The retained earnings account (e.g. 3200) is NOT special-cased:
+   * its posted closing journals surface naturally inside equity.
+   * currentEarnings is cumulative REVENUE (credit − debit) minus EXPENSE
+   * (debit − credit); because fiscal-year close zeroes those accounts, this
+   * equals earnings accumulated after the latest close (or lifetime earnings
+   * when no close has occurred).
+   */
+  async getBalanceSheet(params: {
+    companyId: string;
+    asOfDate?: Date;
+  }): Promise<BalanceSheetResult> {
+    const { companyId, asOfDate } = params;
+    const effectiveAsOf = asOfDate ?? new Date();
+
+    const accounts = await this.ledgerRepository.findChartOfAccounts({
+      companyId,
+      isActive: true,
+      deletedAt: null,
+    });
+
+    const zeroSection = (): BalanceSheetSection => ({
+      rows: [],
+      total: '0.0000',
+    });
+
+    if (accounts.length === 0) {
+      return {
+        asOfDate: effectiveAsOf.toISOString(),
+        assets: zeroSection(),
+        liabilities: zeroSection(),
+        equity: zeroSection(),
+        currentEarnings: '0.0000',
+        totalLiabilitiesAndEquity: '0.0000',
+        balanced: true,
+      };
+    }
+
+    // Single aggregation for the whole statement — section split and
+    // current-earnings derivation both reuse this result.
+    const aggregated = await this.ledgerRepository.aggregatedJournalLines(
+      companyId,
+      {
+        ...(asOfDate ? { asOfDate } : {}),
+        onlyPosted: true,
+      },
+    );
+
+    const balanceMap = new Map<string, { debit: Decimal; credit: Decimal }>();
+    for (const agg of aggregated) {
+      balanceMap.set(agg.accountId, {
+        debit: agg.totalDebit,
+        credit: agg.totalCredit,
+      });
+    }
+
+    const assetRows: BalanceSheetRow[] = [];
+    const liabilityRows: BalanceSheetRow[] = [];
+    const equityRows: BalanceSheetRow[] = [];
+    let assetsTotal = new Decimal(0);
+    let liabilitiesTotal = new Decimal(0);
+    let equityTotal = new Decimal(0);
+    let currentEarnings = new Decimal(0);
+
+    for (const account of accounts) {
+      const bal = balanceMap.get(account.id);
+      const debit = bal?.debit ?? new Decimal(0);
+      const credit = bal?.credit ?? new Decimal(0);
+      const type = account.accountType as string;
+
+      if (type === 'REVENUE') {
+        currentEarnings = currentEarnings.add(credit.sub(debit));
+        continue;
+      }
+      if (type === 'EXPENSE') {
+        currentEarnings = currentEarnings.sub(debit.sub(credit));
+        continue;
+      }
+
+      // Signed balance on the account's normal side; contra positions stay
+      // inline and are never moved to another section.
+      let balance: Decimal;
+      if (type === 'ASSET') {
+        balance = debit.sub(credit);
+      } else if (type === 'LIABILITY' || type === 'EQUITY') {
+        balance = credit.sub(debit);
+      } else {
+        continue;
+      }
+
+      const row: BalanceSheetRow = {
+        accountId: account.id,
+        accountCode: account.code,
+        accountName: account.name,
+        accountType: type as 'ASSET' | 'LIABILITY' | 'EQUITY',
+        level: account.level,
+        balance: balance.toFixed(4),
+      };
+
+      if (type === 'ASSET') {
+        assetRows.push(row);
+        assetsTotal = assetsTotal.add(balance);
+      } else if (type === 'LIABILITY') {
+        liabilityRows.push(row);
+        liabilitiesTotal = liabilitiesTotal.add(balance);
+      } else {
+        equityRows.push(row);
+        equityTotal = equityTotal.add(balance);
+      }
+    }
+
+    const totalLiabilitiesAndEquity = liabilitiesTotal
+      .add(equityTotal)
+      .add(currentEarnings);
+
+    return {
+      asOfDate: effectiveAsOf.toISOString(),
+      assets: { rows: assetRows, total: assetsTotal.toFixed(4) },
+      liabilities: { rows: liabilityRows, total: liabilitiesTotal.toFixed(4) },
+      equity: { rows: equityRows, total: equityTotal.toFixed(4) },
+      currentEarnings: currentEarnings.toFixed(4),
+      totalLiabilitiesAndEquity: totalLiabilitiesAndEquity.toFixed(4),
+      balanced: assetsTotal.equals(totalLiabilitiesAndEquity),
     };
   }
 
