@@ -199,4 +199,21 @@ export class FinancialTransactionsRepository {
       data: { journalEntryId, rowVersion: { increment: 1 } },
     });
   }
+
+  /**
+   * G15-07-C3-C — bulk type lookup for cash-flow classification of
+   * FINANCIAL_TRANSACTION journal entries. Single bounded query (no N+1);
+   * company-scoped like every other repository read.
+   */
+  async findTypesByIds(
+    companyId: string,
+    ids: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ id: string; type: string }[]> {
+    if (ids.length === 0) return [];
+    return this.prisma(tx).financialTransaction.findMany({
+      where: { companyId, id: { in: ids } },
+      select: { id: true, type: true },
+    });
+  }
 }

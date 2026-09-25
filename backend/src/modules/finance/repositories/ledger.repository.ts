@@ -155,6 +155,124 @@ export class LedgerRepository {
   }
 
   /**
+   * G15-07-C3-C — cash-flow aggregation primitive.
+   *
+   * Extends the aggregatedJournalLines pattern with cash-flow filters:
+   * selected account ids, a single referenceType, and an explicit journal
+   * entry id set. Grouping stays per accountId (database-side sums, no
+   * hydration). The existing aggregatedJournalLines is intentionally left
+   * untouched — trial balance and P&L keep their proven behavior.
+   */
+  async aggregatedCashFlowLines(
+    companyId: string,
+    opts: {
+      asOfDate?: Date;
+      dateFrom?: Date;
+      dateTo?: Date;
+      accountIds?: string[];
+      referenceType?: string;
+      journalEntryIds?: string[];
+      onlyPosted?: boolean;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<
+    {
+      accountId: string;
+      totalDebit: Decimal;
+      totalCredit: Decimal;
+    }[]
+  > {
+    const entryWhere: Record<string, any> = { companyId };
+    if (opts.onlyPosted !== false) entryWhere.status = 'POSTED';
+    if (opts.asOfDate) entryWhere.entryDate = { lte: opts.asOfDate };
+    if (opts.dateFrom || opts.dateTo) {
+      const dateFilter: Record<string, Date> = {};
+      if (opts.dateFrom) dateFilter.gte = opts.dateFrom;
+      if (opts.dateTo) dateFilter.lte = opts.dateTo;
+      entryWhere.entryDate = dateFilter;
+    }
+    if (opts.referenceType) {
+      entryWhere.referenceType = opts.referenceType;
+    }
+
+    const lineWhere: Record<string, any> = { journalEntry: entryWhere };
+    if (opts.accountIds) {
+      lineWhere.accountId = { in: opts.accountIds };
+    }
+    if (opts.journalEntryIds) {
+      lineWhere.journalEntryId = { in: opts.journalEntryIds };
+    }
+
+    const grouped = await this.prisma(tx).journalLine.groupBy({
+      by: ['accountId'],
+      where: lineWhere,
+      _sum: { debit: true, credit: true },
+    });
+
+    return grouped.map((g) => ({
+      accountId: g.accountId,
+      totalDebit: new Decimal(g._sum.debit?.toString() ?? '0'),
+      totalCredit: new Decimal(g._sum.credit?.toString() ?? '0'),
+    }));
+  }
+
+  /**
+   * G15-07-C3-C — list journal entries touching selected accounts in a
+   * date range, with their classification references. Bounded bulk lookup
+   * (one query for the whole range); the service partitions ids in memory
+   * and aggregates per partition — no per-JE queries, no N+1.
+   */
+  async findCashJournalEntries(
+    companyId: string,
+    opts: {
+      accountIds: string[];
+      dateFrom: Date;
+      dateTo: Date;
+      onlyPosted?: boolean;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<
+    {
+      id: string;
+      referenceType: string | null;
+      referenceId: string | null;
+    }[]
+  > {
+    return this.prisma(tx).journalEntry.findMany({
+      where: {
+        companyId,
+        status: opts.onlyPosted !== false ? 'POSTED' : undefined,
+        entryDate: { gte: opts.dateFrom, lte: opts.dateTo },
+        lines: { some: { accountId: { in: opts.accountIds } } },
+      },
+      select: { id: true, referenceType: true, referenceId: true },
+      orderBy: { entryDate: 'asc' },
+    });
+  }
+
+  /**
+   * G15-07-C3-C — resolve reference attributes for a bounded id set
+   * (reversal inheritance: a REVERSAL entry points at its original JE).
+   */
+  async findJournalEntriesByIds(
+    companyId: string,
+    ids: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<
+    {
+      id: string;
+      referenceType: string | null;
+      referenceId: string | null;
+    }[]
+  > {
+    if (ids.length === 0) return [];
+    return this.prisma(tx).journalEntry.findMany({
+      where: { companyId, id: { in: ids } },
+      select: { id: true, referenceType: true, referenceId: true },
+    });
+  }
+
+  /**
    * Find a financial period by company and date range.
    */
   async findFinancialPeriodByDate(

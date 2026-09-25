@@ -12,16 +12,20 @@ import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { RequirePermission } from '../../rbac/decorators/require-permission.decorator';
 import { RolesGuard } from '../../rbac/guards/roles.guard';
 import { LedgerQueryService } from '../services/ledger-query.service';
+import { CashFlowService } from '../services/cash-flow.service';
 
 @ApiTags('finance / ledger')
 @Controller('finance/ledger')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LedgerQueryController {
-  constructor(private readonly ledgerQuery: LedgerQueryService) {}
+  constructor(
+    private readonly ledgerQuery: LedgerQueryService,
+    private readonly cashFlow: CashFlowService,
+  ) {}
 
   /**
-   * NOTE: literal routes (`balances/account`, `trial-balance`, `balance-sheet`)
-   * MUST be declared BEFORE the parameterized `:accountId` route. NestJS
+   * NOTE: literal routes (`balances/account`, `trial-balance`, `balance-sheet`,
+   * `cash-flow`) MUST be declared BEFORE the parameterized `:accountId` route. NestJS
    * matches routes in declaration order — otherwise
    * `GET /finance/ledger/trial-balance` binds accountId="trial-balance" and
    * journalLine.findMany() throws a Prisma UUID error
@@ -94,6 +98,32 @@ export class LedgerQueryController {
     return this.ledgerQuery.getBalanceSheet({
       companyId: user.companyId,
       asOfDate: asOfDate ? new Date(asOfDate) : undefined,
+    });
+  }
+
+  @Get('cash-flow')
+  @RequirePermission('finance:read')
+  @ApiOperation({ summary: 'Generate GL-based cash flow statement' })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: true,
+    description: 'Inclusive start calendar date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: true,
+    description: 'Inclusive end calendar date (YYYY-MM-DD)',
+  })
+  @ApiResponse({ status: 200, description: 'Cash flow sections' })
+  async getCashFlow(
+    @Query('dateFrom') dateFrom: string | undefined,
+    @Query('dateTo') dateTo: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.cashFlow.getCashFlow({
+      companyId: user.companyId,
+      dateFrom: dateFrom ? new Date(dateFrom) : undefined,
+      dateTo: dateTo ? new Date(dateTo) : undefined,
     });
   }
 

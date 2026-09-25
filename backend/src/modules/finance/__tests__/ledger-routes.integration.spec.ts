@@ -4,14 +4,15 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../rbac/guards/roles.guard';
 import { LedgerQueryController } from '../controllers/ledger-query.controller';
 import { LedgerQueryService } from '../services/ledger-query.service';
+import { CashFlowService } from '../services/cash-flow.service';
 
 /**
  * Regression tests for the route-ordering bug that made
  * `GET /finance/ledger/trial-balance` resolve to `@Get(':accountId')` (binding
  * accountId="trial-balance") and throw a Prisma UUID error.
  *
- * Literal routes (`balances/account`, `trial-balance`, `balance-sheet`) MUST be
- * declared before the parameterized `:accountId` route.
+ * Literal routes (`balances/account`, `trial-balance`, `balance-sheet`,
+ * `cash-flow`) MUST be declared before the parameterized `:accountId` route.
  */
 
 /** Pass-through guard that also injects a fake authenticated user. */
@@ -38,6 +39,10 @@ describe('Ledger routes — literal vs param ordering (regression)', () => {
     getBalanceSheet: jest.fn(),
   };
 
+  const cashFlow = {
+    getCashFlow: jest.fn(),
+  };
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [LedgerQueryController],
@@ -45,6 +50,10 @@ describe('Ledger routes — literal vs param ordering (regression)', () => {
         {
           provide: LedgerQueryService,
           useValue: ledgerQuery as unknown as LedgerQueryService,
+        },
+        {
+          provide: CashFlowService,
+          useValue: cashFlow as unknown as CashFlowService,
         },
       ],
     })
@@ -117,6 +126,27 @@ describe('Ledger routes — literal vs param ordering (regression)', () => {
 
     expect(res.status).toBe(200);
     expect(ledgerQuery.getBalanceSheet).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: 'comp-1' }),
+    );
+    expect(ledgerQuery.getLedger).not.toHaveBeenCalled();
+  });
+
+  it('GET /finance/ledger/cash-flow resolves to getCashFlow (NOT :accountId)', async () => {
+    cashFlow.getCashFlow.mockResolvedValue({
+      dateFrom: '2026-09-01T00:00:00.000Z',
+      dateTo: '2026-09-30T23:59:59.999Z',
+      reconciled: true,
+    });
+    ledgerQuery.getLedger.mockRejectedValue(
+      new Error('getLedger must NOT handle /finance/ledger/cash-flow'),
+    );
+
+    const res = await fetch(
+      `${baseUrl}/finance/ledger/cash-flow?dateFrom=2026-09-01&dateTo=2026-09-30`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(cashFlow.getCashFlow).toHaveBeenCalledWith(
       expect.objectContaining({ companyId: 'comp-1' }),
     );
     expect(ledgerQuery.getLedger).not.toHaveBeenCalled();

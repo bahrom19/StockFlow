@@ -19,6 +19,7 @@ import { FinancialTransactionsService } from './services/financial-transactions.
 import { JournalEntriesService } from './services/journal-entries.service';
 import { GlEngineService } from './services/gl-engine.service';
 import { LedgerQueryService } from './services/ledger-query.service';
+import { CashFlowService } from './services/cash-flow.service';
 import { PostingValidationService } from './services/posting-validation.service';
 import { FiscalYearCloseService } from './services/fiscal-year-close.service';
 import { FiscalCalendarService } from './services/fiscal-calendar.service';
@@ -58,6 +59,7 @@ import { SalePartiallyRefundedEventHandler } from './events/sale-partially-refun
     // GL Engine services
     GlEngineService,
     LedgerQueryService,
+    CashFlowService,
     PostingValidationService,
     FiscalYearCloseService,
     FiscalCalendarService,
@@ -84,6 +86,7 @@ import { SalePartiallyRefundedEventHandler } from './events/sale-partially-refun
     FinanceIntegrationService,
     GlEngineService,
     LedgerQueryService,
+    CashFlowService,
     PostingValidationService,
     FiscalYearCloseService,
     FiscalCalendarService,
