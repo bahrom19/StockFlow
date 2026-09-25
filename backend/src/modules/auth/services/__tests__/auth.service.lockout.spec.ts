@@ -1,13 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { FinancialPeriodStatus, UserStatus } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
-import { UserStatus } from '@prisma/client';
 import { AuthService } from '../auth.service';
 import { AuthRepository } from '../../repositories/auth.repository';
 import { RolesRepository } from '../../../rbac/repositories/roles.repository';
 import { LoginDto } from '../../dto/login.dto';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { EmailService } from '../email.service';
+import { FiscalCalendarService } from '../../../finance/services/fiscal-calendar.service';
 
 const mockBcryptCompare = jest.fn();
 
@@ -106,6 +107,16 @@ describe('AuthService — Account Lockout', () => {
         {
           provide: EmailService,
           useValue: { sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: FiscalCalendarService,
+          useValue: {
+            ensureCurrentCalendar: jest.fn().mockResolvedValue({
+              fiscalYear: { id: 'fy-1', year: 2026 },
+              financialPeriod: { id: 'fp-1', name: '2026-09', status: FinancialPeriodStatus.OPEN },
+              isPostable: true,
+            }),
+          },
         },
       ],
     }).compile();

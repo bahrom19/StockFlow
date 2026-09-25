@@ -1,3 +1,4 @@
+import { FinancialPeriodStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { FinanceIntegrationService } from '../services/finance-integration.service';
 import {
@@ -22,7 +23,7 @@ import {
  */
 describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO COGS', () => {
   let service: FinanceIntegrationService;
-  let periods: { findCurrent: jest.Mock };
+  let calendarService: { ensureCurrentCalendar: jest.Mock };
   let gl: { post: jest.Mock };
   let tx: {
     chartOfAccount: { findMany: jest.Mock };
@@ -90,7 +91,13 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
   };
 
   beforeEach(() => {
-    periods = { findCurrent: jest.fn().mockResolvedValue({ id: 'fp-1' }) };
+    calendarService = {
+      ensureCurrentCalendar: jest.fn().mockResolvedValue({
+        fiscalYear: { id: 'fy-1', year: 2026 },
+        financialPeriod: { id: 'fp-1', name: '2026-09', status: FinancialPeriodStatus.OPEN },
+        isPostable: true,
+      }),
+    };
     gl = {
       post: jest.fn().mockResolvedValue({
         id: 'je-1',
@@ -107,7 +114,7 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
     warnSpy = jest.fn();
     errorSpy = jest.fn();
     service = new FinanceIntegrationService(
-      periods as never,
+      calendarService as never,
       gl as never,
     );
     (service as unknown as { logger: unknown }).logger = {
@@ -331,7 +338,7 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
  */
 describe('FinanceIntegrationService.onSaleRefunded — G9-F3 FIFO COGS reversal', () => {
   let service: FinanceIntegrationService;
-  let periods: { findCurrent: jest.Mock };
+  let calendarService: { ensureCurrentCalendar: jest.Mock };
   let gl: { post: jest.Mock };
   let tx: {
     chartOfAccount: { findMany: jest.Mock };
@@ -388,7 +395,13 @@ describe('FinanceIntegrationService.onSaleRefunded — G9-F3 FIFO COGS reversal'
   };
 
   beforeEach(() => {
-    periods = { findCurrent: jest.fn().mockResolvedValue({ id: 'fp-1' }) };
+    calendarService = {
+      ensureCurrentCalendar: jest.fn().mockResolvedValue({
+        fiscalYear: { id: 'fy-1', year: 2026 },
+        financialPeriod: { id: 'fp-1', name: '2026-09', status: FinancialPeriodStatus.OPEN },
+        isPostable: true,
+      }),
+    };
     gl = {
       post: jest.fn().mockResolvedValue({ id: 'je-1', entryNumber: 1 }),
     };
@@ -399,7 +412,7 @@ describe('FinanceIntegrationService.onSaleRefunded — G9-F3 FIFO COGS reversal'
     warnSpy = jest.fn();
     errorSpy = jest.fn();
     service = new FinanceIntegrationService(
-      periods as never,
+      calendarService as never,
       gl as never,
     );
     (service as unknown as { logger: unknown }).logger = {

@@ -21,6 +21,7 @@ import { GlEngineService } from './services/gl-engine.service';
 import { LedgerQueryService } from './services/ledger-query.service';
 import { PostingValidationService } from './services/posting-validation.service';
 import { FiscalYearCloseService } from './services/fiscal-year-close.service';
+import { FiscalCalendarService } from './services/fiscal-calendar.service';
 import { ChartOfAccountsRepository } from './repositories/chart-of-accounts.repository';
 import { BankAccountsRepository } from './repositories/bank-accounts.repository';
 import { CashAccountsRepository } from './repositories/cash-accounts.repository';
@@ -59,6 +60,7 @@ import { SalePartiallyRefundedEventHandler } from './events/sale-partially-refun
     LedgerQueryService,
     PostingValidationService,
     FiscalYearCloseService,
+    FiscalCalendarService,
     // Repositories
     ChartOfAccountsRepository,
     BankAccountsRepository,
@@ -84,6 +86,7 @@ import { SalePartiallyRefundedEventHandler } from './events/sale-partially-refun
     LedgerQueryService,
     PostingValidationService,
     FiscalYearCloseService,
+    FiscalCalendarService,
   ],
 })
 export class FinanceModule implements OnModuleInit {

@@ -10,7 +10,6 @@ import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'crypto';
 import {
   AccountType,
-  FinancialPeriodStatus,
   NormalBalance,
   Prisma,
   UserStatus,
@@ -26,6 +25,7 @@ import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { AuthRepository } from '../repositories/auth.repository';
 import { RolesRepository } from '../../rbac/repositories/roles.repository';
 import { EmailService } from './email.service';
+import { FiscalCalendarService } from '../../finance/services/fiscal-calendar.service';
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const MAX_FAILED_ATTEMPTS_DEFAULT = 5;
@@ -47,6 +47,7 @@ export class AuthService {
     private readonly prismaService: PrismaService,
     private readonly rolesRepository: RolesRepository,
     private readonly emailService: EmailService,
+    private readonly calendarService: FiscalCalendarService,
   ) {
     this.maxFailedAttempts =
       this.configService.get<number>('auth.maxFailedAttempts') ??
@@ -634,46 +635,15 @@ export class AuthService {
    * Create the first OPEN financial period for a new company covering the
    * current calendar month. Runs inside the register transaction.
    *
-   * Idempotent: if a period for the current year/month already exists
-   * (e.g. retried registration or imported company), it is left untouched.
-   * Without an OPEN period, completing a sale throws
-   * "No open financial period for company ..." (finance-integration.service).
+   * Delegates to FiscalCalendarService.ensureCurrentCalendar() for the
+   * canonical provisioning path — creates both FiscalYear and FinancialPeriod
+   * atomically using PostgreSQL unique constraints.
    */
   private async seedFinancialPeriod(
     companyId: string,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const now = new Date();
-    // L1-a: accounting calendar identity is UTC (see the timezone design
-    // decision). Server-local getFullYear/getMonth could disagree with the
-    // Date.UTC boundaries below and select a different accounting month.
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth() + 1;
-
-    const existing = await tx.financialPeriod.findFirst({
-      where: { companyId, year, month },
-      select: { id: true },
-    });
-    if (existing) {
-      return;
-    }
-
-    const startDate = new Date(Date.UTC(year, month - 1, 1));
-    const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
-
-    await tx.financialPeriod.create({
-      data: {
-        companyId,
-        name: `${year}-${String(month).padStart(2, '0')}`,
-        year,
-        month,
-        startDate,
-        endDate,
-        status: FinancialPeriodStatus.OPEN,
-        openedBy: null,
-        notes: 'Auto-created on company registration',
-      },
-    });
+    await this.calendarService.ensureCurrentCalendar(companyId, tx);
   }
 
   /**

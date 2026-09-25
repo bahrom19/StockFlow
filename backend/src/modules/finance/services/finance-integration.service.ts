@@ -10,8 +10,8 @@ import {
   SalePartiallyRefundedEventPayload,
   SaleRefundedEventPayload,
 } from '../../sales/interfaces/sale-event.interface';
-import { FinancialPeriodsRepository } from '../repositories/financial-periods.repository';
 import { GlEngineService, PostJournalEntryInput } from './gl-engine.service';
+import { FiscalCalendarService } from './fiscal-calendar.service';
 
 /**
  * Default Chart of Account codes for automatic sales accounting.
@@ -31,7 +31,7 @@ export class FinanceIntegrationService {
   private readonly logger = new Logger(FinanceIntegrationService.name);
 
   constructor(
-    private readonly periodsRepository: FinancialPeriodsRepository,
+    private readonly calendarService: FiscalCalendarService,
     private readonly glEngine: GlEngineService,
   ) {}
 
@@ -43,12 +43,14 @@ export class FinanceIntegrationService {
     event: SaleCompletedEventPayload,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const currentPeriod = await this.periodsRepository.findCurrent(
+    const calendar = await this.calendarService.ensureCurrentCalendar(
       event.companyId,
+      tx,
     );
-    if (!currentPeriod) {
+    if (!calendar.isPostable) {
       throw new BadRequestException(
-        `No open financial period for company ${event.companyId}. Cannot create accounting entries for sale ${event.saleNumber}.`,
+        `Financial period "${calendar.financialPeriod.name}" is ${calendar.financialPeriod.status}. ` +
+          `Cannot create accounting entries for sale ${event.saleNumber}.`,
       );
     }
 
@@ -232,7 +234,7 @@ export class FinanceIntegrationService {
     await this.glEngine.post(
       {
         companyId: event.companyId,
-        financialPeriodId: currentPeriod.id,
+        financialPeriodId: calendar.financialPeriod.id,
         entryDate,
         description: `Sales journal — ${saleDescription}`,
         referenceType: 'SALE',
@@ -302,12 +304,14 @@ export class FinanceIntegrationService {
     event: SaleRefundedEventPayload,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const currentPeriod = await this.periodsRepository.findCurrent(
+    const calendar = await this.calendarService.ensureCurrentCalendar(
       event.companyId,
+      tx,
     );
-    if (!currentPeriod) {
+    if (!calendar.isPostable) {
       throw new BadRequestException(
-        `No open financial period for company ${event.companyId}. Cannot create reversal entries for refund of sale ${event.saleNumber}.`,
+        `Financial period "${calendar.financialPeriod.name}" is ${calendar.financialPeriod.status}. ` +
+          `Cannot create reversal entries for refund of sale ${event.saleNumber}.`,
       );
     }
 
@@ -492,7 +496,7 @@ export class FinanceIntegrationService {
     await this.glEngine.post(
       {
         companyId: event.companyId,
-        financialPeriodId: currentPeriod.id,
+        financialPeriodId: calendar.financialPeriod.id,
         entryDate,
         description: `Sales refund journal — ${description}`,
         referenceType: 'REFUND',
@@ -533,12 +537,14 @@ export class FinanceIntegrationService {
     event: SalePartiallyRefundedEventPayload,
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const currentPeriod = await this.periodsRepository.findCurrent(
+    const calendar = await this.calendarService.ensureCurrentCalendar(
       event.companyId,
+      tx,
     );
-    if (!currentPeriod) {
+    if (!calendar.isPostable) {
       throw new BadRequestException(
-        `No open financial period for company ${event.companyId}. Cannot create journal entries for partial refund ${event.refundNumber} of sale ${event.saleNumber}.`,
+        `Financial period "${calendar.financialPeriod.name}" is ${calendar.financialPeriod.status}. ` +
+          `Cannot create journal entries for partial refund ${event.refundNumber} of sale ${event.saleNumber}.`,
       );
     }
 
@@ -708,7 +714,7 @@ export class FinanceIntegrationService {
     await this.glEngine.post(
       {
         companyId: event.companyId,
-        financialPeriodId: currentPeriod.id,
+        financialPeriodId: calendar.financialPeriod.id,
         entryDate,
         description: `Sales partial refund journal — ${description}`,
         // F1/F7: identity is the REFUND, not the sale.

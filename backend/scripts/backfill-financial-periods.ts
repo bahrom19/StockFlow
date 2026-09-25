@@ -16,8 +16,8 @@ const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth() + 1;
   const startDate = new Date(Date.UTC(year, month - 1, 1));
   const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
   const name = `${year}-${String(month).padStart(2, '0')}`;

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
+import { FinancialPeriodStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -8,6 +9,7 @@ import { AuthRepository } from '../../repositories/auth.repository';
 import { RolesRepository } from '../../../rbac/repositories/roles.repository';
 import { EmailService } from '../email.service';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
+import { FiscalCalendarService } from '../../../finance/services/fiscal-calendar.service';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('hashed-password'),
@@ -51,6 +53,16 @@ describe('AuthService — Password Reset', () => {
         { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: EmailService, useValue: mockEmailService },
+        {
+          provide: FiscalCalendarService,
+          useValue: {
+            ensureCurrentCalendar: jest.fn().mockResolvedValue({
+              fiscalYear: { id: 'fy-1', year: 2026 },
+              financialPeriod: { id: 'fp-1', name: '2026-09', status: FinancialPeriodStatus.OPEN },
+              isPostable: true,
+            }),
+          },
+        },
       ],
     }).compile();
 

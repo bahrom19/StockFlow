@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   // Verify the period exists in the DB (proves auto-creation, no manual step)
   const now = new Date();
   const period = await prisma.financialPeriod.findFirst({
-    where: { companyId, year: now.getFullYear(), month: now.getMonth() + 1 },
+    where: { companyId, year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 },
   });
   check('2. OPEN financial period auto-created', Boolean(period && period.status === 'OPEN'),
     period ? `${period.name} ${period.status}` : 'NOT FOUND');

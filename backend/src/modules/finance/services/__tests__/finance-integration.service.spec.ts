@@ -1,16 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { FinancialPeriodStatus, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { FinanceIntegrationService } from '../finance-integration.service';
-import { FinancialPeriodsRepository } from '../../repositories/financial-periods.repository';
+import { FiscalCalendarService, CalendarResult } from '../fiscal-calendar.service';
 import { GlEngineService, PostJournalEntryInput } from '../gl-engine.service';
 import { SaleCompletedEventPayload } from '../../../sales/interfaces/sale-event.interface';
 
 describe('FinanceIntegrationService', () => {
   let service: FinanceIntegrationService;
   let mockTx: Record<string, any>;
-  let mockPeriodsRepo: jest.Mocked<FinancialPeriodsRepository>;
+  let mockCalendarService: jest.Mocked<FiscalCalendarService>;
   let mockGlEngine: jest.Mocked<GlEngineService>;
 
   const companyId = 'comp-1';
@@ -129,9 +129,9 @@ describe('FinanceIntegrationService', () => {
   }
 
   beforeEach(async () => {
-    mockPeriodsRepo = {
-      findCurrent: jest.fn(),
-    } as unknown as jest.Mocked<FinancialPeriodsRepository>;
+    mockCalendarService = {
+      ensureCurrentCalendar: jest.fn(),
+    } as unknown as jest.Mocked<FiscalCalendarService>;
 
     mockGlEngine = {
       post: jest.fn(),
@@ -141,7 +141,7 @@ describe('FinanceIntegrationService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FinanceIntegrationService,
-        { provide: FinancialPeriodsRepository, useValue: mockPeriodsRepo },
+        { provide: FiscalCalendarService, useValue: mockCalendarService },
         { provide: GlEngineService, useValue: mockGlEngine },
       ],
     }).compile();
@@ -168,7 +168,11 @@ describe('FinanceIntegrationService', () => {
       },
     };
 
-    mockPeriodsRepo.findCurrent.mockResolvedValue({ id: periodId } as any);
+    mockCalendarService.ensureCurrentCalendar.mockResolvedValue({
+      fiscalYear: { id: 'fy-1', year: 2026 } as any,
+      financialPeriod: { id: periodId, name: '2026-09', status: FinancialPeriodStatus.OPEN } as any,
+      isPostable: true,
+    });
     mockGlEngine.post.mockResolvedValue({} as any);
   });
 
@@ -345,7 +349,11 @@ describe('FinanceIntegrationService', () => {
   // 5. No open period — throws BadRequestException
   // ─────────────────────────────────────────────
   it('should throw BadRequestException when no open financial period exists', async () => {
-    mockPeriodsRepo.findCurrent.mockResolvedValue(null);
+    mockCalendarService.ensureCurrentCalendar.mockResolvedValue({
+      fiscalYear: { id: 'fy-1', year: 2026 } as any,
+      financialPeriod: { id: periodId, name: '2026-09', status: FinancialPeriodStatus.CLOSED } as any,
+      isPostable: false,
+    });
 
     await expect(
       service.onSaleCompleted(
@@ -411,7 +419,11 @@ describe('FinanceIntegrationService', () => {
   // 7. No open period on refund — throws BadRequestException
   // ─────────────────────────────────────────────
   it('should throw BadRequestException on refund when no open period exists', async () => {
-    mockPeriodsRepo.findCurrent.mockResolvedValue(null);
+    mockCalendarService.ensureCurrentCalendar.mockResolvedValue({
+      fiscalYear: { id: 'fy-1', year: 2026 } as any,
+      financialPeriod: { id: periodId, name: '2026-09', status: FinancialPeriodStatus.CLOSED } as any,
+      isPostable: false,
+    });
 
     await expect(
       service.onSaleRefunded(
@@ -1040,7 +1052,7 @@ describe('FinanceIntegrationService', () => {
           where: expect.objectContaining({ companyId: 'comp-99' }),
         }),
       );
-      expect(mockPeriodsRepo.findCurrent).toHaveBeenCalledWith('comp-99');
+      expect(mockCalendarService.ensureCurrentCalendar).toHaveBeenCalledWith('comp-99', mockTx);
       expect(getPostedJournal().companyId).toBe('comp-99');
     });
 
@@ -1057,7 +1069,11 @@ describe('FinanceIntegrationService', () => {
     });
 
     it('14: missing OPEN financial period → throws (fail fast)', async () => {
-      mockPeriodsRepo.findCurrent.mockResolvedValueOnce(null as any);
+      mockCalendarService.ensureCurrentCalendar.mockResolvedValueOnce({
+        fiscalYear: { id: 'fy-1', year: 2026 } as any,
+        financialPeriod: { id: periodId, name: '2026-09', status: FinancialPeriodStatus.CLOSED } as any,
+        isPostable: false,
+      });
       await expect(
         service.onSalePartiallyRefunded(
           partialEvent() as any,
