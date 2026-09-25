@@ -28,10 +28,38 @@ export class BankAccountEntity {
   @ApiProperty({ example: 'KZT' })
   currency!: string;
 
-  @ApiProperty({ example: '0.0000' })
+  /**
+   * @deprecated Dead since introduction: never written by any producer, always
+   * the database default. Retained temporarily for backward compatibility.
+   * Canonical balances are derived from the GL (JournalEntry/JournalLine).
+   * Do not use for authoritative accounting decisions. Removal is deferred
+   * to a future versioned/API-removal workstream.
+   */
+  @ApiProperty({
+    example: '0.0000',
+    deprecated: true,
+    description:
+      'Deprecated: never maintained, always the database default. ' +
+      'Retained for backward compatibility. Canonical balances come from ' +
+      'the GL; do not use for accounting decisions.',
+  })
   openingBalance!: string;
 
-  @ApiProperty({ example: '0.0000' })
+  /**
+   * @deprecated Dead since introduction: never written by any producer, always
+   * the database default. Retained temporarily for backward compatibility.
+   * Canonical balances are derived from the GL (JournalEntry/JournalLine).
+   * Do not use for authoritative accounting decisions. Removal is deferred
+   * to a future versioned/API-removal workstream.
+   */
+  @ApiProperty({
+    example: '0.0000',
+    deprecated: true,
+    description:
+      'Deprecated: never maintained, always the database default. ' +
+      'Retained for backward compatibility. Canonical balances come from ' +
+      'the GL; do not use for accounting decisions.',
+  })
   currentBalance!: string;
 
   @ApiProperty({ example: false })
