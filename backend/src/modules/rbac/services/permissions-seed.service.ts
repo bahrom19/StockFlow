@@ -257,6 +257,15 @@ const SEED_PERMISSIONS: PermissionSeed[] = [
     description: 'Allows viewing financial reports',
     module: 'finance',
   },
+  {
+    // G15-07-C0-b: required by POST /finance/gl/fiscal-year/:year/close
+    // (GlEngineController → @RequirePermission('finance:close')). The canonical
+    // seed must match that controller contract (docs/api-contract-v1.md).
+    code: 'finance:close',
+    name: 'Close Fiscal Year',
+    description: 'Allows closing fiscal years with retained earnings transfer',
+    module: 'finance',
+  },
   // Settings
   {
     code: 'settings:read',
