@@ -4,28 +4,40 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { StockMovementType } from '@prisma/client';
+import { Prisma, StockMovementType } from '@prisma/client';
+import { Type } from 'class-transformer';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { InventoryRepository } from '../repositories/inventory.repository';
 import { InventoryAdjustedEvent } from '../events';
 
+// G16-B-02 PH3 (B02-12): the global ValidationPipe only validates classes
+// carrying class-validator metadata, so these DTOs were previously accepted
+// verbatim (any quantity, unknown fields). Decorators align them with the
+// other inventory DTOs (IsInt/Min(1) quantity, non-empty string IDs).
 export class ReserveStockDto {
-  productId!: string;
-  warehouseId!: string;
-  quantity!: number;
-  referenceType?: string;
-  referenceId?: string;
-  expiresAt?: string;
+  @IsString() @IsNotEmpty() productId!: string;
+  @IsString() @IsNotEmpty() warehouseId!: string;
+  @Type(() => Number) @IsInt() @Min(1) quantity!: number;
+  @IsOptional() @IsString() referenceType?: string;
+  @IsOptional() @IsString() referenceId?: string;
+  @IsOptional() @IsString() expiresAt?: string;
 }
 
 export class ReleaseReservationDto {
-  productId!: string;
-  warehouseId!: string;
-  quantity!: number;
-  referenceType?: string;
-  referenceId?: string;
+  @IsString() @IsNotEmpty() productId!: string;
+  @IsString() @IsNotEmpty() warehouseId!: string;
+  @Type(() => Number) @IsInt() @Min(1) quantity!: number;
+  @IsOptional() @IsString() referenceType?: string;
+  @IsOptional() @IsString() referenceId?: string;
 }
 
 @Injectable()
@@ -43,6 +55,16 @@ export class ReservationService {
     userId: string,
   ): Promise<any> {
     return this.prismaService.$transaction(async (tx) => {
+      // G16-B-02 PH3 (B02-12): client-supplied references are untrusted —
+      // validated (ownership + active state) before any Stock mutation so a
+      // poisoned/foreign product or warehouse cannot reach StockMovement.
+      await this.assertReferencesBelongToCompany(
+        dto.warehouseId,
+        dto.productId,
+        companyId,
+        tx,
+      );
+
       const stock =
         await this.inventoryRepository.findStockByProductAndWarehouse(
           dto.productId,
@@ -121,6 +143,15 @@ export class ReservationService {
     userId: string,
   ): Promise<any> {
     return this.prismaService.$transaction(async (tx) => {
+      // G16-B-02 PH3 (B02-12): same fail-closed guard as reserve() — release
+      // must not trust persisted-looking references either.
+      await this.assertReferencesBelongToCompany(
+        dto.warehouseId,
+        dto.productId,
+        companyId,
+        tx,
+      );
+
       const stock =
         await this.inventoryRepository.findStockByProductAndWarehouse(
           dto.productId,
@@ -185,5 +216,39 @@ export class ReservationService {
         availableQuantity: newAvailable,
       };
     });
+  }
+
+  /**
+   * G16-B-02 PH3 (B02-12): Reservation (reserve/release) references are
+   * client-supplied and reach `createStockMovement` connects verbatim, so
+   * they are validated against the caller's company before any write.
+   * Prisma `connect` only proves existence, never tenant ownership. Foreign,
+   * missing and soft-deleted rows are indistinguishable 404s (no
+   * tenant-existence oracle), and inactive rows fail closed with the same
+   * semantics as B02-07/B02-08.
+   */
+  private async assertReferencesBelongToCompany(
+    warehouseId: string,
+    productId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const warehouse = await this.inventoryRepository.findWarehouseById(
+      warehouseId,
+      companyId,
+      tx,
+    );
+    if (!warehouse) throw new NotFoundException('Warehouse not found');
+    if (!warehouse.isActive)
+      throw new NotFoundException('Warehouse is inactive');
+
+    const products = await this.inventoryRepository.findProductsByIds(
+      [productId],
+      companyId,
+      tx,
+    );
+    if (products.length !== 1 || products[0]?.isActive === false) {
+      throw new NotFoundException(`Product with id ${productId} not found`);
+    }
   }
 }
