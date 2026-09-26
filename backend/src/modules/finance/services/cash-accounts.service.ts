@@ -50,6 +50,35 @@ export class CashAccountsService {
     };
 
     const [account] = await this.prismaService.$transaction(async (tx) => {
+      // G16-B-02 PH1 (B02-04): referenced warehouse and chart account must
+      // belong to the caller's company (active, non-deleted). Prisma
+      // `connect` enforces existence only, never tenant ownership.
+      if (dto.warehouseId) {
+        const warehouse = await tx.warehouse.findFirst({
+          where: {
+            id: dto.warehouseId,
+            companyId: currentUser.companyId,
+            isActive: true,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!warehouse) throw new NotFoundException('Warehouse not found');
+      }
+      if (dto.chartOfAccountId) {
+        const chartAccount = await tx.chartOfAccount.findFirst({
+          where: {
+            id: dto.chartOfAccountId,
+            companyId: currentUser.companyId,
+            isActive: true,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!chartAccount) {
+          throw new NotFoundException('Chart of account not found');
+        }
+      }
       const result = await this.repository.create(data, tx);
       await this.auditLog.log(
         {
@@ -136,6 +165,34 @@ export class CashAccountsService {
     }
 
     const [updated] = await this.prismaService.$transaction(async (tx) => {
+      // G16-B-02 PH1 (B02-04): re-validate supplied references (see create).
+      // Disconnect (explicit null) needs no check.
+      if (dto.warehouseId) {
+        const warehouse = await tx.warehouse.findFirst({
+          where: {
+            id: dto.warehouseId,
+            companyId: currentUser.companyId,
+            isActive: true,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!warehouse) throw new NotFoundException('Warehouse not found');
+      }
+      if (dto.chartOfAccountId) {
+        const chartAccount = await tx.chartOfAccount.findFirst({
+          where: {
+            id: dto.chartOfAccountId,
+            companyId: currentUser.companyId,
+            isActive: true,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!chartAccount) {
+          throw new NotFoundException('Chart of account not found');
+        }
+      }
       const result = await this.repository.update(
         id,
         data,

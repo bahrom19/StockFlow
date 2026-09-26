@@ -51,6 +51,21 @@ export class ChartOfAccountsService {
     };
 
     const [account] = await this.prismaService.$transaction(async (tx) => {
+      // G16-B-02 PH1 (B02-06): parent account must belong to the caller's
+      // company (active, non-deleted). Prisma `connect` enforces existence
+      // only, never tenant ownership.
+      if (dto.parentId) {
+        const parent = await tx.chartOfAccount.findFirst({
+          where: {
+            id: dto.parentId,
+            companyId: currentUser.companyId,
+            isActive: true,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!parent) throw new NotFoundException('Parent account not found');
+      }
       const result = await this.repository.create(data, tx);
       await this.auditLog.log(
         {
@@ -147,6 +162,20 @@ export class ChartOfAccountsService {
     if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
 
     const [updated] = await this.prismaService.$transaction(async (tx) => {
+      // G16-B-02 PH1 (B02-06): re-validate supplied parent (see create).
+      // Disconnect (explicit null) needs no check.
+      if (dto.parentId) {
+        const parent = await tx.chartOfAccount.findFirst({
+          where: {
+            id: dto.parentId,
+            companyId: currentUser.companyId,
+            isActive: true,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!parent) throw new NotFoundException('Parent account not found');
+      }
       const result = await this.repository.update(
         id,
         data,

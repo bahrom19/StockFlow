@@ -148,4 +148,64 @@ describe('ChartOfAccountsRepository — update with relation writes + optimistic
       repo.update('acc-1', { name: 'X' }, 'comp-1', 0),
     ).rejects.toThrow(NotFoundException);
   });
+
+  // G16-B-02 PH1 (B02-06) — the relation follow-up write must be
+  // company-scoped: re-assert ownership in the same transaction before the
+  // Prisma update (which requires a unique where), and scope the re-read.
+  it('should re-assert company ownership before the relation follow-up write', async () => {
+    mockPrisma.chartOfAccount.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.chartOfAccount.findFirst.mockResolvedValue(
+      baseAccount as ChartOfAccount,
+    );
+
+    await repo.update(
+      'acc-1',
+      { parent: { connect: { id: 'parent-1' } } },
+      'comp-1',
+      0,
+    );
+
+    expect(mockPrisma.chartOfAccount.findFirst).toHaveBeenCalledWith({
+      where: { id: 'acc-1', companyId: 'comp-1' },
+      select: { id: true },
+    });
+    expect(mockPrisma.chartOfAccount.update).toHaveBeenCalledWith({
+      where: { id: 'acc-1' },
+      data: { parent: { connect: { id: 'parent-1' } } },
+    });
+  });
+
+  it('should abort the relation write when ownership re-assertion fails', async () => {
+    mockPrisma.chartOfAccount.updateMany.mockResolvedValue({ count: 1 });
+    // CAS won, but the row is no longer visible under this company.
+    mockPrisma.chartOfAccount.findFirst.mockResolvedValue(null);
+
+    await expect(
+      repo.update(
+        'acc-1',
+        { parent: { connect: { id: 'parent-1' } } },
+        'comp-1',
+        0,
+      ),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(mockPrisma.chartOfAccount.update).not.toHaveBeenCalled();
+  });
+
+  it('should scope the post-update re-read to the company', async () => {
+    mockPrisma.chartOfAccount.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.chartOfAccount.findFirst.mockResolvedValue(
+      baseAccount as ChartOfAccount,
+    );
+
+    await repo.update('acc-1', { name: 'X' }, 'comp-1', 0);
+
+    const reRead = mockPrisma.chartOfAccount.findFirst.mock.calls.find(
+      (call: any[]) =>
+        call[0]?.where?.id === 'acc-1' &&
+        !('rowVersion' in (call[0]?.where ?? {})) &&
+        call[0]?.select === undefined,
+    );
+    expect(reRead[0]).toEqual({ where: { id: 'acc-1', companyId: 'comp-1' } });
+  });
 });

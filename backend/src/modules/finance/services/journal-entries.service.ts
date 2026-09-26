@@ -16,6 +16,7 @@ import { FinancialPeriodsRepository } from '../repositories/financial-periods.re
 import { PrismaService } from '../../../common/prisma';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { GlEngineService } from './gl-engine.service';
+import { PostingValidationService } from './posting-validation.service';
 
 @Injectable()
 export class JournalEntriesService {
@@ -25,6 +26,7 @@ export class JournalEntriesService {
     private readonly prismaService: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly glEngine: GlEngineService,
+    private readonly validationService: PostingValidationService,
   ) {}
 
   async create(
@@ -55,6 +57,15 @@ export class JournalEntriesService {
           `Journal entry is unbalanced: debit=${totalDebit.toString()}, credit=${totalCredit.toString()}`,
         );
       }
+
+      // G16-B-02 PH1 (B02-01): every referenced account must belong to the
+      // caller's company (active, non-deleted) before anything is persisted.
+      // Prisma `connect` enforces existence only, never tenant ownership.
+      await this.validationService.validateAccountsBelongToCompany(
+        dto.lines.map((l) => l.accountId),
+        currentUser.companyId,
+        tx,
+      );
 
       const entryNumber = await this.repository.getNextEntryNumberInTransaction(
         tx,

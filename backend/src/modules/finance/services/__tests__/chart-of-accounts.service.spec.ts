@@ -155,6 +155,92 @@ describe('ChartOfAccountsService — system-account trust model (G15-07-C1)', ()
     });
   });
 
+  describe('parent ownership (G16-B-02 PH1 B02-06)', () => {
+    const withParentLookup = (resolved: unknown) => {
+      (mockTx as any).chartOfAccount = {
+        findFirst: jest.fn().mockResolvedValue(resolved),
+      };
+    };
+
+    it('rejects a foreign parent on create with 404 and persists nothing', async () => {
+      withParentLookup(null);
+
+      await expect(
+        service.create(createDto({ parentId: 'parent-evil' }) as any, currentUser),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(
+        (mockTx as any).chartOfAccount.findFirst,
+      ).toHaveBeenCalledWith({
+        where: {
+          id: 'parent-evil',
+          companyId,
+          isActive: true,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an inactive/deleted parent on create with 404', async () => {
+      withParentLookup(null);
+
+      await expect(
+        service.create(createDto({ parentId: 'parent-old' }) as any, currentUser),
+      ).rejects.toThrow(NotFoundException);
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts a same-company live parent on create', async () => {
+      withParentLookup({ id: 'parent-1' });
+      repository.create.mockImplementation((data: any) =>
+        Promise.resolve(account({ ...data, companyId })),
+      );
+
+      await service.create(
+        createDto({ parentId: 'parent-1' }) as any,
+        currentUser,
+      );
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parent: { connect: { id: 'parent-1' } },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('skips the lookup when no parent is supplied on create', async () => {
+      repository.create.mockResolvedValue(account());
+
+      await service.create(createDto() as any, currentUser);
+
+      expect((mockTx as any).chartOfAccount).toBeUndefined();
+      expect(repository.create).toHaveBeenCalled();
+    });
+
+    it('rejects a foreign parent on update with 404', async () => {
+      repository.findById.mockResolvedValue(account());
+      withParentLookup(null);
+
+      await expect(
+        service.update('acc-1', { parentId: 'parent-evil' } as any, currentUser),
+      ).rejects.toThrow(NotFoundException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('allows explicit parent disconnect without a lookup', async () => {
+      repository.findById.mockResolvedValue(account());
+      repository.update.mockResolvedValue(account());
+
+      await service.update('acc-1', { parentId: null } as any, currentUser);
+
+      expect((mockTx as any).chartOfAccount).toBeUndefined();
+      expect(repository.update).toHaveBeenCalled();
+    });
+  });
+
   describe('softDelete', () => {
     it('rejects deletion of a system account', async () => {
       repository.findById.mockResolvedValue(

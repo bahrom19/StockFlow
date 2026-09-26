@@ -119,6 +119,19 @@ export class FinancialTransactionsService {
           );
         }
 
+        // G16-B-02 PH1 (B02-03): referenced registers must belong to the
+        // caller's company (active, non-deleted) before persisting.
+        // Prisma `connect` enforces existence only, never tenant ownership.
+        await this.assertRegistersBelongToCompany(
+          {
+            cashAccountId: dto.cashAccountId,
+            bankAccountId: dto.bankAccountId,
+            destinationBankAccountId: dto.destinationBankAccountId,
+          },
+          currentUser.companyId,
+          tx,
+        );
+
         const data: Prisma.FinancialTransactionCreateInput = {
           type: dto.type as FinancialTransactionType,
           direction: dto.direction as TransactionDirection,
@@ -595,6 +608,17 @@ export class FinancialTransactionsService {
     }
 
     const [updated] = await this.prismaService.$transaction(async (txCtx) => {
+      // G16-B-02 PH1 (B02-03): re-validate registers supplied on update.
+      // Disconnect (absent/null id) needs no check.
+      await this.assertRegistersBelongToCompany(
+        {
+          cashAccountId: dto.cashAccountId,
+          bankAccountId: dto.bankAccountId,
+          destinationBankAccountId: dto.destinationBankAccountId,
+        },
+        currentUser.companyId,
+        txCtx,
+      );
       const result = await this.repository.update(
         id,
         data,
@@ -698,6 +722,63 @@ export class FinancialTransactionsService {
       }),
     ]);
     return sale !== null || refund !== null;
+  }
+
+  /**
+   * G16-B-02 PH1 (B02-03): DRAFT-time ownership check for referenced cash/bank
+   * registers. Each supplied id must resolve to a live register of the
+   * caller's company. Missing/foreign/inactive/deleted ids are
+   * indistinguishable NotFound (no tenant-existence oracle). Absent ids
+   * (including explicit disconnect) need no check. Runs inside the caller's
+   * transaction. The post-time fail-closed backstop is preserved separately.
+   */
+  private async assertRegistersBelongToCompany(
+    ids: {
+      cashAccountId?: string | null;
+      bankAccountId?: string | null;
+      destinationBankAccountId?: string | null;
+    },
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (ids.cashAccountId) {
+      const reg = await tx.cashAccount.findFirst({
+        where: {
+          id: ids.cashAccountId,
+          companyId,
+          isActive: true,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!reg) throw new NotFoundException('Cash account not found');
+    }
+    if (ids.bankAccountId) {
+      const reg = await tx.bankAccount.findFirst({
+        where: {
+          id: ids.bankAccountId,
+          companyId,
+          isActive: true,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!reg) throw new NotFoundException('Bank account not found');
+    }
+    if (ids.destinationBankAccountId) {
+      const reg = await tx.bankAccount.findFirst({
+        where: {
+          id: ids.destinationBankAccountId,
+          companyId,
+          isActive: true,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!reg) {
+        throw new NotFoundException('Destination bank account not found');
+      }
+    }
   }
 
   private async resolveDomainCounterpartId(

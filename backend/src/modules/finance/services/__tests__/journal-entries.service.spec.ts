@@ -10,6 +10,7 @@ import { FinancialPeriodsRepository } from '../../repositories/financial-periods
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { AuditLogService } from '../../../shared/services/audit-log.service';
 import { GlEngineService } from '../gl-engine.service';
+import { PostingValidationService } from '../posting-validation.service';
 
 /**
  * G15-06a regression — manual journal posting must update AccountBalance.
@@ -28,6 +29,7 @@ describe('JournalEntriesService.post — AccountBalance update (G15-06a)', () =>
   let prismaService: { $transaction: jest.Mock };
   let auditLog: { log: jest.Mock };
   let glEngine: { updateAccountBalances: jest.Mock };
+  let validationService: { validateAccountsBelongToCompany: jest.Mock };
 
   const currentUser = { userId: 'user-1', companyId: 'comp-1' } as any;
 
@@ -90,6 +92,9 @@ describe('JournalEntriesService.post — AccountBalance update (G15-06a)', () =>
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     glEngine = { updateAccountBalances: jest.fn().mockResolvedValue(undefined) };
+    validationService = {
+      validateAccountsBelongToCompany: jest.fn().mockResolvedValue(undefined),
+    };
 
     service = new JournalEntriesService(
       repository as unknown as JournalEntriesRepository,
@@ -97,6 +102,7 @@ describe('JournalEntriesService.post — AccountBalance update (G15-06a)', () =>
       prismaService as unknown as PrismaService,
       auditLog as unknown as AuditLogService,
       glEngine as unknown as GlEngineService,
+      validationService as unknown as PostingValidationService,
     );
 
     repository.findById.mockResolvedValue(draftEntry());
@@ -218,5 +224,156 @@ describe('JournalEntriesService.post — AccountBalance update (G15-06a)', () =>
 
     expect(glEngine.updateAccountBalances).not.toHaveBeenCalled();
     expect(auditLog.log).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * G16-B-02 PH1 (B02-01) — DRAFT create must prove ownership of every
+ * referenced account before persisting. Prisma `connect` enforces existence
+ * only, never tenant ownership.
+ */
+describe('JournalEntriesService.create — account ownership (G16-B-02 PH1)', () => {
+  let service: JournalEntriesService;
+  let repository: {
+    findById: jest.Mock;
+    update: jest.Mock;
+    getNextEntryNumberInTransaction: jest.Mock;
+    createInTransaction: jest.Mock;
+  };
+  let periodsRepository: { findById: jest.Mock };
+  let validationService: { validateAccountsBelongToCompany: jest.Mock };
+  let auditLog: { log: jest.Mock };
+
+  const currentUser = { userId: 'user-1', companyId: 'comp-1' } as any;
+  const openPeriod = { id: 'fp-1', companyId: 'comp-1', status: 'OPEN' };
+
+  const dto = (over: Record<string, unknown> = {}) => ({
+    financialPeriodId: 'fp-1',
+    lines: [
+      { accountId: 'a-cash', debit: '100', credit: '0' },
+      { accountId: 'a-rev', debit: '0', credit: '100' },
+    ],
+    ...over,
+  });
+
+  beforeEach(() => {
+    const tx = {};
+    repository = {
+      findById: jest.fn(),
+      update: jest.fn(),
+      getNextEntryNumberInTransaction: jest.fn().mockResolvedValue(7),
+      createInTransaction: jest.fn().mockImplementation(async (_tx, input) => ({
+        id: 'je-1',
+        ...input,
+      })),
+    };
+    periodsRepository = { findById: jest.fn().mockResolvedValue(openPeriod) };
+    validationService = {
+      validateAccountsBelongToCompany: jest.fn().mockResolvedValue(undefined),
+    };
+    auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+
+    service = new JournalEntriesService(
+      repository as unknown as JournalEntriesRepository,
+      periodsRepository as unknown as FinancialPeriodsRepository,
+      {
+        $transaction: jest.fn((cb: (t: unknown) => unknown) => cb(tx)),
+      } as unknown as PrismaService,
+      auditLog as unknown as AuditLogService,
+      {} as unknown as GlEngineService,
+      validationService as unknown as PostingValidationService,
+    );
+  });
+
+  it('should validate every line accountId inside the transaction', async () => {
+    await service.create(dto() as any, currentUser);
+
+    expect(
+      validationService.validateAccountsBelongToCompany,
+    ).toHaveBeenCalledWith(['a-cash', 'a-rev'], 'comp-1', {});
+    expect(repository.createInTransaction).toHaveBeenCalled();
+  });
+
+  it('should reject a foreign account with 404 and persist nothing', async () => {
+    validationService.validateAccountsBelongToCompany.mockRejectedValueOnce(
+      new NotFoundException('Chart of account with id a-evil not found'),
+    );
+
+    await expect(
+      service.create(
+        dto({
+          lines: [
+            { accountId: 'a-cash', debit: '100', credit: '0' },
+            { accountId: 'a-evil', debit: '0', credit: '100' },
+          ],
+        }) as any,
+        currentUser,
+      ),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(repository.createInTransaction).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * G16-B-02 PH1 — unit tests for the narrow shared helper. Real
+ * PostingValidationService against a mock tx client.
+ */
+describe('PostingValidationService.validateAccountsBelongToCompany (G16-B-02 PH1)', () => {
+  const service = new PostingValidationService();
+  const txFor = (accounts: Array<{ id: string }>) => ({
+    chartOfAccount: { findMany: jest.fn().mockResolvedValue(accounts) },
+  });
+
+  it('should resolve when all accounts belong to the company', async () => {
+    const tx = txFor([{ id: 'a1' }, { id: 'a2' }]);
+    await expect(
+      service.validateAccountsBelongToCompany(['a1', 'a2'], 'comp-1', tx as any),
+    ).resolves.toBeUndefined();
+    expect(tx.chartOfAccount.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['a1', 'a2'] },
+        companyId: 'comp-1',
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+  });
+
+  it('should deduplicate repeated account ids in one batched lookup', async () => {
+    const tx = txFor([{ id: 'a1' }]);
+    await service.validateAccountsBelongToCompany(
+      ['a1', 'a1', 'a1'],
+      'comp-1',
+      tx as any,
+    );
+    expect(tx.chartOfAccount.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { in: ['a1'] } }) }),
+    );
+  });
+
+  it('should throw NotFound for a foreign/missing account', async () => {
+    const tx = txFor([{ id: 'a1' }]);
+    await expect(
+      service.validateAccountsBelongToCompany(['a1', 'a-evil'], 'comp-1', tx as any),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should throw NotFound for inactive/deleted accounts (filtered by predicate)', async () => {
+    // findMany predicate excludes inactive/deleted, so they surface as missing.
+    const tx = txFor([]);
+    await expect(
+      service.validateAccountsBelongToCompany(['a-old'], 'comp-1', tx as any),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should resolve for an empty account list', async () => {
+    const tx = txFor([]);
+    await expect(
+      service.validateAccountsBelongToCompany([], 'comp-1', tx as any),
+    ).resolves.toBeUndefined();
+    expect(tx.chartOfAccount.findMany).not.toHaveBeenCalled();
   });
 });

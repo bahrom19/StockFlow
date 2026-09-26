@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -103,5 +107,38 @@ export class PostingValidationService {
     }
 
     return { totalDebit, totalCredit };
+  }
+
+  /**
+   * G16-B-02 PH1 — narrowly-scoped account ownership check for DRAFT-time
+   * (create/update) paths. Same predicate as the posting-time account leg
+   * above (id + companyId + active + non-deleted, batched), but throws
+   * NotFoundException so foreign/missing/inactive/deleted accounts are
+   * indistinguishable from nonexistent ones (no tenant-existence oracle).
+   * Runs inside the caller's transaction.
+   */
+  async validateAccountsBelongToCompany(
+    accountIds: string[],
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const uniqueIds = [...new Set(accountIds)];
+    if (uniqueIds.length === 0) return;
+    const accounts = await tx.chartOfAccount.findMany({
+      where: {
+        id: { in: uniqueIds },
+        companyId,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (accounts.length !== uniqueIds.length) {
+      const found = new Set(accounts.map((a) => a.id));
+      const missing = uniqueIds.find((id) => !found.has(id));
+      throw new NotFoundException(
+        `Chart of account with id ${missing} not found`,
+      );
+    }
   }
 }

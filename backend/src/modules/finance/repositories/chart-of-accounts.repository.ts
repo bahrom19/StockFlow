@@ -131,13 +131,24 @@ export class ChartOfAccountsRepository {
       );
     }
 
-    // Apply relation writes (updateMany cannot touch relations)
+    // Apply relation writes (updateMany cannot touch relations).
+    // G16-B-02 PH1 (B02-06): Prisma update() requires a unique where clause,
+    // so company scope is proven here with a scoped re-assertion in the same
+    // transaction instead: the CAS above already gated on {id, companyId,
+    // rowVersion} and companyId is immutable, and the connected parent id
+    // itself is ownership-validated service-side before this call.
     if (Object.keys(relationData).length > 0) {
+      const owned = await prisma.chartOfAccount.findFirst({
+        where: { id, companyId },
+        select: { id: true },
+      });
+      if (!owned)
+        throw new NotFoundException('Chart of account not found');
       await prisma.chartOfAccount.update({ where: { id }, data: relationData });
     }
 
     return prisma.chartOfAccount.findFirst({
-      where: { id },
+      where: { id, companyId },
     }) as unknown as ChartOfAccount;
   }
 
