@@ -228,6 +228,220 @@ describe('JournalEntriesService.post — AccountBalance update (G15-06a)', () =>
 });
 
 /**
+ * G16-B-02 PH2 (B02-02) — Manual Journal Entry post must validate
+ * ownership of all persisted line accounts before committing.
+ * Prisma `connect` enforces existence only; tenant ownership must be
+ * proven for each persisted accountId before status flip and balance update.
+ */
+describe('JournalEntriesService.post — account ownership (G16-B-02 PH2)', () => {
+  let service: JournalEntriesService;
+  let tx: Record<string, unknown>;
+  let repository: { findById: jest.Mock; update: jest.Mock };
+  let periodsRepository: { findById: jest.Mock };
+  let validationService: { validateAccountsBelongToCompany: jest.Mock };
+  let auditLog: { log: jest.Mock };
+  let glEngine: { updateAccountBalances: jest.Mock };
+
+  const currentUser = {
+    userId: 'user-1',
+    companyId: 'comp-1',
+  } as any;
+
+  const line = (over: Record<string, unknown> = {}) => ({
+    id: 'jl-1',
+    journalEntryId: 'je-1',
+    accountId: 'a-cash',
+    debit: '100.0000',
+    credit: '0.0000',
+    description: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...over,
+  });
+
+  const draftEntry = (over: Record<string, unknown> = {}) => ({
+    id: 'je-1',
+    companyId: 'comp-1',
+    financialPeriodId: 'fp-1',
+    entryNumber: 5,
+    entryDate: new Date('2026-08-15T10:00:00Z'),
+    description: 'Manual adjustment',
+    status: JournalEntryStatus.DRAFT,
+    totalDebit: '100.0000',
+    totalCredit: '100.0000',
+    referenceType: null,
+    referenceId: null,
+    postedBy: null,
+    postedAt: null,
+    createdBy: 'user-1',
+    rowVersion: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lines: [
+      line(),
+      line({
+        id: 'jl-2',
+        accountId: 'a-rev',
+        debit: '0.0000',
+        credit: '100.0000',
+      }),
+    ],
+    ...over,
+  });
+
+  const openPeriod = { id: 'fp-1', companyId: 'comp-1', status: 'OPEN' };
+  const postedEntry = (over: Record<string, unknown> = {}) =>
+    draftEntry({ ...over, status: JournalEntryStatus.POSTED });
+
+  beforeEach(() => {
+    tx = {};
+    repository = {
+      findById: jest.fn(),
+      update: jest.fn(),
+    };
+    periodsRepository = { findById: jest.fn() };
+    validationService = {
+      validateAccountsBelongToCompany: jest.fn().mockResolvedValue(undefined),
+    };
+    auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    glEngine = { updateAccountBalances: jest.fn().mockResolvedValue(undefined) };
+
+    service = new JournalEntriesService(
+      repository as unknown as JournalEntriesRepository,
+      periodsRepository as unknown as FinancialPeriodsRepository,
+      {
+        $transaction: jest.fn((cb: (t: unknown) => unknown) => cb(tx)),
+      } as unknown as PrismaService,
+      auditLog as unknown as AuditLogService,
+      glEngine as unknown as GlEngineService,
+      validationService as unknown as PostingValidationService,
+    );
+  });
+
+  it('should reject a foreign persisted account with 404 and no mutation', async () => {
+    validationService.validateAccountsBelongToCompany.mockRejectedValueOnce(
+      new NotFoundException('Chart of account with id a-evil not found'),
+    );
+    repository.findById.mockResolvedValue(
+      draftEntry({
+        lines: [
+          line({ accountId: 'a-cash' }),
+          line({ accountId: 'a-evil' }),
+        ],
+      }),
+    );
+    periodsRepository.findById.mockResolvedValue(openPeriod);
+
+    await expect(service.post('je-1', currentUser)).rejects.toThrow(
+      NotFoundException,
+    );
+
+    expect(validationService.validateAccountsBelongToCompany).toHaveBeenCalledWith(
+      ['a-cash', 'a-evil'],
+      'comp-1',
+      tx,
+    );
+    expect(repository.update).not.toHaveBeenCalled();
+    expect(glEngine.updateAccountBalances).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
+  });
+
+  it('should reject a missing persisted account with 404 and no mutation', async () => {
+    validationService.validateAccountsBelongToCompany.mockRejectedValueOnce(
+      new NotFoundException('Chart of account with id a-missing not found'),
+    );
+    repository.findById.mockResolvedValue(draftEntry());
+    periodsRepository.findById.mockResolvedValue(openPeriod);
+
+    await expect(service.post('je-1', currentUser)).rejects.toThrow(
+      NotFoundException,
+    );
+
+    expect(repository.update).not.toHaveBeenCalled();
+    expect(glEngine.updateAccountBalances).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
+  });
+
+  it('should reject an inactive persisted account with 404 and no mutation', async () => {
+    validationService.validateAccountsBelongToCompany.mockRejectedValueOnce(
+      new NotFoundException('Chart of account with id a-old not found'),
+    );
+    repository.findById.mockResolvedValue(draftEntry());
+    periodsRepository.findById.mockResolvedValue(openPeriod);
+
+    await expect(service.post('je-1', currentUser)).rejects.toThrow(
+      NotFoundException,
+    );
+
+    expect(repository.update).not.toHaveBeenCalled();
+    expect(glEngine.updateAccountBalances).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
+  });
+
+  it('should reject a deleted persisted account with 404 and no mutation', async () => {
+    validationService.validateAccountsBelongToCompany.mockRejectedValueOnce(
+      new NotFoundException('Chart of account with id a-deleted not found'),
+    );
+    repository.findById.mockResolvedValue(draftEntry());
+    periodsRepository.findById.mockResolvedValue(openPeriod);
+
+    await expect(service.post('je-1', currentUser)).rejects.toThrow(
+      NotFoundException,
+    );
+
+    expect(repository.update).not.toHaveBeenCalled();
+    expect(glEngine.updateAccountBalances).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
+  });
+
+  it('should be atomic: validation failure leaves journal DRAFT, no balance mutation, no audit, rowVersion unchanged', async () => {
+    validationService.validateAccountsBelongToCompany.mockRejectedValueOnce(
+      new NotFoundException('Chart of account with id a-evil not found'),
+    );
+    repository.findById.mockResolvedValue(draftEntry());
+    periodsRepository.findById.mockResolvedValue(openPeriod);
+
+    await expect(service.post('je-1', currentUser)).rejects.toThrow(
+      NotFoundException,
+    );
+
+    expect(repository.update).not.toHaveBeenCalled();
+    expect(glEngine.updateAccountBalances).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
+  });
+
+  it('should succeed for valid same-company accounts and update balances + audit', async () => {
+    repository.findById.mockResolvedValue(draftEntry());
+    periodsRepository.findById.mockResolvedValue(openPeriod);
+    repository.update.mockImplementation(async () => postedEntry());
+
+    const result = await service.post('je-1', currentUser);
+
+    expect(result.status).toBe(JournalEntryStatus.POSTED);
+    expect(glEngine.updateAccountBalances).toHaveBeenCalledWith(
+      'comp-1',
+      'fp-1',
+      expect.any(Date),
+      expect.arrayContaining([
+        expect.objectContaining({ accountId: 'a-cash' }),
+        expect.objectContaining({ accountId: 'a-rev' }),
+      ]),
+      tx,
+    );
+    expect(auditLog.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 'comp-1',
+        userId: 'user-1',
+        entityType: 'JournalEntry',
+        entityId: 'je-1',
+        action: 'POST',
+      }),
+      tx,
+    );
+  });
+});
+
+/**
  * G16-B-02 PH1 (B02-01) — DRAFT create must prove ownership of every
  * referenced account before persisting. Prisma `connect` enforces existence
  * only, never tenant ownership.

@@ -214,6 +214,16 @@ export class JournalEntriesService {
       if (!period || period.status !== 'OPEN')
         throw new BadRequestException('Financial period is not open');
 
+      // G16-B-02 PH2 (B02-02): validate ownership of all persisted line accounts
+      // before committing the POST. Prisma `connect` enforces existence only,
+      // never tenant ownership — this guard ensures every referenced account
+      // belongs to the caller's company and is live.
+      await this.validationService.validateAccountsBelongToCompany(
+        (before.lines ?? []).map((l) => l.accountId),
+        currentUser.companyId,
+        tx,
+      );
+
       const data: Prisma.JournalEntryUpdateInput = {
         status: 'POSTED' as JournalEntryStatus,
         postedAt: new Date(),
