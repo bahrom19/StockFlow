@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { StockMovementType } from '@prisma/client';
+import { Prisma, StockMovementType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
@@ -47,6 +47,16 @@ export class InventoryCountService {
     userId: string,
   ): Promise<InventoryCountEntity> {
     return this.prismaService.$transaction(async (tx) => {
+      // G16-B-02 PH3 (B02-08): client-supplied warehouse/product references
+      // must be validated before any persistence — Prisma `connect` proves
+      // existence only, never tenant ownership.
+      await this.assertReferencesBelongToCompany(
+        dto.warehouseId,
+        dto.items.map((item) => item.productId),
+        companyId,
+        tx,
+      );
+
       const count = await this.inventoryRepository.createInventoryCount(
         {
           countNumber: dto.countNumber,
@@ -112,6 +122,17 @@ export class InventoryCountService {
       if (!count) throw new NotFoundException('Inventory count not found');
       if (count.status !== 'DRAFT')
         throw new BadRequestException('Only DRAFT counts can be completed');
+
+      // G16-B-02 PH3 (B02-08): persisted references are untrusted — a count
+      // created before this guard (or otherwise poisoned) must not reach the
+      // Stock mutation loop with a foreign/inactive/deleted warehouse or a
+      // foreign/deleted product.
+      await this.assertReferencesBelongToCompany(
+        count.warehouseId,
+        count.items.map((item) => item.productId),
+        companyId,
+        tx,
+      );
 
       await this.inventoryRepository.updateInventoryCount(
         id,
@@ -285,5 +306,52 @@ export class InventoryCountService {
         throw new NotFoundException('Inventory count not found after update');
       return InventoryCountMapper.toEntity(updated);
     });
+  }
+
+  /**
+   * G16-B-02 PH3 (B02-08): Inventory Count references are client-supplied and
+   * persisted verbatim, so they are validated against the caller's company
+   * before any write — and re-validated at completion, because persisted
+   * references are untrusted. Prisma `connect` only proves existence, never
+   * tenant ownership, so without this a foreign warehouse/product could reach
+   * `createStock`. Foreign, missing and soft-deleted rows are indistinguishable
+   * 404s (no tenant-existence oracle).
+   */
+  private async assertReferencesBelongToCompany(
+    warehouseId: string,
+    productIds: string[],
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const warehouse = await this.inventoryRepository.findWarehouseById(
+      warehouseId,
+      companyId,
+      tx,
+    );
+    if (!warehouse) throw new NotFoundException('Warehouse not found');
+    if (!warehouse.isActive)
+      throw new NotFoundException('Warehouse is inactive');
+
+    const uniqueProductIds = [...new Set(productIds)];
+    if (uniqueProductIds.length === 0) return;
+
+    const products = await this.inventoryRepository.findProductsByIds(
+      uniqueProductIds,
+      companyId,
+      tx,
+    );
+    if (products.length !== uniqueProductIds.length) {
+      const found = new Set(products.map((product) => product.id));
+      const missing = uniqueProductIds.find((id) => !found.has(id));
+      throw new NotFoundException(`Product with id ${missing} not found`);
+    }
+
+    // G16-B-02 PH3 (B02-08 remediation): an inactive product is unusable for a
+    // count. Surfaced as the same indistinguishable 404 as foreign/missing/
+    // deleted so no tenant- or state-existence oracle is exposed.
+    const inactive = products.find(
+      (product) => product.isActive === false,
+    );
+    if (inactive) throw new NotFoundException(`Product with id ${inactive.id} not found`);
   }
 }

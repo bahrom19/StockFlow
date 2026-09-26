@@ -482,15 +482,19 @@ export class InventoryRepository {
     ids: string[],
     companyId: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<Array<{ id: string; costPrice: Decimal | null }>> {
+  ): Promise<Array<{ id: string; costPrice: Decimal | null; isActive: boolean }>> {
     return this.prisma(tx).product.findMany({
       where: {
         id: { in: ids },
         companyId,
         deletedAt: null,
       },
-      select: { id: true, costPrice: true },
-    }) as Promise<Array<{ id: string; costPrice: Decimal | null }>>;
+      // G16-B-02 PH3 (B02-08 remediation): callers must be able to reject an
+      // inactive product, so the active flag is projected alongside cost.
+      select: { id: true, costPrice: true, isActive: true },
+    }) as Promise<
+      Array<{ id: string; costPrice: Decimal | null; isActive: boolean }>
+    >;
   }
 
   // ════════════════════════════════════════

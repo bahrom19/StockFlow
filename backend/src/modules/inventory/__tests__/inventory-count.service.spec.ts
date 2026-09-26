@@ -49,6 +49,21 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
   beforeEach(() => {
     mockTx = {};
     mockRepo = {
+      // B02-08: complete() now validates persisted warehouse/product
+      // ownership before mutating, so the fixture must provide the
+      // company-scoped lookups it uses.
+      findWarehouseById: jest
+        .fn()
+        .mockImplementation((id: string) =>
+          Promise.resolve({ id, isActive: true, deletedAt: null }),
+        ),
+      findProductsByIds: jest
+        .fn()
+        .mockImplementation((ids: string[]) =>
+          Promise.resolve(
+            ids.map((id) => ({ id, costPrice: null, isActive: true })),
+          ),
+        ),
       findInventoryCountById: jest.fn(),
       updateInventoryCount: jest.fn().mockResolvedValue({}),
       findStockByProductAndWarehouse: jest.fn(),
