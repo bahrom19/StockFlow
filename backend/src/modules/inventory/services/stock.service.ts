@@ -327,6 +327,26 @@ export class StockService {
     );
     if (!product) throw new NotFoundException('Product not found');
 
+    // G16-B-02 PH3 (B02-07): validate warehouse ownership for both source
+    // and destination before any stock mutation. Prisma `connect` enforces
+    // existence only, never tenant ownership — this guard ensures both
+    // warehouses belong to the caller's company and are active.
+    const fromWarehouse = await this.inventoryRepository.findWarehouseById(
+      dto.fromWarehouseId,
+      companyId,
+      tx,
+    );
+    if (!fromWarehouse) throw new NotFoundException('Source warehouse not found');
+    if (!fromWarehouse.isActive) throw new NotFoundException('Source warehouse is inactive');
+
+    const toWarehouse = await this.inventoryRepository.findWarehouseById(
+      dto.toWarehouseId,
+      companyId,
+      tx,
+    );
+    if (!toWarehouse) throw new NotFoundException('Destination warehouse not found');
+    if (!toWarehouse.isActive) throw new NotFoundException('Destination warehouse is inactive');
+
     const sourceStock =
       await this.inventoryRepository.findStockByProductAndWarehouse(
         dto.productId,
