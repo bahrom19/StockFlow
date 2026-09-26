@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, User } from '@prisma/client';
+import { CompanyMember, Prisma, User } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
 @Injectable()
@@ -86,6 +86,22 @@ export class UsersRepository {
     });
   }
 
+  /**
+   * Attach an existing user to a company. Caller must run inside the
+   * provisioning transaction; CompanyMember @@unique([companyId, userId])
+   * is the race backstop (P2002 → 409 via the global exception filter).
+   */
+  async createCompanyMember(
+    userId: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CompanyMember> {
+    const client = tx ?? this.prismaService;
+    return client.companyMember.create({
+      data: { userId, companyId },
+    });
+  }
+
   async update(
     id: string,
     data: Prisma.UserUpdateInput,
@@ -96,14 +112,25 @@ export class UsersRepository {
     const client = tx ?? this.prismaService;
 
     if (rowVersion !== undefined) {
+      // G16-B-01: company scope is part of the CAS predicate so a
+      // cross-company write can never succeed even if a caller skipped the
+      // scoped pre-check. Deny-by-default: foreign rows read as NotFound.
       const result = await client.user.updateMany({
-        where: { id, rowVersion },
+        where: {
+          id,
+          rowVersion,
+          members: { some: { companyId, deletedAt: null } },
+        },
         data: { ...data, rowVersion: { increment: 1 } },
       });
 
       if (result.count === 0) {
         const existing = await client.user.findFirst({
-          where: { id },
+          where: {
+            id,
+            deletedAt: null,
+            members: { some: { companyId, deletedAt: null } },
+          },
         });
         if (!existing) {
           throw new NotFoundException(`User with id ${id} not found`);
@@ -113,7 +140,7 @@ export class UsersRepository {
         );
       }
 
-      return client.user.findUnique({ where: { id } }) as Promise<User>;
+      return (await this.findById(id, companyId, tx)) as User;
     }
 
     // Legacy path without rowVersion
@@ -136,8 +163,13 @@ export class UsersRepository {
     const client = tx ?? this.prismaService;
 
     if (rowVersion !== undefined) {
+      // G16-B-01: same company-scoped CAS hardening as update().
       const result = await client.user.updateMany({
-        where: { id, rowVersion },
+        where: {
+          id,
+          rowVersion,
+          members: { some: { companyId, deletedAt: null } },
+        },
         data: {
           deletedAt: new Date(),
           isActive: false,
@@ -147,7 +179,11 @@ export class UsersRepository {
       });
       if (result.count === 0) {
         const existing = await client.user.findFirst({
-          where: { id },
+          where: {
+            id,
+            deletedAt: null,
+            members: { some: { companyId, deletedAt: null } },
+          },
         });
         if (!existing) {
           throw new NotFoundException(`User with id ${id} not found`);
@@ -156,7 +192,14 @@ export class UsersRepository {
           `User ${id} was modified by another user. Please refresh and retry.`,
         );
       }
-      return client.user.findUnique({ where: { id } }) as Promise<User>;
+      // Re-read without the deletedAt filter (the row was just soft-deleted)
+      // but still scoped to the caller's company.
+      return (await client.user.findFirst({
+        where: {
+          id,
+          members: { some: { companyId } },
+        },
+      })) as User;
     }
 
     const existing = await this.findById(id, companyId, tx);

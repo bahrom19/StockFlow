@@ -1,5 +1,15 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, IsNotEmpty } from 'class-validator';
+import {
+  ApiPropertyOptional,
+} from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  IsNotEmpty,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class UpdateUserDto {
   @ApiPropertyOptional({ example: 'updated@example.com' })
@@ -7,11 +17,18 @@ export class UpdateUserDto {
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ example: '$2b$10$...' })
+  // Optional plaintext password rotation. Same policy and server-side bcrypt
+  // handling as CreateUserDto. Client-supplied hashes are never accepted.
+  @ApiPropertyOptional({ example: 'NewStrong123' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  passwordHash?: string;
+  @MinLength(8)
+  @MaxLength(128)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
+    message: 'Password must contain uppercase, lowercase, and a number',
+  })
+  password?: string;
 
   @ApiPropertyOptional({ example: 'Jane' })
   @IsOptional()

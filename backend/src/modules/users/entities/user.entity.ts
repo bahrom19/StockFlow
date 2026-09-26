@@ -8,9 +8,6 @@ export class UserEntity {
   @ApiProperty({ example: 'user@example.com' })
   email!: string;
 
-  @ApiProperty({ example: '$2b$10$...' })
-  passwordHash!: string;
-
   @ApiPropertyOptional({ example: 'John' })
   firstName!: string | null;
 
@@ -39,10 +36,11 @@ export class UserEntity {
   deletedAt!: Date | null;
 
   static fromPrisma(user: User): UserEntity {
+    // NOTE: passwordHash is intentionally NOT serialized. It is internal
+    // credential storage and must never leave the API boundary (G16-B-01).
     return {
       id: user.id,
       email: user.email,
-      passwordHash: user.passwordHash,
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,

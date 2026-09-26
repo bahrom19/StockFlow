@@ -49,7 +49,7 @@ export class UsersController {
     @Body() createUserDto: CreateUserDto,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<UserEntity> {
-    return this.usersService.create(createUserDto);
+    return this.usersService.create(createUserDto, currentUser);
   }
 
   @Get()

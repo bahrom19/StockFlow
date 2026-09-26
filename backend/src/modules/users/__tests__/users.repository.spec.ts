@@ -29,6 +29,10 @@ describe('UsersRepository', () => {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      companyMember: {
+        create: jest.fn(),
       },
     };
 
@@ -150,5 +154,91 @@ describe('UsersRepository', () => {
     mockPrisma.user.findFirst.mockResolvedValue(null);
     const result = await repo.findById('user-1', 'different-company');
     expect(result).toBeNull();
+  });
+
+  it('should create a company member', async () => {
+    mockPrisma.companyMember.create.mockResolvedValue({ id: 'member-1' });
+    const result = await repo.createCompanyMember('user-1', 'comp-1');
+    expect(mockPrisma.companyMember.create).toHaveBeenCalledWith({
+      data: { userId: 'user-1', companyId: 'comp-1' },
+    });
+    expect(result.id).toBe('member-1');
+  });
+
+  // ─────────────────────────────────────────────
+  // G16-B-01 (B01-6): company-scoped CAS writes
+  // ─────────────────────────────────────────────
+  describe('company-scoped CAS writes (B01-6)', () => {
+    it('update with rowVersion scopes predicate to company and re-reads scoped', async () => {
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.user.findFirst.mockResolvedValue(baseUser);
+
+      await repo.update('user-1', { firstName: 'Scoped' }, 'comp-1', 2);
+
+      // P: CAS predicate carries the company scope.
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'user-1',
+          rowVersion: 2,
+          members: { some: { companyId: 'comp-1', deletedAt: null } },
+        },
+        data: { firstName: 'Scoped', rowVersion: { increment: 1 } },
+      });
+      // Scoped re-read (no unscoped findUnique).
+      expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'user-1',
+          deletedAt: null,
+          members: { some: { companyId: 'comp-1', deletedAt: null } },
+        },
+      });
+    });
+
+    it('update with rowVersion denies foreign-company row as NotFound', async () => {
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(
+        repo.update('user-1', { firstName: 'X' }, 'other-comp', 2),
+      ).rejects.toThrow('User with id user-1 not found');
+    });
+
+    it('update with rowVersion raises Conflict on same-company version mismatch', async () => {
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+      mockPrisma.user.findFirst.mockResolvedValue(baseUser);
+
+      await expect(
+        repo.update('user-1', { firstName: 'X' }, 'comp-1', 99),
+      ).rejects.toThrow('was modified by another user');
+    });
+
+    it('softDelete with rowVersion scopes predicate to company', async () => {
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.user.findFirst.mockResolvedValue({
+        ...baseUser,
+        deletedAt: new Date(),
+      });
+
+      await repo.softDelete('user-1', 'comp-1', 2);
+
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'user-1',
+          rowVersion: 2,
+          members: { some: { companyId: 'comp-1', deletedAt: null } },
+        },
+        data: expect.objectContaining({ status: 'DELETED' }),
+      });
+    });
+
+    it('softDelete with rowVersion denies foreign-company row as NotFound', async () => {
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(repo.softDelete('user-1', 'other-comp', 2)).rejects.toThrow(
+        'User with id user-1 not found',
+      );
+    });
   });
 });
