@@ -94,8 +94,16 @@ export class SalesService {
       const itemsData: Prisma.SaleItemCreateWithoutSaleInput[] = [];
 
       for (const item of dto.items) {
+        // G16-B-03 (F-1): inactive products fail closed like foreign/missing/
+        // deleted ones — a sale must not move stock for a deactivated product
+        // (same state semantics as B02-08/B02-12).
         const product = await tx.product.findFirst({
-          where: { id: item.productId, companyId, deletedAt: null },
+          where: {
+            id: item.productId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          },
         });
         if (!product)
           throw new NotFoundException(`Product ${item.productId} not found`);

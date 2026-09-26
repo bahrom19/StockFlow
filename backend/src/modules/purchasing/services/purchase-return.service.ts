@@ -145,14 +145,16 @@ export class PurchaseReturnService {
     // G9-E2: tenant-scoped product validation. PurchaseReturnItem.productId
     // has no FK in the schema, so invalid product references would
     // otherwise be silently accepted. One batched lookup (not N+1) covers
-    // all items: missing, foreign-tenant and soft-deleted products are
-    // indistinguishable 404s — same semantics as the supplier check.
+    // all items: missing, foreign-tenant, soft-deleted and inactive
+    // products (G16-B-03 F-1) are indistinguishable 404s — same
+    // semantics as the supplier check.
     const requestedProductIds = [...new Set(dto.items.map((i) => i.productId))];
     const foundProducts = await tx.product.findMany({
       where: {
         id: { in: requestedProductIds },
         companyId,
         deletedAt: null,
+        isActive: true,
       },
       select: { id: true },
     });
@@ -369,7 +371,8 @@ export class PurchaseReturnService {
       if (dto.items) {
         // G14-03-05-B: revalidate products BEFORE any item write — an invalid
         // productId must reject the whole operation with old items intact
-        // (same batched tenant-scoped check as create; '' never matches).
+        // (same batched tenant-scoped check as create, including the
+        // inactive-product rule of G16-B-03 F-1; '' never matches).
         const requestedProductIds = [
           ...new Set(dto.items.map((i) => i.productId ?? '')),
         ];
@@ -378,6 +381,7 @@ export class PurchaseReturnService {
             id: { in: requestedProductIds },
             companyId,
             deletedAt: null,
+            isActive: true,
           },
           select: { id: true },
         });

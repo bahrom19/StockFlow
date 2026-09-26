@@ -706,9 +706,12 @@ export class PurchaseOrderService {
 
   // G14-03-04: batched tenant-scoped product validation shared by create
   // and update. Mirrors the purchase-return G9-E2 pattern: one query for
-  // all distinct requested ids (no N+1); missing, foreign-tenant and
-  // soft-deleted products are indistinguishable 404s. Follows deletedAt-only
-  // product reference semantics (isActive is not part of reference checks).
+  // all distinct requested ids (no N+1); missing, foreign-tenant,
+  // soft-deleted and inactive products are indistinguishable 404s.
+  // G16-B-03 (F-1): the former deletedAt-only reference semantics
+  // ("isActive is not part of reference checks") is superseded — trade
+  // documents must not reference inactive products, matching the
+  // B02-08/B02-12 fail-closed precedent.
   private async validateProductsBelongToCompany(
     productIds: string[],
     companyId: string,
@@ -720,6 +723,7 @@ export class PurchaseOrderService {
         id: { in: requestedProductIds },
         companyId,
         deletedAt: null,
+        isActive: true,
       },
       select: { id: true },
     });

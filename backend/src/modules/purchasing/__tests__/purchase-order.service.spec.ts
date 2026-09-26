@@ -413,6 +413,65 @@ describe('PurchaseOrderService', () => {
       expect(mockTx.purchaseOrderItem.deleteMany).not.toHaveBeenCalled();
       expect(mockRepo.update).not.toHaveBeenCalled();
     });
+
+    // ── G16-B-03 (F-1): inactive products are indistinguishable 404s ──
+    // Test 9: the batched lookup now carries isActive: true (create path).
+    it('should include isActive in the create-path product lookup', async () => {
+      const mockTx = productTx([productId]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue(basePo as any);
+
+      await service.create(
+        { supplierId, items: [itemDto(productId)] },
+        userId,
+        companyId,
+      );
+
+      expect(mockTx.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: { in: [productId] },
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          }),
+        }),
+      );
+    });
+
+    // Test 10: inactive product → create NotFoundException, no persistence.
+    it('should reject create with an inactive product and not persist', async () => {
+      const mockTx = productTx([]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+
+      await expect(
+        service.create(
+          { supplierId, items: [itemDto('inactive-product')] },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    // Test 11: update to inactive product → NotFoundException, items intact.
+    it('should reject update to an inactive product without mutating items', async () => {
+      const mockTx = productTx([]);
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(basePo as any);
+
+      await expect(
+        service.update(
+          'po-1',
+          { items: [itemDto('inactive-product')] } as any,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockTx.purchaseOrderItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.purchaseOrderItem.createMany).not.toHaveBeenCalled();
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
   });
 
   // ── M2: getNextOrderNumber uses the atomic sequence ──

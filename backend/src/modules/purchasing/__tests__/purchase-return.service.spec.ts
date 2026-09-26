@@ -318,6 +318,7 @@ describe('PurchaseReturnService', () => {
           id: { in: [productId] },
           companyId,
           deletedAt: null,
+          isActive: true,
         },
         select: { id: true },
       });
@@ -368,6 +369,47 @@ describe('PurchaseReturnService', () => {
           }),
         }),
       );
+    });
+
+    // ── G16-B-03 (F-1): inactive products are indistinguishable 404s ──
+    it('rejects create with an inactive product before persistence', async () => {
+      const mockTx = tenantTx({
+        product: { findMany: jest.fn().mockResolvedValue([]) },
+      });
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+
+      await expect(
+        service.create(
+          { ...validDto, items: [{ productId: 'inactive-product', quantity: 1, unitCost: 1 }] },
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects update to an inactive product before any item write', async () => {
+      mockRepo.findById.mockResolvedValue(baseReturn as any);
+      const mockTx = {
+        purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
+        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        product: { findMany: jest.fn().mockResolvedValue([]) },
+        purchaseReturn: { update: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+
+      await expect(
+        service.update(
+          'pr-1',
+          {
+            items: [{ productId: 'inactive-product', quantity: 1, unitCost: 1 }],
+          } as any,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockTx.purchaseReturnItem.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.purchaseReturnItem.createMany).not.toHaveBeenCalled();
     });
   });
 
