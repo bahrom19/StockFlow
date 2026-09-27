@@ -48,6 +48,20 @@ export class CustomersService {
     }
 
     const customer = await this.prismaService.$transaction(async (tx) => {
+      // G16-B-04 (B02-10): client-supplied groupId is untrusted — Prisma
+      // `connect` enforces existence only, never tenant ownership. Prove the
+      // group belongs to the caller's company (live, non-deleted) before any
+      // customer mutation. Missing/foreign/deleted ids are indistinguishable
+      // NotFound (no tenant-existence oracle). CustomerGroup has no isActive
+      // field, so liveness is bounded by deletedAt only.
+      if (createCustomerDto.groupId) {
+        await this.assertCustomerGroupBelongsToCompany(
+          createCustomerDto.groupId,
+          currentUser.companyId,
+          tx,
+        );
+      }
+
       const createdCustomer = await this.customersRepository.create(
         {
           company: { connect: { id: currentUser.companyId } },
@@ -183,6 +197,16 @@ export class CustomersService {
 
     const updatedCustomer = await this.prismaService.$transaction(
       async (tx) => {
+        // G16-B-04 (B02-10): same fail-closed guard as create — validate the
+        // supplied group before the CAS update, inside the same transaction.
+        if (updateCustomerDto.groupId) {
+          await this.assertCustomerGroupBelongsToCompany(
+            updateCustomerDto.groupId,
+            currentUser.companyId,
+            tx,
+          );
+        }
+
         const existing = await this.customersRepository.findById(
           id,
           currentUser.companyId,
@@ -305,6 +329,34 @@ export class CustomersService {
     );
 
     return this.toEntity(deletedCustomer);
+  }
+
+  /**
+   * G16-B-04 (B02-10): ownership check for a client-supplied customer group
+   * reference. The id must resolve to a live (non-deleted) group of the
+   * caller's company. Missing/foreign/deleted ids are indistinguishable
+   * NotFound (no tenant-existence oracle). Runs inside the caller's
+   * transaction, before any customer mutation. CustomerGroup has no isActive
+   * field, so liveness is bounded by deletedAt (same predicate as the
+   * CustomerGroupRepository findFirst convention).
+   */
+  private async assertCustomerGroupBelongsToCompany(
+    groupId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const group = await tx.customerGroup.findFirst({
+      where: {
+        id: groupId,
+        companyId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Customer group not found');
+    }
   }
 
   private toEntity(customer: Customer): CustomerEntity {

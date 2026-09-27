@@ -86,6 +86,26 @@ export class CashShiftService {
         );
       }
 
+      // G16-B-04 (B02-11): dto.warehouseId is client-supplied and untrusted
+      // — Prisma `connect` enforces existence only, never tenant ownership.
+      // The warehouse must belong to the caller's company (active,
+      // non-deleted) before any shift is persisted. Missing/foreign/deleted/
+      // inactive ids are indistinguishable NotFound (no tenant-existence
+      // oracle). Runs inside the existing transaction, after the duplicate-OPEN
+      // check (409 keeps priority) and before the drawer is created.
+      const warehouse = await tx.warehouse.findFirst({
+        where: {
+          id: dto.warehouseId,
+          companyId,
+          deletedAt: null,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      if (!warehouse) {
+        throw new NotFoundException('Warehouse not found');
+      }
+
       // Enforce document currency == Company.currency
       const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
       if (dto.currency && dto.currency !== companyCurrency) {

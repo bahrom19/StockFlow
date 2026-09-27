@@ -102,6 +102,9 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
         }),
       },
       financialPeriod: { findFirst: jest.fn().mockResolvedValue({ id: 'fp-1' }) },
+      // G16-B-04 (B02-11): warehouse ownership guard for openShift —
+      // resolvable by default so legacy openShift specs keep passing.
+      warehouse: { findFirst: jest.fn().mockResolvedValue({ id: warehouseId }) },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -191,6 +194,71 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
         companyId,
       ),
     ).rejects.toThrow('db down');
+  });
+
+  // ───────────────────────────────
+  // G16-B-04 (B02-11) — warehouse ownership guard on openShift
+  // ───────────────────────────────
+  describe('G16-B-04 (B02-11): openShift warehouse ownership', () => {
+    const open = () =>
+      service.openShift({ warehouseId, openingBalance: 100 }, userId, companyId);
+
+    it('opens a shift for an own active warehouse', async () => {
+      repo.findOpenShift.mockResolvedValue(null);
+      repo.create.mockResolvedValue(baseShift);
+
+      const result = await open();
+
+      expect(result.id).toBe('shift-1');
+      expect(mockPrisma.warehouse.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: warehouseId,
+          companyId,
+          deletedAt: null,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      expect(repo.create).toHaveBeenCalled();
+    });
+
+    it('rejects a foreign warehouse with 404 and creates nothing', async () => {
+      repo.findOpenShift.mockResolvedValue(null);
+      mockPrisma.warehouse.findFirst.mockResolvedValue(null);
+
+      await expect(open()).rejects.toThrow(NotFoundException);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a deleted warehouse with 404 (fail closed)', async () => {
+      repo.findOpenShift.mockResolvedValue(null);
+      // deletedAt: null predicate excludes soft-deleted rows → null → 404.
+      mockPrisma.warehouse.findFirst.mockResolvedValue(null);
+
+      await expect(open()).rejects.toThrow(NotFoundException);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an inactive warehouse with 404 (fail closed)', async () => {
+      repo.findOpenShift.mockResolvedValue(null);
+      // isActive: true predicate excludes inactive rows → null → 404.
+      mockPrisma.warehouse.findFirst.mockResolvedValue(null);
+
+      await expect(open()).rejects.toThrow(NotFoundException);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps duplicate-OPEN 409 priority: ConflictException without any warehouse lookup', async () => {
+      repo.findOpenShift.mockResolvedValue(baseShift);
+
+      await expect(open()).rejects.toThrow(ConflictException);
+
+      expect(mockPrisma.warehouse.findFirst).not.toHaveBeenCalled();
+      expect(repo.create).not.toHaveBeenCalled();
+    });
   });
 
   // ───────────────────────────────

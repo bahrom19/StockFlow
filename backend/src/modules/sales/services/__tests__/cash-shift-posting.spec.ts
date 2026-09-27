@@ -84,6 +84,9 @@ describe('CashShiftService.posting — G15-07-C3-B', () => {
       refundPaymentAllocation: {
         aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
       },
+      // G16-B-04 (B02-11): warehouse ownership guard delegate for openShift —
+      // resolvable by default so posting specs behave as before the guard.
+      warehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
     };
     // Default chart stub: family/system codes resolve as live rows with
     // seeder-consistent types; id lookups resolve as live EXPENSE rows.
