@@ -10,10 +10,12 @@ import { AuthRepository } from './repositories/auth.repository';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesRepository } from '../rbac/repositories/roles.repository';
+import { FinanceModule } from '../finance/finance.module';
 
 @Module({
   imports: [
     PrismaModule,
+    FinanceModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
