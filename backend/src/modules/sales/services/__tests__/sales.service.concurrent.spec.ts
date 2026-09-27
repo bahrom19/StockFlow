@@ -3,6 +3,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma, SaleStatus } from '@prisma/client';
 import { SalesRepository } from '../../repositories/sales.repository';
 import { SalesService } from '../sales.service';
+import { IdempotencyService } from '../../../../infrastructure/idempotency/idempotency.service';
 import { CashShiftRepository } from '../../repositories/cash-shift.repository';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { AuditLogService } from '../../../shared/services/audit-log.service';
@@ -321,6 +322,7 @@ describe('SalesService — Concurrent Completion (Optimistic Locking)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SalesService,
+        { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: SalesRepository, useValue: mockSalesRepo },
         { provide: CashShiftRepository, useValue: mockCashShiftRepo },
         { provide: PrismaService, useValue: mockPrisma },

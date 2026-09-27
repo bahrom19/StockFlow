@@ -9,6 +9,7 @@ import { CashShiftRepository } from '../../repositories/cash-shift.repository';
 import { AuditLogService } from '../../../shared/services/audit-log.service';
 import { DocumentSequenceService } from '../../../shared/services/document-sequence.service';
 import { PrismaService } from '../../../../common/prisma';
+import { IdempotencyService } from '../../../../infrastructure/idempotency/idempotency.service';
 import { EventBus, EVENT_BUS } from '../../../../common/events';
 import { CustomerCreditLedgerService } from '../../../crm/services/customer-credit-ledger.service';
 import { CustomerCreditLedgerRepository } from '../../../crm/repositories/customer-credit-ledger.repository';
@@ -169,6 +170,7 @@ describe('SalesRefundService — refund cash shift netting (v1.1.1, E2 owner)', 
         { provide: DocumentSequenceService, useValue: mockDocumentSequence },
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: EVENT_BUS, useValue: mockEventBus },
         CustomerCreditLedgerService,
         { provide: CustomerCreditLedgerRepository, useValue: { findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn(), atomicSpend: jest.fn() } },

@@ -8,6 +8,8 @@ import { Prisma, RefundStatus, Sale, SaleItem, SaleStatus } from '@prisma/client
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
+import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import {
   DocumentSequenceService,
@@ -70,6 +72,7 @@ function toDecimal(
 export class SalesRefundService {
     constructor(
     private readonly prismaService: PrismaService,
+    private readonly idempotencyService: IdempotencyService,
     private readonly salesRepository: SalesRepository,
     private readonly cashShiftRepository: CashShiftRepository,
     private readonly salesRefundRepository: SalesRefundRepository,
@@ -96,10 +99,25 @@ export class SalesRefundService {
     dto: CreateRefundDto,
     userId: string,
     companyId: string,
+    idempotencyKey?: string,
   ): Promise<SalesRefundEntity> {
-    return this.prismaService.$transaction((tx) =>
-      this.createRefundInTransaction(saleId, dto, userId, companyId, tx),
-    );
+    // G16-C-02: keyed idempotency (Phase F1/F2) around the refund aggregate.
+    // Same key + same payload after a lost response replays the original
+    // SalesRefund result without creating a second refund; different keys stay
+    // governed by the existing Sale rowVersion CAS inside the aggregate.
+    // Without a key this is byte-for-byte the legacy behaviour.
+    const result = await runWithIdempotency({
+      prisma: this.prismaService,
+      idempotency: this.idempotencyService,
+      companyId,
+      idempotencyKey,
+      endpoint: 'sales.refund',
+      requestHashPayload: { userId, saleId, body: dto },
+      status: 200,
+      work: (tx) =>
+        this.createRefundInTransaction(saleId, dto, userId, companyId, tx),
+    });
+    return result.body as SalesRefundEntity;
   }
 
   /**

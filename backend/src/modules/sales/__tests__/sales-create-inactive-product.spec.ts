@@ -4,6 +4,7 @@ import { SalesService } from '../services/sales.service';
 import { SalesRepository } from '../repositories/sales.repository';
 import { CashShiftRepository } from '../repositories/cash-shift.repository';
 import { PrismaService } from '../../../common/prisma';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { CompaniesService } from '../../companies/services/companies.service';
 import { CustomerCreditLedgerService } from '../../crm/services/customer-credit-ledger.service';
 
@@ -83,6 +84,7 @@ describe('SalesService.create — inactive product rejection (G16-B-03 F-1)', ()
       salesRepository as unknown as SalesRepository,
       cashShiftRepository as unknown as CashShiftRepository,
       prisma as unknown as PrismaService,
+      {} as unknown as IdempotencyService, // G16-C: unused on the no-key path
       eventBus as any,
       companiesService as unknown as CompaniesService,
       creditLedger as unknown as CustomerCreditLedgerService,

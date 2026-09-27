@@ -3,6 +3,8 @@ import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
+import 'package:stockflow/core/outbox/outbox_mutation_queue.dart'
+    show idempotencyHeader;
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 
 // ──────────────────────────────────
@@ -32,11 +34,20 @@ class SalesRepository {
   SalesRepository(this._api);
 
   /// POST /sales — Create a sale (DRAFT)
-  Future<SalesResult<Sale>> create(CreateSaleRequest request) async {
+  ///
+  /// [idempotencyKey] (G16-C-01): when non-null it is transported as the
+  /// `Idempotency-Key` header — the same business submit always replays the
+  /// SAME key, so the backend can dedupe safely. Null keeps the legacy
+  /// header-less request (offline outbox ops stay key-less by contract).
+  Future<SalesResult<Sale>> create(
+    CreateSaleRequest request, {
+    String? idempotencyKey,
+  }) async {
     try {
       final response = await _api.post<Map<String, dynamic>>(
         '/sales',
         data: request.toJson(),
+        options: idempotencyHeader(idempotencyKey),
       );
       return SalesSuccess(Sale.fromJson(response.data!));
     } catch (e) {
@@ -162,9 +173,15 @@ class SalesRepository {
   }
 
   /// POST /sales/:id/complete — Complete a sale
-  Future<SalesResult<Sale>> complete(String id) async {
+  ///
+  /// [idempotencyKey] (G16-C-01): same contract as [create] — one immutable
+  /// key per business submit, reused by every retry.
+  Future<SalesResult<Sale>> complete(String id, {String? idempotencyKey}) async {
     try {
-      final response = await _api.post<Map<String, dynamic>>('/sales/$id/complete');
+      final response = await _api.post<Map<String, dynamic>>(
+        '/sales/$id/complete',
+        options: idempotencyHeader(idempotencyKey),
+      );
       return SalesSuccess(Sale.fromJson(response.data!));
     } catch (e) {
       return SalesFailure(_errorHandler.handle(e));

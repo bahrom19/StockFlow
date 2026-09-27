@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SaleStatus } from '@prisma/client';
+import { IdempotencyService } from '../../../../infrastructure/idempotency/idempotency.service';
 import { SalesService } from '../sales.service';
 import { SalesRepository } from '../../repositories/sales.repository';
 import { CashShiftRepository } from '../../repositories/cash-shift.repository';
@@ -105,6 +106,7 @@ describe('SalesService — transitionStatus (D1 regression)', () => {
         { provide: SalesRepository, useValue: mockSalesRepo },
         { provide: CashShiftRepository, useValue: mockCashShiftRepo },
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: EVENT_BUS, useValue: mockEventBus },
         CustomerCreditLedgerService,
         { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },

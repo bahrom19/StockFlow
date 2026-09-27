@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { Prisma, SaleStatus } from '@prisma/client';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { Decimal } from '@prisma/client/runtime/library';
 import { SalesService } from '../services/sales.service';
 import { SalesRepository } from '../repositories/sales.repository';
@@ -121,6 +122,7 @@ describe('SalesService — Sale ↔ CashShift currency invariant', () => {
         { provide: SalesRepository, useValue: mockSalesRepo },
         { provide: CashShiftRepository, useValue: mockCashShiftRepo },
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: EVENT_BUS, useValue: mockEventBus },
         CustomerCreditLedgerService,
         { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn() } },

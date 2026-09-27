@@ -15,6 +15,12 @@ import {
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
+import {
+  IdempotencyService,
+} from '../../../infrastructure/idempotency/idempotency.service';
+import {
+  runWithIdempotency,
+} from '../../../infrastructure/idempotency/idempotency.helper';
 import { CashShiftRepository } from '../repositories/cash-shift.repository';
 import { SalesRepository } from '../repositories/sales.repository';
 import { allocateShiftSales } from './payment-allocation';
@@ -52,6 +58,7 @@ export class SalesService {
     private readonly salesRepository: SalesRepository,
     private readonly cashShiftRepository: CashShiftRepository,
     private readonly prismaService: PrismaService,
+    private readonly idempotencyService: IdempotencyService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
     private readonly companiesService: CompaniesService,
     private readonly creditLedger: CustomerCreditLedgerService,
@@ -61,9 +68,23 @@ export class SalesService {
     dto: CreateSaleDto,
     userId: string,
     companyId: string,
-  ): Promise<SaleEntity> {
-    return this.prismaService.$transaction(async (tx) => {
-      const saleNumber =
+    idempotencyKey?: string,
+  ) {
+    // G16-C-01: keyed idempotency (Phase F1/F2). With a key, the reservation
+    // INSERT is the first write of THE authoritative transaction — it commits
+    // or rolls back together with the sale, so a retry of the same key +
+    // payload replays the original response instead of creating a second
+    // sale. Without a key this is byte-for-byte the legacy behaviour.
+    const result = await runWithIdempotency({
+      prisma: this.prismaService,
+      idempotency: this.idempotencyService,
+      companyId,
+      idempotencyKey,
+      endpoint: 'sales.create',
+      requestHashPayload: { userId, body: dto },
+      status: 201,
+      work: async (tx) => {
+        const saleNumber =
         dto.saleNumber ??
         (await this.salesRepository.getNextSaleNumber(companyId));
 
@@ -191,7 +212,9 @@ export class SalesService {
       );
 
       return SaleMapper.toEntity(sale);
+      },
     });
+    return result.body as SaleEntity;
   }
 
   async findAll(
@@ -252,10 +275,36 @@ export class SalesService {
     newStatus: SaleStatus,
     userId: string,
     companyId: string,
-  ): Promise<SaleEntity> {
-    return this.prismaService.$transaction(async (tx) => {
-      const sale = await this.salesRepository.findById(id, companyId, tx);
-      if (!sale) throw new NotFoundException(`Sale ${id} not found`);
+    idempotencyKey?: string,
+  ) {
+    // G16-C-01: keyed idempotency for POST /sales/:id/complete and /cancel.
+    // The endpoint tag is derived from the target status so a complete and a
+    // cancel can never share an idempotency identity. Same key + same sale
+    // after a lost response replays the ORIGINAL completion/cancellation
+    // result without re-running stock/GL/ledger side effects; the existing
+    // rowVersion CAS and VALID_TRANSITIONS stay authoritative for racing
+    // requests that carry different keys.
+    const endpoint =
+      newStatus === SaleStatus.COMPLETED
+        ? 'sales.complete'
+        : newStatus === SaleStatus.CANCELLED
+          ? 'sales.cancel'
+          : 'sales.status';
+    const result = await runWithIdempotency({
+      prisma: this.prismaService,
+      idempotency: this.idempotencyService,
+      companyId,
+      idempotencyKey,
+      endpoint,
+      requestHashPayload: {
+        userId,
+        saleId: id,
+        body: { status: newStatus },
+      },
+      status: 200,
+      work: async (tx) => {
+        const sale = await this.salesRepository.findById(id, companyId, tx);
+        if (!sale) throw new NotFoundException(`Sale ${id} not found`);
 
       // G11-E E2: refund statuses are derived from the refund workflow only.
       // Enforced at the SERVICE level so the SalesRefund aggregate is the sole
@@ -298,7 +347,9 @@ export class SalesService {
         tx,
       );
       return SaleMapper.toEntity(updated);
+      },
     });
+    return result.body as SaleEntity;
   }
 
   private async completeSale(

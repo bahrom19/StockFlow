@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { Prisma, SaleStatus } from '@prisma/client';
 import { SalesService } from '../sales.service';
+import { IdempotencyService } from '../../../../infrastructure/idempotency/idempotency.service';
 import { SalesRepository } from '../../repositories/sales.repository';
 import { CashShiftRepository } from '../../repositories/cash-shift.repository';
 import { PrismaService } from '../../../../common/prisma';
@@ -62,6 +63,7 @@ describe('SalesService — create payment validation (change/overpayment Phase 1
       providers: [
         { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
         SalesService,
+        { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: SalesRepository, useValue: mockSalesRepo },
         { provide: CashShiftRepository, useValue: {} },
         { provide: PrismaService, useValue: mockPrisma },

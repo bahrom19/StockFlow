@@ -1687,7 +1687,7 @@ model Sale {
   warehouseId   String     @db.Uuid
   cashierId     String     @db.Uuid
   customerId    String?    @db.Uuid
-  saleNumber    String     @unique @db.VarChar(100)
+  saleNumber    String     @db.VarChar(100)
   status        SaleStatus @default(DRAFT)
   subtotal      Decimal    @default(0) @db.Decimal(18, 4)
   discount      Decimal    @default(0) @db.Decimal(18, 4)
@@ -1722,7 +1722,11 @@ model Sale {
   @@index([companyId, deletedAt])
   @@index([companyId, status])
   @@index([companyId, createdAt])
-  @@index([companyId, saleNumber])
+  // G16-C-04: tenant-scoped document identity (G8 pattern) — the previous
+  // global @unique made two companies collide on the same saleNumber.
+  // Soft-deleted rows keep participating in uniqueness (full parity with the
+  // old single-column unique).
+  @@unique([companyId, saleNumber])
   @@index([customerId, companyId])
 }
 

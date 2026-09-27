@@ -13,6 +13,7 @@ import { CashShiftRepository } from '../../../sales/repositories/cash-shift.repo
 import { AuditLogService } from '../../../shared/services/audit-log.service';
 import { DocumentSequenceService } from '../../../shared/services/document-sequence.service';
 import { PrismaService } from '../../../../common/prisma';
+import { IdempotencyService } from '../../../../infrastructure/idempotency/idempotency.service';
 import { CustomerCreditLedgerService } from '../../../crm/services/customer-credit-ledger.service';
 import { CustomerCreditLedgerRepository } from '../../../crm/repositories/customer-credit-ledger.repository';
 import { EventBus, EVENT_BUS } from '../../../../common/events';
@@ -290,6 +291,7 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
       providers: [
         SalesRefundService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: SalesRepository, useValue: mockSalesRepository },
         { provide: CashShiftRepository, useValue: mockCashShiftRepository },
         { provide: SalesRefundRepository, useValue: mockSalesRefundRepository },

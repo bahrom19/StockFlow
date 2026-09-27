@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -45,8 +46,14 @@ export class SalesController {
   async create(
     @Body() dto: CreateSaleDto,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<SaleEntity> {
-    return this.salesService.create(dto, user.userId, user.companyId);
+    return this.salesService.create(
+      dto,
+      user.userId,
+      user.companyId,
+      idempotencyKey,
+    );
   }
 
   @Get()
@@ -157,12 +164,14 @@ export class SalesController {
     @Param('id') id: string,
     @Body('status') status: SaleStatus,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<SaleEntity> {
     return this.salesService.transitionStatus(
       id,
       status,
       user.userId,
       user.companyId,
+      idempotencyKey,
     );
   }
 
@@ -177,12 +186,14 @@ export class SalesController {
   async complete(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<SaleEntity> {
     return this.salesService.transitionStatus(
       id,
       SaleStatus.COMPLETED,
       user.userId,
       user.companyId,
+      idempotencyKey,
     );
   }
 
@@ -195,12 +206,14 @@ export class SalesController {
   async cancel(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<SaleEntity> {
     return this.salesService.transitionStatus(
       id,
       SaleStatus.CANCELLED,
       user.userId,
       user.companyId,
+      idempotencyKey,
     );
   }
 

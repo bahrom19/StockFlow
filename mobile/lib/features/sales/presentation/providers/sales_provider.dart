@@ -4,6 +4,7 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/errors/failures.dart';
+import 'package:stockflow/core/outbox/outbox_operation.dart';
 import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 
@@ -400,6 +401,13 @@ class SaleListNotifier extends StateNotifier<SaleListState> {
 class PosNotifier extends StateNotifier<AsyncValue<Sale?>> {
   final Ref _ref;
 
+  /// G16-C-01: the Idempotency-Key for the CURRENT business submit. Minted
+  /// once per PAY submit and reused for every retry of the same submit —
+  /// retries can never mint a new key, otherwise a duplicate submit would
+  /// create a second sale. Cleared only when the submit reaches a terminal
+  /// outcome (2xx, permanent 4xx or the user abandons the flow).
+  String? _submitIdempotencyKey;
+
   PosNotifier(this._ref) : super(const AsyncData(null));
 
   /// Create sale as DRAFT
@@ -452,8 +460,12 @@ class PosNotifier extends StateNotifier<AsyncValue<Sale?>> {
       currency: currency,
       notes: notes,
     );
-    final result = await repo.create(request);
+    // G16-C-01: one immutable key per business submit — attempt 1 and every
+    // retry share it, so the backend replays instead of double-selling.
+    final key = _submitIdempotencyKey ??= OutboxOperation.idGenerator();
+    final result = await repo.create(request, idempotencyKey: key);
     if (result is SalesSuccess<Sale>) {
+      _submitIdempotencyKey = null;
       state = AsyncData(result.data);
       return result.data;
     }
@@ -462,12 +474,24 @@ class PosNotifier extends StateNotifier<AsyncValue<Sale?>> {
     return null;
   }
 
+  /// G16-C-01: the caller (POS workspace) abandons the current submit — the
+  /// pending key is dropped so the NEXT submit mints a fresh one. Called on
+  /// the failure paths after the user has been informed.
+  void abandonSubmit() {
+    _submitIdempotencyKey = null;
+  }
+
   /// Complete a sale (DRAFT → COMPLETED)
   Future<Sale?> completeSale(String saleId) async {
     state = const AsyncLoading();
     final repo = _ref.read(salesRepositoryProvider);
-    final result = await repo.complete(saleId);
+    // G16-C-01: reuse the submit key through complete so create+complete of
+    // one business submit form one idempotency chain; fall back to a fresh
+    // key when completing outside that flow.
+    final key = _submitIdempotencyKey ??= OutboxOperation.idGenerator();
+    final result = await repo.complete(saleId, idempotencyKey: key);
     if (result is SalesSuccess<Sale>) {
+      _submitIdempotencyKey = null;
       state = AsyncData(result.data);
       return result.data;
     }

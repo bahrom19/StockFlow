@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -57,12 +58,14 @@ export class SalesRefundController {
     @Param('id') id: string,
     @Body() dto: CreateRefundDto,
     @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<SalesRefundEntity> {
     return this.salesRefundService.createRefund(
       id,
       dto ?? {},
       user.userId,
       user.companyId,
+      idempotencyKey,
     );
   }
 }
