@@ -25,6 +25,14 @@ class _FakeSuppliersRepo extends SuppliersRepository {
   _FakeSuppliersRepo(super.api, super.ref, this.message);
   final String message;
 
+  // G1: the create flow now consults the duplicate-name warning first.
+  // Override it so these tests stay offline (no real HTTP in widget tests).
+  @override
+  Future<SuppliersResult<List<Supplier>>> checkDuplicateName(
+      String companyName) async {
+    return const SuppliersSuccess([]);
+  }
+
   @override
   Future<SuppliersResult<Supplier>> create(
       CreateSupplierRequest request) async {

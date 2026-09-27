@@ -15,6 +15,9 @@ class Supplier with _$Supplier {
     String? website,
     String? notes,
     @Default(true) bool isActive,
+    // G1 (P3-03): optimistic-locking token echoed back in the PATCH body.
+    // Defaults to 0 so locally-built fixtures stay compatible.
+    @Default(0) int rowVersion,
     required DateTime createdAt,
     required DateTime updatedAt,
     DateTime? deletedAt,

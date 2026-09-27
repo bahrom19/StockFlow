@@ -17,6 +17,7 @@ _$SupplierImpl _$$SupplierImplFromJson(Map<String, dynamic> json) =>
       website: json['website'] as String?,
       notes: json['notes'] as String?,
       isActive: json['isActive'] as bool? ?? true,
+      rowVersion: (json['rowVersion'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       deletedAt: json['deletedAt'] == null
@@ -35,6 +36,7 @@ Map<String, dynamic> _$$SupplierImplToJson(_$SupplierImpl instance) =>
       'website': instance.website,
       'notes': instance.notes,
       'isActive': instance.isActive,
+      'rowVersion': instance.rowVersion,
       'createdAt': instance.createdAt.toIso8601String(),
       'updatedAt': instance.updatedAt.toIso8601String(),
       'deletedAt': instance.deletedAt?.toIso8601String(),

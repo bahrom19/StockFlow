@@ -108,10 +108,13 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
     final supplierResult = results[0] as SuppliersResult<Supplier>;
     final contactsResult = results[1] as SuppliersResult<List<SupplierContact>>;
-    final addressesResult = results[2] as SuppliersResult<List<SupplierAddress>>;
+    final addressesResult =
+        results[2] as SuppliersResult<List<SupplierAddress>>;
     final financeResult = results[3] as SuppliersResult<SupplierFinanceSummary>;
-    final paymentsResult = results[4] as SuppliersResult<SupplierPaymentListResponse>;
-    final productsResult = results[5] as SuppliersResult<SupplierProductListResponse>;
+    final paymentsResult =
+        results[4] as SuppliersResult<SupplierPaymentListResponse>;
+    final productsResult =
+        results[5] as SuppliersResult<SupplierProductListResponse>;
 
     if (!mounted) return;
 
@@ -134,15 +137,18 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       _addresses = addressesResult is SuppliersSuccess<List<SupplierAddress>>
           ? addressesResult.data
           : [];
-      _financeSummary = financeResult is SuppliersSuccess<SupplierFinanceSummary>
-          ? financeResult.data
-          : null;
-      _payments = paymentsResult is SuppliersSuccess<SupplierPaymentListResponse>
-          ? paymentsResult.data.items
-          : [];
-      _supplierProducts = productsResult is SuppliersSuccess<SupplierProductListResponse>
-          ? productsResult.data.items
-          : [];
+      _financeSummary =
+          financeResult is SuppliersSuccess<SupplierFinanceSummary>
+              ? financeResult.data
+              : null;
+      _payments =
+          paymentsResult is SuppliersSuccess<SupplierPaymentListResponse>
+              ? paymentsResult.data.items
+              : [];
+      _supplierProducts =
+          productsResult is SuppliersSuccess<SupplierProductListResponse>
+              ? productsResult.data.items
+              : [];
       _isLoading = false;
     });
 
@@ -414,6 +420,14 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
               _load();
             },
           ),
+          // G1 (P3-05): archive/delete via the existing soft-delete endpoint.
+          // Historical documents are never touched (FK Restrict on the
+          // backend), and the supplier disappears from the default list.
+          IconButton(
+            icon: const Icon(Icons.archive_outlined),
+            tooltip: context.l10n.delete,
+            onPressed: () => _confirmArchiveSupplier(supplier),
+          ),
         ],
       ),
       body: RefreshIndicator(
@@ -642,24 +656,19 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
           CreateSupplierContactRequest(
             firstName:
                 firstNameCtrl.text.isNotEmpty ? firstNameCtrl.text : null,
-            lastName:
-                lastNameCtrl.text.isNotEmpty ? lastNameCtrl.text : null,
+            lastName: lastNameCtrl.text.isNotEmpty ? lastNameCtrl.text : null,
             phone: phoneCtrl.text.isNotEmpty ? phoneCtrl.text : null,
             email: emailCtrl.text.isNotEmpty ? emailCtrl.text : null,
-            position:
-                positionCtrl.text.isNotEmpty ? positionCtrl.text : null,
+            position: positionCtrl.text.isNotEmpty ? positionCtrl.text : null,
             isPrimary: isPrimary,
           ));
     } else {
       await repo.updateContact(widget.supplierId, contact.id, {
-        'firstName':
-            firstNameCtrl.text.isNotEmpty ? firstNameCtrl.text : null,
-        'lastName':
-            lastNameCtrl.text.isNotEmpty ? lastNameCtrl.text : null,
+        'firstName': firstNameCtrl.text.isNotEmpty ? firstNameCtrl.text : null,
+        'lastName': lastNameCtrl.text.isNotEmpty ? lastNameCtrl.text : null,
         'phone': phoneCtrl.text.isNotEmpty ? phoneCtrl.text : null,
         'email': emailCtrl.text.isNotEmpty ? emailCtrl.text : null,
-        'position':
-            positionCtrl.text.isNotEmpty ? positionCtrl.text : null,
+        'position': positionCtrl.text.isNotEmpty ? positionCtrl.text : null,
         'isPrimary': isPrimary,
       });
     }
@@ -670,6 +679,53 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     final repo = ref.read(suppliersRepositoryProvider);
     await repo.deleteContact(widget.supplierId, contact.id);
     _loadContactsAndAddresses();
+  }
+
+  /// G1 (P3-05): archive (soft-delete) the supplier after explicit user
+  /// confirmation, then return to the list. Restore is intentionally not
+  /// offered (approved design decision).
+  Future<void> _confirmArchiveSupplier(Supplier supplier) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(dialogContext.l10n.supplierArchiveTitle),
+        content: Text(
+          dialogContext.l10n.supplierArchiveBody(supplier.companyName),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(dialogContext.l10n.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(dialogContext.l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final repo = ref.read(suppliersRepositoryProvider);
+    final result = await repo.delete(widget.supplierId);
+    if (!mounted) return;
+    if (result is SuppliersSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.supplierArchived)),
+      );
+      context.pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(localizedErrorLabel(
+            context.l10n,
+            (result as SuppliersFailure).error.message,
+          )),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // ── Address Dialog (reuses G2 pattern) ─────────────────────
@@ -741,8 +797,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
             city: cityCtrl.text.isNotEmpty ? cityCtrl.text : null,
             country: countryCtrl.text.isNotEmpty ? countryCtrl.text : null,
             street: streetCtrl.text.isNotEmpty ? streetCtrl.text : null,
-            postalCode:
-                postalCtrl.text.isNotEmpty ? postalCtrl.text : null,
+            postalCode: postalCtrl.text.isNotEmpty ? postalCtrl.text : null,
             isDefault: isDefault,
           ));
     } else {
@@ -750,8 +805,7 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
         'city': cityCtrl.text.isNotEmpty ? cityCtrl.text : null,
         'country': countryCtrl.text.isNotEmpty ? countryCtrl.text : null,
         'street': streetCtrl.text.isNotEmpty ? streetCtrl.text : null,
-        'postalCode':
-            postalCtrl.text.isNotEmpty ? postalCtrl.text : null,
+        'postalCode': postalCtrl.text.isNotEmpty ? postalCtrl.text : null,
         'isDefault': isDefault,
       });
     }
@@ -827,27 +881,40 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
       repo.getFinanceSummary(widget.supplierId),
       repo.getPayments(widget.supplierId),
       repo.getPaymentAging(widget.supplierId),
-      repo.getSupplierInvoiceList(widget.supplierId, page: _invoicePage, limit: 10),
+      repo.getSupplierInvoiceList(widget.supplierId,
+          page: _invoicePage, limit: 10),
       repo.getCreditSummary(widget.supplierId),
     ]);
     if (!mounted) return;
     setState(() {
       if (results[0] is SuppliersSuccess<SupplierFinanceSummary>) {
-        _financeSummary = (results[0] as SuppliersSuccess<SupplierFinanceSummary>).data;
+        _financeSummary =
+            (results[0] as SuppliersSuccess<SupplierFinanceSummary>).data;
       }
       if (results[1] is SuppliersSuccess<SupplierPaymentListResponse>) {
-        _payments = (results[1] as SuppliersSuccess<SupplierPaymentListResponse>).data.items;
+        _payments =
+            (results[1] as SuppliersSuccess<SupplierPaymentListResponse>)
+                .data
+                .items;
       }
       if (results[2] is SuppliersSuccess<SupplierPaymentAging>) {
-        _paymentAging = (results[2] as SuppliersSuccess<SupplierPaymentAging>).data;
+        _paymentAging =
+            (results[2] as SuppliersSuccess<SupplierPaymentAging>).data;
       }
       if (results[3] is SuppliersSuccess<PurchaseInvoiceListResponse>) {
-        _invoices = (results[3] as SuppliersSuccess<PurchaseInvoiceListResponse>).data.items;
-        _invoiceTotal = (results[3] as SuppliersSuccess<PurchaseInvoiceListResponse>).data.total;
+        _invoices =
+            (results[3] as SuppliersSuccess<PurchaseInvoiceListResponse>)
+                .data
+                .items;
+        _invoiceTotal =
+            (results[3] as SuppliersSuccess<PurchaseInvoiceListResponse>)
+                .data
+                .total;
       }
       // G9-D1: keep the read-only credit summary in sync after payments.
       if (results[4] is SuppliersSuccess<SupplierCreditSummary>) {
-        _creditSummary = (results[4] as SuppliersSuccess<SupplierCreditSummary>).data;
+        _creditSummary =
+            (results[4] as SuppliersSuccess<SupplierCreditSummary>).data;
       }
     });
   }
@@ -859,16 +926,23 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
         _purchaseDateFrom = null;
         _purchaseDateTo = null;
       } else if (value == '3m') {
-        _purchaseDateFrom = DateTime(now.year, now.month - 3, now.day).toIso8601String().substring(0, 10);
+        _purchaseDateFrom = DateTime(now.year, now.month - 3, now.day)
+            .toIso8601String()
+            .substring(0, 10);
         _purchaseDateTo = null;
       } else if (value == '6m') {
-        _purchaseDateFrom = DateTime(now.year, now.month - 6, now.day).toIso8601String().substring(0, 10);
+        _purchaseDateFrom = DateTime(now.year, now.month - 6, now.day)
+            .toIso8601String()
+            .substring(0, 10);
         _purchaseDateTo = null;
       } else if (value == '1y') {
-        _purchaseDateFrom = DateTime(now.year - 1, now.month, now.day).toIso8601String().substring(0, 10);
+        _purchaseDateFrom = DateTime(now.year - 1, now.month, now.day)
+            .toIso8601String()
+            .substring(0, 10);
         _purchaseDateTo = null;
       } else if (value == 'ytd') {
-        _purchaseDateFrom = DateTime(now.year, 1, 1).toIso8601String().substring(0, 10);
+        _purchaseDateFrom =
+            DateTime(now.year, 1, 1).toIso8601String().substring(0, 10);
         _purchaseDateTo = null;
       }
     });
@@ -881,7 +955,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
 
   // ── Price History Dialog ──────────────────────────────
 
-  Future<void> _showPriceHistoryDialog(String productId, String productName) async {
+  Future<void> _showPriceHistoryDialog(
+      String productId, String productName) async {
     if (!mounted) return;
     final repo = ref.read(suppliersRepositoryProvider);
     final result = await repo.getPriceHistory(widget.supplierId, productId,
@@ -896,7 +971,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
     }
   }
 
-  Widget _analyticsStat(String label, String value, ThemeData theme, {bool highlighted = false}) {
+  Widget _analyticsStat(String label, String value, ThemeData theme,
+      {bool highlighted = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -905,7 +981,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
-        Text(CurrencyCatalog.format(value, code: ref.read(companyCurrencyProvider)),
+        Text(
+            CurrencyCatalog.format(value,
+                code: ref.read(companyCurrencyProvider)),
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: highlighted ? FontWeight.w700 : FontWeight.w600,
               color: highlighted ? theme.colorScheme.primary : null,
@@ -937,9 +1015,14 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                   runSpacing: 8,
                   children: [
                     if (history.currentQuotedPrice != null)
-                      _analyticsStat(context.l10n.currentQuotedPrice, '₸${history.currentQuotedPrice}', theme),
-                    _analyticsStat(context.l10n.avgCost, '₸${history.averageUnitCost}', theme),
-                    _analyticsStat(context.l10n.minMaxCost, '₸${history.minUnitCost} / ₸${history.maxUnitCost}', theme),
+                      _analyticsStat(context.l10n.currentQuotedPrice,
+                          '₸${history.currentQuotedPrice}', theme),
+                    _analyticsStat(context.l10n.avgCost,
+                        '₸${history.averageUnitCost}', theme),
+                    _analyticsStat(
+                        context.l10n.minMaxCost,
+                        '₸${history.minUnitCost} / ₸${history.maxUnitCost}',
+                        theme),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -956,31 +1039,34 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                           color: theme.colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 8),
                   ...history.pricePoints.map((pp) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          child: Text(pp.invoiceDate.substring(0, 10),
-                              style: theme.textTheme.bodySmall),
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 80,
+                              child: Text(pp.invoiceDate.substring(0, 10),
+                                  style: theme.textTheme.bodySmall),
+                            ),
+                            Expanded(
+                              child: Text(pp.invoiceNumber,
+                                  style: theme.textTheme.bodySmall
+                                      ?.copyWith(fontWeight: FontWeight.w500)),
+                            ),
+                            SizedBox(
+                              width: 70,
+                              child: Text('₸${pp.unitCost}',
+                                  style: theme.textTheme.bodySmall,
+                                  textAlign: TextAlign.end),
+                            ),
+                            SizedBox(
+                              width: 50,
+                              child: Text('×${pp.quantity}',
+                                  style: theme.textTheme.bodySmall,
+                                  textAlign: TextAlign.end),
+                            ),
+                          ],
                         ),
-                        Expanded(
-                          child: Text(pp.invoiceNumber,
-                              style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500)),
-                        ),
-                        SizedBox(
-                          width: 70,
-                          child: Text('₸${pp.unitCost}',
-                              style: theme.textTheme.bodySmall, textAlign: TextAlign.end),
-                        ),
-                        SizedBox(
-                          width: 50,
-                          child: Text('×${pp.quantity}',
-                              style: theme.textTheme.bodySmall, textAlign: TextAlign.end),
-                        ),
-                      ],
-                    ),
-                  )),
+                      )),
                 ],
               ],
             ),
@@ -1033,8 +1119,12 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
           final filteredProducts = searchQuery.isEmpty
               ? availableProducts
               : availableProducts.where((p) {
-                  final nameMatch = p.name.toLowerCase().contains(searchQuery.toLowerCase());
-                  final skuMatch = p.sku?.toLowerCase().contains(searchQuery.toLowerCase()) ?? false;
+                  final nameMatch =
+                      p.name.toLowerCase().contains(searchQuery.toLowerCase());
+                  final skuMatch = p.sku
+                          ?.toLowerCase()
+                          .contains(searchQuery.toLowerCase()) ??
+                      false;
                   return nameMatch || skuMatch;
                 }).toList();
 
@@ -1046,7 +1136,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Product selector
-                  Text(context.l10n.selectProduct, style: Theme.of(ctx).textTheme.labelLarge),
+                  Text(context.l10n.selectProduct,
+                      style: Theme.of(ctx).textTheme.labelLarge),
                   const SizedBox(height: 8),
                   if (selectedProductId != null)
                     Card(
@@ -1054,7 +1145,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                         dense: true,
                         leading: const Icon(Icons.inventory_2, size: 20),
                         title: Text(selectedProductName),
-                        subtitle: selectedProductSku.isNotEmpty ? Text('SKU: $selectedProductSku') : null,
+                        subtitle: selectedProductSku.isNotEmpty
+                            ? Text('SKU: $selectedProductSku')
+                            : null,
                         trailing: IconButton(
                           icon: const Icon(Icons.close, size: 16),
                           onPressed: () => setDialogState(() {
@@ -1076,17 +1169,33 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Column(
                           children: [
-                            Text(productsError!, style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: Theme.of(ctx).colorScheme.error)),
+                            Text(productsError!,
+                                style: Theme.of(ctx)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                        color:
+                                            Theme.of(ctx).colorScheme.error)),
                             const SizedBox(height: 8),
                             TextButton.icon(
                               onPressed: () async {
-                                setDialogState(() { isLoadingProducts = true; productsError = null; });
-                                final result = await ref.read(productsRepositoryProvider).list(limit: 50);
-                                if (result is ProductsSuccess<ProductListResponse>) {
-                                  setDialogState(() { availableProducts = result.data.items; });
+                                setDialogState(() {
+                                  isLoadingProducts = true;
+                                  productsError = null;
+                                });
+                                final result = await ref
+                                    .read(productsRepositoryProvider)
+                                    .list(limit: 50);
+                                if (result
+                                    is ProductsSuccess<ProductListResponse>) {
+                                  setDialogState(() {
+                                    availableProducts = result.data.items;
+                                  });
                                 } else if (result is ProductsFail) {
                                   final fail = result as ProductsFail;
-                                  setDialogState(() { productsError = fail.error.message; });
+                                  setDialogState(() {
+                                    productsError = fail.error.message;
+                                  });
                                 }
                                 setDialogState(() => isLoadingProducts = false);
                               },
@@ -1102,7 +1211,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                           hintText: context.l10n.productSelectorHint,
                           prefixIcon: const Icon(Icons.search, size: 20),
                           border: const OutlineInputBorder(),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                         ),
                         onChanged: (v) => setDialogState(() {
                           searchQuery = v;
@@ -1114,7 +1224,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                           constraints: const BoxConstraints(maxHeight: 200),
                           margin: const EdgeInsets.only(top: 4),
                           decoration: BoxDecoration(
-                            border: Border.all(color: Theme.of(ctx).colorScheme.outline),
+                            border: Border.all(
+                                color: Theme.of(ctx).colorScheme.outline),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: ListView.builder(
@@ -1125,7 +1236,9 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                               return ListTile(
                                 dense: true,
                                 title: Text(product.name),
-                                subtitle: product.sku != null ? Text('SKU: ${product.sku}') : null,
+                                subtitle: product.sku != null
+                                    ? Text('SKU: ${product.sku}')
+                                    : null,
                                 onTap: () => setDialogState(() {
                                   selectedProductId = product.id;
                                   selectedProductName = product.name;
@@ -1140,7 +1253,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                       if (showProductsList && filteredProducts.isEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: Text(context.l10n.noData, style: Theme.of(ctx).textTheme.bodySmall),
+                          child: Text(context.l10n.noData,
+                              style: Theme.of(ctx).textTheme.bodySmall),
                         ),
                     ],
                   ],
@@ -1148,7 +1262,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                   // Supplier SKU
                   TextField(
                     controller: supplierSkuCtrl,
-                    decoration: InputDecoration(labelText: context.l10n.supplierSku),
+                    decoration:
+                        InputDecoration(labelText: context.l10n.supplierSku),
                   ),
                   const SizedBox(height: 12),
                   // Supplier quoted price
@@ -1158,7 +1273,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                       labelText: context.l10n.supplierQuotedPrice,
                       suffixText: '₸',
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                   ),
                   const SizedBox(height: 12),
                   // Preferred supplier
@@ -1184,37 +1300,51 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                 child: Text(context.l10n.cancel),
               ),
               FilledButton(
-                onPressed: isSubmitting ? null : () async {
-                  if (selectedProductId == null) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text(context.l10n.selectProductRequired)),
-                    );
-                    return;
-                  }
-                  setDialogState(() => isSubmitting = true);
-                  final price = double.tryParse(priceCtrl.text);
-                  final createResult = await repo.createSupplierProduct(
-                    widget.supplierId,
-                    CreateSupplierProductRequest(
-                      productId: selectedProductId!,
-                      supplierSku: supplierSkuCtrl.text.isNotEmpty ? supplierSkuCtrl.text : null,
-                      purchasePrice: price,
-                      isPreferred: isPreferred,
-                      notes: notesCtrl.text.isNotEmpty ? notesCtrl.text : null,
-                    ),
-                  );
-                  if (!ctx.mounted) return;
-                  if (createResult is SuppliersSuccess) {
-                    Navigator.pop(ctx, true);
-                  } else if (createResult is SuppliersFailure) {
-                    setDialogState(() => isSubmitting = false);
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text((createResult as SuppliersFailure).error.message)),
-                    );
-                  }
-                },
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        if (selectedProductId == null) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                                content:
+                                    Text(context.l10n.selectProductRequired)),
+                          );
+                          return;
+                        }
+                        setDialogState(() => isSubmitting = true);
+                        final price = double.tryParse(priceCtrl.text);
+                        final createResult = await repo.createSupplierProduct(
+                          widget.supplierId,
+                          CreateSupplierProductRequest(
+                            productId: selectedProductId!,
+                            supplierSku: supplierSkuCtrl.text.isNotEmpty
+                                ? supplierSkuCtrl.text
+                                : null,
+                            purchasePrice: price,
+                            isPreferred: isPreferred,
+                            notes: notesCtrl.text.isNotEmpty
+                                ? notesCtrl.text
+                                : null,
+                          ),
+                        );
+                        if (!ctx.mounted) return;
+                        if (createResult is SuppliersSuccess) {
+                          Navigator.pop(ctx, true);
+                        } else if (createResult is SuppliersFailure) {
+                          setDialogState(() => isSubmitting = false);
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                                content: Text((createResult as SuppliersFailure)
+                                    .error
+                                    .message)),
+                          );
+                        }
+                      },
                 child: isSubmitting
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : Text(context.l10n.save),
               ),
             ],
@@ -1234,7 +1364,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
   Future<void> _showEditProductDialog(SupplierProduct sp) async {
     if (!mounted) return;
     final supplierSkuCtrl = TextEditingController(text: sp.supplierSku ?? '');
-    final priceCtrl = TextEditingController(text: sp.purchasePrice?.toString() ?? '');
+    final priceCtrl =
+        TextEditingController(text: sp.purchasePrice?.toString() ?? '');
     final notesCtrl = TextEditingController(text: sp.notes ?? '');
     bool isPreferred = sp.isPreferred;
     bool isSubmitting = false;
@@ -1251,16 +1382,19 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Product name (read-only)
-                Text(context.l10n.product, style: Theme.of(ctx).textTheme.labelLarge),
+                Text(context.l10n.product,
+                    style: Theme.of(ctx).textTheme.labelLarge),
                 const SizedBox(height: 4),
                 Text(sp.product.name, style: Theme.of(ctx).textTheme.bodyLarge),
                 if (sp.product.sku != null)
-                  Text('SKU: ${sp.product.sku}', style: Theme.of(ctx).textTheme.bodySmall),
+                  Text('SKU: ${sp.product.sku}',
+                      style: Theme.of(ctx).textTheme.bodySmall),
                 const SizedBox(height: 16),
                 // Supplier SKU
                 TextField(
                   controller: supplierSkuCtrl,
-                  decoration: InputDecoration(labelText: context.l10n.supplierSku),
+                  decoration:
+                      InputDecoration(labelText: context.l10n.supplierSku),
                 ),
                 const SizedBox(height: 12),
                 // Supplier quoted price
@@ -1270,7 +1404,8 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
                     labelText: context.l10n.supplierQuotedPrice,
                     suffixText: '₸',
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 12),
                 // Preferred supplier
@@ -1296,31 +1431,42 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
               child: Text(context.l10n.cancel),
             ),
             FilledButton(
-              onPressed: isSubmitting ? null : () async {
-                setDialogState(() => isSubmitting = true);
-                final price = double.tryParse(priceCtrl.text);
-                final updateResult = await repo.updateSupplierProduct(
-                  widget.supplierId,
-                  sp.id,
-                  {
-                    'supplierSku': supplierSkuCtrl.text.isNotEmpty ? supplierSkuCtrl.text : null,
-                    'purchasePrice': price,
-                    'isPreferred': isPreferred,
-                    'notes': notesCtrl.text.isNotEmpty ? notesCtrl.text : null,
-                  },
-                );
-                if (!ctx.mounted) return;
-                if (updateResult is SuppliersSuccess) {
-                  Navigator.pop(ctx, true);
-                } else if (updateResult is SuppliersFailure) {
-                  setDialogState(() => isSubmitting = false);
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(content: Text((updateResult as SuppliersFailure).error.message)),
-                  );
-                }
-              },
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      setDialogState(() => isSubmitting = true);
+                      final price = double.tryParse(priceCtrl.text);
+                      final updateResult = await repo.updateSupplierProduct(
+                        widget.supplierId,
+                        sp.id,
+                        {
+                          'supplierSku': supplierSkuCtrl.text.isNotEmpty
+                              ? supplierSkuCtrl.text
+                              : null,
+                          'purchasePrice': price,
+                          'isPreferred': isPreferred,
+                          'notes':
+                              notesCtrl.text.isNotEmpty ? notesCtrl.text : null,
+                        },
+                      );
+                      if (!ctx.mounted) return;
+                      if (updateResult is SuppliersSuccess) {
+                        Navigator.pop(ctx, true);
+                      } else if (updateResult is SuppliersFailure) {
+                        setDialogState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(
+                              content: Text((updateResult as SuppliersFailure)
+                                  .error
+                                  .message)),
+                        );
+                      }
+                    },
               child: isSubmitting
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : Text(context.l10n.save),
             ),
           ],
@@ -1343,8 +1489,12 @@ class _SupplierDetailScreenState extends ConsumerState<SupplierDetailScreen> {
         title: Text(context.l10n.confirmRemoval),
         content: Text('${context.l10n.remove} ${sp.product.name}?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.cancel)),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.delete)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(context.l10n.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(context.l10n.delete)),
         ],
       ),
     );

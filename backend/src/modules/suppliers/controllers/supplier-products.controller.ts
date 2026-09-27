@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -52,7 +53,7 @@ export class SupplierProductsController {
   @ApiQuery({ name: 'sortOrder', required: false, type: String })
   @ApiResponse({ status: 200 })
   async findAll(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
@@ -82,8 +83,8 @@ export class SupplierProductsController {
   @ApiParam({ name: 'spId', type: String })
   @ApiResponse({ status: 200, type: SupplierProductEntity })
   async findById(
-    @Param('supplierId') supplierId: string,
-    @Param('spId') spId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('spId', ParseUUIDPipe) spId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.productsService.findById(spId, supplierId, user.companyId);
@@ -100,11 +101,13 @@ export class SupplierProductsController {
   @ApiParam({ name: 'supplierId', type: String })
   @ApiResponse({ status: 201, type: SupplierProductEntity })
   async create(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Body() dto: CreateSupplierProductDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.productsService.create(supplierId, dto, user.companyId);
+    return this.productsService.create(supplierId, dto, user.companyId, {
+      userId: user.userId,
+    });
   }
 
   // ─────────────────────────────────────────────
@@ -118,12 +121,14 @@ export class SupplierProductsController {
   @ApiParam({ name: 'spId', type: String })
   @ApiResponse({ status: 200, type: SupplierProductEntity })
   async update(
-    @Param('supplierId') supplierId: string,
-    @Param('spId') spId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('spId', ParseUUIDPipe) spId: string,
     @Body() dto: UpdateSupplierProductDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.productsService.update(spId, supplierId, user.companyId, dto);
+    return this.productsService.update(spId, supplierId, user.companyId, dto, {
+      userId: user.userId,
+    });
   }
 
   // ─────────────────────────────────────────────
@@ -137,10 +142,12 @@ export class SupplierProductsController {
   @ApiParam({ name: 'supplierId', type: String })
   @ApiParam({ name: 'spId', type: String })
   async remove(
-    @Param('supplierId') supplierId: string,
-    @Param('spId') spId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('spId', ParseUUIDPipe) spId: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.productsService.remove(spId, supplierId, user.companyId);
+    return this.productsService.remove(spId, supplierId, user.companyId, {
+      userId: user.userId,
+    });
   }
 }

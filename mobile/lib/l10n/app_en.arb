@@ -1107,5 +1107,22 @@
     "placeholders": {
       "currency": {}
     }
-  }
+  },
+  "supplierModifiedError": "Supplier was changed by another user. Current data has been reloaded — please review and try again.",
+  "supplierDuplicateWarningTitle": "Possible duplicate supplier",
+  "supplierDuplicateWarningBody": "A supplier with a similar name already exists: {names}. Create anyway?",
+  "@supplierDuplicateWarningBody": {
+    "placeholders": {
+      "names": {}
+    }
+  },
+  "supplierDuplicateWarningProceed": "Create anyway",
+  "supplierArchiveTitle": "Archive supplier",
+  "supplierArchiveBody": "Archive {name}? The supplier will be hidden from the default list. Historical documents are kept.",
+  "@supplierArchiveBody": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "supplierArchived": "Supplier archived"
 }

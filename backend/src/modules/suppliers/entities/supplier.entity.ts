@@ -43,6 +43,14 @@ export class SupplierEntity {
   @ApiProperty({ example: true })
   isActive!: boolean;
 
+  @ApiProperty({
+    example: 0,
+    description:
+      'Optimistic-locking token (G1/P3-03). Echo it unchanged in the PATCH ' +
+      'body; a stale value is rejected with 409.',
+  })
+  rowVersion!: number;
+
   @ApiProperty({ example: '2026-07-08T00:00:00.000Z' })
   createdAt!: Date;
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -33,7 +33,7 @@ export class SupplierExposureController {
   @ApiResponse({ status: 200, type: SupplierExposureEntity })
   @ApiResponse({ status: 404, description: 'Supplier not found' })
   async getOpenPoExposure(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<SupplierExposureEntity> {
     return this.exposureService.getOpenPoExposure(

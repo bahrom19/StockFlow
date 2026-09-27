@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, SupplierAddress } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import { CreateSupplierAddressDto } from '../dto/create-supplier-address.dto';
 import { UpdateSupplierAddressDto } from '../dto/update-supplier-address.dto';
 import { SupplierAddressEntity } from '../entities/supplier-address.entity';
@@ -8,13 +9,54 @@ import { SupplierAddressesRepository } from '../repositories/supplier-addresses.
 import { SuppliersService } from './suppliers.service';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 
+// G1 (P3-04): bounded audit diff; no free-form user text is written.
+type AddressAuditFields = Pick<
+  SupplierAddress,
+  'supplierId' | 'city' | 'country' | 'street' | 'postalCode' | 'isDefault' | 'rowVersion'
+>;
+
+function addressAuditFields(a: SupplierAddress): AddressAuditFields {
+  return {
+    supplierId: a.supplierId,
+    city: a.city,
+    country: a.country,
+    street: a.street,
+    postalCode: a.postalCode,
+    isDefault: a.isDefault,
+    rowVersion: a.rowVersion,
+  };
+}
+
 @Injectable()
 export class SupplierAddressesService {
   constructor(
     private readonly addressesRepository: SupplierAddressesRepository,
     private readonly suppliersService: SuppliersService,
     private readonly prismaService: PrismaService,
+    private readonly auditLogService: AuditLogService,
   ) {}
+
+  private async audit(
+    action: string,
+    entityId: string,
+    before: AddressAuditFields | null,
+    after: AddressAuditFields | null,
+    currentUser: JwtPayload,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await this.auditLogService.log(
+      {
+        companyId: currentUser.companyId,
+        userId: currentUser.userId,
+        entityType: 'SupplierAddress',
+        entityId,
+        action,
+        before,
+        after,
+      },
+      tx,
+    );
+  }
 
   async create(
     supplierId: string,
@@ -30,7 +72,7 @@ export class SupplierAddressesService {
         await this.addressesRepository.clearDefault(supplierId, undefined, tx);
       }
 
-      return this.addressesRepository.create(
+      const created = await this.addressesRepository.create(
         {
           supplier: { connect: { id: supplierId } },
           city: dto.city,
@@ -41,6 +83,12 @@ export class SupplierAddressesService {
         } as Prisma.SupplierAddressCreateInput,
         tx,
       );
+      // G1 (P3-04): audit in the SAME transaction as the business write.
+      await this.audit('supplier_address.create', created.id, null, addressAuditFields(created), currentUser, tx);
+      if (dto.isDefault) {
+        await this.audit('supplier_address.default_change', created.id, null, addressAuditFields(created), currentUser, tx);
+      }
+      return created;
     });
 
     return this.toEntity(address);
@@ -110,7 +158,7 @@ export class SupplierAddressesService {
         );
       }
 
-      return this.addressesRepository.update(
+      const updated = await this.addressesRepository.update(
         addressId,
         supplierId,
         {
@@ -123,6 +171,12 @@ export class SupplierAddressesService {
         current.rowVersion,
         tx,
       );
+      // G1 (P3-04): audit in the SAME transaction as the business write.
+      await this.audit('supplier_address.update', updated.id, addressAuditFields(current), addressAuditFields(updated), currentUser, tx);
+      if (dto.isDefault) {
+        await this.audit('supplier_address.default_change', updated.id, addressAuditFields(current), addressAuditFields(updated), currentUser, tx);
+      }
+      return updated;
     });
 
     return this.toEntity(updated);
@@ -154,6 +208,8 @@ export class SupplierAddressesService {
         current.rowVersion,
         tx,
       );
+      // G1 (P3-04): audit in the SAME transaction as the tombstone write.
+      await this.audit('supplier_address.delete', addressId, addressAuditFields(current), null, currentUser, tx);
     });
   }
 

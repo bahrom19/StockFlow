@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { SuppliersService } from '../services/suppliers.service';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
@@ -10,6 +10,7 @@ describe('SuppliersService', () => {
   let mockRepo: jest.Mocked<SuppliersRepository>;
   let mockPrisma: { $transaction: jest.Mock };
   let mockTx: Record<string, any>;
+  let auditLog: { log: jest.Mock };
 
   const currentUser = {
     userId: 'me',
@@ -57,10 +58,16 @@ describe('SuppliersService', () => {
         SuppliersService,
         { provide: SuppliersRepository, useValue: mockRepo },
         { provide: PrismaService, useValue: mockPrisma },
+        // G1 (P3-04): audit logging is wired in; unit tests stub it out.
+        { provide: require('../../shared/services/audit-log.service').AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
     service = module.get<SuppliersService>(SuppliersService);
+    auditLog = module.get(
+      require('../../shared/services/audit-log.service').AuditLogService,
+    ) as unknown as { log: jest.Mock };
+    mockRepo.findActiveByNameNormalized = jest.fn().mockResolvedValue([]);
   });
 
   // ─────────────────────────────────────────────
@@ -151,7 +158,7 @@ describe('SuppliersService', () => {
     } as any);
     const result = await service.update(
       'supp-1',
-      { companyName: 'Updated Co' } as any,
+      { companyName: 'Updated Co', rowVersion: 0 } as any,
       currentUser,
     );
     expect(result.companyName).toBe('Updated Co');
@@ -162,7 +169,7 @@ describe('SuppliersService', () => {
     mockRepo.findById.mockResolvedValue(baseSupplier as any);
     mockRepo.findActiveByEmail.mockResolvedValue({ ...baseSupplier, id: 'other' } as any);
     await expect(
-      service.update('supp-1', { email: 'taken@test.com' } as any, currentUser),
+      service.update('supp-1', { email: 'taken@test.com', rowVersion: 0 } as any, currentUser),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -170,7 +177,7 @@ describe('SuppliersService', () => {
     mockRepo.findById.mockResolvedValue(baseSupplier as any);
     mockRepo.findActiveByPhone.mockResolvedValue({ ...baseSupplier, id: 'other' } as any);
     await expect(
-      service.update('supp-1', { phone: '+77009998877' } as any, currentUser),
+      service.update('supp-1', { phone: '+77009998877', rowVersion: 0 } as any, currentUser),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -178,7 +185,7 @@ describe('SuppliersService', () => {
     mockRepo.findById.mockResolvedValue(baseSupplier as any);
     mockRepo.findActiveByBin.mockResolvedValue({ ...baseSupplier, id: 'other' } as any);
     await expect(
-      service.update('supp-1', { bin: '999999999999' } as any, currentUser),
+      service.update('supp-1', { bin: '999999999999', rowVersion: 0 } as any, currentUser),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -188,7 +195,7 @@ describe('SuppliersService', () => {
     // Same values as existing — should not trigger duplicate check
     const result = await service.update(
       'supp-1',
-      { email: 'supply@test.com', phone: '+77001112233', bin: '123456789012' } as any,
+      { email: 'supply@test.com', phone: '+77001112233', bin: '123456789012', rowVersion: 0 } as any,
       currentUser,
     );
     expect(result.companyName).toBe('Updated');
@@ -295,11 +302,11 @@ describe('SuppliersService', () => {
         creditLimit: new Prisma.Decimal('250000.5'),
       } as any);
 
-      const result = await service.update(
-        'supp-1',
-        { defaultDueDays: 45, creditLimit: 250000.5 } as any,
-        currentUser,
-      );
+    const result = await service.update(
+      'supp-1',
+      { defaultDueDays: 45, creditLimit: 250000.5, rowVersion: 0 } as any,
+      currentUser,
+    );
 
       expect(mockRepo.update).toHaveBeenCalledWith(
         'supp-1',
@@ -319,7 +326,7 @@ describe('SuppliersService', () => {
       mockRepo.findById.mockResolvedValue(baseSupplier as any);
       mockRepo.update.mockResolvedValue(baseSupplier as any);
 
-      await service.update('supp-1', { notes: 'x' } as any, currentUser);
+      await service.update('supp-1', { notes: 'x', rowVersion: 0 } as any, currentUser);
 
       const data = mockRepo.update.mock.calls[0]?.[1] as any;
       expect(data.defaultDueDays).toBeUndefined();
@@ -331,7 +338,7 @@ describe('SuppliersService', () => {
       await expect(
         service.update(
           'supp-1',
-          { defaultDueDays: 30 } as any,
+          { defaultDueDays: 30, rowVersion: 0 } as any,
           { ...currentUser, companyId: 'other-comp' },
         ),
       ).rejects.toThrow(NotFoundException);
@@ -369,6 +376,125 @@ describe('SuppliersService', () => {
       it('allows both fields to be omitted', async () => {
         expect(await validateDto({ companyName: 'X' })).toHaveLength(0);
       });
+    });
+  });
+
+  // ─────────────────────────────────────────────────────
+  // G1: rowVersion CAS contract + audit + duplicate warning
+  // ─────────────────────────────────────────────────────
+  describe('G1: CAS rowVersion / audit / duplicate-name warning', () => {
+    it('rejects update without rowVersion (optimistic locking required)', async () => {
+      await expect(
+        service.update('supp-1', { companyName: 'X' } as any, currentUser),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('forwards the client rowVersion to the repository CAS on update', async () => {
+      mockRepo.findById.mockResolvedValue(baseSupplier as any);
+      mockRepo.update.mockResolvedValue(baseSupplier as any);
+
+      await service.update(
+        'supp-1',
+        { companyName: 'X', rowVersion: 7 } as any,
+        currentUser,
+      );
+
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'supp-1',
+        expect.anything(),
+        'comp-1',
+        7,
+        mockTx,
+      );
+    });
+
+    it('writes supplier.update audit in the SAME transaction as the business write', async () => {
+      mockRepo.findById.mockResolvedValue(baseSupplier as any);
+      mockRepo.update.mockResolvedValue(baseSupplier as any);
+
+      await service.update(
+        'supp-1',
+        { companyName: 'X', rowVersion: 0 } as any,
+        currentUser,
+      );
+
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId: 'comp-1',
+          userId: 'me',
+          entityType: 'Supplier',
+          entityId: 'supp-1',
+          action: 'supplier.update',
+        }),
+        mockTx,
+      );
+    });
+
+    it('writes supplier.create audit in the same transaction', async () => {
+      mockRepo.create.mockResolvedValue(baseSupplier as any);
+      await service.create({ companyName: 'Supply Co' } as any, currentUser);
+
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: 'Supplier',
+          entityId: 'supp-1',
+          action: 'supplier.create',
+          before: null,
+        }),
+        mockTx,
+      );
+    });
+
+    it('writes supplier.soft_delete audit in the same transaction', async () => {
+      mockRepo.findById.mockResolvedValue(baseSupplier as any);
+      mockRepo.softDelete.mockResolvedValue({
+        ...baseSupplier,
+        deletedAt: new Date(),
+      } as any);
+      await service.softDelete('supp-1', currentUser);
+
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: 'Supplier',
+          entityId: 'supp-1',
+          action: 'supplier.soft_delete',
+        }),
+        mockTx,
+      );
+    });
+
+    it('excludes audit payload fields that must not leak and includes rowVersion', async () => {
+      mockRepo.create.mockResolvedValue(baseSupplier as any);
+      await service.create(
+        { companyName: 'Supply Co', notes: 'secret note' } as any,
+        currentUser,
+      );
+
+      const after = auditLog.log.mock.calls[0][0].after;
+      expect(after).not.toHaveProperty('notes');
+      expect(after).toHaveProperty('rowVersion', 0);
+      expect(after).toHaveProperty('companyName', 'Supply Co');
+    });
+
+    it('checkDuplicateName normalizes (trim, collapse, lowercase) and scopes to company', async () => {
+      mockRepo.findActiveByNameNormalized.mockResolvedValue([baseSupplier]);
+      const result = await service.checkDuplicateName(
+        '  Alpha   SUPPLY  ',
+        currentUser,
+      );
+
+      expect(mockRepo.findActiveByNameNormalized).toHaveBeenCalledWith(
+        'alpha supply',
+        'comp-1',
+      );
+      expect(result).toHaveLength(1);
+    });
+
+    it('checkDuplicateName returns empty for blank input without querying', async () => {
+      const result = await service.checkDuplicateName('   ', currentUser);
+      expect(result).toHaveLength(0);
+      expect(mockRepo.findActiveByNameNormalized).not.toHaveBeenCalled();
     });
   });
 });

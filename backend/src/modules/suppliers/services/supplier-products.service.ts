@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Currency, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierProductsRepository } from '../repositories/supplier-products.repository';
 import { SupplierProductEntity } from '../entities/supplier-product.entity';
@@ -14,6 +15,31 @@ import { CreateSupplierProductDto } from '../dto/create-supplier-product.dto';
 import { UpdateSupplierProductDto } from '../dto/update-supplier-product.dto';
 import { toSupplierProductEntity } from '../mappers/supplier-product.mapper';
 import { CompaniesService } from '../../companies/services/companies.service';
+import { SupplierProduct } from '@prisma/client';
+
+// G1 (P3-04): bounded audit diff; notes is free-form user text and is
+// never written to the audit trail.
+type ProductAuditFields = Pick<
+  SupplierProduct,
+  'supplierId' | 'productId' | 'supplierSku' | 'purchasePrice' | 'currency' | 'isPreferred' | 'rowVersion'
+>;
+
+function productAuditFields(sp: SupplierProduct): ProductAuditFields {
+  return {
+    supplierId: sp.supplierId,
+    productId: sp.productId,
+    supplierSku: sp.supplierSku,
+    purchasePrice: sp.purchasePrice,
+    currency: sp.currency,
+    isPreferred: sp.isPreferred,
+    rowVersion: sp.rowVersion,
+  };
+}
+
+/** G1 (P3-04): actor identity forwarded by the controller from the JWT. */
+export interface SupplierProductActor {
+  userId: string;
+}
 
 @Injectable()
 export class SupplierProductsService {
@@ -24,7 +50,36 @@ export class SupplierProductsService {
     private readonly suppliersRepo: SuppliersRepository,
     private readonly supplierProductsRepo: SupplierProductsRepository,
     private readonly companiesService: CompaniesService,
+    private readonly auditLogService: AuditLogService,
   ) {}
+
+  private async audit(
+    action: string,
+    entityId: string,
+    before: ProductAuditFields | null,
+    after: ProductAuditFields | null,
+    actor: SupplierProductActor | undefined,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (!actor) {
+      // Actor is always provided by the controller; kept optional only so
+      // legacy internal callers/tests without an actor stay compatible.
+      return;
+    }
+    await this.auditLogService.log(
+      {
+        companyId,
+        userId: actor.userId,
+        entityType: 'SupplierProduct',
+        entityId,
+        action,
+        before,
+        after,
+      },
+      tx,
+    );
+  }
 
   // ─────────────────────────────────────────────
   // LIST
@@ -93,6 +148,7 @@ export class SupplierProductsService {
     supplierId: string,
     dto: CreateSupplierProductDto,
     companyId: string,
+    actor?: SupplierProductActor,
   ): Promise<SupplierProductEntity> {
     // 1. Validate supplier
     const supplier = await this.suppliersRepo.findById(supplierId, companyId);
@@ -160,6 +216,12 @@ export class SupplierProductsService {
         tx,
       );
 
+      // G1 (P3-04): audit in the SAME transaction as the business write.
+      await this.audit('supplier_product.create', sp.id, null, productAuditFields(sp), actor, companyId, tx);
+      if (dto.isPreferred) {
+        await this.audit('supplier_product.preferred_change', sp.id, null, productAuditFields(sp), actor, companyId, tx);
+      }
+
       this.logger.log(
         `SupplierProduct created: supplier=${supplierId} product=${dto.productId}`,
       );
@@ -177,6 +239,7 @@ export class SupplierProductsService {
     supplierId: string,
     companyId: string,
     dto: UpdateSupplierProductDto,
+    actor?: SupplierProductActor,
   ): Promise<SupplierProductEntity> {
     // 1. Verify existing
     const existing = await this.supplierProductsRepo.findById(
@@ -221,6 +284,12 @@ export class SupplierProductsService {
         tx,
       );
 
+      // G1 (P3-04): audit in the SAME transaction as the business write.
+      await this.audit('supplier_product.update', sp.id, productAuditFields(existing as unknown as SupplierProduct), productAuditFields(sp), actor, companyId, tx);
+      if (dto.isPreferred === true && !existing.isPreferred) {
+        await this.audit('supplier_product.preferred_change', sp.id, productAuditFields(existing as unknown as SupplierProduct), productAuditFields(sp), actor, companyId, tx);
+      }
+
       return toSupplierProductEntity(sp);
     });
   }
@@ -233,6 +302,7 @@ export class SupplierProductsService {
     id: string,
     supplierId: string,
     companyId: string,
+    actor?: SupplierProductActor,
   ): Promise<void> {
     const existing = await this.supplierProductsRepo.findById(
       id,
@@ -243,11 +313,24 @@ export class SupplierProductsService {
       throw new NotFoundException(`Supplier product ${id} not found`);
     }
 
-    await this.supplierProductsRepo.softDelete(
-      id,
-      companyId,
-      existing.rowVersion,
-    );
+    // G1 (P3-04): tombstone + audit commit/roll back together.
+    await this.prismaService.$transaction(async (tx) => {
+      await this.supplierProductsRepo.softDelete(
+        id,
+        companyId,
+        existing.rowVersion,
+        tx,
+      );
+      await this.audit(
+        'supplier_product.delete',
+        id,
+        productAuditFields(existing as unknown as SupplierProduct),
+        null,
+        actor,
+        companyId,
+        tx,
+      );
+    });
 
     this.logger.log(`SupplierProduct soft-deleted: ${id}`);
   }

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -37,7 +37,7 @@ export class SupplierAnalyticsController {
   @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
   @ApiResponse({ status: 200, type: SupplierPurchaseSummaryEntity })
   async getPurchaseSummary(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @CurrentUser() user?: JwtPayload,
@@ -63,7 +63,7 @@ export class SupplierAnalyticsController {
   @ApiQuery({ name: 'sortOrder', required: false, type: String })
   @ApiResponse({ status: 200, type: SupplierProductPurchaseListEntity })
   async getProductPurchases(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @Query('page') page?: number,
@@ -94,7 +94,7 @@ export class SupplierAnalyticsController {
   @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
   @ApiResponse({ status: 200, type: SupplierReliabilityEntity })
   async getReliability(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @CurrentUser() user?: JwtPayload,
@@ -116,7 +116,7 @@ export class SupplierAnalyticsController {
   @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
   @ApiResponse({ status: 200, type: SupplierPriceHistoryEntity })
   async getPriceHistory(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Query('productId') productId: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
@@ -137,7 +137,7 @@ export class SupplierAnalyticsController {
   @ApiParam({ name: 'supplierId', type: String })
   @ApiResponse({ status: 200, type: SupplierPaymentAgingEntity })
   async getPaymentAging(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @CurrentUser() user?: JwtPayload,
   ) {
     return this.analyticsService.getPaymentAging(
@@ -154,7 +154,7 @@ export class SupplierAnalyticsController {
   @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
   @ApiResponse({ status: 200, type: SupplierReturnSummaryEntity })
   async getReturnSummary(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @CurrentUser() user?: JwtPayload,
@@ -175,7 +175,7 @@ export class SupplierAnalyticsController {
   @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
   @ApiResponse({ status: 200, type: SupplierPerformanceEntity })
   async getPerformance(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @CurrentUser() user?: JwtPayload,
@@ -197,7 +197,7 @@ export class SupplierAnalyticsController {
   @ApiQuery({ name: 'status', required: false, type: String, description: 'Filter by PurchaseOrderStatus' })
   @ApiResponse({ status: 200, type: SupplierOrderPipelineEntity })
   async getOrderPipeline(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @Query('status') status?: string,

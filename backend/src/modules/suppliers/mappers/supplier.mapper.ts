@@ -13,6 +13,8 @@ export class SupplierMapper {
       website: supplier.website,
       notes: supplier.notes,
       isActive: supplier.isActive,
+      // G1 (P3-03): exposed for API-client CAS updates.
+      rowVersion: supplier.rowVersion,
       defaultDueDays: supplier.defaultDueDays,
       creditLimit: supplier.creditLimit?.toString() ?? null,
       createdAt: supplier.createdAt,

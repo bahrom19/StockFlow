@@ -225,6 +225,32 @@ export class SuppliersRepository {
     });
   }
 
+  /**
+   * G1: normalized company-name duplicate lookup (advisory, non-blocking).
+   * Normalization happens in the service (trim → collapse whitespace →
+   * lowercase); here we match case-insensitively on the raw column, which
+   * combined with the service-side normalization gives equality semantics
+   * for trimmed/collapsed/lowercased names. Soft-deleted rows are excluded.
+   */
+  async findActiveByNameNormalized(
+    normalizedCompanyName: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Supplier[]> {
+    return this.getClient(tx).supplier.findMany({
+      where: {
+        companyName: {
+          equals: normalizedCompanyName,
+          mode: 'insensitive',
+        },
+        companyId,
+        deletedAt: null,
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 10,
+    });
+  }
+
   async softDelete(
     id: string,
     companyId: string,

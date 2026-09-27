@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   UseGuards,
@@ -45,7 +46,7 @@ export class SupplierPaymentAllocationsController {
   @ApiParam({ name: 'supplierId', type: String })
   @ApiResponse({ status: 201, type: SupplierPaymentAllocationEntity })
   async create(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Body() dto: CreateSupplierPaymentAllocationDto,
     @CurrentUser() user: JwtPayload,
     @Headers('idempotency-key') idempotencyKey?: string,
@@ -72,8 +73,8 @@ export class SupplierPaymentAllocationsController {
   @ApiParam({ name: 'paymentId', type: String })
   @ApiResponse({ status: 200, type: [SupplierPaymentAllocationEntity] })
   async findByPayment(
-    @Param('supplierId') supplierId: string,
-    @Param('paymentId') paymentId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.allocationsService.findByPayment(
@@ -94,8 +95,8 @@ export class SupplierPaymentAllocationsController {
   @ApiParam({ name: 'invoiceId', type: String })
   @ApiResponse({ status: 200, type: [SupplierPaymentAllocationEntity] })
   async findByInvoice(
-    @Param('supplierId') supplierId: string,
-    @Param('invoiceId') invoiceId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.allocationsService.findByInvoice(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
 import 'package:stockflow/features/suppliers/data/repositories/suppliers_repository.dart';
@@ -110,11 +111,12 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
     setState(() => _isSaving = true);
     final repo = ref.read(suppliersRepositoryProvider);
 
-    final editingId =
-        _existing?.id ?? widget.supplier?.id ?? widget.supplierId;
+    final editingId = _existing?.id ?? widget.supplier?.id ?? widget.supplierId;
 
     SuppliersResult<Supplier> result;
     if (_isEditing && editingId != null) {
+      // G1 (P3-03): the CAS token read when the form was loaded is echoed
+      // back; a stale value is rejected by the backend with 409.
       result = await repo.update(editingId, {
         'companyName': _nameCtrl.text,
         'bin': _binCtrl.text.isNotEmpty ? _binCtrl.text : null,
@@ -123,8 +125,22 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
         'website': _websiteCtrl.text.isNotEmpty ? _websiteCtrl.text : null,
         'notes': _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
         'isActive': _isActive,
+        'rowVersion': _existing?.rowVersion ?? 0,
       });
     } else {
+      // G1: non-blocking duplicate-name warning before create. The user can
+      // always continue — the check only surfaces likely duplicates.
+      final dupes = await repo.checkDuplicateName(_nameCtrl.text);
+      final duplicateNames = dupes is SuppliersSuccess<List<Supplier>>
+          ? dupes.data.map((d) => d.companyName).toList()
+          : const <String>[];
+      if (duplicateNames.isNotEmpty && mounted) {
+        final proceed = await _confirmDuplicateName(duplicateNames);
+        if (!proceed || !mounted) {
+          setState(() => _isSaving = false);
+          return;
+        }
+      }
       result = await repo.create(CreateSupplierRequest(
         companyName: _nameCtrl.text,
         bin: _binCtrl.text.isNotEmpty ? _binCtrl.text : null,
@@ -149,18 +165,58 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
       );
       context.pop();
     } else if (result is SuppliersFailure && mounted) {
+      final failure = (result as SuppliersFailure).error;
+      // G1 (P3-03): CAS conflict — the supplier changed since the form was
+      // loaded. Surface it explicitly, reload the current server state into
+      // the form and stop (no retry loop, no silent overwrite).
+      if (failure is ConflictFailure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.l10n.supplierModifiedError),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        await _load();
+        return;
+      }
       // Render-time localization: canonical ErrorHandler fallbacks get the
       // localized label (RU/KK); backend/freeform messages pass through.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(localizedErrorLabel(
             context.l10n,
-            (result as SuppliersFailure).error.message,
+            failure.message,
           )),
           backgroundColor: Colors.red,
         ),
       );
     }
+  }
+
+  /// G1: duplicate-name warning dialog. Returns true when the user chooses
+  /// to proceed with creation anyway.
+  Future<bool> _confirmDuplicateName(List<String> duplicateNames) async {
+    final listed = duplicateNames.take(3).join(', ');
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(dialogContext.l10n.supplierDuplicateWarningTitle),
+        content: Text(
+          dialogContext.l10n.supplierDuplicateWarningBody(listed),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(dialogContext.l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(dialogContext.l10n.supplierDuplicateWarningProceed),
+          ),
+        ],
+      ),
+    );
+    return proceed ?? false;
   }
 
   @override
@@ -301,7 +357,8 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.people_outline, size: 20, color: theme.colorScheme.primary),
+                Icon(Icons.people_outline,
+                    size: 20, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(context.l10n.contacts, style: theme.textTheme.titleMedium),
                 const Spacer(),
@@ -317,41 +374,49 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
                   context.l10n.noSuppliersFound, // reuse generic empty text
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.outline),
                 ),
               )
             else
               ..._contacts.map((c) => ListTile(
-                dense: true,
-                leading: CircleAvatar(
-                  radius: 16,
-                  child: Text((c.firstName ?? c.email ?? '?')[0].toUpperCase(),
-                      style: const TextStyle(fontSize: 12)),
-                ),
-                title: Text(c.displayName),
-                subtitle: Text([c.position, c.phone ?? c.email].where((e) => e != null && e.isNotEmpty).join(' · ')),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (c.isPrimary)
-                      Chip(
-                        label: Text(context.l10n.primaryContact, style: const TextStyle(fontSize: 10)),
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                      ),
-                    PopupMenuButton<String>(
-                      onSelected: (v) {
-                        if (v == 'edit') _showContactDialog(contact: c);
-                        if (v == 'delete') _deleteContact(c);
-                      },
-                      itemBuilder: (_) => [
-                        PopupMenuItem(value: 'edit', child: Text(context.l10n.edit)),
-                        PopupMenuItem(value: 'delete', child: Text(context.l10n.delete)),
+                    dense: true,
+                    leading: CircleAvatar(
+                      radius: 16,
+                      child: Text(
+                          (c.firstName ?? c.email ?? '?')[0].toUpperCase(),
+                          style: const TextStyle(fontSize: 12)),
+                    ),
+                    title: Text(c.displayName),
+                    subtitle: Text([c.position, c.phone ?? c.email]
+                        .where((e) => e != null && e.isNotEmpty)
+                        .join(' · ')),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (c.isPrimary)
+                          Chip(
+                            label: Text(context.l10n.primaryContact,
+                                style: const TextStyle(fontSize: 10)),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                        PopupMenuButton<String>(
+                          onSelected: (v) {
+                            if (v == 'edit') _showContactDialog(contact: c);
+                            if (v == 'delete') _deleteContact(c);
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                                value: 'edit', child: Text(context.l10n.edit)),
+                            PopupMenuItem(
+                                value: 'delete',
+                                child: Text(context.l10n.delete)),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
-              )),
+                  )),
           ],
         ),
       ),
@@ -370,9 +435,11 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.location_on_outlined, size: 20, color: theme.colorScheme.primary),
+                Icon(Icons.location_on_outlined,
+                    size: 20, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
-                Text(context.l10n.addresses, style: theme.textTheme.titleMedium),
+                Text(context.l10n.addresses,
+                    style: theme.textTheme.titleMedium),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.add, size: 20),
@@ -386,36 +453,42 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
                   context.l10n.noSuppliersFound,
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.outline),
                 ),
               )
             else
               ..._addresses.map((a) => ListTile(
-                dense: true,
-                leading: Icon(Icons.location_on, size: 20, color: theme.colorScheme.outline),
-                title: Text(a.displayAddress),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (a.isDefault)
-                      Chip(
-                        label: Text(context.l10n.defaultAddress, style: const TextStyle(fontSize: 10)),
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                      ),
-                    PopupMenuButton<String>(
-                      onSelected: (v) {
-                        if (v == 'edit') _showAddressDialog(address: a);
-                        if (v == 'delete') _deleteAddress(a);
-                      },
-                      itemBuilder: (_) => [
-                        PopupMenuItem(value: 'edit', child: Text(context.l10n.edit)),
-                        PopupMenuItem(value: 'delete', child: Text(context.l10n.delete)),
+                    dense: true,
+                    leading: Icon(Icons.location_on,
+                        size: 20, color: theme.colorScheme.outline),
+                    title: Text(a.displayAddress),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (a.isDefault)
+                          Chip(
+                            label: Text(context.l10n.defaultAddress,
+                                style: const TextStyle(fontSize: 10)),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                        PopupMenuButton<String>(
+                          onSelected: (v) {
+                            if (v == 'edit') _showAddressDialog(address: a);
+                            if (v == 'delete') _deleteAddress(a);
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                                value: 'edit', child: Text(context.l10n.edit)),
+                            PopupMenuItem(
+                                value: 'delete',
+                                child: Text(context.l10n.delete)),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
-              )),
+                  )),
           ],
         ),
       ),
@@ -436,20 +509,36 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(contact == null ? context.l10n.newContact : context.l10n.edit),
+          title: Text(
+              contact == null ? context.l10n.newContact : context.l10n.edit),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: firstNameCtrl, decoration: InputDecoration(labelText: context.l10n.firstName)),
+                TextField(
+                    controller: firstNameCtrl,
+                    decoration:
+                        InputDecoration(labelText: context.l10n.firstName)),
                 const SizedBox(height: 8),
-                TextField(controller: lastNameCtrl, decoration: InputDecoration(labelText: context.l10n.lastName)),
+                TextField(
+                    controller: lastNameCtrl,
+                    decoration:
+                        InputDecoration(labelText: context.l10n.lastName)),
                 const SizedBox(height: 8),
-                TextField(controller: phoneCtrl, decoration: InputDecoration(labelText: context.l10n.phone), keyboardType: TextInputType.phone),
+                TextField(
+                    controller: phoneCtrl,
+                    decoration: InputDecoration(labelText: context.l10n.phone),
+                    keyboardType: TextInputType.phone),
                 const SizedBox(height: 8),
-                TextField(controller: emailCtrl, decoration: InputDecoration(labelText: context.l10n.email), keyboardType: TextInputType.emailAddress),
+                TextField(
+                    controller: emailCtrl,
+                    decoration: InputDecoration(labelText: context.l10n.email),
+                    keyboardType: TextInputType.emailAddress),
                 const SizedBox(height: 8),
-                TextField(controller: positionCtrl, decoration: InputDecoration(labelText: context.l10n.position)),
+                TextField(
+                    controller: positionCtrl,
+                    decoration:
+                        InputDecoration(labelText: context.l10n.position)),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   title: Text(context.l10n.primaryContact),
@@ -461,8 +550,12 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.cancel)),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.save)),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(context.l10n.cancel)),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(context.l10n.save)),
           ],
         ),
       ),
@@ -474,14 +567,17 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
     final repo = ref.read(suppliersRepositoryProvider);
 
     if (contact == null) {
-      await repo.createContact(supplierId, CreateSupplierContactRequest(
-        firstName: firstNameCtrl.text.isNotEmpty ? firstNameCtrl.text : null,
-        lastName: lastNameCtrl.text.isNotEmpty ? lastNameCtrl.text : null,
-        phone: phoneCtrl.text.isNotEmpty ? phoneCtrl.text : null,
-        email: emailCtrl.text.isNotEmpty ? emailCtrl.text : null,
-        position: positionCtrl.text.isNotEmpty ? positionCtrl.text : null,
-        isPrimary: isPrimary,
-      ));
+      await repo.createContact(
+          supplierId,
+          CreateSupplierContactRequest(
+            firstName:
+                firstNameCtrl.text.isNotEmpty ? firstNameCtrl.text : null,
+            lastName: lastNameCtrl.text.isNotEmpty ? lastNameCtrl.text : null,
+            phone: phoneCtrl.text.isNotEmpty ? phoneCtrl.text : null,
+            email: emailCtrl.text.isNotEmpty ? emailCtrl.text : null,
+            position: positionCtrl.text.isNotEmpty ? positionCtrl.text : null,
+            isPrimary: isPrimary,
+          ));
     } else {
       await repo.updateContact(supplierId, contact.id, {
         'firstName': firstNameCtrl.text.isNotEmpty ? firstNameCtrl.text : null,
@@ -516,18 +612,30 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(address == null ? context.l10n.newAddress : context.l10n.edit),
+          title: Text(
+              address == null ? context.l10n.newAddress : context.l10n.edit),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: streetCtrl, decoration: InputDecoration(labelText: context.l10n.address)),
+                TextField(
+                    controller: streetCtrl,
+                    decoration:
+                        InputDecoration(labelText: context.l10n.address)),
                 const SizedBox(height: 8),
-                TextField(controller: cityCtrl, decoration: InputDecoration(labelText: context.l10n.city)),
+                TextField(
+                    controller: cityCtrl,
+                    decoration: InputDecoration(labelText: context.l10n.city)),
                 const SizedBox(height: 8),
-                TextField(controller: countryCtrl, decoration: InputDecoration(labelText: context.l10n.country)),
+                TextField(
+                    controller: countryCtrl,
+                    decoration:
+                        InputDecoration(labelText: context.l10n.country)),
                 const SizedBox(height: 8),
-                TextField(controller: postalCtrl, decoration: InputDecoration(labelText: context.l10n.postalCode)),
+                TextField(
+                    controller: postalCtrl,
+                    decoration:
+                        InputDecoration(labelText: context.l10n.postalCode)),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   title: Text(context.l10n.defaultAddress),
@@ -539,8 +647,12 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.cancel)),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.save)),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(context.l10n.cancel)),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(context.l10n.save)),
           ],
         ),
       ),
@@ -552,13 +664,15 @@ class _SupplierFormScreenState extends ConsumerState<SupplierFormScreen> {
     final repo = ref.read(suppliersRepositoryProvider);
 
     if (address == null) {
-      await repo.createAddress(supplierId, CreateSupplierAddressRequest(
-        city: cityCtrl.text.isNotEmpty ? cityCtrl.text : null,
-        country: countryCtrl.text.isNotEmpty ? countryCtrl.text : null,
-        street: streetCtrl.text.isNotEmpty ? streetCtrl.text : null,
-        postalCode: postalCtrl.text.isNotEmpty ? postalCtrl.text : null,
-        isDefault: isDefault,
-      ));
+      await repo.createAddress(
+          supplierId,
+          CreateSupplierAddressRequest(
+            city: cityCtrl.text.isNotEmpty ? cityCtrl.text : null,
+            country: countryCtrl.text.isNotEmpty ? countryCtrl.text : null,
+            street: streetCtrl.text.isNotEmpty ? streetCtrl.text : null,
+            postalCode: postalCtrl.text.isNotEmpty ? postalCtrl.text : null,
+            isDefault: isDefault,
+          ));
     } else {
       await repo.updateAddress(supplierId, address.id, {
         'city': cityCtrl.text.isNotEmpty ? cityCtrl.text : null,

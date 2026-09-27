@@ -757,6 +757,23 @@
   "website": "Веб-сайт",
   "noSuppliersFound": "Поставщики не найдены",
   "suppliersEmptySubtitle": "Добавьте первого поставщика, чтобы начать закупки",
+  "supplierModifiedError": "Поставщик был изменён другим пользователем. Актуальные данные загружены заново — проверьте и повторите.",
+  "supplierDuplicateWarningTitle": "Возможный дубликат поставщика",
+  "supplierDuplicateWarningBody": "Поставщик с похожим названием уже существует: {names}. Всё равно создать?",
+  "@supplierDuplicateWarningBody": {
+    "placeholders": {
+      "names": {}
+    }
+  },
+  "supplierDuplicateWarningProceed": "Всё равно создать",
+  "supplierArchiveTitle": "Архивировать поставщика",
+  "supplierArchiveBody": "Архивировать {name}? Поставщик будет скрыт из общего списка. Исторические документы сохранятся.",
+  "@supplierArchiveBody": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "supplierArchived": "Поставщик архивирован",
   "editSupplier": "Изменить поставщика",
   "companyNameRequired": "Название компании *",
   "supplierCreated": "Поставщик создан",

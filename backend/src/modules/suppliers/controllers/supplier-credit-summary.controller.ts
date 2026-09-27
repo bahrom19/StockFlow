@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -33,7 +33,7 @@ export class SupplierCreditSummaryController {
   @ApiResponse({ status: 200, type: SupplierCreditSummaryEntity })
   @ApiResponse({ status: 404, description: 'Supplier not found' })
   async getCreditSummary(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<SupplierCreditSummaryEntity> {
     return this.creditSummaryService.getCreditSummary(

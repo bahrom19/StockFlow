@@ -59,6 +59,8 @@ describe('SupplierContactsService', () => {
         { provide: SupplierContactsRepository, useValue: mockContactsRepo },
         { provide: SuppliersService, useValue: mockSuppliersService },
         { provide: PrismaService, useValue: mockPrisma },
+        // G1 (P3-04): audit logging is wired in; unit tests stub it out.
+        { provide: require('../../shared/services/audit-log.service').AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

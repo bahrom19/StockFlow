@@ -73,14 +73,14 @@ class SuppliersRepository {
     }
   }
 
-  Future<SuppliersResult<Supplier>> create(CreateSupplierRequest request) async {
+  Future<SuppliersResult<Supplier>> create(
+      CreateSupplierRequest request) async {
     try {
       // The deployed CreateSupplierDto requires companyId in the request body.
       final companyId = _ref.read(currentUserProvider)?.companyId;
       final payload = <String, dynamic>{
         ...request.toJson(),
-        if (companyId != null && companyId.isNotEmpty)
-          'companyId': companyId,
+        if (companyId != null && companyId.isNotEmpty) 'companyId': companyId,
       };
       final response = await _api.post<Map<String, dynamic>>(
         '/suppliers',
@@ -109,6 +109,27 @@ class SuppliersRepository {
     try {
       await _api.delete<dynamic>('/suppliers/$id');
       return const SuppliersSuccess(null);
+    } catch (e) {
+      return SuppliersFailure(_errorHandler.handle(e));
+    }
+  }
+
+  /// G1: non-blocking company-name duplicate warning.
+  /// Returns ACTIVE suppliers whose normalized name equals the given one
+  /// (trim → collapse whitespace → lowercase, compared case-insensitively
+  /// on the backend). May be empty — purely advisory.
+  Future<SuppliersResult<List<Supplier>>> checkDuplicateName(
+      String companyName) async {
+    try {
+      final response = await _api.get<List<dynamic>>(
+        '/suppliers/duplicates',
+        queryParameters: {'companyName': companyName},
+      );
+      final items = (response.data ?? const [])
+          .map(
+              (raw) => Supplier.fromJson(Map<String, dynamic>.from(raw as Map)))
+          .toList();
+      return SuppliersSuccess(items);
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
@@ -226,7 +247,9 @@ class SuppliersRepository {
   // ── Payments ──────────────────────────────────────────────
 
   Future<SuppliersResult<SupplierPaymentListResponse>> getPayments(
-      String supplierId, {int page = 1, int limit = 20}) async {
+      String supplierId,
+      {int page = 1,
+      int limit = 20}) async {
     try {
       final response = await _api.get<Map<String, dynamic>>(
         '/suppliers/$supplierId/payments',
@@ -259,8 +282,7 @@ class SuppliersRepository {
       final response = await _api.get<Map<String, dynamic>>(
         '/suppliers/$supplierId/finance/summary',
       );
-      return SuppliersSuccess(
-          SupplierFinanceSummary.fromJson(response.data!));
+      return SuppliersSuccess(SupplierFinanceSummary.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
@@ -269,25 +291,27 @@ class SuppliersRepository {
   // ── Supplier Purchase Analytics ─────────────────────
 
   Future<SuppliersResult<SupplierPurchaseSummary>> getPurchaseSummary(
-      String supplierId, {String? dateFrom, String? dateTo}) async {
+      String supplierId,
+      {String? dateFrom,
+      String? dateTo}) async {
     try {
       final params = <String, dynamic>{};
-      if (dateFrom != null && dateFrom.isNotEmpty) params['dateFrom'] = dateFrom;
+      if (dateFrom != null && dateFrom.isNotEmpty)
+        params['dateFrom'] = dateFrom;
       if (dateTo != null && dateTo.isNotEmpty) params['dateTo'] = dateTo;
       final response = await _api.get<Map<String, dynamic>>(
         '/suppliers/$supplierId/analytics/purchase-summary',
         queryParameters: params.isNotEmpty ? params : null,
       );
-      return SuppliersSuccess(
-          SupplierPurchaseSummary.fromJson(response.data!));
+      return SuppliersSuccess(SupplierPurchaseSummary.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
   }
 
   Future<SuppliersResult<ProductPurchaseListResponse>> getProductPurchases(
-      String supplierId, {
-      String? dateFrom,
+      String supplierId,
+      {String? dateFrom,
       String? dateTo,
       int page = 1,
       int limit = 20,
@@ -301,7 +325,8 @@ class SuppliersRepository {
         'sortBy': sortBy,
         'sortOrder': sortOrder,
       };
-      if (dateFrom != null && dateFrom.isNotEmpty) params['dateFrom'] = dateFrom;
+      if (dateFrom != null && dateFrom.isNotEmpty)
+        params['dateFrom'] = dateFrom;
       if (dateTo != null && dateTo.isNotEmpty) params['dateTo'] = dateTo;
       if (search != null && search.isNotEmpty) params['search'] = search;
       final response = await _api.get<Map<String, dynamic>>(
@@ -315,18 +340,18 @@ class SuppliersRepository {
     }
   }
 
-  Future<SuppliersResult<SupplierReliability>> getReliability(
-      String supplierId, {String? dateFrom, String? dateTo}) async {
+  Future<SuppliersResult<SupplierReliability>> getReliability(String supplierId,
+      {String? dateFrom, String? dateTo}) async {
     try {
       final params = <String, dynamic>{};
-      if (dateFrom != null && dateFrom.isNotEmpty) params['dateFrom'] = dateFrom;
+      if (dateFrom != null && dateFrom.isNotEmpty)
+        params['dateFrom'] = dateFrom;
       if (dateTo != null && dateTo.isNotEmpty) params['dateTo'] = dateTo;
       final response = await _api.get<Map<String, dynamic>>(
         '/suppliers/$supplierId/analytics/reliability',
         queryParameters: params.isNotEmpty ? params : null,
       );
-      return SuppliersSuccess(
-          SupplierReliability.fromJson(response.data!));
+      return SuppliersSuccess(SupplierReliability.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
@@ -339,14 +364,14 @@ class SuppliersRepository {
       final params = <String, dynamic>{
         'productId': productId,
       };
-      if (dateFrom != null && dateFrom.isNotEmpty) params['dateFrom'] = dateFrom;
+      if (dateFrom != null && dateFrom.isNotEmpty)
+        params['dateFrom'] = dateFrom;
       if (dateTo != null && dateTo.isNotEmpty) params['dateTo'] = dateTo;
       final response = await _api.get<Map<String, dynamic>>(
         '/suppliers/$supplierId/analytics/price-history',
         queryParameters: params,
       );
-      return SuppliersSuccess(
-          SupplierPriceHistory.fromJson(response.data!));
+      return SuppliersSuccess(SupplierPriceHistory.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
@@ -358,8 +383,7 @@ class SuppliersRepository {
       final response = await _api.get<Map<String, dynamic>>(
         '/suppliers/$supplierId/analytics/payment-aging',
       );
-      return SuppliersSuccess(
-          SupplierPaymentAging.fromJson(response.data!));
+      return SuppliersSuccess(SupplierPaymentAging.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
@@ -373,25 +397,26 @@ class SuppliersRepository {
       final response = await _api.get<Map<String, dynamic>>(
         '/suppliers/$supplierId/credit-summary',
       );
-      return SuppliersSuccess(
-          SupplierCreditSummary.fromJson(response.data!));
+      return SuppliersSuccess(SupplierCreditSummary.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
   }
 
   Future<SuppliersResult<SupplierReturnSummary>> getReturnSummary(
-      String supplierId, {String? dateFrom, String? dateTo}) async {
+      String supplierId,
+      {String? dateFrom,
+      String? dateTo}) async {
     try {
       final params = <String, dynamic>{};
-      if (dateFrom != null && dateFrom.isNotEmpty) params['dateFrom'] = dateFrom;
+      if (dateFrom != null && dateFrom.isNotEmpty)
+        params['dateFrom'] = dateFrom;
       if (dateTo != null && dateTo.isNotEmpty) params['dateTo'] = dateTo;
       final response = await _api.get<Map<String, dynamic>>(
         '/suppliers/$supplierId/analytics/return-summary',
         queryParameters: params.isNotEmpty ? params : null,
       );
-      return SuppliersSuccess(
-          SupplierReturnSummary.fromJson(response.data!));
+      return SuppliersSuccess(SupplierReturnSummary.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
@@ -399,8 +424,8 @@ class SuppliersRepository {
 
   // ── G5-B7 Performance Overview ──────────────────────────
 
-  Future<SuppliersResult<SupplierPerformance>> getPerformance(
-      String supplierId, {String? dateFrom, String? dateTo}) async {
+  Future<SuppliersResult<SupplierPerformance>> getPerformance(String supplierId,
+      {String? dateFrom, String? dateTo}) async {
     try {
       final params = <String, dynamic>{};
       if (dateFrom != null) params['dateFrom'] = dateFrom;
@@ -409,8 +434,7 @@ class SuppliersRepository {
         '/suppliers/$supplierId/analytics/performance',
         queryParameters: params,
       );
-      return SuppliersSuccess(
-          SupplierPerformance.fromJson(response.data!));
+      return SuppliersSuccess(SupplierPerformance.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
@@ -419,7 +443,10 @@ class SuppliersRepository {
   // ── G5-B8 Order Pipeline ─────────────────────────────
 
   Future<SuppliersResult<SupplierOrderPipeline>> getOrderPipeline(
-      String supplierId, {String? dateFrom, String? dateTo, String? status}) async {
+      String supplierId,
+      {String? dateFrom,
+      String? dateTo,
+      String? status}) async {
     try {
       final params = <String, dynamic>{};
       if (dateFrom != null) params['dateFrom'] = dateFrom;
@@ -429,8 +456,7 @@ class SuppliersRepository {
         '/suppliers/$supplierId/analytics/order-pipeline',
         queryParameters: params,
       );
-      return SuppliersSuccess(
-          SupplierOrderPipeline.fromJson(response.data!));
+      return SuppliersSuccess(SupplierOrderPipeline.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
@@ -479,7 +505,6 @@ class SuppliersRepository {
     }
   }
 
-
   /// Supplier-scoped invoice list used by the Record Payment invoice picker.
   Future<SuppliersResult<List<SupplierInvoiceLite>>> getSupplierInvoices(
     String supplierId, {
@@ -522,8 +547,8 @@ class SuppliersRepository {
         return const SuppliersSuccess(<CashAccountLite>[]);
       }
       final items = rawItems
-          .map((item) => CashAccountLite.fromJson(
-              Map<String, dynamic>.from(item as Map)))
+          .map((item) =>
+              CashAccountLite.fromJson(Map<String, dynamic>.from(item as Map)))
           .toList();
       return SuppliersSuccess(items);
     } catch (e) {
@@ -543,8 +568,8 @@ class SuppliersRepository {
         return const SuppliersSuccess(<BankAccountLite>[]);
       }
       final items = rawItems
-          .map((item) => BankAccountLite.fromJson(
-              Map<String, dynamic>.from(item as Map)))
+          .map((item) =>
+              BankAccountLite.fromJson(Map<String, dynamic>.from(item as Map)))
           .toList();
       return SuppliersSuccess(items);
     } catch (e) {
@@ -582,7 +607,11 @@ class SuppliersRepository {
   // ── Supplier Products ────────────────────────────────
 
   Future<SuppliersResult<SupplierProductListResponse>> getSupplierProducts(
-      String supplierId, {int page = 1, int limit = 20, String? search, bool? isPreferred}) async {
+      String supplierId,
+      {int page = 1,
+      int limit = 20,
+      String? search,
+      bool? isPreferred}) async {
     try {
       final params = <String, dynamic>{'page': page, 'limit': limit};
       if (search != null && search.isNotEmpty) params['search'] = search;
@@ -605,8 +634,7 @@ class SuppliersRepository {
         '/suppliers/$supplierId/products',
         data: request.toJson(),
       );
-      return SuppliersSuccess(
-          SupplierProduct.fromJson(response.data!));
+      return SuppliersSuccess(SupplierProduct.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }
@@ -619,8 +647,7 @@ class SuppliersRepository {
         '/suppliers/$supplierId/products/$spId',
         data: data,
       );
-      return SuppliersSuccess(
-          SupplierProduct.fromJson(response.data!));
+      return SuppliersSuccess(SupplierProduct.fromJson(response.data!));
     } catch (e) {
       return SuppliersFailure(_errorHandler.handle(e));
     }

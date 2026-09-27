@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -73,6 +74,24 @@ export class SuppliersController {
     return this.suppliersService.findAll(query, currentUser);
   }
 
+  // G1: company-name duplicate warning. STATIC route — must be declared
+  // BEFORE @Get(':id') or NestJS would match /suppliers/duplicates as :id.
+  @Get('duplicates')
+  @RequirePermission('suppliers:read')
+  @ApiOperation({ summary: 'Check for active suppliers with the same normalized company name (non-blocking warning)' })
+  @ApiQuery({ name: 'companyName', required: true, type: String })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Active suppliers with an equal normalized name (may be empty)',
+    type: [SupplierEntity],
+  })
+  async checkDuplicates(
+    @Query('companyName') companyName: string,
+    @CurrentUser() currentUser: JwtPayload,
+  ): Promise<SupplierEntity[]> {
+    return this.suppliersService.checkDuplicateName(companyName ?? '', currentUser);
+  }
+
   @Get(':id')
   @RequirePermission('suppliers:read')
   @ApiOperation({ summary: 'Get supplier by id' })
@@ -83,7 +102,7 @@ export class SuppliersController {
     type: SupplierEntity,
   })
   async findById(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<SupplierEntity> {
     return this.suppliersService.findById(id, currentUser);
@@ -99,7 +118,7 @@ export class SuppliersController {
     type: SupplierEntity,
   })
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() updateSupplierDto: UpdateSupplierDto,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<SupplierEntity> {
@@ -115,7 +134,7 @@ export class SuppliersController {
     description: 'Supplier soft deleted',
   })
   async softDelete(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<void> {
     await this.suppliersService.softDelete(id, currentUser);

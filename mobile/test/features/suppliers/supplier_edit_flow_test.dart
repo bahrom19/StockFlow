@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
+import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/features/suppliers/data/repositories/suppliers_repository.dart';
 import 'package:stockflow/features/suppliers/domain/supplier_models.dart';
 import 'package:stockflow/features/suppliers/presentation/screens/supplier_form_screen.dart';
@@ -19,7 +20,7 @@ AppLocalizations en() => lookupAppLocalizations(const Locale('en'));
 AppLocalizations ru() => lookupAppLocalizations(const Locale('ru'));
 AppLocalizations kk() => lookupAppLocalizations(const Locale('kk'));
 
-Supplier _fixture() => Supplier(
+Supplier _fixture({int rowVersion = 0}) => Supplier(
       id: 'sup-1',
       companyId: 'comp-1',
       companyName: 'Alpha Supply',
@@ -29,6 +30,7 @@ Supplier _fixture() => Supplier(
       website: 'https://alpha.example',
       notes: 'Main vendor',
       isActive: true,
+      rowVersion: rowVersion,
       createdAt: DateTime(2026, 1, 1),
       updatedAt: DateTime(2026, 1, 1),
     );
@@ -41,10 +43,21 @@ class _FakeSuppliersRepo extends SuppliersRepository {
   Map<String, dynamic>? updatedPayload;
   bool createCalled = false;
 
+  // G1 test hooks.
+  SuppliersResult<Supplier>? nextUpdateResult;
+  SuppliersResult<List<Supplier>>? duplicateNamesResult;
+
   @override
   Future<SuppliersResult<Supplier>> getById(String id) async {
     calls.add('getById:$id');
     return SuppliersSuccess(_fixture());
+  }
+
+  @override
+  Future<SuppliersResult<List<Supplier>>> checkDuplicateName(
+      String companyName) async {
+    calls.add('checkDuplicateName:$companyName');
+    return duplicateNamesResult ?? const SuppliersSuccess([]);
   }
 
   @override
@@ -53,7 +66,7 @@ class _FakeSuppliersRepo extends SuppliersRepository {
     calls.add('update:$id');
     updatedId = id;
     updatedPayload = data;
-    return SuppliersSuccess(_fixture());
+    return nextUpdateResult ?? SuppliersSuccess(_fixture());
   }
 
   @override
@@ -115,7 +128,7 @@ Future<_FakeSuppliersRepo> pumpEditForm(
       .read(suppliersRepositoryProvider) as _FakeSuppliersRepo;
 }
 
-Future<void> pumpCreateForm(WidgetTester tester) async {
+Future<_FakeSuppliersRepo> pumpCreateForm(WidgetTester tester) async {
   tester.view.physicalSize = const Size(800, 2200);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(() {
@@ -154,6 +167,10 @@ Future<void> pumpCreateForm(WidgetTester tester) async {
     ),
   );
   await tester.pumpAndSettle();
+  // The provider owns the fake instance — read it back to assert call records.
+  final ctx = tester.element(find.byType(SupplierFormScreen));
+  return ProviderScope.containerOf(ctx)
+      .read(suppliersRepositoryProvider) as _FakeSuppliersRepo;
 }
 
 void main() {
@@ -219,6 +236,64 @@ void main() {
       expect(find.text(en().create), findsOneWidget);
       expect(find.widgetWithText(TextFormField, 'Alpha Supply'), findsNothing,
           reason: 'create form must start empty');
+    });
+
+    testWidgets('G1: edit save sends rowVersion in the PATCH payload',
+        (tester) async {
+      final repo = await pumpEditForm(tester, locale: const Locale('en'));
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Alpha Supply'), 'Alpha Renamed');
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+
+      expect(repo.updatedPayload?['rowVersion'], 0,
+          reason: 'the CAS token read at form load must be echoed back');
+    });
+
+    testWidgets(
+        'G1: 409 conflict surfaces a localized message and reloads server state',
+        (tester) async {
+      final repo = await pumpEditForm(tester, locale: const Locale('en'));
+      repo.nextUpdateResult = SuppliersFailure(ConflictFailure(
+          message: 'Supplier sup-1 was modified by another user.'));
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Alpha Supply'), 'Alpha Renamed');
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text(en().supplierModifiedError), findsOneWidget,
+          reason: 'the conflict must be explicit, not silent');
+      expect(repo.calls.where((c) => c.startsWith('getById')).length,
+          greaterThanOrEqualTo(2),
+          reason: 'form must reload the supplier after a conflict');
+    });
+
+    testWidgets(
+        'G1: duplicate-name warning blocks until confirmed, then create proceeds',
+        (tester) async {
+      final repo = await pumpCreateForm(tester);
+      repo.duplicateNamesResult = SuppliersSuccess([
+        _fixture(),
+      ]);
+      // The create form starts empty; the company-name field is the first one.
+      await tester.enterText(
+          find.byType(TextFormField).first, 'Alpha Supply');
+      await tester.tap(find.byType(FilledButton));
+      // Dialog entrance animation — pump discretely: pumpAndSettle can
+      // starve while the dialog route owns the animation ticker.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text(en().supplierDuplicateWarningTitle), findsOneWidget,
+          reason: 'the warning dialog must appear before create');
+      expect(find.text(en().supplierDuplicateWarningProceed), findsOneWidget);
+
+      await tester.tap(find.text(en().supplierDuplicateWarningProceed));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(repo.createCalled, isTrue,
+          reason: 'the warning is non-blocking: user can continue');
     });
   });
 }

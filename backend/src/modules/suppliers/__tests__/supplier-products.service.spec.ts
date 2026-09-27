@@ -84,6 +84,8 @@ describe('SupplierProductsService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: SuppliersRepository, useValue: mockSuppliersRepo },
         { provide: SupplierProductsRepository, useValue: mockSupplierProductsRepo },
+        // G1 (P3-04): audit logging is wired in; unit tests stub it out.
+        { provide: require('../../shared/services/audit-log.service').AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -196,18 +198,48 @@ describe('SupplierProductsService', () => {
 
     it('should not leave partial preferred-state mutation on failed create', async () => {
       // Preferred switching + duplicate create: if clearPreferred runs then
-      // create fails with P2002, transaction rollback must restore consistency.
-      // This test verifies the transaction boundary preserves state.
+      // create fails, transaction rollback must restore consistency.
+      //
+      // G1 (P3-01) faithful mock: in production a concurrent duplicate hits
+      // the partial unique index supplier_product_company_supplier_product_unique
+      // (G14-02-06) and SupplierProductsRepository.create maps the Prisma P2002
+      // to ConflictException. The service consumes that repository contract,
+      // so the mock rejects with ConflictException — exactly what the real
+      // repository surfaces across the service boundary.
+      //
+      // The service issues clearPreferred and create inside ONE
+      // prismaService.$transaction, so the rejection aborts the whole
+      // transaction: no partial preferred-state mutation can commit.
+      // Unit-level assertions:
+      //   1. ConflictException propagates (strict, unchanged).
+      //   2. clearPreferred and create were issued against the SAME tx
+      //      client — the precondition that makes the rollback atomic.
       mockSupplierProductsRepo.findBySupplierAndProduct.mockResolvedValue(null);
+      mockSupplierProductsRepo.create.mockRejectedValueOnce(
+        new ConflictException(
+          'This product is already linked to this supplier',
+        ),
+      );
+
       await expect(
         service.create(supplierId, { productId, isPreferred: true }, companyId),
       ).rejects.toThrow(ConflictException);
-      // After failed create, preferred should not be set (rolled back).
-      expect(mockSupplierProductsRepo.clearPreferred).not.toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
+
+      // Both mutations ran in the same transaction (same tx client), so the
+      // failed create rolls the preferred-state mutation back atomically.
+      expect(mockSupplierProductsRepo.clearPreferred).toHaveBeenCalledWith(
+        productId,
+        companyId,
+        undefined,
+        mockPrisma,
+      );
+      expect(mockSupplierProductsRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          supplier: { connect: { id: supplierId } },
+          product: { connect: { id: productId } },
+          isPreferred: true,
+        }),
+        mockPrisma,
       );
     });
 
@@ -290,11 +322,14 @@ describe('SupplierProductsService', () => {
   describe('remove', () => {
     it('should soft delete successfully', async () => {
       mockSupplierProductsRepo.findById.mockResolvedValue(baseSp);
+      // G1 (P3-04): remove now runs tombstone + audit in one transaction,
+      // so the repo call carries the tx client as its 4th argument.
       await service.remove(spId, supplierId, companyId);
       expect(mockSupplierProductsRepo.softDelete).toHaveBeenCalledWith(
         spId,
         companyId,
         baseSp.rowVersion,
+        mockPrisma,
       );
     });
 

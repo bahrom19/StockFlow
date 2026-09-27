@@ -757,6 +757,23 @@
   "website": "Веб-сайт",
   "noSuppliersFound": "Жеткізушілер табылмады",
   "suppliersEmptySubtitle": "Сатып алуды бастау үшін алғашқы жеткізушіңізді қосыңыз",
+  "supplierModifiedError": "Жеткізушіні басқа пайдаланушы өзгерткен. Ағымдағы деректер қайта жүктелді — тексеріп, қайталап көріңіз.",
+  "supplierDuplicateWarningTitle": "Мүмкін қайталанған жеткізуші",
+  "supplierDuplicateWarningBody": "Ұқсас атауы бар жеткізуші бар: {names}. Соған қарамастан жасау керек пе?",
+  "@supplierDuplicateWarningBody": {
+    "placeholders": {
+      "names": {}
+    }
+  },
+  "supplierDuplicateWarningProceed": "Соған қарамастан жасау",
+  "supplierArchiveTitle": "Жеткізушіні мұрағаттау",
+  "supplierArchiveBody": "{name} мұрағаттау керек пе? Жеткізуші жалпы тізімнен жасырылады. Тарихи құжаттар сақталады.",
+  "@supplierArchiveBody": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "supplierArchived": "Жеткізуші мұрағатталды",
   "editSupplier": "Жеткізушіні өңдеу",
   "companyNameRequired": "Компания атауы *",
   "supplierCreated": "Жеткізуші жасалды",

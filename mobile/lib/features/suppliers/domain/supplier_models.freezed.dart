@@ -28,7 +28,10 @@ mixin _$Supplier {
   String? get phone => throw _privateConstructorUsedError;
   String? get website => throw _privateConstructorUsedError;
   String? get notes => throw _privateConstructorUsedError;
-  bool get isActive => throw _privateConstructorUsedError;
+  bool get isActive =>
+      throw _privateConstructorUsedError; // G1 (P3-03): optimistic-locking token echoed back in the PATCH body.
+// Defaults to 0 so locally-built fixtures stay compatible.
+  int get rowVersion => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get updatedAt => throw _privateConstructorUsedError;
   DateTime? get deletedAt => throw _privateConstructorUsedError;
@@ -58,6 +61,7 @@ abstract class $SupplierCopyWith<$Res> {
       String? website,
       String? notes,
       bool isActive,
+      int rowVersion,
       DateTime createdAt,
       DateTime updatedAt,
       DateTime? deletedAt});
@@ -87,6 +91,7 @@ class _$SupplierCopyWithImpl<$Res, $Val extends Supplier>
     Object? website = freezed,
     Object? notes = freezed,
     Object? isActive = null,
+    Object? rowVersion = null,
     Object? createdAt = null,
     Object? updatedAt = null,
     Object? deletedAt = freezed,
@@ -128,6 +133,10 @@ class _$SupplierCopyWithImpl<$Res, $Val extends Supplier>
           ? _value.isActive
           : isActive // ignore: cast_nullable_to_non_nullable
               as bool,
+      rowVersion: null == rowVersion
+          ? _value.rowVersion
+          : rowVersion // ignore: cast_nullable_to_non_nullable
+              as int,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -162,6 +171,7 @@ abstract class _$$SupplierImplCopyWith<$Res>
       String? website,
       String? notes,
       bool isActive,
+      int rowVersion,
       DateTime createdAt,
       DateTime updatedAt,
       DateTime? deletedAt});
@@ -189,6 +199,7 @@ class __$$SupplierImplCopyWithImpl<$Res>
     Object? website = freezed,
     Object? notes = freezed,
     Object? isActive = null,
+    Object? rowVersion = null,
     Object? createdAt = null,
     Object? updatedAt = null,
     Object? deletedAt = freezed,
@@ -230,6 +241,10 @@ class __$$SupplierImplCopyWithImpl<$Res>
           ? _value.isActive
           : isActive // ignore: cast_nullable_to_non_nullable
               as bool,
+      rowVersion: null == rowVersion
+          ? _value.rowVersion
+          : rowVersion // ignore: cast_nullable_to_non_nullable
+              as int,
       createdAt: null == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -259,6 +274,7 @@ class _$SupplierImpl implements _Supplier {
       this.website,
       this.notes,
       this.isActive = true,
+      this.rowVersion = 0,
       required this.createdAt,
       required this.updatedAt,
       this.deletedAt});
@@ -285,6 +301,11 @@ class _$SupplierImpl implements _Supplier {
   @override
   @JsonKey()
   final bool isActive;
+// G1 (P3-03): optimistic-locking token echoed back in the PATCH body.
+// Defaults to 0 so locally-built fixtures stay compatible.
+  @override
+  @JsonKey()
+  final int rowVersion;
   @override
   final DateTime createdAt;
   @override
@@ -294,7 +315,7 @@ class _$SupplierImpl implements _Supplier {
 
   @override
   String toString() {
-    return 'Supplier(id: $id, companyId: $companyId, companyName: $companyName, bin: $bin, email: $email, phone: $phone, website: $website, notes: $notes, isActive: $isActive, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt)';
+    return 'Supplier(id: $id, companyId: $companyId, companyName: $companyName, bin: $bin, email: $email, phone: $phone, website: $website, notes: $notes, isActive: $isActive, rowVersion: $rowVersion, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt)';
   }
 
   @override
@@ -314,6 +335,8 @@ class _$SupplierImpl implements _Supplier {
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.isActive, isActive) ||
                 other.isActive == isActive) &&
+            (identical(other.rowVersion, rowVersion) ||
+                other.rowVersion == rowVersion) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -324,8 +347,21 @@ class _$SupplierImpl implements _Supplier {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, id, companyId, companyName, bin,
-      email, phone, website, notes, isActive, createdAt, updatedAt, deletedAt);
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      companyId,
+      companyName,
+      bin,
+      email,
+      phone,
+      website,
+      notes,
+      isActive,
+      rowVersion,
+      createdAt,
+      updatedAt,
+      deletedAt);
 
   /// Create a copy of Supplier
   /// with the given fields replaced by the non-null parameter values.
@@ -354,6 +390,7 @@ abstract class _Supplier implements Supplier {
       final String? website,
       final String? notes,
       final bool isActive,
+      final int rowVersion,
       required final DateTime createdAt,
       required final DateTime updatedAt,
       final DateTime? deletedAt}) = _$SupplierImpl;
@@ -378,7 +415,11 @@ abstract class _Supplier implements Supplier {
   @override
   String? get notes;
   @override
-  bool get isActive;
+  bool
+      get isActive; // G1 (P3-03): optimistic-locking token echoed back in the PATCH body.
+// Defaults to 0 so locally-built fixtures stay compatible.
+  @override
+  int get rowVersion;
   @override
   DateTime get createdAt;
   @override

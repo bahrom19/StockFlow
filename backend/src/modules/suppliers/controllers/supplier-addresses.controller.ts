@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
@@ -43,7 +44,7 @@ export class SupplierAddressesController {
     type: [SupplierAddressEntity],
   })
   async findAll(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<SupplierAddressEntity[]> {
     return this.addressesService.findAll(supplierId, currentUser);
@@ -60,8 +61,8 @@ export class SupplierAddressesController {
     type: SupplierAddressEntity,
   })
   async findById(
-    @Param('supplierId') supplierId: string,
-    @Param('addressId') addressId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('addressId', ParseUUIDPipe) addressId: string,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<SupplierAddressEntity> {
     return this.addressesService.findById(supplierId, addressId, currentUser);
@@ -79,7 +80,7 @@ export class SupplierAddressesController {
     type: SupplierAddressEntity,
   })
   async create(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Body() dto: CreateSupplierAddressDto,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<SupplierAddressEntity> {
@@ -98,8 +99,8 @@ export class SupplierAddressesController {
     type: SupplierAddressEntity,
   })
   async update(
-    @Param('supplierId') supplierId: string,
-    @Param('addressId') addressId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('addressId', ParseUUIDPipe) addressId: string,
     @Body() dto: UpdateSupplierAddressDto,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<SupplierAddressEntity> {
@@ -122,8 +123,8 @@ export class SupplierAddressesController {
     description: 'Address soft deleted',
   })
   async softDelete(
-    @Param('supplierId') supplierId: string,
-    @Param('addressId') addressId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('addressId', ParseUUIDPipe) addressId: string,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<void> {
     await this.addressesService.softDelete(supplierId, addressId, currentUser);

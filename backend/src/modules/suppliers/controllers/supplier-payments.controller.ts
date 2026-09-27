@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -48,7 +49,7 @@ export class SupplierPaymentsController {
   @ApiParam({ name: 'supplierId', type: String })
   @ApiResponse({ status: 200, type: SupplierFinanceSummaryEntity })
   async getFinanceSummary(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.paymentsService.getFinanceSummary(
@@ -69,7 +70,7 @@ export class SupplierPaymentsController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200 })
   async findAll(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @CurrentUser() user?: JwtPayload,
@@ -93,8 +94,8 @@ export class SupplierPaymentsController {
   @ApiParam({ name: 'paymentId', type: String })
   @ApiResponse({ status: 200, type: SupplierPaymentEntity })
   async findById(
-    @Param('supplierId') supplierId: string,
-    @Param('paymentId') paymentId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.paymentsService.findById(
@@ -115,7 +116,7 @@ export class SupplierPaymentsController {
   @ApiParam({ name: 'supplierId', type: String })
   @ApiResponse({ status: 201, type: SupplierPaymentEntity })
   async create(
-    @Param('supplierId') supplierId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @Body() dto: CreateSupplierPaymentDto,
     @CurrentUser() user: JwtPayload,
     @Headers('idempotency-key') idempotencyKey?: string,
@@ -140,8 +141,8 @@ export class SupplierPaymentsController {
   @ApiParam({ name: 'paymentId', type: String })
   @ApiResponse({ status: 200, type: SupplierPaymentEntity })
   async patch(
-    @Param('supplierId') supplierId: string,
-    @Param('paymentId') paymentId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @Body() dto: UpdateSupplierPaymentDto,
     @CurrentUser() user: JwtPayload,
   ) {
@@ -164,8 +165,8 @@ export class SupplierPaymentsController {
   @ApiParam({ name: 'supplierId', type: String })
   @ApiParam({ name: 'paymentId', type: String })
   async void(
-    @Param('supplierId') supplierId: string,
-    @Param('paymentId') paymentId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @CurrentUser() user: JwtPayload,
   ) {
     return this.paymentsService.void(
