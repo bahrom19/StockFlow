@@ -189,9 +189,23 @@ test.describe('Supplier lifecycle (G1)', () => {
     const supplierProduct = await spRes.json();
 
     // ── 7. Payment (needs a cash account; CASH requires cashAccountId) ──
+    // Discover the company's ChartOfAccount for Cash (code 1010)
+    // before creating the CashAccount so the cash account is linked
+    // to a valid GL account (SupplierPaymentsService.resolveCreditAccountId
+    // requires chartOfAccountId to be non-null).
+    const chartRes = await request.get(
+      `${apiBase}/finance/chart-of-accounts?search=1010&isActive=true&accountType=ASSET`,
+      { headers: auth(tenantA) },
+    );
+    expect(chartRes.status(), await chartRes.text()).toBe(200);
+    const chartAccounts = await chartRes.json();
+    const chartAccount = chartAccounts.items?.[0];
+    expect(chartAccount).toBeDefined();
+    const chartOfAccountId = chartAccount.id;
+
     const cashRes = await request.post(`${apiBase}/finance/cash-accounts`, {
       headers: auth(tenantA),
-      data: { name: `G1 Cash ${u}` },
+      data: { name: `G1 Cash ${u}`, chartOfAccountId },
     });
     expect(cashRes.status(), await cashRes.text()).toBe(201);
     const cashAccount = await cashRes.json();
