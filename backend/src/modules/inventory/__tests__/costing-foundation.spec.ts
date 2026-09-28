@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { CostLayer, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { CostingService } from '../services/costing.service';
@@ -263,6 +267,12 @@ describe('CostingService — G9-F1 foundation', () => {
       costingMethod: 'AVERAGE',
     });
 
+    // G16-F: the no-basis gap is a typed business validation failure (400),
+    // not an untyped infrastructure error — that untyped Error was what the
+    // adjustment path used to swallow, silently desyncing Stock from layers.
+    await expect(
+      service.consumeFifoLayers('prod-1', 'company-1', 8, 'SALE', 'sale-1', tx),
+    ).rejects.toThrow(BadRequestException);
     await expect(
       service.consumeFifoLayers('prod-1', 'company-1', 8, 'SALE', 'sale-1', tx),
     ).rejects.toThrow(/no costPrice basis/);

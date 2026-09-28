@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -143,10 +144,15 @@ export class CostingService {
         client,
       );
       if (!product?.costPrice) {
-        // No cost basis at all (no layers, no costPrice): keep the existing
-        // adjustment-path behaviour — surface the gap rather than fabricate
-        // a zero-cost layer that would distort valuation and future COGS.
-        throw new Error(
+        // No cost basis at all (no layers, no costPrice): G16-F — the gap
+        // must surface as a typed business validation failure instead of an
+        // untyped infrastructure error. Previously a plain Error here was
+        // swallowed by the adjustment path, silently desyncing Stock from
+        // CostLayers (valuation drift). BadRequestException (400) keeps the
+        // legacy inventory-count / purchase-return semantics (they already
+        // propagated it and rolled back) while giving the adjustment path a
+        // proper client-facing failure that now also rolls back.
+        throw new BadRequestException(
           `Insufficient cost layers and no costPrice basis. Short ${remaining} units for product ${productId}`,
         );
       }

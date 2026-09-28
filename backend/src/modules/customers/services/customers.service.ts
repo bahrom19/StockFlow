@@ -322,6 +322,11 @@ export class CustomersService {
             companyId: currentUser.companyId,
             deletedBy: currentUser.userId ?? null,
           }),
+          // G16-F (NWD-03): the event is published inside this $transaction —
+          // hand handlers the transactionClient the same way inventory/sales
+          // events do, so future subscribers join the transaction instead of
+          // silently skipping their finance legs.
+          { context: { transactionClient: tx } },
         );
 
         return deleted;

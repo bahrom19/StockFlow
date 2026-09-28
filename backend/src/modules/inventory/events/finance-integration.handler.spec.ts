@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { InventoryFinanceHandler } from './finance-integration.handler';
 import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { PrismaService } from '../../../common/prisma';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 
 /**
  * Regression tests for the accounting direction of inventory adjustments
@@ -46,6 +47,12 @@ describe('InventoryFinanceHandler — journal direction', () => {
         InventoryFinanceHandler,
         { provide: PrismaService, useValue: {} },
         { provide: GlEngineService, useValue: glEngine },
+        // G16-F: the handler now persists GL skip records through the
+        // existing AuditLogService — stub it for the happy-path specs here.
+        {
+          provide: AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

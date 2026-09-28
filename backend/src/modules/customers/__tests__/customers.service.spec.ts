@@ -295,6 +295,29 @@ describe('CustomersService', () => {
     expect(mockEventBus.publish).toHaveBeenCalled();
   });
 
+  // G16-F (F12): customer.deleted is published inside the $transaction and
+  // must hand future subscribers the transactionClient — same contract as
+  // inventory/sales events — instead of an out-of-transaction publish that
+  // would make finance legs silently skip.
+  it('F12: softDelete publishes customer.deleted with the current transaction client', async () => {
+    mockRepo.findById.mockResolvedValue(baseCustomer as any);
+    mockRepo.softDelete.mockResolvedValue({
+      ...baseCustomer,
+      deletedAt: new Date(),
+    } as any);
+
+    await service.softDelete('cust-1', currentUser);
+
+    expect(mockEventBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ eventName: 'customer.deleted' }),
+      expect.objectContaining({
+        context: expect.objectContaining({
+          transactionClient: expect.anything(),
+        }),
+      }),
+    );
+  });
+
   // ─────────────────────────────────────────────
   // MULTI-TENANT ISOLATION
   // ─────────────────────────────────────────────

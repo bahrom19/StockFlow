@@ -1,4 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { StockMovementType } from '@prisma/client';
 import { StockService } from '../services/stock.service';
 import { InventoryRepository } from '../repositories/inventory.repository';
@@ -145,5 +149,173 @@ describe('StockService.adjustStock — strict stock (Policy A)', () => {
     expect(repo.updateStock).not.toHaveBeenCalled();
     expect(repo.createStockMovement).not.toHaveBeenCalled();
     expect(eventBus.publish).not.toHaveBeenCalled();
+  });
+
+  // ── G16-F (NWD-01): fail-closed cost-layer consume for adjustments ────
+  //
+  // Every consume failure must propagate out of the $transaction callback so
+  // Prisma rolls back the whole adjustment (stock update, movement, layers,
+  // GL journal, audit). "Complete rollback" is verified at the DB-contract
+  // level: every mutation that DID run received the transaction client (so
+  // it belongs to the aborted tx), and NO post-consume step (event publish,
+  // audit log) ever executed.
+
+  const fifoResult = (total: string) =>
+    ({
+      layers: [{ layerId: 'layer-1', quantity: 1, unitCost: '15', cost: '15' }],
+      totalCost: new Decimal(total),
+      fallbackCost: new Decimal('0'),
+    }) as never;
+
+  it('F1: fully layered negative adjustment succeeds and consumes layers with the FIFO valuation', async () => {
+    repo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    costing.calculateAverageCost.mockResolvedValue(new Decimal('15'));
+    costing.consumeFifoLayers.mockResolvedValue(fifoResult('30'));
+
+    const movement = await service.adjustStock(dto(-2), 'comp-1', 'user-1');
+
+    expect(movement).toBeDefined();
+    expect(costing.consumeFifoLayers).toHaveBeenCalledWith(
+      'prod-1',
+      'comp-1',
+      2,
+      'ADJUSTMENT',
+      'stock-1',
+      mockPrisma,
+    );
+    // GL-adjacent contract: the event carries the canonical FIFO unit cost
+    // and the transaction client for the finance handler.
+    expect(eventBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ unitCost: '15', quantity: -2 }),
+      }),
+      { context: { transactionClient: mockPrisma } },
+    );
+    expect(auditLog.log).toHaveBeenCalled();
+  });
+
+  it('F2: zero layers and no costPrice → 400, transaction rolled back, no event/audit', async () => {
+    repo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    costing.consumeFifoLayers.mockRejectedValue(
+      new BadRequestException(
+        'Insufficient cost layers and no costPrice basis. Short 2 units for product prod-1',
+      ),
+    );
+
+    await expect(
+      service.adjustStock(dto(-2), 'comp-1', 'user-1'),
+    ).rejects.toThrow(BadRequestException);
+
+    // The consume failure is the rollback trigger: mutations that already
+    // ran belong to the aborted tx (they got the tx client), and nothing
+    // after the consume step executed.
+    expect(repo.updateStock).toHaveBeenCalledWith(
+      'stock-1',
+      expect.anything(),
+      'comp-1',
+      0,
+      mockPrisma,
+    );
+    expect(repo.createStockMovement).toHaveBeenCalledWith(
+      expect.anything(),
+      mockPrisma,
+    );
+    expect(eventBus.publish).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
+  });
+
+  it('F3: partial layers with costPrice → success with layered+fallback valuation (FALLBACK B preserved)', async () => {
+    repo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    costing.calculateAverageCost.mockResolvedValue(new Decimal('15'));
+    // 1 layered unit + 1 fallback unit, canonical total 30.
+    costing.consumeFifoLayers.mockResolvedValue(fifoResult('30'));
+
+    await expect(
+      service.adjustStock(dto(-2), 'comp-1', 'user-1'),
+    ).resolves.toBeDefined();
+
+    expect(costing.consumeFifoLayers).toHaveBeenCalledWith(
+      'prod-1',
+      'comp-1',
+      2,
+      'ADJUSTMENT',
+      'stock-1',
+      mockPrisma,
+    );
+    expect(eventBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ unitCost: '15' }),
+      }),
+      { context: { transactionClient: mockPrisma } },
+    );
+  });
+
+  it('F4: partial layers with no costPrice → 400, complete rollback', async () => {
+    repo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    costing.consumeFifoLayers.mockRejectedValue(
+      new BadRequestException(/no costPrice basis/.source),
+    );
+
+    await expect(
+      service.adjustStock(dto(-2), 'comp-1', 'user-1'),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(eventBus.publish).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
+    expect(repo.updateStock).toHaveBeenCalledWith(
+      'stock-1',
+      expect.anything(),
+      'comp-1',
+      0,
+      mockPrisma,
+    );
+  });
+
+  it('F5: consume CAS loss → ConflictException (409), complete rollback, no silent retry', async () => {
+    repo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    costing.consumeFifoLayers.mockRejectedValue(
+      new ConflictException('Cost layer layer-1 was modified concurrently.'),
+    );
+
+    await expect(
+      service.adjustStock(dto(-2), 'comp-1', 'user-1'),
+    ).rejects.toThrow(ConflictException);
+
+    expect(eventBus.publish).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
+  });
+
+  it('F14: cross-tenant productId → 404, no side effects (tenant isolation preserved)', async () => {
+    // The product lookup is company-scoped; a foreign productId is invisible
+    // exactly like a missing one — never a cross-tenant leak.
+    repo.findProductById.mockResolvedValue(null);
+
+    await expect(
+      service.adjustStock(dto(-2), 'comp-1', 'user-1'),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(repo.updateStock).not.toHaveBeenCalled();
+    expect(repo.createStockMovement).not.toHaveBeenCalled();
+    expect(costing.consumeFifoLayers).not.toHaveBeenCalled();
+    expect(eventBus.publish).not.toHaveBeenCalled();
+  });
+
+  it('F6: unexpected consume error → propagated (500 path), never swallowed, complete rollback', async () => {
+    repo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    costing.consumeFifoLayers.mockRejectedValue(
+      new Error('unexpected costing infrastructure failure'),
+    );
+
+    // The pre-G16-F behaviour swallowed this class of error and committed a
+    // drifting adjustment. Now it must propagate out of the tx callback.
+    await expect(
+      service.adjustStock(dto(-2), 'comp-1', 'user-1'),
+    ).rejects.toThrow('unexpected costing infrastructure failure');
+    await expect(
+      service.adjustStock(dto(-2), 'comp-1', 'user-1'),
+    ).rejects.not.toThrow(BadRequestException);
+
+    expect(eventBus.publish).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
   });
 });

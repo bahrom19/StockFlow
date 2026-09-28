@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   HttpStatus,
   Inject,
   Injectable,
@@ -230,23 +229,20 @@ export class StockService {
         );
       }
     } else if (dto.quantity < 0) {
-      try {
-        await this.costingService.consumeFifoLayers(
-          dto.productId,
-          companyId,
-          Math.abs(dto.quantity),
-          'ADJUSTMENT',
-          layerReferenceId,
-          tx,
-        );
-      } catch (err) {
-        // Real concurrency conflicts must propagate; insufficient layers
-        // keep the pre-Step-2 behaviour (adjustment still succeeds).
-        if (err instanceof ConflictException) throw err;
-        this.logger.warn(
-          `Cost layer consumption skipped for product ${dto.productId}: ${(err as Error).message}`,
-        );
-      }
+      // G16-F (NWD-01): no silent-skip. Every consume failure propagates and
+      // rolls back the whole adjustment transaction — stock, movement, cost
+      // layers, GL journal and audit all live in this same tx. A missing cost
+      // basis now fails as BadRequestException (400) instead of a previously
+      // swallowed plain Error that left Stock without its CostLayer backing;
+      // ConflictException (layer CAS loss) stays a 409 retry-after-refresh.
+      await this.costingService.consumeFifoLayers(
+        dto.productId,
+        companyId,
+        Math.abs(dto.quantity),
+        'ADJUSTMENT',
+        layerReferenceId,
+        tx,
+      );
     }
 
     await this.eventBus.publish(
