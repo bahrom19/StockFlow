@@ -178,12 +178,15 @@ describe('ProductsService', () => {
     mockRepo.findById.mockResolvedValue({
       ...baseProduct,
       id: 'prod-1',
+      // G16-H-1: opening stock requires a cost basis — fixture carries one.
+      costPrice: 12.5,
       unit: { name: 'kg' },
       stocks: [{ quantity: 15 }],
     } as any);
 
     const result = await service.create(
-      { name: 'Rice', price: 50, stockQuantity: 15 } as any,
+      // G16-H-1: opening stock requires a cost basis in the request itself.
+      { name: 'Rice', price: 50, costPrice: 12.5, stockQuantity: 15 } as any,
       currentUser,
     );
 
@@ -834,9 +837,11 @@ describe('ProductsService', () => {
       expect(txArg).toBe(mockTx);
     });
 
-    it('writes stock without layer/GL when costPrice is absent', async () => {
+    it('writes stock without layer/GL when costPrice is zero (legitimate zero-cost basis)', async () => {
+      // G16-H-1: Decimal(0) is a VALID basis — no gate, but zero-amount
+      // valuation writes no layer/GL (consistent with the GL zero-skip).
       await service.create(
-        { name: 'Rice', price: 50, stockQuantity: 10 } as any,
+        { name: 'Rice', price: 50, stockQuantity: 10, costPrice: 0 } as any,
         currentUser,
       );
 
@@ -846,6 +851,22 @@ describe('ProductsService', () => {
           data: expect.objectContaining({ type: 'OPENING_BALANCE' }),
         }),
       );
+      expect(mockCosting.recordInboundLayer).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+    });
+
+    it('G16-H-1: rejects opening stock when costPrice is NULL (no basis)', async () => {
+      mockRepo.create.mockResolvedValue({ ...baseProduct, id: 'prod-1' } as any);
+      mockRepo.findDefaultWarehouse.mockResolvedValue({ id: 'wh-1' });
+      await expect(
+        service.create(
+          { name: 'Rice', price: 50, stockQuantity: 10 } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(/requires a cost basis/);
+      // Atomicity: the in-tx stock/movement writes that ran before the gate
+      // belong to the aborted transaction (rolled back in a real DB); no
+      // post-gate side effects (layer/GL) ever execute.
       expect(mockCosting.recordInboundLayer).not.toHaveBeenCalled();
       expect(mockGlEngine.post).not.toHaveBeenCalled();
     });

@@ -35,6 +35,7 @@ describe('StockService.adjustStock — strict stock (Policy A)', () => {
   let auditLog: { log: jest.Mock };
   let costing: {
     calculateAverageCost: jest.Mock;
+    resolvePositiveEntryUnitCost: jest.Mock;
     recordInboundLayer: jest.Mock;
     consumeFifoLayers: jest.Mock;
   };
@@ -73,6 +74,11 @@ describe('StockService.adjustStock — strict stock (Policy A)', () => {
     costing = {
       calculateAverageCost: jest.fn().mockResolvedValue(new Decimal('0')),
       recordInboundLayer: jest.fn().mockResolvedValue(undefined),
+      // G16-H-1: default resolver fixture — average basis @ 15 (matches the
+      // calculateAverageCost fixture the old ladder relied on).
+      resolvePositiveEntryUnitCost: jest
+        .fn()
+        .mockResolvedValue({ unitCost: new Decimal('15'), source: 'AVERAGE' }),
       consumeFifoLayers: jest.fn().mockResolvedValue(undefined),
     };
     eventBus = { publish: jest.fn().mockResolvedValue(undefined) };
@@ -298,6 +304,58 @@ describe('StockService.adjustStock — strict stock (Policy A)', () => {
     expect(repo.createStockMovement).not.toHaveBeenCalled();
     expect(costing.consumeFifoLayers).not.toHaveBeenCalled();
     expect(eventBus.publish).not.toHaveBeenCalled();
+  });
+
+  it('G16-H-1: positive adjustment with average basis → layer at average cost (shared ladder)', async () => {
+    repo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    costing.resolvePositiveEntryUnitCost = jest
+      .fn()
+      .mockResolvedValue({ unitCost: new Decimal('15'), source: 'AVERAGE' });
+
+    await expect(service.adjustStock(dto(3), 'comp-1', 'user-1')).resolves.toBeDefined();
+    expect(costing.recordInboundLayer).toHaveBeenCalledWith(
+      'prod-1',
+      'comp-1',
+      3,
+      new Decimal('15'),
+      'ADJUSTMENT',
+      'stock-1',
+      undefined,
+      mockPrisma,
+    );
+  });
+
+  it('G16-H-1: positive adjustment with Decimal(0) cost basis → zero-valued layer (valid zero-cost)', async () => {
+    repo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    costing.resolvePositiveEntryUnitCost = jest
+      .fn()
+      .mockResolvedValue({ unitCost: new Decimal('0'), source: 'COST_PRICE' });
+
+    await expect(service.adjustStock(dto(3), 'comp-1', 'user-1')).resolves.toBeDefined();
+    expect(costing.recordInboundLayer).toHaveBeenCalledWith(
+      'prod-1',
+      'comp-1',
+      3,
+      new Decimal('0'),
+      'ADJUSTMENT',
+      'stock-1',
+      undefined,
+      mockPrisma,
+    );
+  });
+
+  it('G16-H-1: positive adjustment without any basis → 400, rollback before layer/GL/event', async () => {
+    repo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    costing.resolvePositiveEntryUnitCost = jest
+      .fn()
+      .mockResolvedValue({ unitCost: null, source: 'NONE' });
+
+    await expect(
+      service.adjustStock(dto(3), 'comp-1', 'user-1'),
+    ).rejects.toThrow(/no cost basis for product/);
+    expect(costing.recordInboundLayer).not.toHaveBeenCalled();
+    expect(eventBus.publish).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
   });
 
   it('F6: unexpected consume error → propagated (500 path), never swallowed, complete rollback', async () => {

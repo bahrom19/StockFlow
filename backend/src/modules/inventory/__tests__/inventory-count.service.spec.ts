@@ -80,6 +80,11 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
       calculateAverageCost: jest
         .fn()
         .mockResolvedValue(new Decimal('20')),
+      // G16-H-1: the shared positive-entry ladder — default fixture resolves
+      // AVERAGE @ 20 (same effective basis the old ladder produced).
+      resolvePositiveEntryUnitCost: jest
+        .fn()
+        .mockResolvedValue({ unitCost: new Decimal('20'), source: 'AVERAGE' }),
       recordInboundLayer: jest.fn().mockResolvedValue(undefined),
       consumeFifoLayers: jest.fn().mockResolvedValue({ totalCost: new Decimal('100') }),
     };
@@ -275,21 +280,42 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
     );
   });
 
-  // Positive line without any cost basis: stock moves, no layer, no finance event.
-  it('should skip layer and finance event when no cost basis exists', async () => {
+  // G16-H-1: positive differences without any basis are refused (fail-closed
+  // gate); the old skip-and-continue behavior is intentionally gone.
+  it('G16-H-1: refuses a positive difference when no cost basis exists', async () => {
     mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 15)]));
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
-    mockCosting.calculateAverageCost.mockResolvedValueOnce(new Decimal('0'));
-    mockRepo.findProductById.mockResolvedValueOnce({ id: productId, costPrice: null });
+    mockCosting.resolvePositiveEntryUnitCost.mockResolvedValueOnce({
+      unitCost: null,
+      source: 'NONE',
+    });
+
+    await expect(
+      service.complete('count-1', { rowVersion: 0 } as any, companyId, userId),
+    ).rejects.toThrow(/no cost basis for product/);
+    // gate fires before valuation/stock side effects of the +diff line
+    expect(mockCosting.recordInboundLayer).not.toHaveBeenCalled();
+  });
+
+  it('G16-H-1: zero costPrice is a valid basis for a positive difference', async () => {
+    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 15)]));
+    mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    mockCosting.resolvePositiveEntryUnitCost.mockResolvedValueOnce({
+      unitCost: new Decimal('0'),
+      source: 'COST_PRICE',
+    });
 
     await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
 
-    expect(mockRepo.updateStock).toHaveBeenCalled();
-    expect(mockRepo.createStockMovement).toHaveBeenCalledTimes(1);
-    expect(mockCosting.recordInboundLayer).not.toHaveBeenCalled();
-    const adjustedCalls = mockEventBus.publish.mock.calls.filter(
-      ([event]: any) => event?.eventName === 'inventory.adjusted',
+    expect(mockCosting.recordInboundLayer).toHaveBeenCalledWith(
+      productId,
+      companyId,
+      5,
+      new Decimal('0'),
+      'INVENTORY_COUNT',
+      'count-1',
+      undefined,
+      expect.anything(),
     );
-    expect(adjustedCalls).toHaveLength(0);
   });
 });

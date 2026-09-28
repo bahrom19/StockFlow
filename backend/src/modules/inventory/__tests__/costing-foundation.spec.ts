@@ -279,6 +279,56 @@ describe('CostingService — G9-F1 foundation', () => {
     expect(outLayerCreate).not.toHaveBeenCalled();
   });
 
+  // ── G16-H-1: resolvePositiveEntryUnitCost (shared positive-entry ladder) ──
+
+  it('G16-H-1 resolver: valued layers → AVERAGE (costPrice not consulted)', async () => {
+    repo.findActiveCostLayers.mockResolvedValue([
+      { unitCost: new Decimal('100'), remainingQuantity: 5 } as CostLayer,
+    ]);
+
+    const r = await service.resolvePositiveEntryUnitCost('prod-1', 'company-1', tx);
+
+    expect(r).toEqual({ unitCost: new Decimal('100'), source: 'AVERAGE' });
+    expect(repo.findProductById).not.toHaveBeenCalled();
+  });
+
+  it('G16-H-1 resolver: no layers + positive costPrice → COST_PRICE', async () => {
+    repo.findActiveCostLayers.mockResolvedValue([]);
+    repo.findProductById.mockResolvedValue({ id: 'prod-1', costPrice: new Decimal('120') } as any);
+
+    const r = await service.resolvePositiveEntryUnitCost('prod-1', 'company-1', tx);
+
+    expect(r).toEqual({ unitCost: new Decimal('120'), source: 'COST_PRICE' });
+  });
+
+  it('G16-H-1 resolver: Decimal(0) costPrice is a VALID COST_PRICE basis (null-check, not truthiness)', async () => {
+    repo.findActiveCostLayers.mockResolvedValue([]);
+    repo.findProductById.mockResolvedValue({ id: 'prod-1', costPrice: new Decimal('0') } as any);
+
+    const r = await service.resolvePositiveEntryUnitCost('prod-1', 'company-1', tx);
+
+    expect(r).toEqual({ unitCost: new Decimal('0'), source: 'COST_PRICE' });
+  });
+
+  it('G16-H-1 resolver: no layers + null costPrice → NONE', async () => {
+    repo.findActiveCostLayers.mockResolvedValue([]);
+    repo.findProductById.mockResolvedValue({ id: 'prod-1', costPrice: null } as any);
+
+    const r = await service.resolvePositiveEntryUnitCost('prod-1', 'company-1', tx);
+
+    expect(r).toEqual({ unitCost: null, source: 'NONE' });
+  });
+
+  it('G16-H-1 resolver: tenant-scoped lookups (companyId passed through)', async () => {
+    repo.findActiveCostLayers.mockResolvedValue([]);
+    repo.findProductById.mockResolvedValue(null as any);
+
+    await service.resolvePositiveEntryUnitCost('prod-1', 'company-1', tx);
+
+    expect(repo.findActiveCostLayers).toHaveBeenCalledWith('prod-1', 'company-1', tx);
+    expect(repo.findProductById).toHaveBeenCalledWith('prod-1', 'company-1', tx);
+  });
+
   it('propagates ConflictException on layer CAS loss without writing the OUT layer', async () => {
     repo.findActiveCostLayers.mockResolvedValue([layer('layer-a', '100', 10)]);
     repo.consumeCostLayer.mockResolvedValue(false); // concurrent modification

@@ -180,6 +180,48 @@ export class CostingService {
     return { totalCost, layers: consumed, fallbackCost };
   }
 
+  /**
+   * G16-H-1 — single source of truth for "may positive stock be created?".
+   *
+   * Resolution order (documented G16-H-1 design):
+   *   1. valued IN cost layers (FIFO/average basis) → AVERAGE;
+   *   2. product.costPrice — INCLUDING Decimal(0) as a legitimate zero-cost
+   *      basis (null/undefined is the ONLY "no basis" value; truthiness is
+   *      deliberately not used) → COST_PRICE;
+   *   3. otherwise → NONE (unitCost null).
+   *
+   * Callers enforce: NONE + a positive stock entry → typed failure inside
+   * the caller's transaction, so no unvalued positive stock can be created.
+   * Tenant scope is preserved: every lookup is (companyId, productId).
+   */
+  async resolvePositiveEntryUnitCost(
+    productId: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ unitCost: Decimal | null; source: 'AVERAGE' | 'COST_PRICE' | 'NONE' }> {
+    const averageCost = await this.calculateAverageCost(productId, companyId, tx);
+    if (!averageCost.isZero()) {
+      return { unitCost: averageCost, source: 'AVERAGE' };
+    }
+
+    const product = await this.inventoryRepository.findProductById(
+      productId,
+      companyId,
+      tx,
+    );
+    // Explicit null comparison — Decimal(0) must remain a VALID basis.
+    const costPrice = product?.costPrice ?? null;
+    if (costPrice !== null) {
+      return { unitCost: new Decimal(costPrice.toString()), source: 'COST_PRICE' };
+    }
+
+    // Diagnostic trace for the no-basis case (callers enforce fail-closed).
+    this.logger.warn(
+      `No cost basis for product ${productId} (company ${companyId}): no valued cost layers and product.costPrice is not set`,
+    );
+    return { unitCost: null, source: 'NONE' };
+  }
+
   async calculateAverageCost(
     productId: string,
     companyId: string,

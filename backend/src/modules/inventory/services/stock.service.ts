@@ -190,17 +190,39 @@ export class StockService {
       tx,
     );
 
-    // Source of truth for unit cost is the costing engine (weighted average
-    // of active cost layers). Fall back to the static product costPrice, then
-    // to null (journal skipped by the zero-amount guard in the handler).
-    const averageCost = await this.costingService.calculateAverageCost(
-      dto.productId,
-      companyId,
-      tx,
-    );
-    const unitCost = !averageCost.isZero()
-      ? averageCost.toString()
-      : product.costPrice?.toString();
+    // G16-H-1: single cost-basis ladder for POSITIVE stock entries, now
+    // centralized: valued layers → product.costPrice (Decimal(0) included as
+    // a valid basis) → NONE. A positive adjustment without any basis is
+    // refused (typed 400, inside this tx) — silent creation of unvalued
+    // stock is no longer possible. Negative entries keep the pre-G16-H-1
+    // behavior: average → static costPrice → null (finance journal skipped
+    // by the zero-amount guard); a negative movement only consumes existing
+    // valuation and must not be gated.
+    let unitCost: string | undefined;
+    if (dto.quantity > 0) {
+      const resolved = await this.costingService.resolvePositiveEntryUnitCost(
+        dto.productId,
+        companyId,
+        tx,
+      );
+      if (resolved.source === 'NONE') {
+        throw new BadRequestException(
+          `Cannot adjust stock: no cost basis for product ${dto.productId}. Set product costPrice or receive stock with a unit cost first.`,
+        );
+      }
+      unitCost = resolved.unitCost!.toString();
+    } else {
+      const averageCost = await this.costingService.calculateAverageCost(
+        dto.productId,
+        companyId,
+        tx,
+      );
+      unitCost = !averageCost.isZero()
+        ? averageCost.toString()
+        : product.costPrice !== null && product.costPrice !== undefined
+          ? product.costPrice.toString()
+          : undefined;
+    }
 
     // ── Step 2: keep cost layers in sync with the adjustment ──────────
     // Positive adjustments create an inbound cost layer; negative

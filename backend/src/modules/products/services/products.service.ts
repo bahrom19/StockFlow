@@ -250,6 +250,18 @@ export class ProductsService {
       },
     });
 
+    // G16-H-1: opening stock must not create unvalued positive stock.
+    // costPrice NULL/undefined = NO basis → typed failure inside this tx
+    // (Stock/StockMovement above roll back together with the product).
+    // Decimal(0) is a legitimate zero-cost basis: Stock + Movement are kept,
+    // no valued layer/GL is written (zero-amount valuation — consistent with
+    // the adjustment/count paths and the GL zero-amount observable-skip).
+    if (quantity > 0 && (costPrice === undefined || costPrice === null)) {
+      throw new BadRequestException(
+        'Opening stock requires a cost basis: set costPrice or create the product without stockQuantity.',
+      );
+    }
+
     if (costPrice === undefined || costPrice === null) return;
 
     const unitCost = new Decimal(costPrice);

@@ -169,24 +169,24 @@ export class InventoryCountService {
           );
         }
 
-        // G15-05-A valuation ladder (mirrors applyAdjustStock): weighted
-        // average of active cost layers, then static product costPrice.
-        // No other basis is invented.
-        const averageCost = await this.costingService.calculateAverageCost(
-          item.productId,
-          companyId,
-          tx,
-        );
+        // G15-05-A valuation ladder, G16-H-1-centralized: positive
+        // differences resolve cost through the shared ladder (layers →
+        // costPrice incl. Decimal(0)) and are REFUSED when no basis exists —
+        // a count must not create unvalued positive stock. Negative
+        // differences consume via consumeFifoLayers below (unchanged).
         let unitCost: string | undefined;
-        if (!averageCost.isZero()) {
-          unitCost = averageCost.toString();
-        } else {
-          const product = await this.inventoryRepository.findProductById(
+        if (item.difference > 0) {
+          const resolved = await this.costingService.resolvePositiveEntryUnitCost(
             item.productId,
             companyId,
             tx,
           );
-          unitCost = product?.costPrice?.toString();
+          if (resolved.source === 'NONE') {
+            throw new BadRequestException(
+              `Cannot complete count ${count.countNumber}: no cost basis for product ${item.productId}. Set product costPrice or receive stock with a unit cost first.`,
+            );
+          }
+          unitCost = resolved.unitCost!.toString();
         }
 
         const afterQty = item.actualQuantity;

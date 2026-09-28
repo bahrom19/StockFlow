@@ -37,6 +37,7 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
     calculateAverageCost: jest.Mock;
     recordInboundLayer: jest.Mock;
     consumeFifoLayers: jest.Mock;
+    resolvePositiveEntryUnitCost: jest.Mock;
   };
 
   const COMPANY_ID = 'comp-1';
@@ -129,6 +130,10 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       consumeFifoLayers: jest
         .fn()
         .mockResolvedValue({ totalCost: new Decimal('100') }),
+      resolvePositiveEntryUnitCost: jest.fn().mockResolvedValue({
+        unitCost: new Decimal('20'),
+        source: 'AVERAGE',
+      }),
     };
 
     const mockPrisma = {
