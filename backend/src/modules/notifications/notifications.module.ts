@@ -16,10 +16,10 @@ import { OverdueNotificationCronService } from './scheduler/overdue-notification
  * fans out Notification rows to all active company members.
  * N4 adds the REST API (list, unread-count, mark-read) via NotificationsController.
  *
- * Handler ordering: this module is imported LAST in AppModule, so its
- * `onModuleInit` subscriptions register after the inventory module's stock
- * handlers — a low-stock check on `sale.completed` therefore reads the
- * post-decrement stock inside the same transaction.
+ * Handler ordering: `sale.completed` subscriptions carry explicit EventBus
+ * priorities (G16-E) — Inventory 10 → Finance 20 → Notifications 30 — so a
+ * low-stock check always reads the post-decrement stock inside the same
+ * transaction, regardless of module import or init order.
  */
 @Module({
   imports: [PrismaModule],
@@ -42,9 +42,15 @@ export class NotificationsModule implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
+    // G16-E: priority 30 — runs LAST on sale.completed so the low-stock
+    // check reads the post-decrement stock created by the Inventory
+    // handler (order: Inventory 10 → Finance 20 → Notifications 30).
+    // Ordering is now explicit, not dependent on module import order.
+    this.eventBus.subscribe('sale.completed', this.lowStockHandler, {
+      priority: 30,
+    });
     this.eventBus.subscribe('inventory.adjusted', this.lowStockHandler);
     this.eventBus.subscribe('inventory.transferred', this.lowStockHandler);
-    this.eventBus.subscribe('sale.completed', this.lowStockHandler);
     this.eventBus.subscribe(
       'purchase.order.status.changed',
       this.poStatusHandler,

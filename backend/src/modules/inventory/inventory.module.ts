@@ -83,7 +83,12 @@ export class InventoryModule implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.eventBus.subscribe('sale.completed', this.saleCompletedHandler);
+    // G16-E: priority 10 — the FIFO CostLayers and stock decrement MUST be
+    // created before the Finance handler reads them for COGS
+    // (sale.completed order: Inventory 10 → Finance 20 → Notifications 30).
+    this.eventBus.subscribe('sale.completed', this.saleCompletedHandler, {
+      priority: 10,
+    });
     this.eventBus.subscribe('sale.refunded', this.saleRefundedHandler);
     this.eventBus.subscribe(
       'sale.partially_refunded',

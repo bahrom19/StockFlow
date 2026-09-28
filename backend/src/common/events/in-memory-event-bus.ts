@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { EventBus } from './event-bus.interface';
+import {
+  DEFAULT_EVENT_HANDLER_PRIORITY,
+  EventBus,
+  SubscribeOptions,
+} from './event-bus.interface';
 import { PublishOptions } from './publish-options.interface';
 import { DomainEvent } from './domain-event.interface';
 import { EventHandler } from './event-handler.interface';
@@ -8,7 +12,11 @@ import { EventHandler } from './event-handler.interface';
  * Lightweight in-process domain event bus.
  *
  * Behaviour:
- * - Handlers execute **synchronously** in registration order.
+ * - Handlers execute **synchronously**, awaited sequentially in
+ *   ascending priority order (lower priority value runs earlier);
+ *   equal priorities keep registration order (stable sort) — G16-E.
+ *   Events without explicit priorities behave exactly as before:
+ *   registration order.
  * - If a {@code PublishOptions.context} is provided (e.g. a Prisma
  *   TransactionClient), every handler receives it so the business
  *   code can run inside the originating database transaction.
@@ -28,22 +36,45 @@ import { EventHandler } from './event-handler.interface';
  */
 @Injectable()
 export class InMemoryEventBus implements EventBus {
-  private readonly handlers = new Map<string, EventHandler[]>();
+  private readonly handlers = new Map<string, StoredHandler[]>();
 
   async publish<T extends DomainEvent>(
     event: T,
     options?: PublishOptions,
   ): Promise<void> {
-    const handlers = this.handlers.get(event.eventName) ?? [];
+    const stored = this.handlers.get(event.eventName) ?? [];
 
-    for (const handler of handlers) {
-      await handler.handle(event, options?.context);
+    // G16-E: deterministic execution order — priority ascending, then
+    // registration index, so equal priorities are always stable regardless
+    // of the engine's sort implementation.
+    const ordered = stored
+      .map((entry, registrationIndex) => ({ entry, registrationIndex }))
+      .sort(
+        (a, b) =>
+          a.entry.priority - b.entry.priority ||
+          a.registrationIndex - b.registrationIndex,
+      );
+
+    for (const { entry } of ordered) {
+      await entry.handler.handle(event, options?.context);
     }
   }
 
-  subscribe(eventName: string, handler: EventHandler): void {
+  subscribe(
+    eventName: string,
+    handler: EventHandler,
+    options?: SubscribeOptions,
+  ): void {
     const existing = this.handlers.get(eventName) ?? [];
-    existing.push(handler);
+    existing.push({
+      handler,
+      priority: options?.priority ?? DEFAULT_EVENT_HANDLER_PRIORITY,
+    });
     this.handlers.set(eventName, existing);
   }
+}
+
+interface StoredHandler {
+  handler: EventHandler;
+  priority: number;
 }

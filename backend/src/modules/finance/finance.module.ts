@@ -101,7 +101,11 @@ export class FinanceModule implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.eventBus.subscribe('sale.completed', this.saleCompletedHandler);
+    // G16-E: priority 20 — runs AFTER Inventory (10) so the OUT CostLayers
+    // exist when resolveSaleCogs reads them; before Notifications (30).
+    this.eventBus.subscribe('sale.completed', this.saleCompletedHandler, {
+      priority: 20,
+    });
     this.eventBus.subscribe('sale.refunded', this.saleRefundedHandler);
     this.eventBus.subscribe(
       'sale.partially_refunded',
