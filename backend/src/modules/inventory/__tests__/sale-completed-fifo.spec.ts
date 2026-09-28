@@ -1,4 +1,9 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Decimal } from '@prisma/client/runtime/library';
 import { SaleCompletedEventHandler } from '../events/sale-completed.handler';
 import { InventoryRepository } from '../repositories/inventory.repository';
 import { CostingService } from '../services/costing.service';
@@ -27,13 +32,21 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
   let costing: { consumeFifoLayers: jest.Mock };
   let updateMany: jest.Mock;
   let createMovement: jest.Mock;
+  let saleItemUpdateMany: jest.Mock;
   let tx: {
     stock: { updateMany: jest.Mock };
+    saleItem: { updateMany: jest.Mock };
     stockMovement: { create: jest.Mock };
   };
 
-  const payload = (items: Array<{ productId: string; quantity: number }>) => ({
-    items,
+  const payload = (
+    items: Array<{ productId: string; quantity: number; saleItemId?: string }>,
+  ) => ({
+    items: items.map((i, idx) => ({
+      saleItemId: i.saleItemId ?? `si-${idx + 1}`,
+      productId: i.productId,
+      quantity: i.quantity,
+    })),
     warehouseId: 'wh-1',
     companyId: 'comp-1',
     saleId: 'sale-1',
@@ -60,9 +73,13 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
   beforeEach(() => {
     updateMany = jest.fn().mockResolvedValue({ count: 1 });
     createMovement = jest.fn().mockResolvedValue({ id: 'mov-1' });
+    // G16-G: every payload item also carries its persisted SaleItem id, and
+    // the handler writes fifoCost back through the same tx.
+    saleItemUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
     tx = {
       stock: { updateMany },
       stockMovement: { create: createMovement },
+      saleItem: { updateMany: saleItemUpdateMany },
     };
     repo = {
       findStockByProductAndWarehouse: jest
@@ -332,6 +349,7 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
     const otherTx = {
       stock: { updateMany },
       stockMovement: { create: createMovement },
+      saleItem: { updateMany: saleItemUpdateMany },
     };
 
     await handler.handle(
@@ -389,5 +407,217 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
       ),
     ).rejects.toThrow(/Insufficient stock/);
     expect(costing.consumeFifoLayers).not.toHaveBeenCalled();
+  });
+
+  // ── G16-G: runtime fifoCost persistence (T1–T8, T15, T17) ───────────
+
+  it('T1: persists result.totalCost AS-IS on the item\'s SaleItem row via the same tx', async () => {
+    costing.consumeFifoLayers.mockResolvedValue(fifoResult('500'));
+
+    await handler.handle(
+      {
+        eventName: 'sale.completed',
+        payload: payload([{ productId: 'prod-1', quantity: 5 }]),
+      } as any,
+      { transactionClient: tx },
+    );
+
+    expect(saleItemUpdateMany).toHaveBeenCalledTimes(1);
+    expect(saleItemUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'si-1', saleId: 'sale-1' },
+      data: { fifoCost: '500' },
+    });
+  });
+
+  it('T2: multi-layer consumption persists the layered total (1000 + 300 = 1300)', async () => {
+    costing.consumeFifoLayers.mockResolvedValue(
+      fifoResult('1300', [
+        { layerId: 'layer-a', quantity: 10, unitCost: '100', cost: '1000' },
+        { layerId: 'layer-b', quantity: 2, unitCost: '150', cost: '300' },
+      ]),
+    );
+
+    await handler.handle(
+      {
+        eventName: 'sale.completed',
+        payload: payload([{ productId: 'prod-1', quantity: 12 }]),
+      } as any,
+      { transactionClient: tx },
+    );
+
+    expect(saleItemUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'si-1', saleId: 'sale-1' },
+      data: { fifoCost: '1300' },
+    });
+  });
+
+  it('T3: partial FIFO + FALLBACK B persists layered + fallback total (500 + 360 = 860)', async () => {
+    costing.consumeFifoLayers.mockResolvedValue(
+      fifoResult(
+        '860',
+        [{ layerId: 'layer-a', quantity: 5, unitCost: '100', cost: '500' }],
+        '360',
+      ),
+    );
+
+    await handler.handle(
+      {
+        eventName: 'sale.completed',
+        payload: payload([{ productId: 'prod-1', quantity: 8 }]),
+      } as any,
+      { transactionClient: tx },
+    );
+
+    expect(saleItemUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'si-1', saleId: 'sale-1' },
+      data: { fifoCost: '860' },
+    });
+  });
+
+  it('T4: zero FIFO layers + costPrice fallback persists the full fallback total', async () => {
+    costing.consumeFifoLayers.mockResolvedValue(
+      fifoResult('960', [], '960'),
+    );
+
+    await handler.handle(
+      {
+        eventName: 'sale.completed',
+        payload: payload([{ productId: 'prod-1', quantity: 8 }]),
+      } as any,
+      { transactionClient: tx },
+    );
+
+    expect(saleItemUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'si-1', saleId: 'sale-1' },
+      data: { fifoCost: '960' },
+    });
+  });
+
+  it('T6: N items each get their OWN consume result — different products (T7 duplicates keep their own OUT too)', async () => {
+    costing.consumeFifoLayers
+      .mockResolvedValueOnce(fifoResult('60'))
+      .mockResolvedValueOnce(fifoResult('45'))
+      .mockResolvedValueOnce(fifoResult('12.5'));
+
+    await handler.handle(
+      {
+        eventName: 'sale.completed',
+        payload: payload([
+          { productId: 'prod-a', quantity: 2 },
+          { productId: 'prod-b', quantity: 3 },
+          { productId: 'prod-c', quantity: 1 },
+        ]),
+      } as any,
+      { transactionClient: tx },
+    );
+
+    expect(saleItemUpdateMany).toHaveBeenCalledTimes(3);
+    expect(saleItemUpdateMany.mock.calls.map((c) => c[0].where.id)).toEqual([
+      'si-1',
+      'si-2',
+      'si-3',
+    ]);
+    expect(saleItemUpdateMany.mock.calls.map((c) => c[0].data.fifoCost)).toEqual([
+      '60',
+      '45',
+      '12.5',
+    ]);
+    // per-item consume → per-item OUT layers → Σ SaleItem.fifoCost ==
+    // Σ OUT.totalCost(sale) holds by construction (I1); for duplicate
+    // productIds each sequential consume sees updated layer remainders and
+    // writes its own OUT layer, so A.fifoCost + B.fifoCost == OUT1 + OUT2.
+  });
+
+  it('T7: duplicate productId items persist distinct fifoCosts summing to the canonical total', async () => {
+    // Same product in two lines: FIFO order is payload order; OUT1 + OUT2 =
+    // 20 + 30 → the two SaleItems carry exactly those totals (I1 exact).
+    costing.consumeFifoLayers
+      .mockResolvedValueOnce(fifoResult('20'))
+      .mockResolvedValueOnce(fifoResult('30'));
+
+    await handler.handle(
+      {
+        eventName: 'sale.completed',
+        payload: payload([
+          { productId: 'prod-x', quantity: 2, saleItemId: 'si-first' },
+          { productId: 'prod-x', quantity: 3, saleItemId: 'si-second' },
+        ]),
+      } as any,
+      { transactionClient: tx },
+    );
+
+    expect(costing.consumeFifoLayers).toHaveBeenCalledTimes(2);
+    expect(saleItemUpdateMany.mock.calls.map((c) => c[0].where.id)).toEqual([
+      'si-first',
+      'si-second',
+    ]);
+    expect(
+      saleItemUpdateMany.mock.calls.reduce(
+        (sum, c) => sum.add(c[0].data.fifoCost),
+        new Decimal(0),
+      ),
+    ).toEqual(new Decimal('50'));
+  });
+
+  it('T8: Decimal conservation — no unitCost multiplication, no rounding of totalCost', async () => {
+    // totalCost carries 4-decimal precision that unitCost × qty could never
+    // reproduce (5.0001 is not divisible by 3): the persisted value must be
+    // the consume total verbatim.
+    costing.consumeFifoLayers.mockResolvedValue(
+      fifoResult('10.0002'),
+    );
+
+    await handler.handle(
+      {
+        eventName: 'sale.completed',
+        payload: payload([{ productId: 'prod-1', quantity: 3 }]),
+      } as any,
+      { transactionClient: tx },
+    );
+
+    expect(saleItemUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'si-1', saleId: 'sale-1' },
+      data: { fifoCost: '10.0002' },
+    });
+  });
+
+  it('T15: SaleItem persist failure after consume → fail-fast, whole transaction rolls back', async () => {
+    costing.consumeFifoLayers.mockResolvedValue(fifoResult('500'));
+    saleItemUpdateMany.mockResolvedValue({ count: 0 }); // row vanished?
+
+    await expect(
+      handler.handle(
+        {
+          eventName: 'sale.completed',
+          payload: payload([{ productId: 'prod-1', quantity: 5 }]),
+        } as any,
+        { transactionClient: tx },
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(saleItemUpdateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('T17: saleId predicate in the write keeps the persist tenant-scoped', async () => {
+    costing.consumeFifoLayers.mockResolvedValue(fifoResult('500'));
+
+    await handler.handle(
+      {
+        eventName: 'sale.completed',
+        payload: payload([{ productId: 'prod-1', quantity: 5 }]),
+      } as any,
+      { transactionClient: tx },
+    );
+
+    // where.clause must always pair the item id with THIS sale's id — the
+    // saleId is tenant/context-scoped upstream, so a foreign SaleItem row can
+    // never match even if the id collided.
+    expect(saleItemUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'si-1',
+          saleId: 'sale-1',
+        }),
+      }),
+    );
   });
 });

@@ -44,6 +44,7 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
   };
   let eventBus: { publish: jest.Mock };
   let saleRows: Array<Record<string, any>>;
+  let saleItemFindManyArgs: Array<Record<string, any>>;
   let service: SalesService;
 
   const dto = (saleNumber?: string) =>
@@ -66,7 +67,15 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
           .fn()
           .mockResolvedValue({ id: productId, companyId, costPrice: null }),
       },
-      saleItem: { findMany: jest.fn().mockResolvedValue([]) },
+      saleItem: {
+        findMany: jest.fn(async (args: any) => {
+          // G16-G T14b: capture whether the completion read requests the
+          // deterministic id order (duplicate productId items consume FIFO
+          // and persist fifoCost in this order — replay must be repeatable).
+          saleItemFindManyArgs.push(args);
+          return [];
+        }),
+      },
       receipt: { create: jest.fn().mockResolvedValue({}) },
       cashShift: { findFirst: jest.fn().mockResolvedValue(null) },
       payment: { findMany: jest.fn().mockResolvedValue([]) },
@@ -78,6 +87,7 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
   beforeEach(() => {
     store = new MockIdempotencyStore();
     saleRows = [];
+    saleItemFindManyArgs = [];
     prisma = createMockPrisma(store, (tx) => Object.assign(tx, buildTx())).prisma;
     eventBus = { publish: jest.fn() };
     salesRepository = {
@@ -248,6 +258,9 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
     expect(second).toEqual(first);
     expect(eventBus.publish).toHaveBeenCalledTimes(1);
     expect(salesRepository.update).toHaveBeenCalledTimes(1);
+    // G16-G T14b: the completion read is id-ordered so the FIFO persist
+    // sequence for duplicate-product items is deterministic on replay.
+    expect(saleItemFindManyArgs[0]?.orderBy).toEqual({ id: 'asc' });
   });
 
   it('C2: different key on already COMPLETED sale → existing transition error', async () => {

@@ -358,7 +358,14 @@ export class SalesService {
     tx: Prisma.TransactionClient,
     companyId: string,
   ): Promise<{ cashShiftId: string | null }> {
-    const items = await tx.saleItem.findMany({ where: { saleId: sale.id } });
+    // G16-G: deterministic item order — duplicate productId items must
+    // consume FIFO layers and persist fifoCost in a stable, repeatable
+    // sequence (id is stable within this transaction; the order feeds the
+    // sale.completed payload).
+    const items = await tx.saleItem.findMany({
+      where: { saleId: sale.id },
+      orderBy: { id: 'asc' },
+    });
 
     // NOTE: Inventory changes (stock deduction + stock movement) are handled
     // by the SaleCompletedEventHandler in the Inventory module via the EventBus.
@@ -474,6 +481,9 @@ export class SalesService {
         changeAmount: sale.changeAmount.toString(),
         currency: sale.currency,
         items: items.map((i) => ({
+          // G16-G: the persisted SaleItem id — lets the completion handler
+          // write the per-item FIFO total cost back to the exact row.
+          saleItemId: i.id,
           productId: i.productId,
           quantity: i.quantity,
           unitPrice: i.unitPrice.toString(),

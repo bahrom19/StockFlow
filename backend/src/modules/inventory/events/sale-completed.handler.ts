@@ -96,7 +96,7 @@ export class SaleCompletedEventHandler implements EventHandler<SaleCompletedEven
       // layer consumption (CAS-guarded) and the OUT summary layer commit or
       // roll back together with the sale. Errors propagate — no adjustment-path
       // soft failure here: a sale must never complete with unconsumed cost.
-      await this.costingService.consumeFifoLayers(
+      const fifo = await this.costingService.consumeFifoLayers(
         item.productId,
         event.payload.companyId,
         item.quantity,
@@ -104,6 +104,30 @@ export class SaleCompletedEventHandler implements EventHandler<SaleCompletedEven
         event.payload.saleId,
         tx,
       );
+
+      // G16-G: persist the authoritative per-item TOTAL FIFO cost (layered
+      // cost + FALLBACK B, if any) on the exact SaleItem row — inside the SAME
+      // transaction. result.totalCost is used AS-IS: no unitCost × quantity,
+      // no proportional division, no rounding. Because consume already runs
+      // per item, duplicate-product items each keep their own OUT layer and
+      // Σ SaleItem.fifoCost == Σ OUT.totalCost(sale) holds by construction.
+      // The saleId predicate keeps the write tenant-scoped; a row mismatch
+      // after a successful consume means the cost basis would be lost — fail
+      // the whole sale transaction rather than commit without valuation.
+      const persisted = await tx.saleItem.updateMany({
+        where: {
+          id: item.saleItemId,
+          saleId: event.payload.saleId,
+        },
+        data: {
+          fifoCost: fifo.totalCost,
+        },
+      });
+      if (persisted.count !== 1) {
+        throw new BadRequestException(
+          `SaleItem ${item.saleItemId} for sale ${event.payload.saleId} not found while persisting FIFO cost — sale rolled back`,
+        );
+      }
     }
   }
 }

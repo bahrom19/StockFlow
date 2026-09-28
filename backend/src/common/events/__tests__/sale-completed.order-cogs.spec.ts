@@ -181,6 +181,16 @@ describe('sale.completed ordering & FIFO COGS (G16-E, D2/D3/D7/D8)', () => {
           return data;
         }),
       },
+      // G16-G: the completion handler persists each item's FIFO total cost
+      // through this tx; a 0-count update must fail the sale transaction.
+      saleItem: {
+        updateMany: jest.fn(async ({ where }: any) =>
+          where.saleId === payload.saleId &&
+          payload.items.some((i: any) => i.saleItemId === where.id)
+            ? { count: 1 }
+            : { count: 0 },
+        ),
+      },
       costLayer: {
         create: jest.fn(async ({ data }: any) => {
           const row = {

@@ -7,6 +7,16 @@ export interface SaleItemEvent {
   subtotal: string;
   total: string;
   margin: string;
+  /**
+   * G16-G: persisted `SaleItem.id`. REQUIRED IN PRACTICE on `sale.completed`
+   * — the completion handler fail-fasts (BadRequestException → full sale
+   * rollback) when it is missing, because without it the authoritative
+   * per-item FIFO total cost cannot be written back. Typed optional ONLY so
+   * the legacy `sale.refunded` payload (whose production path is frozen by
+   * G16-G scope) keeps compiling unchanged; the sale completion path always
+   * sets it.
+   */
+  saleItemId?: string;
 }
 
 export interface PaymentEvent {

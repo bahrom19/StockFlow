@@ -77,6 +77,7 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
           transactionClient: {
             stock: { updateMany },
             stockMovement: { create: createMovement },
+            saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           },
         },
       ),
@@ -96,6 +97,7 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
           transactionClient: {
             stock: { updateMany },
             stockMovement: { create: createMovement },
+            saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           },
         },
       ),
@@ -113,6 +115,7 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
         transactionClient: {
           stock: { updateMany },
           stockMovement: { create: createMovement },
+          saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         },
       },
     );
@@ -153,6 +156,7 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
           transactionClient: {
             stock: { updateMany },
             stockMovement: { create: createMovement },
+            saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           },
         },
       ),
@@ -173,6 +177,7 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
           transactionClient: {
             stock: { updateMany },
             stockMovement: { create: createMovement },
+            saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           },
         },
       ),
