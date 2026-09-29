@@ -12,13 +12,24 @@
  * then processes them per pair (batch size 25). Dry-run never opens a write
  * transaction; apply mode never runs without the explicit --apply flag.
  *
- * Exit codes: 0 = no failures; 1 = at least one pair FAILED.
+ * G16-J-R1: --apply requires a valid audit actor. The runner resolves
+ * STOCKFLOW_RECONCILIATION_ACTOR_USER_ID to a real, ACTIVE User.id BEFORE any
+ * discovery/write; a missing, malformed, nonexistent or inactive actor aborts
+ * the run with exit code 1 and no data change. Dry-run needs no actor.
+ *
+ * Exit codes: 0 = no failures; 1 = at least one pair FAILED (or actor
+ * resolution failed before any write).
  */
 import { createRequire } from 'module';
 const require = createRequire(new URL('../package.json', import.meta.url));
 const { PrismaClient } = require('@prisma/client');
 const { StockReconciliationService } = require('./dist/modules/inventory/services/stock-reconciliation.service.js');
 const { AuditLogService } = require('./dist/modules/shared/services/audit-log.service.js');
+const {
+  resolveReconciliationActor,
+  ReconciliationActorResolutionError,
+  RECONCILIATION_ACTOR_ENV_VAR,
+} = require('./dist/modules/inventory/services/reconciliation-actor.resolver.js');
 
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
@@ -26,10 +37,10 @@ const BATCH_SIZE = 25;
 
 const prisma = new PrismaClient();
 // The service only needs log() from AuditLogService; the runner's actor is
-// the operator executing the script.
+// resolved (G16-J-R1) from STOCKFLOW_RECONCILIATION_ACTOR_USER_ID — a real,
+// ACTIVE User.id validated before any write transaction is opened.
 const auditLogService = new AuditLogService(prisma);
 const service = new StockReconciliationService(prisma, auditLogService);
-const ACTOR = 'reconciliation-runner';
 
 const J = (v) => JSON.stringify(v, (_, x) => (typeof x === 'bigint' ? Number(x) : x));
 
@@ -60,6 +71,25 @@ async function discoverPairs() {
 }
 
 async function main() {
+  // G16-J-R1: resolve the audit actor BEFORE discovery so an unusable actor
+  // fails fast with zero write transactions. Dry-run needs no actor.
+  let actorUserId = null;
+  if (APPLY) {
+    try {
+      actorUserId = await resolveReconciliationActor(prisma);
+    } catch (e) {
+      const detail =
+        e instanceof ReconciliationActorResolutionError
+          ? `[${e.code}] ${e.message}`
+          : String(e.message).split('\n').slice(-2).join(' | ');
+      console.error(`FATAL: cannot resolve reconciliation audit actor (${RECONCILIATION_ACTOR_ENV_VAR}): ${detail}`);
+      console.error('Aborting before any discovery/write. No CostLayer and no AuditLog were written.');
+      await prisma.$disconnect();
+      process.exit(1);
+    }
+    console.log(`Audit actor (${RECONCILIATION_ACTOR_ENV_VAR}): ${actorUserId}`);
+  }
+
   const pairs = await discoverPairs();
   console.log(`Discovered ${pairs.length} mismatch pair(s). Mode: ${APPLY ? 'APPLY (write)' : 'DRY-RUN (read-only)'}`);
   if (!APPLY) console.log('No changes will be made. Pass --apply to write.\n');
@@ -89,7 +119,7 @@ async function main() {
             reason: plan.reason,
           }));
         } else {
-          const result = await service.reconcilePair(pair.companyId, pair.productId, ACTOR);
+          const result = await service.reconcilePair(pair.companyId, pair.productId, actorUserId);
           totals[result.status] += 1;
           if (result.status === 'FAILED') failed = true;
           console.log(J(result));

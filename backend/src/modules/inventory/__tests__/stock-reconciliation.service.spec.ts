@@ -93,6 +93,22 @@ describe('StockReconciliationService — G16-I-3', () => {
     expect(mockTx.$queryRaw.mock.calls[0][0].strings.join(' ')).toContain('FOR UPDATE');
   });
 
+  it('T5 (G16-J-R1): the resolved actor UUID is the AuditLog userId (never an arbitrary string)', async () => {
+    await service.reconcilePair(COMPANY, PRODUCT, USER);
+
+    expect(mockAuditLog.log).toHaveBeenCalledTimes(1);
+    expect(mockAuditLog.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: COMPANY,
+        userId: USER,
+        entityType: 'CostLayer',
+        entityId: 'layer-new',
+        action: 'COST_LAYER_RECONCILIATION',
+      }),
+      mockTx,
+    );
+  });
+
   it('A2: A-mismatch + costPrice = 0 → zero-cost layer (Decimal(0) is a valid basis)', async () => {
     mockTx.product.findFirst.mockResolvedValue(productRow(new Decimal(0)));
 
