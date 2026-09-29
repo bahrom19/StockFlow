@@ -214,6 +214,27 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
     );
   });
 
+  it('G16-H-3 T6: zero-cost fallback (fifoCost = 0) persists successfully — zero is not treated as missing', async () => {
+    costing.consumeFifoLayers.mockResolvedValue(
+      fifoResult('0', [], '0'),
+    );
+
+    await expect(
+      handler.handle(
+        {
+          eventName: 'sale.completed',
+          payload: payload([{ productId: 'prod-1', quantity: 8 }]),
+        } as any,
+        { transactionClient: tx },
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(saleItemUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'si-1', saleId: 'sale-1' },
+      data: { fifoCost: '0' },
+    });
+  });
+
   // ── 5. No cost basis ────────────────────────────────────────────────
 
   it('propagates the no-cost-basis error — no swallow, no warn-and-continue', async () => {

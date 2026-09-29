@@ -259,6 +259,63 @@ describe('CostingService — G9-F1 foundation', () => {
     });
   });
 
+  it('G16-H-3 T2: fully falls back with costPrice = Decimal(0) — valid zero-cost basis, total 0', async () => {
+    repo.findActiveCostLayers.mockResolvedValue([]);
+    repo.findProductById.mockResolvedValue({
+      id: 'prod-1',
+      costPrice: new Decimal('0'),
+      costingMethod: 'AVERAGE',
+    });
+
+    const result = await service.consumeFifoLayers(
+      'prod-1',
+      'company-1',
+      8,
+      'SALE',
+      'sale-1',
+      tx,
+    );
+
+    expect(result.layers).toEqual([]);
+    expect(result.fallbackCost.toString()).toBe('0');
+    expect(result.totalCost.toString()).toBe('0');
+    expect(repo.consumeCostLayer).not.toHaveBeenCalled();
+    const outData = outLayerCreate.mock.calls[0][0].data;
+    expect(outData.direction).toBe('OUT');
+    expect(outData.quantity).toBe(8);
+    expect((outData.totalCost as Decimal).toString()).toBe('0');
+    expect((outData.unitCost as Decimal).toString()).toBe('0');
+  });
+
+  it('G16-H-3 T4: partial FIFO + zero-cost fallback — shortfall valued at 0, total = layered cost', async () => {
+    repo.findActiveCostLayers.mockResolvedValue([layer('layer-a', '100', 5)]);
+    repo.findProductById.mockResolvedValue({
+      id: 'prod-1',
+      costPrice: new Decimal('0'),
+      costingMethod: 'AVERAGE',
+    });
+
+    const result = await service.consumeFifoLayers(
+      'prod-1',
+      'company-1',
+      8,
+      'SALE',
+      'sale-1',
+      tx,
+    );
+
+    // layered 500 + fallback 3 × 0 = 0 → total 500; no false no-basis error
+    expect(result.layers).toEqual([
+      { layerId: 'layer-a', quantity: 5, unitCost: '100', cost: '500' },
+    ]);
+    expect(result.fallbackCost.toString()).toBe('0');
+    expect(result.totalCost.toString()).toBe('500');
+    const outData = outLayerCreate.mock.calls[0][0].data;
+    expect((outData.totalCost as Decimal).toString()).toBe('500');
+    // deterministic blended unitCost = totalCost / requestedQty = 500 / 8
+    expect((outData.unitCost as Decimal).toString()).toBe('62.5');
+  });
+
   it('throws when layers are insufficient and no product.costPrice basis exists', async () => {
     repo.findActiveCostLayers.mockResolvedValue([layer('layer-a', '100', 5)]);
     repo.findProductById.mockResolvedValue({

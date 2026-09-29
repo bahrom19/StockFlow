@@ -143,7 +143,11 @@ export class CostingService {
         companyId,
         client,
       );
-      if (!product?.costPrice) {
+      // G16-H-3: explicit absence check (no truthiness). Decimal(0) is a
+      // VALID zero-cost basis (aligned with the G16-H-1 resolver and the
+      // G16-H-2 B4 manual remediation, which both accept Decimal(0)); only a
+      // missing product or a null/undefined costPrice means "no basis".
+      if (!product || product.costPrice === null || product.costPrice === undefined) {
         // No cost basis at all (no layers, no costPrice): G16-F — the gap
         // must surface as a typed business validation failure instead of an
         // untyped infrastructure error. Previously a plain Error here was

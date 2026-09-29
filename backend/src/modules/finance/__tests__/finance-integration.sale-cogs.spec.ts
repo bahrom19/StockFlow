@@ -287,6 +287,30 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
     expect(cogs).toMatchObject({ accountId: 'acc-cogs' });
   });
 
+  it('G16-H-3 T7: zero OUT totalCost resolves COGS = 0 and posts no COGS/inventory lines (existing gt(0) skip)', async () => {
+    tx.costLayer.findMany.mockResolvedValue([outLayer('0')]);
+
+    await service.onSaleCompleted(
+      payload([item('prod-a', 2, '999')]),
+      tx as never,
+    );
+
+    // revenue side stays; the zero-amount COGS pair is skipped entirely by
+    // the existing totalCost.gt(0) semantics — no new accounting rule.
+    expect(cogsLine()).toBeUndefined();
+    expect(inventoryLine()).toBeUndefined();
+    expect(gl.post).toHaveBeenCalledTimes(1);
+    const lines = gl.post.mock.calls[0][0].lines;
+    // every posted line is still zero on the empty side (balanced journal)
+    for (const l of lines) {
+      expect(new Decimal(l.debit === '0' ? 0 : l.debit).gte(0)).toBe(true);
+    }
+    // legacy costPrice (999 × 2) must NOT leak in as COGS
+    expect(lines.find((l: { accountId: string }) => l.accountId === 'acc-cogs')).toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
   // ── TEST 10: COGS journal amount == OUT totalCost ───────────────────
 
   it('makes the COGS journal amount exactly equal to the OUT totalCost sum (41.5 + 58.5 = 100)', async () => {
