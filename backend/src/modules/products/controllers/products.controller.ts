@@ -23,6 +23,7 @@ import {
 import { CreateProductDto } from '../dto/create-product.dto';
 import { ProductQueryDto } from '../dto/product-query.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
+import { SetCostPriceDto } from '../dto/set-cost-price.dto';
 import { ProductEntity } from '../entities/product.entity';
 import { ProductsService } from '../services/products.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -124,6 +125,39 @@ export class ProductsController {
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<ProductEntity> {
     return this.productsService.update(id, updateProductDto, currentUser);
+  }
+
+  /**
+   * G16-H-2 (B4): manual cost-price reconciliation. Sets costPrice on a
+   * currently unvalued product (Decimal(0) allowed). Idempotent for the
+   * same value; 409 if a different costPrice already exists. No layers/GL.
+   */
+  @Patch(':id/cost-price')
+  @RequirePermission('products:update')
+  @ApiOperation({
+    summary: 'Set cost price on an unvalued product (B4 remediation)',
+    description:
+      'Manual cost-price reconciliation for legacy unvalued stock. Only ' +
+      'moves costPrice from NULL to an explicit value (zero allowed); an ' +
+      'existing costPrice is never overwritten. Writes an audit record in ' +
+      'the same transaction. No cost layers, stock movements or GL entries.',
+  })
+  @ApiBody({ type: SetCostPriceDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Cost price set (or idempotent no-op)',
+    type: ProductEntity,
+  })
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: 'Product already has a cost price (no silent overwrite)',
+  })
+  async setCostPrice(
+    @Param('id') id: string,
+    @Body() dto: SetCostPriceDto,
+    @CurrentUser() currentUser: JwtPayload,
+  ): Promise<ProductEntity> {
+    return this.productsService.remediateCostPrice(id, dto, currentUser);
   }
 
   @Delete(':id')

@@ -29,4 +29,8 @@ describe('ProductsController — RBAC metadata (G15-05-D)', () => {
   it('PATCH /products/:id requires products:update', () => {
     expect(required('update')).toBe('products:update');
   });
+
+  it('PATCH /products/:id/cost-price requires products:update (G16-H-2 B4)', () => {
+    expect(required('setCostPrice')).toBe('products:update');
+  });
 });

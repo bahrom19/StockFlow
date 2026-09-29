@@ -13,6 +13,7 @@ import { CostingService } from '../../inventory/services/costing.service';
 import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 
 describe('ProductsService', () => {
@@ -24,6 +25,7 @@ describe('ProductsService', () => {
   let mockIdempotency: any;
   let mockGlEngine: { post: jest.Mock };
   let mockCosting: { recordInboundLayer: jest.Mock };
+  let mockAuditLog: { log: jest.Mock };
 
   const currentUser: JwtPayload = {
     userId: 'me',
@@ -108,6 +110,8 @@ describe('ProductsService', () => {
       post: jest.fn().mockResolvedValue({ id: 'je-open-1' }),
     };
     mockCosting = { recordInboundLayer: jest.fn().mockResolvedValue(undefined) };
+    // G16-H-2 (B4): AuditLogService mock — records entries for assertions.
+    mockAuditLog = { log: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -118,6 +122,7 @@ describe('ProductsService', () => {
         { provide: IdempotencyService, useValue: mockIdempotency },
         { provide: GlEngineService, useValue: mockGlEngine },
         { provide: CostingService, useValue: mockCosting },
+        { provide: AuditLogService, useValue: mockAuditLog },
       ],
     }).compile();
 
@@ -945,6 +950,241 @@ describe('ProductsService', () => {
           }),
         }),
       );
+    });
+  });
+
+  // ══ G16-H-2 (B4): manual cost-price reconciliation ══
+  describe('remediateCostPrice — G16-H-2 B4', () => {
+    const nullCostProduct = {
+      ...baseProduct,
+      costPrice: null,
+      stocks: [{ quantity: 10 }],
+    };
+
+    it('A. NULL -> positive cost: updates, audits, returns entity', async () => {
+      mockRepo.findById.mockResolvedValue(nullCostProduct as any);
+      mockRepo.update.mockResolvedValue({
+        ...nullCostProduct,
+        costPrice: new Prisma.Decimal(12.5),
+      } as any);
+
+      const result = await service.remediateCostPrice(
+        'prod-1',
+        { costPrice: 12.5, reason: 'B4 manual entry' } as any,
+        currentUser,
+      );
+
+      expect(result.costPrice).toBe('12.5'); // mapper returns string
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'prod-1',
+        { costPrice: new Prisma.Decimal(12.5) },
+        'comp-1',
+        0,
+        mockTx,
+      );
+      expect(mockAuditLog.log).toHaveBeenCalledTimes(1);
+    });
+
+    it('B. NULL -> zero cost: Decimal(0) persisted (valid zero basis)', async () => {
+      mockRepo.findById.mockResolvedValue(nullCostProduct as any);
+      mockRepo.update.mockResolvedValue({
+        ...nullCostProduct,
+        costPrice: new Prisma.Decimal(0),
+      } as any);
+
+      const result = await service.remediateCostPrice(
+        'prod-1',
+        { costPrice: 0, reason: 'B4 zero-cost entry' } as any,
+        currentUser,
+      );
+
+      expect(result.costPrice).toBe('0'); // zero-cost basis preserved
+      expect(mockRepo.update).toHaveBeenCalledWith(
+        'prod-1',
+        { costPrice: new Prisma.Decimal(0) },
+        'comp-1',
+        0,
+        mockTx,
+      );
+      expect(mockAuditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId: 'comp-1',
+          userId: 'me',
+          entityType: 'Product',
+          entityId: 'prod-1',
+          action: 'PRODUCT_COST_PRICE_REMEDIATION',
+          before: { costPrice: null },
+          after: expect.objectContaining({
+            costPrice: '0',
+            remediation: 'B4_MANUAL',
+          }),
+        }),
+        mockTx,
+      );
+    });
+
+    it('F. foreign tenant product -> 404 (no info leakage)', async () => {
+      mockRepo.findById.mockResolvedValue(null as any);
+      await expect(
+        service.remediateCostPrice(
+          'prod-other',
+          { costPrice: 5, reason: 'x' } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('G. deleted product -> 404 (repository filters deletedAt)', async () => {
+      mockRepo.findById.mockResolvedValue(null as any);
+      await expect(
+        service.remediateCostPrice(
+          'prod-del',
+          { costPrice: 5, reason: 'x' } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('H. malformed cost -> 400', async () => {
+      await expect(
+        service.remediateCostPrice(
+          'prod-1',
+          { costPrice: 'abc', reason: 'x' } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('I. negative cost -> 400', async () => {
+      await expect(
+        service.remediateCostPrice(
+          'prod-1',
+          { costPrice: -3, reason: 'x' } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('J. existing non-NULL + same value -> idempotent no-op, no AuditLog', async () => {
+      mockRepo.findById.mockResolvedValue(baseProduct as any); // costPrice 600
+
+      const result = await service.remediateCostPrice(
+        'prod-1',
+        { costPrice: '600', reason: 'repeat' } as any,
+        currentUser,
+      );
+
+      expect(result.costPrice).toBe('600');
+      expect(mockRepo.update).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('K. existing non-NULL + different value -> 409, no overwrite', async () => {
+      mockRepo.findById.mockResolvedValue(baseProduct as any); // costPrice 600
+
+      await expect(
+        service.remediateCostPrice(
+          'prod-1',
+          { costPrice: 700, reason: 'try overwrite' } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(mockRepo.update).not.toHaveBeenCalled();
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('L/M. audit created with old/new values, actor, reason, remediation marker', async () => {
+      mockRepo.findById.mockResolvedValue(nullCostProduct as any);
+      mockRepo.update.mockResolvedValue({
+        ...nullCostProduct,
+        costPrice: new Prisma.Decimal(25),
+      } as any);
+
+      await service.remediateCostPrice(
+        'prod-1',
+        { costPrice: 25, reason: 'legacy stock valuation' } as any,
+        currentUser,
+      );
+
+      expect(mockAuditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId: 'comp-1',
+          userId: 'me',
+          entityType: 'Product',
+          entityId: 'prod-1',
+          action: 'PRODUCT_COST_PRICE_REMEDIATION',
+          before: { costPrice: null },
+          after: expect.objectContaining({
+            costPrice: '25',
+            reason: 'legacy stock valuation',
+            remediation: 'B4_MANUAL',
+          }),
+        }),
+        mockTx,
+      );
+    });
+
+    it('N. audit failure rolls back costPrice update (same tx)', async () => {
+      mockRepo.findById.mockResolvedValue(nullCostProduct as any);
+      mockRepo.update.mockResolvedValue({
+        ...nullCostProduct,
+        costPrice: new Prisma.Decimal(12.5),
+      } as any);
+      mockAuditLog.log.mockRejectedValueOnce(new Error('audit down'));
+
+      await expect(
+        service.remediateCostPrice(
+          'prod-1',
+          { costPrice: 12.5, reason: 'x' } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow('audit down');
+      // In a real DB the tx rolls back; mock-level: audit call attempted
+      // inside the same tx callback and its failure propagates.
+      expect(mockAuditLog.log).toHaveBeenCalledTimes(1);
+    });
+
+    it('O. CAS conflict from repository -> propagates as ConflictException', async () => {
+      mockRepo.findById.mockResolvedValue(nullCostProduct as any);
+      mockRepo.update.mockRejectedValue(
+        new ConflictException(
+          'Product prod-1 was modified by another user. Please refresh and retry.',
+        ),
+      );
+
+      await expect(
+        service.remediateCostPrice(
+          'prod-1',
+          { costPrice: 12.5, reason: 'x' } as any,
+          currentUser,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(mockAuditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('P/Q/R/S/T/U. no accounting side effects of any kind', async () => {
+      mockRepo.findById.mockResolvedValue(nullCostProduct as any);
+      mockRepo.update.mockResolvedValue({
+        ...nullCostProduct,
+        costPrice: new Prisma.Decimal(9),
+      } as any);
+
+      await service.remediateCostPrice(
+        'prod-1',
+        { costPrice: 9, reason: 'x' } as any,
+        currentUser,
+      );
+
+      expect(mockCosting.recordInboundLayer).not.toHaveBeenCalled();
+      expect(mockGlEngine.post).not.toHaveBeenCalled();
+      expect(mockStockService.adjustStock).not.toHaveBeenCalled();
+      expect(mockTx.stock.upsert).not.toHaveBeenCalled();
+      expect(mockTx.stockMovement.create).not.toHaveBeenCalled();
+      expect(mockTx.costLayer).toBeUndefined();
     });
   });
 });

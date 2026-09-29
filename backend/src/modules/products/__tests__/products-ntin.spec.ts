@@ -8,6 +8,7 @@ import { CostingService } from '../../inventory/services/costing.service';
 import { GlEngineService } from '../../finance/services/gl-engine.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 
 /**
@@ -97,6 +98,9 @@ describe('ProductsService — NTIN', () => {
           provide: CostingService,
           useValue: { recordInboundLayer: jest.fn() },
         },
+        // G16-H-2 (B4): ProductsService now requires AuditLogService (DI);
+        // NTIN tests never exercise audit logging, so a stub is enough.
+        { provide: AuditLogService, useValue: { log: jest.fn() } },
       ],
     }).compile();
 

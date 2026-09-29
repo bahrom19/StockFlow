@@ -11,6 +11,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { ProductQueryDto } from '../dto/product-query.dto';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
+import { SetCostPriceDto } from '../dto/set-cost-price.dto';
 import { ProductEntity } from '../entities/product.entity';
 import { ProductMapper } from '../mappers/product.mapper';
 import { ProductsRepository } from '../repositories/products.repository';
@@ -25,6 +26,7 @@ import { GlEngineService } from '../../finance/services/gl-engine.service';
 // parallel direct write to the Stock table.
 import { StockService } from '../../inventory/services';
 import { CostingService } from '../../inventory/services';
+import { AuditLogService } from '../../shared/services/audit-log.service';
 
 /**
  * Normalize a product identifier (SKU / barcode):
@@ -49,6 +51,7 @@ export class ProductsService {
     private readonly idempotencyService: IdempotencyService,
     private readonly glEngine: GlEngineService,
     private readonly costingService: CostingService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async create(
@@ -573,5 +576,94 @@ export class ProductsService {
     );
 
     return ProductMapper.toEntity(deletedProduct);
+  }
+
+  /**
+   * G16-H-2 (B4): manual cost-price reconciliation for a currently unvalued
+   * product. Sets Product.costPrice (NULL -> explicit value, Decimal(0)
+   * allowed) with an AuditLog record in the SAME transaction. No accounting
+   * side effects: no CostLayer, no Stock/StockMovement writes, no GL, no
+   * events — future valuation relies on the existing FALLBACK B safety net.
+   * Idempotency: repeat with the same value is a no-op (no AuditLog); a
+   * different value over an existing non-NULL costPrice is a 409 (no
+   * overwrite, no override mechanism). Row-version CAS prevents lost
+   * updates under concurrency.
+   */
+  async remediateCostPrice(
+    productId: string,
+    dto: SetCostPriceDto,
+    currentUser: JwtPayload,
+  ): Promise<ProductEntity> {
+    const companyId = currentUser.companyId;
+    const userId = currentUser.userId;
+
+    // Decimal-safe parsing: malformed/NaN/Infinity/negative are rejected;
+    // zero is a VALID explicit zero-cost basis (no truthiness shortcuts).
+    let parsed: Decimal;
+    try {
+      parsed = new Decimal(dto.costPrice as string | number);
+    } catch {
+      throw new BadRequestException('costPrice must be a valid decimal number');
+    }
+    if (!parsed.isFinite()) {
+      throw new BadRequestException('costPrice must be a finite number');
+    }
+    if (parsed.isNegative()) {
+      throw new BadRequestException('costPrice must not be negative');
+    }
+
+    return this.prismaService.$transaction(async (tx) => {
+      // Tenant-scoped lookup: id + companyId + not deleted (404 otherwise).
+      const product = await this.productsRepository.findById(
+        productId,
+        companyId,
+        tx,
+      );
+      if (!product) {
+        throw new NotFoundException(`Product with id ${productId} not found`);
+      }
+
+      // Class B safety: an existing costPrice is never silently overwritten.
+      // (Explicit null checks only — Decimal(0) is a legitimate value.)
+      if (product.costPrice !== null && product.costPrice !== undefined) {
+        const existingCost = new Decimal(product.costPrice.toString());
+        if (existingCost.eq(parsed)) {
+          // Idempotent no-op: nothing changed, no AuditLog.
+          return ProductMapper.toEntity(product);
+        }
+        throw new ConflictException(
+          `Product ${productId} already has a cost price. Use the regular product update flow to change it.`,
+        );
+      }
+
+      // Row-version CAS convention: pass the loaded rowVersion explicitly.
+      const rowVersion = product.rowVersion ?? 0;
+      const updated = await this.productsRepository.update(
+        productId,
+        { costPrice: parsed } as Prisma.ProductUpdateInput,
+        companyId,
+        rowVersion,
+        tx,
+      );
+
+      await this.auditLogService.log(
+        {
+          companyId,
+          userId,
+          entityType: 'Product',
+          entityId: productId,
+          action: 'PRODUCT_COST_PRICE_REMEDIATION',
+          before: { costPrice: null },
+          after: {
+            costPrice: parsed.toString(),
+            reason: dto.reason,
+            remediation: 'B4_MANUAL',
+          },
+        },
+        tx,
+      );
+
+      return ProductMapper.toEntity(updated);
+    });
   }
 }
