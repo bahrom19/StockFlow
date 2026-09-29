@@ -26,6 +26,7 @@ import {
   ReservationService,
   CostingService,
 } from './services';
+import { StockReconciliationService } from './services/stock-reconciliation.service';
 import { InventoryRepository } from './repositories/inventory.repository';
 import {
   SaleCompletedEventHandler,
@@ -59,6 +60,7 @@ import {
     UomService,
     ReservationService,
     CostingService,
+    StockReconciliationService,
     SaleCompletedEventHandler,
     SaleRefundedEventHandler,
     SalePartiallyRefundedEventHandler,
