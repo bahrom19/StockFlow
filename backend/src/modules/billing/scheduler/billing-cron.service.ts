@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { JobRunStatus } from '@prisma/client';
 import { RedisService } from '../../../infrastructure/cache/redis.service';
+import { JobRunService } from '../../../common/observability/job-run.service';
 import { CompanySubscriptionRepository } from '../repositories/company-subscription.repository';
 import { CompanySubscriptionService } from '../services/company-subscription.service';
 import { InvoiceService } from '../services/invoice.service';
@@ -11,16 +13,32 @@ import { EventBus, EVENT_BUS } from '../../../common/events';
 const LOCK_PREFIX = 'cron:lock:';
 const SYSTEM_USER = 'system';
 
-// Per-job lock TTLs (seconds) - longer for jobs with potentially longer execution time
+// Per-job lock TTLs (seconds).
+//
+// Sizing rule (G16-L-2A-R3): a TTL must exceed the job's realistic legitimate
+// execution time, while staying STRICTLY BELOW the cron interval so a slow run
+// never suppresses the next scheduled run. Tenants are iterated with per-row DB
+// writes, so worst case scales with tenant count (243 companies today).
+//
+// Jobs on a 24h/monthly interval have ample headroom, so their TTLs were raised
+// from 55s/300s to 1800s (maintenance: 7200s — it loops 5000-row batches until
+// exhausted, making it the longest-running job).
+//
+// Two jobs are deliberately UNCHANGED and remain residual risks:
+//   'expired-trials' runs EVERY_MINUTE (60s), so 55s is already the practical
+//     ceiling. A TTL cannot fix an over-running job on a 60s schedule.
+//   'retry-payments' has TTL == interval (300s). Raising it would suppress a
+//     legitimately scheduled 5-minute retry; the per-row CAS inside the job is
+//     what prevents double-charging.
 const LOCK_TTL_BY_JOB = {
   'expired-trials': 55,
-  'recurring-invoices': 300,
+  'recurring-invoices': 1800,
   'retry-payments': 300,
-  'suspend-overdue': 55,
-  'expire-suspended': 55,
+  'suspend-overdue': 900,
+  'expire-suspended': 1800,
   'reset-usage': 300,
-  'resume-paid': 55,
-  'cleanup': 300,
+  'resume-paid': 240,
+  'cleanup': 1800,
 } as const;
 
 type LockKey = keyof typeof LOCK_TTL_BY_JOB;
@@ -37,6 +55,7 @@ export class BillingCronService {
     private readonly companySubscriptionService: CompanySubscriptionService,
     private readonly invoiceService: InvoiceService,
     @Inject(EVENT_BUS) private readonly eventBus: EventBus,
+    private readonly jobRunService: JobRunService,
   ) {}
 
   /**
@@ -65,6 +84,7 @@ export class BillingCronService {
     const ownerToken = await this.acquireLock(lockKey);
     if (!ownerToken) return;
 
+    const runId = await this.jobRunService.start('billing.expired-trials');
     try {
       const expiredTrials =
         await this.subscriptionRepository.findExpiredTrials();
@@ -86,6 +106,12 @@ export class BillingCronService {
       if (expiredTrials.length > 0) {
         this.logger.log(`Processed ${expiredTrials.length} expired trials`);
       }
+      await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
+        processed: expiredTrials.length,
+      });
+    } catch (error) {
+      await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
+      throw error;
     } finally {
       await this.releaseLock(lockKey, ownerToken);
     }
@@ -100,6 +126,7 @@ export class BillingCronService {
     const ownerToken = await this.acquireLock(lockKey);
     if (!ownerToken) return;
 
+    const runId = await this.jobRunService.start('billing.recurring-invoices');
     try {
       const expiringToday =
         await this.subscriptionRepository.findExpiringToday();
@@ -125,6 +152,13 @@ export class BillingCronService {
       if (generated > 0) {
         this.logger.log(`Generated ${generated} recurring invoices`);
       }
+      await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
+        processed: expiringToday.length,
+        succeeded: generated,
+      });
+    } catch (error) {
+      await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
+      throw error;
     } finally {
       await this.releaseLock(lockKey, ownerToken);
     }
@@ -139,6 +173,7 @@ export class BillingCronService {
     const ownerToken = await this.acquireLock(lockKey);
     if (!ownerToken) return;
 
+    const runId = await this.jobRunService.start('billing.retry-payments');
     try {
       const pendingRetries =
         await this.subscriptionRepository.findPendingRetries({ maxRetries: 3 });
@@ -181,6 +216,12 @@ export class BillingCronService {
       if (pendingRetries.length > 0) {
         this.logger.log(`Processed ${pendingRetries.length} payment retries`);
       }
+      await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
+        processed: pendingRetries.length,
+      });
+    } catch (error) {
+      await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
+      throw error;
     } finally {
       await this.releaseLock(lockKey, ownerToken);
     }
@@ -195,6 +236,7 @@ export class BillingCronService {
     const ownerToken = await this.acquireLock(lockKey);
     if (!ownerToken) return;
 
+    const runId = await this.jobRunService.start('billing.suspend-overdue');
     try {
       const overdue =
         await this.subscriptionRepository.findOverdueGracePeriod();
@@ -213,6 +255,12 @@ export class BillingCronService {
       if (overdue.length > 0) {
         this.logger.log(`Suspended ${overdue.length} overdue subscriptions`);
       }
+      await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
+        processed: overdue.length,
+      });
+    } catch (error) {
+      await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
+      throw error;
     } finally {
       await this.releaseLock(lockKey, ownerToken);
     }
@@ -227,6 +275,7 @@ export class BillingCronService {
     const ownerToken = await this.acquireLock(lockKey);
     if (!ownerToken) return;
 
+    const runId = await this.jobRunService.start('billing.expire-suspended');
     try {
       const expired =
         await this.subscriptionRepository.findExpiredSuspensions();
@@ -248,6 +297,12 @@ export class BillingCronService {
       if (expired.length > 0) {
         this.logger.log(`Expired ${expired.length} suspended subscriptions`);
       }
+      await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
+        processed: expired.length,
+      });
+    } catch (error) {
+      await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
+      throw error;
     } finally {
       await this.releaseLock(lockKey, ownerToken);
     }
@@ -262,9 +317,16 @@ export class BillingCronService {
     const ownerToken = await this.acquireLock(lockKey);
     if (!ownerToken) return;
 
+    const runId = await this.jobRunService.start('billing.reset-usage');
     try {
       const result = await this.prismaService.usageRecord.deleteMany({});
       this.logger.log(`Reset ${result.count} usage records`);
+      await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
+        processed: result.count,
+      });
+    } catch (error) {
+      await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
+      throw error;
     } finally {
       await this.releaseLock(lockKey, ownerToken);
     }
@@ -280,6 +342,7 @@ export class BillingCronService {
     const ownerToken = await this.acquireLock(lockKey);
     if (!ownerToken) return;
 
+    const runId = await this.jobRunService.start('billing.resume-paid');
     try {
       // G13-03-07-03: drain every page within one run (was: first page of
       // 100 only). Two phases: collect candidate IDs first without mutating
@@ -339,6 +402,13 @@ export class BillingCronService {
       if (resumed > 0) {
         this.logger.log(`Resumed ${resumed} subscriptions after payment`);
       }
+      await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
+        processed: candidates.length,
+        succeeded: resumed,
+      });
+    } catch (error) {
+      await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
+      throw error;
     } finally {
       await this.releaseLock(lockKey, ownerToken);
     }
@@ -356,6 +426,7 @@ export class BillingCronService {
     const ownerToken = await this.acquireLock(lockKey);
     if (!ownerToken) return;
 
+    const runId = await this.jobRunService.start('billing.cleanup');
     try {
       // Delete webhook events older than 90 days
       const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
@@ -379,6 +450,12 @@ export class BillingCronService {
           `Cleanup: ${deletedWebhooks.count} webhook events deleted, ${staleRetries.count} retry counters reset`,
         );
       }
+      await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
+        processed: deletedWebhooks.count + staleRetries.count,
+      });
+    } catch (error) {
+      await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
+      throw error;
     } finally {
       await this.releaseLock(lockKey, ownerToken);
     }

@@ -1,5 +1,63 @@
 import { BillingCronService } from '../billing-cron.service';
 
+// Observability stub: JobRun persistence is non-authoritative infrastructure and
+// must never influence billing behaviour under test.
+const jobRunStub = () =>
+  ({
+    start: jest.fn().mockResolvedValue('jobrun-test-id'),
+    finish: jest.fn().mockResolvedValue(undefined),
+  }) as any;
+
+describe('BillingCronService - stable JobRun jobName mapping', () => {
+  // Source-level pin: the 10 registered jobs must keep exactly these names.
+  // Reads the real files so a rename cannot pass unnoticed.
+  const { readFileSync } = require('fs');
+  const { join } = require('path');
+
+  const BILLING = join(__dirname, '..', 'billing-cron.service.ts');
+  const MAINTENANCE = join(
+    __dirname,
+    '..',
+    '..',
+    '..',
+    'maintenance',
+    'maintenance-cron.service.ts',
+  );
+  const NOTIFICATIONS = join(
+    __dirname,
+    '..',
+    '..',
+    '..',
+    'notifications',
+    'scheduler',
+    'overdue-notification-cron.service.ts',
+  );
+
+  const EXPECTED: Record<string, string> = {
+    'billing.expired-trials': BILLING,
+    'billing.recurring-invoices': BILLING,
+    'billing.retry-payments': BILLING,
+    'billing.suspend-overdue': BILLING,
+    'billing.expire-suspended': BILLING,
+    'billing.reset-usage': BILLING,
+    'billing.resume-paid': BILLING,
+    'billing.cleanup': BILLING,
+    'maintenance.cleanup-idempotency': MAINTENANCE,
+    'notifications.scan-overdue': NOTIFICATIONS,
+  };
+
+  it('registers exactly the 10 approved job names and no others', () => {
+    const sources = [BILLING, MAINTENANCE, NOTIFICATIONS].map((f) => readFileSync(f, 'utf8'));
+    const found = sources
+      .join('\n')
+      .match(/jobRunService\.start\('([^']+)'\)/g)!
+      .map((m) => m.replace(/jobRunService\.start\('|'\)/g, ''));
+
+    expect(found.sort()).toEqual(Object.keys(EXPECTED).sort());
+    expect(found).toHaveLength(10);
+  });
+});
+
 describe('BillingCronService - TTL verification', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -14,6 +72,7 @@ describe('BillingCronService - TTL verification', () => {
       {} as any,
       {} as any,
       {} as any,
+      jobRunStub(),
     );
 
     const fakeToken = 'test-token-expired-trials';
@@ -35,9 +94,90 @@ describe('BillingCronService - TTL verification', () => {
     expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:expired-trials', fakeToken);
   });
 
+  // ---- G16-L-2A-R4: JobRun observability isolation ----
+
+  describe('JobRun observability', () => {
+    const buildService = (jobRun: any, overrides: Record<string, any> = {}) => {
+      const service = new BillingCronService(
+        {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRun,
+      );
+      (service as any).redisService = {
+        acquireLock: jest.fn().mockResolvedValue('token-x'),
+        releaseLock: jest.fn().mockResolvedValue(true),
+      };
+      (service as any).subscriptionRepository = {
+        findExpiredTrials: jest.fn().mockResolvedValue([]),
+      };
+      (service as any).companySubscriptionService = {
+        downgradeToFree: jest.fn().mockResolvedValue(undefined),
+      };
+      Object.assign(service as any, overrides);
+      return service;
+    };
+
+    it('records RUNNING with the stable job name, then SUCCEEDED', async () => {
+      const jobRun = jobRunStub();
+      const service = buildService(jobRun);
+
+      await service.processExpiredTrials();
+
+      expect(jobRun.start).toHaveBeenCalledWith('billing.expired-trials');
+      expect(jobRun.finish).toHaveBeenCalledWith(
+        'jobrun-test-id',
+        'SUCCEEDED',
+        expect.objectContaining({ processed: 0 }),
+      );
+    });
+
+    it('does not execute business logic and does not start a JobRun on lock contention', async () => {
+      const jobRun = jobRunStub();
+      const service = buildService(jobRun);
+      (service as any).redisService.acquireLock.mockResolvedValue(null);
+
+      await service.processExpiredTrials();
+
+      expect((service as any).subscriptionRepository.findExpiredTrials).not.toHaveBeenCalled();
+      expect(jobRun.start).not.toHaveBeenCalled();
+      expect(jobRun.finish).not.toHaveBeenCalled();
+      expect((service as any).redisService.releaseLock).not.toHaveBeenCalled();
+    });
+
+    it('records FAILED, rethrows the original error, and still releases the lock', async () => {
+      const jobRun = jobRunStub();
+      const boom = new Error('subscription query failed');
+      const service = buildService(jobRun, {
+        subscriptionRepository: { findExpiredTrials: jest.fn().mockRejectedValue(boom) },
+      });
+
+      await expect(service.processExpiredTrials()).rejects.toThrow('subscription query failed');
+
+      expect(jobRun.finish).toHaveBeenCalledWith(
+        'jobrun-test-id',
+        'FAILED',
+        expect.objectContaining({ error: boom }),
+      );
+      expect((service as any).redisService.releaseLock).toHaveBeenCalledWith(
+        'cron:lock:expired-trials',
+        'token-x',
+      );
+    });
+
+    it('runs the business job and releases the lock when JobRun.start() returns null', async () => {
+      const jobRun = jobRunStub();
+      jobRun.start.mockResolvedValue(null);
+      const service = buildService(jobRun);
+
+      await service.processExpiredTrials();
+
+      expect((service as any).subscriptionRepository.findExpiredTrials).toHaveBeenCalled();
+      expect(jobRun.finish).toHaveBeenCalledWith(null, 'SUCCEEDED', expect.anything());
+      expect((service as any).redisService.releaseLock).toHaveBeenCalled();
+    });
+  });
+
   it('should call acquireLock with TTL 300 for generateRecurringInvoices', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-recurring-invoices';
@@ -63,13 +203,13 @@ describe('BillingCronService - TTL verification', () => {
     await service.generateRecurringInvoices();
 
     const redisService = (service as any).redisService;
-    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:recurring-invoices', 300);
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:recurring-invoices', 1800);
     expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:recurring-invoices', fakeToken);
   });
 
   it('should call acquireLock with TTL 300 for retryFailedPayments', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-retry-payments';
@@ -99,7 +239,7 @@ describe('BillingCronService - TTL verification', () => {
     persistedCounts: number[],
   ) {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-retry-behavioral';
@@ -185,7 +325,7 @@ describe('BillingCronService - TTL verification', () => {
 
   it('should call acquireLock with TTL 55 for suspendOverdueSubscriptions', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-suspend-overdue';
@@ -203,13 +343,13 @@ describe('BillingCronService - TTL verification', () => {
     await service.suspendOverdueSubscriptions();
 
     const redisService = (service as any).redisService;
-    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:suspend-overdue', 55);
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:suspend-overdue', 900);
     expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:suspend-overdue', fakeToken);
   });
 
   it('should call acquireLock with TTL 55 for expireSuspendedSubscriptions', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-expire-suspended';
@@ -230,13 +370,13 @@ describe('BillingCronService - TTL verification', () => {
     await service.expireSuspendedSubscriptions();
 
     const redisService = (service as any).redisService;
-    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:expire-suspended', 55);
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:expire-suspended', 1800);
     expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:expire-suspended', fakeToken);
   });
 
   it('should call acquireLock with TTL 300 for resetUsageRecords', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-reset-usage';
@@ -257,7 +397,7 @@ describe('BillingCronService - TTL verification', () => {
 
   it('should call acquireLock with TTL 55 for resumeAfterPayment', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-resume-paid';
@@ -278,13 +418,13 @@ describe('BillingCronService - TTL verification', () => {
     await service.resumeAfterPayment();
 
     const redisService = (service as any).redisService;
-    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:resume-paid', 55);
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:resume-paid', 240);
     expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:resume-paid', fakeToken);
   });
 
   it('should call acquireLock with TTL 300 for cleanupOldData', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-cleanup';
@@ -300,13 +440,13 @@ describe('BillingCronService - TTL verification', () => {
     await service.cleanupOldData();
 
     const redisService = (service as any).redisService;
-    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:cleanup', 300);
+    expect(redisService.acquireLock).toHaveBeenCalledWith('cron:lock:cleanup', 1800);
     expect(redisService.releaseLock).toHaveBeenCalledWith('cron:lock:cleanup', fakeToken);
   });
 
   it('should not release lock when acquire returns null', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     (service as any).redisService = {
@@ -328,7 +468,7 @@ describe('BillingCronService - TTL verification', () => {
 
   it('should use the atomic recurring-invoice method and never update the period separately', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-atomic-recurring';
@@ -377,7 +517,7 @@ describe('BillingCronService - TTL verification', () => {
 
   it('should skip already-invoiced periods and continue after per-subscription failure', async () => {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-recurring-partial';
@@ -415,7 +555,7 @@ describe('BillingCronService - TTL verification', () => {
     failingCompanyIds: Set<string> = new Set(),
   ) {
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
     );
 
     const fakeToken = 'test-token-resume-drain';

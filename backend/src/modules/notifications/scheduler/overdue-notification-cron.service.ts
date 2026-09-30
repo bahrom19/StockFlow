@@ -1,14 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { CompanyStatus } from '@prisma/client';
+import { CompanyStatus, JobRunStatus } from '@prisma/client';
 import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { PrismaService } from '../../../common/prisma';
+import { JobRunService } from '../../../common/observability/job-run.service';
 import { OverdueInvoiceRepository } from '../repositories/overdue-invoice.repository';
 import { NotificationsService } from '../notifications.service';
 
 const LOCK_PREFIX = 'cron:lock:';
 // One run per day; the lock only needs to cover a single scan duration.
-const LOCK_TTL_SEC = 300;
+// The scan iterates EVERY active company and issues per-invoice notification
+// writes, so it scales with tenant count (243 companies today). TTL raised
+// from 300s to 1800s (30 min) — still far below the 24h daily interval, so the
+// next day's run is never suppressed.
+const LOCK_TTL_SEC = 1800;
 
 /**
  * Daily SUPPLIER_PAYMENT_OVERDUE scan (N3).
@@ -32,6 +37,7 @@ export class OverdueNotificationCronService {
     private readonly prismaService: PrismaService,
     private readonly overdueInvoiceRepository: OverdueInvoiceRepository,
     private readonly notificationsService: NotificationsService,
+    private readonly jobRunService: JobRunService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -42,6 +48,7 @@ export class OverdueNotificationCronService {
       return;
     }
 
+    const runId = await this.jobRunService.start('notifications.scan-overdue');
     try {
       const startOfToday = this.getScanStart();
       const dayBucket = this.formatDayBucket(startOfToday);
@@ -86,9 +93,14 @@ export class OverdueNotificationCronService {
           `Overdue scan: ${notified} notification(s) created (${dayBucket})`,
         );
       }
+      await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
+        processed: companies.length,
+        succeeded: notified,
+      });
     } catch (error) {
       // Scan-level failure (e.g. company listing) — never propagate to the
       // scheduler; the next daily run retries.
+      await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
       this.logger.error(`Overdue scan failed: ${(error as Error).message}`);
     } finally {
       await this.redisService.releaseLock(LOCK_PREFIX + lockKey, ownerToken);

@@ -2457,6 +2457,50 @@ model IdempotencyRecord {
   @@index([expiresAt])
 }
 
+/// Durable per-run observability for @Cron jobs (G16-L-2A).
+///
+/// System/operational data — deliberately NOT tenant-scoped: a job run is a
+/// property of the deployment, not of a company. `jobName` matches the cron
+/// lock key (e.g. `expired-trials`, `cleanup`), which is what operators see in
+/// logs and Redis, so runs and locks can be correlated directly.
+///
+/// JobRun is OBSERVABILITY ONLY. It is never read by billing/maintenance
+/// business logic and is never the source of truth for any business state.
+/// A failed write here must never fail, delay or alter the business job —
+/// see `JobRunService` (every method swallows and logs its own errors).
+enum JobRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model JobRun {
+  id        String        @id @default(uuid()) @db.Uuid
+  jobName   String        @db.VarChar(100)
+  status    JobRunStatus  @default(RUNNING)
+  startedAt DateTime      @default(now())
+  /// NULL while RUNNING (and for a run abandoned by a process crash).
+  finishedAt DateTime?
+  /// Milliseconds between startedAt and finishedAt. Stored so operational
+  /// queries do not have to compute it, and so it is queryable in SQL.
+  durationMs Int?
+  /// Concise failure diagnosis only — never a serialized exception object,
+  /// never payment/customer data. Truncated by the service.
+  errorMessage String?     @db.VarChar(500)
+  /// Optional counters, populated only where the job already tracks them.
+  processed Int?
+  succeeded Int?
+  failed    Int?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  /// Operational lookup: "all runs of job X, most recent first" and
+  /// "overlapping/repeated runs of X around incident T".
+  @@index([jobName, startedAt])
+  /// Operational lookup: "what is currently running / what failed recently".
+  @@index([status, startedAt])
+}
+
 /// In-app notification (Notifications Foundation V1 — phase N2).
 ///
 /// One row per recipient (fan-out at creation time). `titleKey`/`bodyKey`

@@ -51,6 +51,12 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
       prisma as unknown as PrismaService,
       overdueRepo as unknown as OverdueInvoiceRepository,
       service as unknown as NotificationsService,
+      // Observability stub: JobRun persistence is non-authoritative and must
+      // never influence notification behaviour under test.
+      {
+        start: jest.fn().mockResolvedValue('jobrun-test-id'),
+        finish: jest.fn().mockResolvedValue(undefined),
+      } as any,
     );
   });
 
@@ -153,5 +159,95 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
     await cron.scanOverdueInvoices();
 
     expect(redis.releaseLock).toHaveBeenCalledWith('cron:lock:overdue-notifications', fakeToken);
+  });
+
+  // G16-L-2A-R3: the scan iterates every active company, so its TTL must be
+  // large enough to cover a full tenant sweep while staying below the daily
+  // interval. This pins the value so a future edit cannot silently regress it.
+  it('should acquire lock with TTL 1800 (tenant sweep, below daily interval)', async () => {
+    redis.acquireLock.mockResolvedValue('token-ttl-check');
+
+    await cron.scanOverdueInvoices();
+
+    expect(redis.acquireLock).toHaveBeenCalledWith(
+      'cron:lock:overdue-notifications',
+      1800,
+    );
+  });
+
+  // ---- G16-L-2A-R4: JobRun observability isolation ----
+
+  describe('JobRun observability', () => {
+    it('records a RUNNING run with the stable job name, then SUCCEEDED', async () => {
+      const jobRun = (cron as any).jobRunService;
+
+      await cron.scanOverdueInvoices();
+
+      expect(jobRun.start).toHaveBeenCalledWith('notifications.scan-overdue');
+      expect(jobRun.finish).toHaveBeenCalledWith(
+        'jobrun-test-id',
+        'SUCCEEDED',
+        expect.objectContaining({ processed: 2, succeeded: 0 }),
+      );
+    });
+
+    // Contention: no lock -> no business work AND no JobRun row at all.
+    // A SKIPPED status was deliberately NOT introduced (G16-L-2A-R2).
+    it('does not execute business logic and does not start a JobRun when the lock is contended', async () => {
+      redis.acquireLock.mockResolvedValue(null);
+      const jobRun = (cron as any).jobRunService;
+
+      await cron.scanOverdueInvoices();
+
+      expect(prisma.company.findMany).not.toHaveBeenCalled();
+      expect(jobRun.start).not.toHaveBeenCalled();
+      expect(jobRun.finish).not.toHaveBeenCalled();
+      expect(redis.releaseLock).not.toHaveBeenCalled();
+    });
+
+    it('releases the lock with the owner token after a successful run', async () => {
+      redis.acquireLock.mockResolvedValue('token-success');
+
+      await cron.scanOverdueInvoices();
+
+      expect(redis.releaseLock).toHaveBeenCalledWith(
+        'cron:lock:overdue-notifications',
+        'token-success',
+      );
+    });
+
+    it('records FAILED but still releases the lock when the scan throws', async () => {
+      const jobRun = (cron as any).jobRunService;
+      prisma.company.findMany.mockRejectedValue(new Error('db down'));
+
+      await cron.scanOverdueInvoices();
+
+      expect(jobRun.finish).toHaveBeenCalledWith(
+        'jobrun-test-id',
+        'FAILED',
+        expect.objectContaining({ error: expect.any(Error) }),
+      );
+      // The original best-effort behaviour is preserved: the error is still
+      // swallowed and never propagated to the scheduler.
+      expect(redis.releaseLock).toHaveBeenCalledWith(
+        'cron:lock:overdue-notifications',
+        'token-notifications',
+      );
+    });
+
+    // The core isolation guarantee: observability failure must never stop work.
+    // NOTE: JobRunService.start() never rejects — it catches internally and
+    // returns null. That is the real failure mode being asserted here, so the
+    // mock mirrors production rather than inventing a rejecting stub.
+    it('completes normally when JobRun.start() returns null (service swallows internally)', async () => {
+      const jobRun = (cron as any).jobRunService;
+      jobRun.start.mockResolvedValue(null);
+
+      await cron.scanOverdueInvoices();
+
+      expect(prisma.company.findMany).toHaveBeenCalled();
+      expect(jobRun.finish).toHaveBeenCalledWith(null, 'SUCCEEDED', expect.anything());
+      expect(redis.releaseLock).toHaveBeenCalled();
+    });
   });
 });

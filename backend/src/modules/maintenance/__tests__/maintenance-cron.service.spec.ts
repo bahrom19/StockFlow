@@ -4,12 +4,14 @@ import { MaintenanceCronService } from '../maintenance-cron.service';
 import { PrismaService } from '../../../common/prisma';
 import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { MetricsService } from '../../../common/observability/metrics.service';
+import { JobRunService } from '../../../common/observability/job-run.service';
 
 describe('MaintenanceCronService', () => {
   let service: MaintenanceCronService;
   let mockPrisma: jest.Mocked<PrismaService>;
   let mockRedis: jest.Mocked<RedisService>;
   let mockMetrics: jest.Mocked<MetricsService>;
+  let mockJobRun: { start: jest.Mock; finish: jest.Mock };
 
   beforeEach(async () => {
     mockPrisma = {
@@ -26,12 +28,18 @@ describe('MaintenanceCronService', () => {
       eventDuration: { observe: jest.fn() },
     } as unknown as jest.Mocked<MetricsService>;
 
+    mockJobRun = {
+      start: jest.fn().mockResolvedValue('jobrun-test-id'),
+      finish: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MaintenanceCronService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: RedisService, useValue: mockRedis },
         { provide: MetricsService, useValue: mockMetrics },
+        { provide: JobRunService, useValue: mockJobRun },
       ],
     }).compile();
 
@@ -45,7 +53,7 @@ describe('MaintenanceCronService', () => {
 
       await service.cleanupIdempotencyRecords();
 
-      expect(mockRedis.acquireLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', 3300);
+      expect(mockRedis.acquireLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', 7200);
     });
 
     it('should return 0 and skip cleanup if lock not acquired', async () => {
@@ -104,7 +112,7 @@ describe('MaintenanceCronService', () => {
 
       await service.cleanupIdempotencyRecords();
 
-      expect(mockRedis.acquireLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', 3300);
+      expect(mockRedis.acquireLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', 7200);
     });
 
     it('should record error metric on failure', async () => {
