@@ -203,7 +203,18 @@ void main() {
     });
 
     test('online success → no enqueue, nothing parked', () async {
-      final (container, spy, controller, _) = await harness();
+      // G16-N-3 P2-A fixture: a genuine success carries a valid CashShift
+      // body (the four non-nullable String ids; every other field has a
+      // fromJson default). A 200 with data:null is NOT a real success — its
+      // parse failure is transport-uncertain and now correctly parks.
+      final (container, spy, controller, _) = await harness(
+        successData: const {
+          'id': 'shift-1',
+          'companyId': 'company-1',
+          'warehouseId': 'wh-1',
+          'cashierId': 'user-1',
+        },
+      );
       final notifier = container.read(cashShiftProvider.notifier);
       await notifier.loadShift('wh-1');
 

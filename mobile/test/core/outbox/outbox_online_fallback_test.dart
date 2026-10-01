@@ -28,11 +28,16 @@ class FakeErr extends FakeResult {
   final Failure error;
 }
 
-/// The same predicate shape the production call sites pass: a result is a
-/// transport-level failure exactly when the existing ErrorHandler mapped it
-/// to [NetworkFailure] (timeout / network / connection error).
+/// The same predicate shape the production call sites pass: delegates to the
+/// production transport-uncertainty policy
+/// ([OutboxMutationQueue.isUncertainOutcome]) so the fallback suite exercises
+/// the real rule — timeouts AND transport-uncertain 5xx/408/cancelled park
+/// under the transported key, while 429 and definitive 4xx surface inline.
+///
+/// G16-N-3 P2-A: replaces the earlier NetworkFailure-only mirror, exactly as
+/// the cash/inventory call sites did.
 bool fakeIsNetworkFailure(FakeResult result) =>
-    result is FakeErr && result.error is NetworkFailure;
+    result is FakeErr && OutboxMutationQueue.isUncertainOutcome(result.error);
 
 /// Capturing stand-in for the network boundary used by [OutboxSyncService]:
 /// records the path, body, query and Idempotency-Key of every POST and
@@ -174,12 +179,19 @@ void main() {
       expect(op.idempotencyKey, op.clientOperationId);
     });
 
-    test('business errors 400/404/409/422 → NOT enqueued', () async {
+    test('business errors 400/401/403/404/409/422/429 → NOT enqueued',
+        () async {
       final businessFailures = <Failure>[
         const ValidationFailure(message: 'bad request'),
+        const AuthFailure(message: 'invalid credentials'),
+        const AuthFailure(message: 'permission denied'),
         const NotFoundFailure(message: 'not found'),
         const ConflictFailure(message: 'conflict'),
         const ValidationFailure(message: 'unprocessable'),
+        // G16-N-3 P2-A: 429 is a DEFINITIVE rejection (rate limiter answered
+        // before the mutation) — it must surface inline, never park, even
+        // though it is a ServerFailure like 5xx.
+        const ServerFailure(message: 'too many requests', code: '429'),
       ];
 
       for (final failure in businessFailures) {
@@ -380,6 +392,254 @@ void main() {
       expect(spy.calls.single.key, isNull);
       expect((spy.calls.single.data as Map)['saleNumber'], 'OFF-1');
       expect(controller.state.operations, isEmpty);
+    });
+  });
+
+  /// G16-N-3 P2-A — transport-uncertain 5xx parks under the transported key.
+  ///
+  /// Regression target: an online keyed mutation that receives HTTP 5xx AFTER
+  /// the backend may have committed must NOT discard its idempotency key.
+  /// Discarding it and minting a fresh UUID on retry would create a second
+  /// reservation and double-apply the mutation (cash movement, stock
+  /// adjustment, transfer, goods receipt).
+  group('OutboxMutationQueue.isUncertainOutcome — G16-N-3 P2-A policy', () {
+    test('NetworkFailure is uncertain', () {
+      expect(
+        OutboxMutationQueue.isUncertainOutcome(
+          const NetworkFailure(message: 'timeout'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('ServerFailure with null code (cancelled/unknown transport) is '
+        'uncertain', () {
+      expect(
+        OutboxMutationQueue.isUncertainOutcome(
+          const ServerFailure(message: 'cancelled'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('ServerFailure 408 / 500 / 502 / 503 / 504 are uncertain', () {
+      for (final code in ['408', '500', '502', '503', '504']) {
+        expect(
+          OutboxMutationQueue.isUncertainOutcome(
+            ServerFailure(message: 'server', code: code),
+          ),
+          isTrue,
+          reason: 'code $code must park',
+        );
+      }
+    });
+
+    test('unparseable ServerFailure code is uncertain (fail safe, park)',
+        () {
+      for (final code in ['', 'abc', '  ']) {
+        expect(
+          OutboxMutationQueue.isUncertainOutcome(
+            ServerFailure(message: 'server', code: code),
+          ),
+          isTrue,
+          reason: 'code "$code" must park rather than discard the key',
+        );
+      }
+    });
+
+    test('ServerFailure 429 is DEFINITIVE — must not park', () {
+      expect(
+        OutboxMutationQueue.isUncertainOutcome(
+          const ServerFailure(message: 'too many requests', code: '429'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('definitive 4xx failures are not uncertain', () {
+      const definitive = [
+        ValidationFailure(message: 'bad request'),
+        ValidationFailure(message: 'unprocessable'),
+        NotFoundFailure(message: 'not found'),
+        ConflictFailure(message: 'conflict'),
+        AuthFailure(message: 'invalid credentials'),
+        AuthFailure(message: 'permission denied'),
+      ];
+      for (final failure in definitive) {
+        expect(
+          OutboxMutationQueue.isUncertainOutcome(failure),
+          isFalse,
+          reason: '${failure.runtimeType} must not park',
+        );
+      }
+    });
+  });
+
+  group('mutate — G16-N-3 P2-A 5xx parking', () {
+    test('ServerFailure 500 → parked; stored idempotencyKey == transported K',
+        () async {
+      final originalGenerator = OutboxOperation.idGenerator;
+      var mints = 0;
+      OutboxOperation.idGenerator = () {
+        mints++;
+        return 'MINTED-$mints';
+      };
+      addTearDown(() => OutboxOperation.idGenerator = originalGenerator);
+
+      final (container, controller, _) = await harness();
+      final queue = container.read(outboxMutationQueueProvider);
+      final seen = <String>[];
+
+      final outcome = await queue.mutate<FakeResult>(
+        kind: OutboxOperationKind.adjustStock,
+        payload: const {'productId': 'p1', 'quantity': 5},
+        online: true,
+        sendOnline: (key) async {
+          seen.add(key);
+          return const FakeErr(
+            ServerFailure(message: 'Server error.', code: '500'),
+          );
+        },
+        isNetworkFailure: fakeIsNetworkFailure,
+      );
+
+      expect(outcome, isA<OutboxMutationQueued<FakeResult>>());
+      final op = controller.state.operations.single;
+      // The parked operation carries the EXACT key the failed attempt sent.
+      expect(seen, ['MINTED-1']);
+      expect(op.clientOperationId, 'MINTED-1');
+      expect(op.idempotencyKey, 'MINTED-1');
+      expect(op.idempotencyKey, op.clientOperationId);
+      expect(op.status, OutboxStatus.pending);
+      // One mint: the initial online key. The fallback minted nothing.
+      expect(mints, 1);
+    });
+
+    test('ServerFailure 504 → parked under K (gateway timeout after commit)',
+        () async {
+      final (container, controller, _) = await harness();
+      final queue = container.read(outboxMutationQueueProvider);
+      final seen = <String>[];
+
+      final outcome = await queue.mutate<FakeResult>(
+        kind: OutboxOperationKind.cashIn,
+        payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+        online: true,
+        clientOperationId: 'K-504',
+        sendOnline: (key) async {
+          seen.add(key);
+          return const FakeErr(
+            ServerFailure(message: 'Gateway timeout.', code: '504'),
+          );
+        },
+        isNetworkFailure: fakeIsNetworkFailure,
+      );
+
+      expect(outcome, isA<OutboxMutationQueued<FakeResult>>());
+      expect(seen, ['K-504']);
+      final op = controller.state.operations.single;
+      expect(op.idempotencyKey, 'K-504');
+    });
+
+    test('ServerFailure with null code (cancelled) → parked under K',
+        () async {
+      final (container, controller, _) = await harness();
+      final queue = container.read(outboxMutationQueueProvider);
+
+      final outcome = await queue.mutate<FakeResult>(
+        kind: OutboxOperationKind.transferStock,
+        payload: const {'productId': 'p1', 'quantity': 2},
+        online: true,
+        clientOperationId: 'K-cancel',
+        sendOnline: (_) async =>
+            const FakeErr(ServerFailure(message: 'cancelled')),
+        isNetworkFailure: fakeIsNetworkFailure,
+      );
+
+      expect(outcome, isA<OutboxMutationQueued<FakeResult>>());
+      expect(controller.state.operations.single.idempotencyKey, 'K-cancel');
+    });
+
+    test('ServerFailure 429 → NOT parked (definitive rejection)', () async {
+      final (container, controller, _) = await harness();
+      final queue = container.read(outboxMutationQueueProvider);
+
+      final outcome = await queue.mutate<FakeResult>(
+        kind: OutboxOperationKind.cashOut,
+        payload: const {'amount': 10.0, 'warehouseId': 'wh-1'},
+        online: true,
+        clientOperationId: 'K-429',
+        sendOnline: (_) async => const FakeErr(
+          ServerFailure(message: 'Too many requests.', code: '429'),
+        ),
+        isNetworkFailure: fakeIsNetworkFailure,
+      );
+
+      expect(outcome, isA<OutboxMutationSent<FakeResult>>());
+      expect(controller.state.operations, isEmpty);
+    });
+
+    test('5xx → parked → replay sends EXACTLY K; idGenerator never called '
+        'again (no-new-key proof)', () async {
+      final originalGenerator = OutboxOperation.idGenerator;
+      var mints = 0;
+      OutboxOperation.idGenerator = () {
+        mints++;
+        return 'K-$mints';
+      };
+      addTearDown(() => OutboxOperation.idGenerator = originalGenerator);
+
+      final (container, controller, _) = await harness();
+      final queue = container.read(outboxMutationQueueProvider);
+      final seen = <String>[];
+
+      // 1) ONLINE attempt transports K, receives 500 → parked under K.
+      final outcome = await queue.mutate<FakeResult>(
+        kind: OutboxOperationKind.goodsReceipt,
+        payload: const {'purchaseOrderId': 'po-1'},
+        online: true,
+        sendOnline: (key) async {
+          seen.add(key);
+          return const FakeErr(
+            ServerFailure(message: 'Server error.', code: '500'),
+          );
+        },
+        isNetworkFailure: fakeIsNetworkFailure,
+      );
+
+      expect(outcome, isA<OutboxMutationQueued<FakeResult>>());
+      expect(seen, ['K-1']);
+      expect(mints, 1);
+      final parked = controller.state.operations.single;
+      expect(parked.idempotencyKey, 'K-1');
+
+      // 2) Replay — the worker MUST transport K, and MUST NOT mint a key.
+      OutboxOperation.idGenerator = () {
+        mints++;
+        return 'MINTED-DURING-REPLAY-$mints';
+      };
+      final spy = PostSpy();
+      final sync = OutboxSyncService(
+        controller: controller,
+        post: spy.call,
+        currentUser: () => testUser,
+        isOnline: () => true,
+      );
+      final result = await sync.syncAll();
+
+      expect(result.sent, 1);
+      expect(spy.calls, hasLength(1));
+      // THE invariant: the replay carries the ORIGINAL key.
+      expect(spy.calls.single.key, 'K-1');
+      // And minting a fresh UUID would have registered here.
+      expect(mints, 1,
+          reason: 'replay must never generate an idempotency key');
+      expect(controller.state.operations, isEmpty);
+
+      // 3) A second flush replays nothing (at-most-once end to end).
+      final second = await sync.syncAll();
+      expect(spy.calls, hasLength(1));
+      expect(second.sent, 0);
     });
   });
 }

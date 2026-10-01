@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/outbox/outbox_mutation_queue.dart';
 import 'package:stockflow/core/outbox/outbox_operation.dart';
 import 'package:stockflow/core/services/connectivity_service.dart';
@@ -154,8 +153,13 @@ class AdjustmentNotifier extends StateNotifier<AsyncValue<StockMovement?>> {
       // network / connection error per the existing ErrorHandler mapping)
       // → park in the outbox under the SAME key. Business errors are not
       // parked.
+      //
+      // G16-N-3 P2-A: central transport-uncertainty policy — HTTP 5xx risks a
+      // server-side commit the client cannot observe, so it parks under the
+      // SAME key instead of discarding it for a fresh UUID on retry.
       isNetworkFailure: (result) =>
-          result is InvFailure<StockMovement> && result.error is NetworkFailure,
+          result is InvFailure<StockMovement> &&
+          OutboxMutationQueue.isUncertainOutcome(result.error),
     );
     if (outcome is OutboxMutationSent<InvResult<StockMovement>>) {
       final result = outcome.result;
@@ -197,9 +201,12 @@ class TransferNotifier extends StateNotifier<AsyncValue<List<StockMovement>?>> {
       online: online,
       sendOnline: (key) => repo.transferStock(dto, idempotencyKey: key),
       // Phase F5-A: same fallback contract as [AdjustmentNotifier.adjust].
+      //
+      // G16-N-3 P2-A: central transport-uncertainty policy — HTTP 5xx parks
+      // under the SAME key.
       isNetworkFailure: (result) =>
           result is InvFailure<List<StockMovement>> &&
-          result.error is NetworkFailure,
+          OutboxMutationQueue.isUncertainOutcome(result.error),
     );
     if (outcome is OutboxMutationSent<InvResult<List<StockMovement>>>) {
       final result = outcome.result;

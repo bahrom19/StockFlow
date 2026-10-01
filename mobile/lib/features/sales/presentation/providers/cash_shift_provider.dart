@@ -216,8 +216,16 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
       // ErrorHandler already maps those to NetworkFailure) is parked in the
       // outbox under the SAME idempotency key the failed attempt carried.
       // Business failures (400/404/409/422 …) keep surfacing inline.
+      //
+      // G16-N-3 P2-A: the predicate is the central transport-uncertainty
+      // policy — HTTP 5xx / 408 / cancelled now park too, because the backend
+      // may already have committed the mutation (runWithIdempotency commits
+      // atomically, so a 5xx says nothing about whether it applied). Replay
+      // with the SAME key makes the retry at-most-once; discarding the key
+      // (retry with a fresh UUID) would double-apply.
       isNetworkFailure: (result) =>
-          result is ShiftFailure<CashShift> && result.error is NetworkFailure,
+          result is ShiftFailure<CashShift> &&
+          OutboxMutationQueue.isUncertainOutcome(result.error),
     );
 
     if (outcome is OutboxMutationSent<ShiftResult<CashShift>>) {

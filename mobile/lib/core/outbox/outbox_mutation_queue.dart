@@ -2,6 +2,7 @@ import 'package:dio/dio.dart' show Options;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/auth/models/auth_models.dart';
+import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/outbox/outbox_controller.dart';
 import 'package:stockflow/core/outbox/outbox_operation.dart';
 
@@ -11,7 +12,6 @@ import 'package:stockflow/core/outbox/outbox_operation.dart';
 Options? idempotencyHeader(String? idempotencyKey) => idempotencyKey == null
     ? null
     : Options(headers: {'Idempotency-Key': idempotencyKey});
-
 /// Outcome of [OutboxMutationQueue.mutate].
 sealed class OutboxMutationOutcome<T> {
   const OutboxMutationOutcome();
@@ -77,6 +77,43 @@ class OutboxMutationQueue {
       'No internet connection. Your changes were saved offline and will sync '
       'automatically.';
 
+  /// G16-N-3 P2-A: central transport-uncertainty policy for the five keyed
+  /// mutations (cashIn, cashOut, adjustStock, transferStock, goodsReceipt).
+  ///
+  /// True when the mutation's server-side outcome is UNKNOWN. The backend
+  /// commits the business mutation and its IdempotencyRecord atomically
+  /// (runWithIdempotency), so an outcome-unknown failure may already have
+  /// been applied — parking under the SAME idempotency key is the only safe
+  /// retry: a same-key replay returns the stored result instead of applying
+  /// the mutation a second time. Parking under a FRESH key would create a
+  /// second reservation and double-apply.
+  ///
+  /// - [NetworkFailure] (timeout / network / connection error) — never
+  ///   reached a verdict; always uncertain.
+  /// - [ServerFailure] — uncertain when `code` is null (Dio cancel / unknown
+  ///   transport failure — no HTTP verdict exists), '408' (server timeout),
+  ///   or numeric code >= 500 (501/504 arrive here via ErrorHandler default).
+  ///   A 429 (`code == '429'`) is deliberately NOT uncertain: the rate
+  ///   limiter rejects the request BEFORE the mutation, so nothing applied.
+  /// - Every other failure (ValidationFailure 400/422, NotFoundFailure 404,
+  ///   ConflictFailure 409, AuthFailure 401/403) rejected the submission
+  ///   itself — the backend rolled the reservation back with the business
+  ///   transaction, so there is nothing to replay. Never parked.
+  ///
+  /// Defensive: an unparseable numeric-looking `code` is treated as unknown
+  /// (parked), never as definitive — the safe direction for a
+  /// financial/inventory mutation.
+  static bool isUncertainOutcome(Failure failure) {
+    if (failure is NetworkFailure) return true;
+    if (failure is! ServerFailure) return false;
+    final code = failure.code;
+    if (code == null || code.isEmpty) return true;
+    if (code == '408') return true;
+    final status = int.tryParse(code);
+    if (status == null) return true;
+    return status >= 500;
+  }
+
   /// Online → [sendOnline]; offline → enqueue. See the class docs.
   ///
   /// Phase F5-A fallback: when [online] is true and the attempt made through
@@ -90,6 +127,12 @@ class OutboxMutationQueue {
   /// makes the replay at-most-once. Business failures (400/404/409/422 …)
   /// are NOT parked: they surface through [OutboxMutationSent] exactly as
   /// before and stay the caller's concern.
+  ///
+  /// G16-N-3 P2-A: [isNetworkFailure] now denotes the transport-UNCERTAIN
+  /// outcome — call sites delegate to [isUncertainOutcome], which also parks
+  /// HTTP 5xx / 408 / cancelled (outcome unknown after a possible server-side
+  /// commit) while still refusing 429 and definitive 4xx. The parameter name
+  /// is kept unchanged so no call site or test signature churns.
   Future<OutboxMutationOutcome<T>> mutate<T>({
     required OutboxOperationKind kind,
     required Map<String, dynamic> payload,

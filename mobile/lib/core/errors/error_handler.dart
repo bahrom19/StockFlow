@@ -96,13 +96,21 @@ class ErrorHandler {
       case 422:
         return ValidationFailure(message: message);
       case 429:
-        return ServerFailure(message: ErrorMessages.tooManyRequests);
+        // G16-N-3 P2-A: the HTTP status is preserved in `code` (existing
+        // field, no consumer today) so transport-uncertain outcomes
+        // (5xx / 408 / cancelled) can be distinguished from a definitive
+        // rate-limit rejection when deciding whether an online keyed mutation
+        // may be parked for replay. Classification and messages unchanged.
+        return ServerFailure(
+            message: ErrorMessages.tooManyRequests,
+            code: '$statusCode');
       case 500:
       case 502:
       case 503:
-        return ServerFailure(message: ErrorMessages.serverUnavailable);
+        return ServerFailure(
+            message: ErrorMessages.serverUnavailable, code: '$statusCode');
       default:
-        return ServerFailure(message: message);
+        return ServerFailure(message: message, code: '$statusCode');
     }
   }
 }

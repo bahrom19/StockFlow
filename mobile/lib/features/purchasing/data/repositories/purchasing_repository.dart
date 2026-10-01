@@ -185,8 +185,15 @@ class PurchasingRepository {
       // outbox under the SAME idempotency key the failed attempt carried, so
       // the next flush replays `Idempotency-Key: <original key>` and the
       // backend guarantees at-most-once. Business errors (400/404/409/422,
-      // auth, 5xx …) are NEVER parked — they surface inline as before.
-      if (failure is NetworkFailure && offlineQueue != null) {
+      // auth …) are NEVER parked — they surface inline as before.
+      //
+      // G16-N-3 P2-A: transport-uncertain HTTP 5xx / 408 / cancelled now fall
+      // back too — the backend may already have committed. Delegates to the
+      // central [OutboxMutationQueue.isUncertainOutcome] policy shared with
+      // cash/inventory so all five keyed mutations classify identically. The
+      // 429 / definitive-4xx exclusions stay exactly as before.
+      if (OutboxMutationQueue.isUncertainOutcome(failure) &&
+          offlineQueue != null) {
         try {
           await offlineQueue.enqueueOffline(
             kind: OutboxOperationKind.goodsReceipt,
