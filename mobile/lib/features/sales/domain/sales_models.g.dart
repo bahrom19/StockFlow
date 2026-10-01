@@ -150,6 +150,36 @@ Map<String, dynamic> _$$ReceiptImplToJson(_$ReceiptImpl instance) =>
       'updatedAt': instance.updatedAt.toIso8601String(),
     };
 
+_$RefundItemImpl _$$RefundItemImplFromJson(Map<String, dynamic> json) =>
+    _$RefundItemImpl(
+      saleItemId: json['saleItemId'] as String,
+      quantity: (json['quantity'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$$RefundItemImplToJson(_$RefundItemImpl instance) =>
+    <String, dynamic>{
+      'saleItemId': instance.saleItemId,
+      'quantity': instance.quantity,
+    };
+
+_$RefundSaleRequestImpl _$$RefundSaleRequestImplFromJson(
+        Map<String, dynamic> json) =>
+    _$RefundSaleRequestImpl(
+      items: (json['items'] as List<dynamic>?)
+          ?.map((e) => RefundItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      reason: json['reason'] as String?,
+      reference: json['reference'] as String?,
+    );
+
+Map<String, dynamic> _$$RefundSaleRequestImplToJson(
+        _$RefundSaleRequestImpl instance) =>
+    <String, dynamic>{
+      'items': instance.items,
+      'reason': instance.reason,
+      'reference': instance.reference,
+    };
+
 _$CreateSaleRequestImpl _$$CreateSaleRequestImplFromJson(
         Map<String, dynamic> json) =>
     _$CreateSaleRequestImpl(

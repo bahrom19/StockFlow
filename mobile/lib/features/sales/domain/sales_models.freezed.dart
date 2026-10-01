@@ -1645,6 +1645,372 @@ abstract class _Receipt implements Receipt {
       throw _privateConstructorUsedError;
 }
 
+RefundItem _$RefundItemFromJson(Map<String, dynamic> json) {
+  return _RefundItem.fromJson(json);
+}
+
+/// @nodoc
+mixin _$RefundItem {
+  String get saleItemId => throw _privateConstructorUsedError;
+  int get quantity => throw _privateConstructorUsedError;
+
+  /// Serializes this RefundItem to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of RefundItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $RefundItemCopyWith<RefundItem> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $RefundItemCopyWith<$Res> {
+  factory $RefundItemCopyWith(
+          RefundItem value, $Res Function(RefundItem) then) =
+      _$RefundItemCopyWithImpl<$Res, RefundItem>;
+  @useResult
+  $Res call({String saleItemId, int quantity});
+}
+
+/// @nodoc
+class _$RefundItemCopyWithImpl<$Res, $Val extends RefundItem>
+    implements $RefundItemCopyWith<$Res> {
+  _$RefundItemCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of RefundItem
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? saleItemId = null,
+    Object? quantity = null,
+  }) {
+    return _then(_value.copyWith(
+      saleItemId: null == saleItemId
+          ? _value.saleItemId
+          : saleItemId // ignore: cast_nullable_to_non_nullable
+              as String,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$RefundItemImplCopyWith<$Res>
+    implements $RefundItemCopyWith<$Res> {
+  factory _$$RefundItemImplCopyWith(
+          _$RefundItemImpl value, $Res Function(_$RefundItemImpl) then) =
+      __$$RefundItemImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({String saleItemId, int quantity});
+}
+
+/// @nodoc
+class __$$RefundItemImplCopyWithImpl<$Res>
+    extends _$RefundItemCopyWithImpl<$Res, _$RefundItemImpl>
+    implements _$$RefundItemImplCopyWith<$Res> {
+  __$$RefundItemImplCopyWithImpl(
+      _$RefundItemImpl _value, $Res Function(_$RefundItemImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of RefundItem
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? saleItemId = null,
+    Object? quantity = null,
+  }) {
+    return _then(_$RefundItemImpl(
+      saleItemId: null == saleItemId
+          ? _value.saleItemId
+          : saleItemId // ignore: cast_nullable_to_non_nullable
+              as String,
+      quantity: null == quantity
+          ? _value.quantity
+          : quantity // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$RefundItemImpl implements _RefundItem {
+  const _$RefundItemImpl({required this.saleItemId, required this.quantity});
+
+  factory _$RefundItemImpl.fromJson(Map<String, dynamic> json) =>
+      _$$RefundItemImplFromJson(json);
+
+  @override
+  final String saleItemId;
+  @override
+  final int quantity;
+
+  @override
+  String toString() {
+    return 'RefundItem(saleItemId: $saleItemId, quantity: $quantity)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$RefundItemImpl &&
+            (identical(other.saleItemId, saleItemId) ||
+                other.saleItemId == saleItemId) &&
+            (identical(other.quantity, quantity) ||
+                other.quantity == quantity));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, saleItemId, quantity);
+
+  /// Create a copy of RefundItem
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$RefundItemImplCopyWith<_$RefundItemImpl> get copyWith =>
+      __$$RefundItemImplCopyWithImpl<_$RefundItemImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$RefundItemImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _RefundItem implements RefundItem {
+  const factory _RefundItem(
+      {required final String saleItemId,
+      required final int quantity}) = _$RefundItemImpl;
+
+  factory _RefundItem.fromJson(Map<String, dynamic> json) =
+      _$RefundItemImpl.fromJson;
+
+  @override
+  String get saleItemId;
+  @override
+  int get quantity;
+
+  /// Create a copy of RefundItem
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$RefundItemImplCopyWith<_$RefundItemImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+RefundSaleRequest _$RefundSaleRequestFromJson(Map<String, dynamic> json) {
+  return _RefundSaleRequest.fromJson(json);
+}
+
+/// @nodoc
+mixin _$RefundSaleRequest {
+  List<RefundItem>? get items => throw _privateConstructorUsedError;
+  String? get reason => throw _privateConstructorUsedError;
+  String? get reference => throw _privateConstructorUsedError;
+
+  /// Serializes this RefundSaleRequest to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of RefundSaleRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $RefundSaleRequestCopyWith<RefundSaleRequest> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $RefundSaleRequestCopyWith<$Res> {
+  factory $RefundSaleRequestCopyWith(
+          RefundSaleRequest value, $Res Function(RefundSaleRequest) then) =
+      _$RefundSaleRequestCopyWithImpl<$Res, RefundSaleRequest>;
+  @useResult
+  $Res call({List<RefundItem>? items, String? reason, String? reference});
+}
+
+/// @nodoc
+class _$RefundSaleRequestCopyWithImpl<$Res, $Val extends RefundSaleRequest>
+    implements $RefundSaleRequestCopyWith<$Res> {
+  _$RefundSaleRequestCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of RefundSaleRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? items = freezed,
+    Object? reason = freezed,
+    Object? reference = freezed,
+  }) {
+    return _then(_value.copyWith(
+      items: freezed == items
+          ? _value.items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<RefundItem>?,
+      reason: freezed == reason
+          ? _value.reason
+          : reason // ignore: cast_nullable_to_non_nullable
+              as String?,
+      reference: freezed == reference
+          ? _value.reference
+          : reference // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$RefundSaleRequestImplCopyWith<$Res>
+    implements $RefundSaleRequestCopyWith<$Res> {
+  factory _$$RefundSaleRequestImplCopyWith(_$RefundSaleRequestImpl value,
+          $Res Function(_$RefundSaleRequestImpl) then) =
+      __$$RefundSaleRequestImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({List<RefundItem>? items, String? reason, String? reference});
+}
+
+/// @nodoc
+class __$$RefundSaleRequestImplCopyWithImpl<$Res>
+    extends _$RefundSaleRequestCopyWithImpl<$Res, _$RefundSaleRequestImpl>
+    implements _$$RefundSaleRequestImplCopyWith<$Res> {
+  __$$RefundSaleRequestImplCopyWithImpl(_$RefundSaleRequestImpl _value,
+      $Res Function(_$RefundSaleRequestImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of RefundSaleRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? items = freezed,
+    Object? reason = freezed,
+    Object? reference = freezed,
+  }) {
+    return _then(_$RefundSaleRequestImpl(
+      items: freezed == items
+          ? _value._items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<RefundItem>?,
+      reason: freezed == reason
+          ? _value.reason
+          : reason // ignore: cast_nullable_to_non_nullable
+              as String?,
+      reference: freezed == reference
+          ? _value.reference
+          : reference // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$RefundSaleRequestImpl implements _RefundSaleRequest {
+  const _$RefundSaleRequestImpl(
+      {final List<RefundItem>? items, this.reason, this.reference})
+      : _items = items;
+
+  factory _$RefundSaleRequestImpl.fromJson(Map<String, dynamic> json) =>
+      _$$RefundSaleRequestImplFromJson(json);
+
+  final List<RefundItem>? _items;
+  @override
+  List<RefundItem>? get items {
+    final value = _items;
+    if (value == null) return null;
+    if (_items is EqualUnmodifiableListView) return _items;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(value);
+  }
+
+  @override
+  final String? reason;
+  @override
+  final String? reference;
+
+  @override
+  String toString() {
+    return 'RefundSaleRequest(items: $items, reason: $reason, reference: $reference)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$RefundSaleRequestImpl &&
+            const DeepCollectionEquality().equals(other._items, _items) &&
+            (identical(other.reason, reason) || other.reason == reason) &&
+            (identical(other.reference, reference) ||
+                other.reference == reference));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType,
+      const DeepCollectionEquality().hash(_items), reason, reference);
+
+  /// Create a copy of RefundSaleRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$RefundSaleRequestImplCopyWith<_$RefundSaleRequestImpl> get copyWith =>
+      __$$RefundSaleRequestImplCopyWithImpl<_$RefundSaleRequestImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$RefundSaleRequestImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _RefundSaleRequest implements RefundSaleRequest {
+  const factory _RefundSaleRequest(
+      {final List<RefundItem>? items,
+      final String? reason,
+      final String? reference}) = _$RefundSaleRequestImpl;
+
+  factory _RefundSaleRequest.fromJson(Map<String, dynamic> json) =
+      _$RefundSaleRequestImpl.fromJson;
+
+  @override
+  List<RefundItem>? get items;
+  @override
+  String? get reason;
+  @override
+  String? get reference;
+
+  /// Create a copy of RefundSaleRequest
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$RefundSaleRequestImplCopyWith<_$RefundSaleRequestImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 CreateSaleRequest _$CreateSaleRequestFromJson(Map<String, dynamic> json) {
   return _CreateSaleRequest.fromJson(json);
 }

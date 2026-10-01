@@ -9,6 +9,7 @@ import 'package:stockflow/features/payments/presentation/labels.dart';
 import 'package:stockflow/features/sales/data/repositories/sales_repository.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/labels.dart';
+import 'package:stockflow/features/sales/presentation/providers/sales_provider.dart';
 
 // ──────────────────────────────────
 // Sale Detail Screen
@@ -117,7 +118,14 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
       ),
     );
     if (confirmed == true) {
-      await _transitionStatus(status);
+      if (status == 'REFUNDED') {
+        // G16-N-2: refunds go through the canonical `POST /sales/:id/refund`
+        // endpoint only. `PATCH /sales/:id/status` cannot carry refund
+        // statuses (backend guard) and must never be used for refunds.
+        await _refundAll();
+      } else {
+        await _transitionStatus(status);
+      }
     }
   }
 
@@ -141,27 +149,63 @@ class _SaleDetailScreenState extends ConsumerState<SaleDetailScreen> {
     );
     if (confirmed != true || !mounted) return;
 
-    // Full return (all items back to full quantity) → use the refund API.
+    // Full return (all items back to full quantity) → canonical refund API
+    // with no items ("refund ALL remaining quantities"). G16-N-2.
     final isFull = sale.items.every((i) => quantities[i.id] == i.quantity);
     if (isFull) {
-      await _transitionStatus('REFUNDED');
+      await _submitRefund(
+        items: null,
+        successMessage: context.l10n.saleRefundedMessage,
+      );
       return;
     }
-    // Partial → mark the sale as PARTIALLY_REFUNDED.
-    final repo = ref.read(salesRepositoryProvider);
-    final result = await repo.transitionStatus(widget.saleId, 'PARTIALLY_REFUNDED');
-    if (result is SalesSuccess<Sale>) {
-      setState(() => _sale = result.data);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.partialReturnRecorded)),
-        );
+    // Partial → canonical refund API with the requested per-item quantities
+    // (server validates remaining quantities and derives all amounts).
+    final items = <RefundItem>[];
+    for (final item in sale.items) {
+      final qty = quantities[item.id] ?? 0;
+      if (qty > 0) {
+        items.add(RefundItem(saleItemId: item.id, quantity: qty));
       }
-    } else if (mounted) {
+    }
+    if (items.isEmpty) return; // nothing selected; the dialog guards this
+    await _submitRefund(
+      items: items,
+      successMessage: context.l10n.partialReturnRecorded,
+    );
+  }
+
+  /// Full refund — ALL remaining quantities through the canonical
+  /// `POST /sales/:id/refund` endpoint (G16-N-2), same confirm dialog as
+  /// before.
+  Future<void> _refundAll() async {
+    await _submitRefund(
+      items: null,
+      successMessage: context.l10n.saleRefundedMessage,
+    );
+  }
+
+  /// Submit a refund through [PosNotifier.refundSale] — the canonical refund
+  /// endpoint with an immutable Idempotency-Key per logical submit (G16-N-2).
+  /// A success re-loads the sale so the REFUNDED / PARTIALLY_REFUNDED status
+  /// comes from the server, never from a locally fabricated state.
+  Future<void> _submitRefund({
+    required List<RefundItem>? items,
+    required String successMessage,
+  }) async {
+    final notifier = ref.read(posProvider.notifier);
+    final error = await notifier.refundSale(widget.saleId, items: items);
+    if (!mounted) return;
+    if (error == null) {
+      await _loadSale();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(successMessage)),
+      );
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(localizedErrorLabel(
-              context.l10n, (result as SalesFailure<Sale>).error.message)),
+          content: Text(localizedErrorLabel(context.l10n, error)),
           backgroundColor: Colors.red,
         ),
       );

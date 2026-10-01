@@ -185,6 +185,41 @@ class Receipt with _$Receipt {
 }
 
 // ──────────────────────────────────
+// Refund requests (G16-N-2 canonical keyed refund)
+// ──────────────────────────────────
+
+/// One requested refund line: how many units of one SaleItem to refund.
+/// Mirrors the backend `RefundItemDto` — the client supplies ONLY
+/// `saleItemId` + `quantity`; money amounts are always derived server-side.
+@freezed
+class RefundItem with _$RefundItem {
+  const factory RefundItem({
+    required String saleItemId,
+    required int quantity,
+  }) = _RefundItem;
+
+  factory RefundItem.fromJson(Map<String, dynamic> json) =>
+      _$RefundItemFromJson(json);
+}
+
+/// Request body for `POST /sales/:id/refund` (backend `CreateRefundDto`).
+///
+/// `items` omitted/empty means "refund ALL remaining quantities" — the
+/// canonical full-refund semantics. A non-empty list performs a partial
+/// refund of the requested quantities.
+@freezed
+class RefundSaleRequest with _$RefundSaleRequest {
+  const factory RefundSaleRequest({
+    List<RefundItem>? items,
+    String? reason,
+    String? reference,
+  }) = _RefundSaleRequest;
+
+  factory RefundSaleRequest.fromJson(Map<String, dynamic> json) =>
+      _$RefundSaleRequestFromJson(json);
+}
+
+// ──────────────────────────────────
 // Requests
 // ──────────────────────────────────
 @freezed

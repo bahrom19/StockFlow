@@ -198,11 +198,34 @@ class SalesRepository {
     }
   }
 
-  /// POST /sales/:id/refund — Refund a completed sale
-  Future<SalesResult<Sale>> refund(String id) async {
+  /// POST /sales/:id/refund — Canonical refund endpoint (G16-N-2).
+  ///
+  /// Creates a durable SalesRefund aggregate server-side: all remaining
+  /// quantities when [request].items is null/empty, otherwise exactly the
+  /// requested per-SaleItem quantities. Money/cost are derived server-side.
+  ///
+  /// [idempotencyKey] (G16-N-2): when non-null it is transported as the
+  /// `Idempotency-Key` header via the shared [idempotencyHeader] helper —
+  /// one immutable key per logical refund submit, reused by every retry so
+  /// the backend replays instead of double-refunding. Null keeps the legacy
+  /// header-less request.
+  ///
+  /// The endpoint returns a `SalesRefundEntity`; the UI consumes nothing
+  /// from it, so [SalesResult] is typed `void` to avoid a Sale-shaped
+  /// misparse. Callers still get typed success/failure with the mapped
+  /// [Failure] (400 quantity/state validation, 409 conflict, 422 mismatch).
+  Future<SalesResult<void>> refund(
+    String id, {
+    RefundSaleRequest? request,
+    String? idempotencyKey,
+  }) async {
     try {
-      final response = await _api.post<Map<String, dynamic>>('/sales/$id/refund');
-      return SalesSuccess(Sale.fromJson(response.data!));
+      await _api.post<Map<String, dynamic>>(
+        '/sales/$id/refund',
+        data: request?.toJson(),
+        options: idempotencyHeader(idempotencyKey),
+      );
+      return const SalesSuccess(null);
     } catch (e) {
       return SalesFailure(_errorHandler.handle(e));
     }

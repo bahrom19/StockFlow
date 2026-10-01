@@ -510,19 +510,129 @@ class PosNotifier extends StateNotifier<AsyncValue<Sale?>> {
     return null;
   }
 
-  /// Refund a sale
-  Future<Sale?> refundSale(String saleId) async {
+  /// One logical refund submission = one immutable Idempotency-Key (G16-N-2).
+  ///
+  /// The key is minted lazily once per logical submit and reused for every
+  /// retry attempt of that submit — the transport never auto-retries POSTs
+  /// (`_RetryInterceptor` covers GET/HEAD/OPTIONS only), so attempts are
+  /// user-driven re-taps of the same confirmation. The key is cleared only
+  /// when the submit reaches a terminal outcome for the CURRENT submission:
+  /// success, a definitive non-retryable failure (mapped 4xx — the backend
+  /// rejected the submission itself and the reservation rolled back with the
+  /// business transaction), or an explicit abandonment before a NEW
+  /// submission. A timeout/network failure keeps the key: the user retry must
+  /// replay the same reservation, never mint a new one.
+  ///
+  /// Not persisted (refund is online-only — no outbox kind exists for it):
+  /// an app restart mid-submit loses the key. That is safe — a refund is
+  /// all-or-nothing (the reservation commits atomically with the aggregate),
+  /// and the UI gates the action on the live sale status, so a retry after
+  /// restart either finds the refund already applied or starts clean.
+  final RefundSubmitKey _refundSubmitKey = RefundSubmitKey();
+
+  /// The sale the currently held refund key belongs to. `posProvider` is an
+  /// app-wide notifier, so a key retained after a timeout on one sale must
+  /// never be reused for a different sale's refund (different payload → the
+  /// backend would 422 a legitimate new submission). Switching sales starts
+  /// a clean submission context.
+  String? _refundSubmitSaleId;
+
+  /// Refund a sale through the canonical `POST /sales/:id/refund` endpoint.
+  ///
+  /// Key lifecycle: mint-once per logical submit, reuse on every retry,
+  /// clear on terminal outcomes per [RefundSubmitKey] docs.
+  ///
+  /// Pass `items: null` (or empty) for a FULL refund (all remaining
+  /// quantities — the canonical semantics of the endpoint). Pass explicit
+  /// `items` for a partial refund. Each refundSale() call = ONE logical
+  /// submit attempt; a NEW submission must call [beginRefundSubmit] first so
+  /// it mints a fresh key.
+  ///
+  /// Returns `null` on success, or the failure message for display (mapped
+  /// by the canonical ErrorHandler — localize via `localizedErrorLabel`).
+  Future<String?> refundSale(
+    String saleId, {
+    List<RefundItem>? items,
+  }) async {
     final repo = _ref.read(salesRepositoryProvider);
-    final result = await repo.refund(saleId);
-    if (result is SalesSuccess<Sale>) {
-      return result.data;
+    // Cross-sale guard: a retained key from another sale's uncertain submit
+    // must not pin this sale's submission (see [_refundSubmitSaleId]).
+    if (_refundSubmitSaleId != saleId) {
+      _refundSubmitKey.clear();
+      _refundSubmitSaleId = saleId;
     }
-    return null;
+    final result = await repo.refund(
+      saleId,
+      request: items == null ? null : RefundSaleRequest(items: items),
+      idempotencyKey: _refundSubmitKey.currentOrNew(),
+    );
+    if (result is SalesSuccess<void>) {
+      _refundSubmitKey.clear();
+      return null;
+    }
+    final failure = (result as SalesFailure<void>).error;
+    if (_isDefinitiveRefundFailure(failure)) {
+      // 4xx: the backend rejected this submission itself — the key's
+      // reservation rolled back with the business transaction, so a later
+      // retry must start a NEW submission (new key). Timeout/network keeps
+      // the key so the retry replays the same reservation.
+      _refundSubmitKey.clear();
+    }
+    return failure.message;
+  }
+
+  /// Start a NEW logical refund submission (G16-N-2): drops any held key so
+  /// the next [refundSale] mints a fresh one. Called by the UI before a NEW
+  /// user-confirmed refund — for the SAME submission's user retries, the UI
+  /// must NOT call this, so the retry reuses the immutable key.
+  void beginRefundSubmit() => _refundSubmitKey.clear();
+
+  /// Definitive (non-retryable) refund failures: mapped 400/404/401/403.
+  /// These rejected the submission itself — the idempotency reservation
+  /// rolled back with the business transaction, so keeping the key would pin
+  /// the next submission to a dead reservation. Everything else (network,
+  /// timeouts, 5xx, and 409 Conflict) is NOT definitive: the backend MAY
+  /// have committed (lost response / another same-key request in flight),
+  /// which is exactly the duplicate risk the key protects against — a retry
+  /// with the SAME key either replays the committed result or runs clean.
+  static bool _isDefinitiveRefundFailure(Failure failure) {
+    if (failure is ValidationFailure || // 400 / 422
+        failure is NotFoundFailure || // 404 (sale gone / other tenant)
+        failure is AuthFailure) {
+      // 401/403 — re-auth needed; a stale key must not bind a later submit
+      return true;
+    }
+    return false;
   }
 
   void reset() {
     state = const AsyncData(null);
   }
+}
+
+/// Immutable-per-submit Idempotency-Key holder for the canonical refund
+/// submission (G16-N-2).
+///
+/// Mirrors the proven `_submitIdempotencyKey` pattern of G16-C-01 (create /
+/// complete): the key is minted lazily once per logical submit and reused
+/// verbatim by every retry of that submit. Cleared only at terminal
+/// boundaries — see [PosNotifier.refundSale].
+///
+/// Key material is an opaque UUID v4 from the centralised [OutboxOperation
+/// .idGenerator] (tests stub the same seam as the outbox does).
+class RefundSubmitKey {
+  String? _value;
+
+  /// The currently held key, minting a fresh UUID v4 on first access.
+  /// Subsequent reads return the SAME value until [clear].
+  String currentOrNew() => _value ??= OutboxOperation.idGenerator();
+
+  /// The currently held key without minting one.
+  String? get current => _value;
+
+  /// Drop the key. The next [currentOrNew] mints a fresh UUID v4 — used on
+  /// terminal outcomes and before a NEW logical submission.
+  void clear() => _value = null;
 }
 
 // ──────────────────────────────────
