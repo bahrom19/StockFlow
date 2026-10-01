@@ -11,6 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/api/api_endpoints.dart';
+import 'package:stockflow/core/auth/auth_state.dart';
+import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/auth/token_storage.dart';
 import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/currency/money.dart';
@@ -24,6 +26,22 @@ import 'package:stockflow/features/sales/presentation/screens/pos_workspace.dart
 // ──────────────────────────────────
 // Fixtures
 // ──────────────────────────────────
+
+/// G16-N-3 P1 — held sales are persisted per (companyId, userId) and are
+/// unreadable/unwritable without an authenticated session, so the POS tests
+/// declare one explicitly instead of running anonymously.
+const _testCompanyId = 'company-A';
+const _testUserId = 'user-X';
+
+final CurrentUser _testUser = CurrentUser(
+  id: _testUserId,
+  email: 'cashier@stockflow.test',
+  companyId: _testCompanyId,
+);
+
+final String _heldSalesKey =
+    HeldSalesNotifier.scopedStorageKey(_testCompanyId, _testUserId);
+
 Map<String, dynamic> _product(
   String id,
   String name, {
@@ -793,7 +811,10 @@ void main() {
   group('PosWorkspace', () {
     Widget buildWorkspace(_FakePosApi fake) {
       return ProviderScope(
-        overrides: [apiClientProvider.overrideWith((ref) => fake)],
+        overrides: [
+          apiClientProvider.overrideWith((ref) => fake),
+          currentUserProvider.overrideWithValue(_testUser),
+        ],
         child: const MaterialApp(
           locale: Locale('en'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -1245,7 +1266,9 @@ void main() {
         (tester) async {
       useDesktopSurface(tester);
       // Seed the exact storage payload (web/desktop localStorage equivalent)
-      // that a previous session would have left behind.
+      // that a previous session of the SAME (company, user) would have left
+      // behind. G16-N-3 P1: the partition is scoped and the record carries its
+      // owner.
       final persisted = HeldSale(
         id: 'held-1',
         label: 'Restored hold',
@@ -1260,9 +1283,11 @@ void main() {
             costPrice: Money(minorUnits: 500, currency: 'KZT'),
           ),
         ],
+        companyId: _testCompanyId,
+        userId: _testUserId,
       );
       SharedPreferences.setMockInitialValues({
-        'held_sales_v1': jsonEncode([persisted.toJson()]),
+        _heldSalesKey: jsonEncode([persisted.toJson()]),
       });
       addTearDown(() => SharedPreferences.setMockInitialValues({}));
 
@@ -1368,7 +1393,10 @@ void main() {
   group('PosWorkspace semantics boundaries', () {
     Widget buildWorkspace(_FakePosApi fake) {
       return ProviderScope(
-        overrides: [apiClientProvider.overrideWith((ref) => fake)],
+        overrides: [
+          apiClientProvider.overrideWith((ref) => fake),
+          currentUserProvider.overrideWithValue(_testUser),
+        ],
         child: const MaterialApp(
           locale: Locale('en'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -1498,7 +1526,11 @@ void main() {
   group('HeldSalesNotifier', () {
     test('hold, resume and discard persist via preferences', () async {
       SharedPreferences.setMockInitialValues({});
-      final container = ProviderContainer();
+      // G16-N-3 P1: held sales require an authenticated session and persist to
+      // a per-(company, user) partition.
+      final container = ProviderContainer(
+        overrides: [currentUserProvider.overrideWithValue(_testUser)],
+      );
       addTearDown(container.dispose);
       final notifier = container.read(heldSalesProvider.notifier);
 
@@ -1526,9 +1558,9 @@ void main() {
 
       // Real persistence: the payload must exist in SharedPreferences.
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('held_sales_v1');
+      final raw = prefs.getString(_heldSalesKey);
       expect(raw, isNotNull,
-          reason: 'hold must persist the payload to storage');
+          reason: 'hold must persist the payload to the scoped key');
       final stored = jsonDecode(raw!) as List<dynamic>;
       expect(stored, hasLength(1));
       expect((stored.first as Map<String, dynamic>)['label'], 'Test hold');
@@ -1543,7 +1575,7 @@ void main() {
 
       // Resuming must also update storage.
       final after = jsonDecode((await SharedPreferences.getInstance())
-          .getString('held_sales_v1')!) as List<dynamic>;
+          .getString(_heldSalesKey)!) as List<dynamic>;
       expect(after, isEmpty,
           reason: 'resume must remove the sale from storage');
     });
@@ -1599,7 +1631,10 @@ void main() {
   group('PosWorkspace localization (RU/KK)', () {
     Widget buildWorkspaceLocale(_FakePosApi fake, Locale locale) {
       return ProviderScope(
-        overrides: [apiClientProvider.overrideWith((ref) => fake)],
+        overrides: [
+          apiClientProvider.overrideWith((ref) => fake),
+          currentUserProvider.overrideWithValue(_testUser),
+        ],
         child: MaterialApp(
           locale: locale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,

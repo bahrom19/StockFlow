@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stockflow/core/auth/auth_state.dart';
+import 'package:stockflow/core/auth/models/auth_models.dart';
 import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/features/sales/domain/sales_models.dart';
 import 'package:stockflow/features/sales/presentation/providers/held_sales_provider.dart';
@@ -12,7 +14,7 @@ import 'package:stockflow/features/sales/presentation/providers/sales_provider.d
 ///
 /// These tests prove REAL storage round-trips (SharedPreferences mock), not
 /// in-memory behavior:
-///   * save → storage contains the `held_sales_v1` payload;
+///   * save → storage contains the SCOPED payload for the authenticated user;
 ///   * a brand-new provider/container (reload-equivalent) restores saved sales;
 ///   * multiple sales survive save + reload;
 ///   * resume/discard update the persisted payload;
@@ -22,7 +24,35 @@ import 'package:stockflow/features/sales/presentation/providers/sales_provider.d
 /// The storage is reached through `preferencesStorageProvider` — the exact DI
 /// wiring used in production — so these tests fail if the provider ever stops
 /// initializing its instance (the original web-persistence bug).
-const _storageKey = 'held_sales_v1';
+///
+/// G16-N-3 P1: persistence is now per (companyId, userId) partition, and
+/// `hold()` refuses to persist anything without an authenticated session. Every
+/// container here therefore carries an explicit authenticated `CurrentUser` —
+/// modelling the real security boundary rather than an anonymous one.
+/// Cross-user/cross-company behaviour lives in
+/// `held_sales_isolation_test.dart`.
+const _companyId = 'company-A';
+const _userId = 'user-X';
+
+/// The scoped partition these tests write to and read from.
+final String _storageKey = HeldSalesNotifier.scopedStorageKey(_companyId, _userId);
+
+/// An authenticated session, exactly as production provides it.
+const CurrentUser _currentUser = CurrentUser(
+  id: _userId,
+  email: 'cashier@stockflow.test',
+  companyId: _companyId,
+);
+
+/// A container with an authenticated session — held sales are unreadable and
+/// unwritable without one.
+ProviderContainer _authenticatedContainer() {
+  final container = ProviderContainer(
+    overrides: [currentUserProvider.overrideWithValue(_currentUser)],
+  );
+  addTearDown(container.dispose);
+  return container;
+}
 
 CartState _cart(String sku, double unitPrice, {String? customerName}) =>
     CartState(
@@ -47,11 +77,10 @@ Future<String?> _storedRaw() async {
 
 void main() {
   group('HeldSalesNotifier web persistence', () {
-    test('hold persists the payload to SharedPreferences under held_sales_v1',
-        () async {
+    test('hold persists the payload to SharedPreferences under the scoped '
+        'key', () async {
       SharedPreferences.setMockInitialValues({});
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+      final container = _authenticatedContainer();
       final notifier = container.read(heldSalesProvider.notifier);
 
       await notifier.hold(_cart('ESP', 10), label: 'Test hold');
@@ -65,7 +94,7 @@ void main() {
 
       // Real storage round-trip through the DI provider.
       final raw = await _storedRaw();
-      expect(raw, isNotNull, reason: 'held_sales_v1 must exist in storage');
+      expect(raw, isNotNull, reason: '$_storageKey must exist in storage');
       final list = jsonDecode(raw!) as List<dynamic>;
       expect(list, hasLength(1));
       final first = list.first as Map<String, dynamic>;
@@ -74,20 +103,33 @@ void main() {
       expect(first['heldAt'], isNotEmpty);
       expect(first['items'], isA<List<dynamic>>());
 
+      // G16-N-3 P1: the record is attributed to the authenticated session.
+      expect(first['companyId'], _companyId);
+      expect(first['userId'], _userId);
+      expect(first['schemaVersion'], HeldSale.currentSchemaVersion);
+
+      // The pre-scope global key is never written.
+      expect(
+        (await SharedPreferences.getInstance())
+            .getString(HeldSalesNotifier.legacyStorageKey),
+        isNull,
+      );
+
       // Payload schema-compatible: round-trips through fromJson unchanged.
       final parsed = HeldSale.fromJson(first);
       expect(parsed.label, 'Test hold');
       expect(parsed.items.length, 1);
       expect(parsed.items.first.productName, 'Item ESP');
       expect(parsed.total, Money.fromMinorUnits(2000, 'KZT'));
+      expect(parsed.companyId, _companyId);
+      expect(parsed.userId, _userId);
     });
 
     test('a new provider instance restores saved sales (reload-equivalent)',
         () async {
       SharedPreferences.setMockInitialValues({});
       // Session 1: hold two sales.
-      final session1 = ProviderContainer();
-      addTearDown(session1.dispose);
+      final session1 = _authenticatedContainer();
       await session1.read(heldSalesProvider.notifier).hold(
             _cart('A1', 10, customerName: 'Anna'),
             label: 'First',
@@ -99,8 +141,7 @@ void main() {
       expect(session1.read(heldSalesProvider).held.length, 2);
 
       // Session 2: brand-new container/provider reads the same storage.
-      final session2 = ProviderContainer();
-      addTearDown(session2.dispose);
+      final session2 = _authenticatedContainer();
       await session2.read(heldSalesProvider.notifier).load();
       final held = session2.read(heldSalesProvider).held;
       expect(held, hasLength(2));
@@ -113,8 +154,7 @@ void main() {
 
     test('multiple held sales survive save + reload in order', () async {
       SharedPreferences.setMockInitialValues({});
-      final session1 = ProviderContainer();
-      addTearDown(session1.dispose);
+      final session1 = _authenticatedContainer();
       await session1.read(heldSalesProvider.notifier).hold(
             _cart('X1', 5),
             label: 'Oldest',
@@ -125,8 +165,7 @@ void main() {
           );
 
       // Newest-first ordering is preserved on restore.
-      final session2 = ProviderContainer();
-      addTearDown(session2.dispose);
+      final session2 = _authenticatedContainer();
       await session2.read(heldSalesProvider.notifier).load();
       final labels =
           session2.read(heldSalesProvider).held.map((h) => h.label).toList();
@@ -135,8 +174,7 @@ void main() {
 
     test('resume removes the sale from persisted storage', () async {
       SharedPreferences.setMockInitialValues({});
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+      final container = _authenticatedContainer();
       final notifier = container.read(heldSalesProvider.notifier);
 
       await notifier.hold(_cart('R1', 12), label: 'To resume');
@@ -154,8 +192,7 @@ void main() {
 
     test('discard removes the sale from persisted storage', () async {
       SharedPreferences.setMockInitialValues({});
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+      final container = _authenticatedContainer();
       final notifier = container.read(heldSalesProvider.notifier);
 
       await notifier.hold(_cart('D1', 8), label: 'Discard me');

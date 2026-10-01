@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/errors/failures.dart';
@@ -641,8 +642,27 @@ class RefundSubmitKey {
 final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) {
   final notifier = CartNotifier(ref);
   notifier.syncFromCurrency(); // initial currency mirrors current provider.
+  // G16-N-3 P1: the active POS cart is the same cross-user disclosure class as
+  // held sales — CartState carries customerId/customerName plus CartItem
+  // product and costPrice data, and the root ProviderScope outlives logout, so
+  // without this a second cashier on a shared terminal inherits the first
+  // cashier's live cart. Cleared on any change of authenticated identity.
+  // Same lifecycle pattern as heldSalesProvider / outboxSchedulerProvider.
+  ref.listen<AuthState>(authStateProvider, (prev, next) {
+    if (_cartIdentityOf(prev) == _cartIdentityOf(next)) return;
+    notifier.clear();
+  });
   return notifier;
 });
+
+/// The authenticated identity carried by an [AuthState], or null when the
+/// session is not authenticated. Used only to decide whether the cart must be
+/// reset on an auth transition.
+({String companyId, String userId})? _cartIdentityOf(AuthState? state) {
+  if (state is! AuthAuthenticated) return null;
+  final user = state.user;
+  return (companyId: user.companyId, userId: user.id);
+}
 
 final saleListProvider =
     StateNotifierProvider<SaleListNotifier, SaleListState>((ref) {
