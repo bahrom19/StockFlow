@@ -172,7 +172,12 @@ function fmtDuration(ms) {
   return `${Math.round(ms / 60000)}m`;
 }
 
-function printReport({ latest, consec, stale, durations }) {
+function printReport({
+  latest,
+  consecutiveFailures: consec,
+  staleRunning: stale,
+  durationPercentiles: durations,
+}) {
   console.log('===== JobRun inspection (read-only) =====');
   console.log(`Generated: ${new Date().toISOString()}\n`);
 
