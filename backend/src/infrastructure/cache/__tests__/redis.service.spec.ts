@@ -10,6 +10,7 @@ describe('RedisService', () => {
       ping: jest.fn(),
       quit: jest.fn(),
       on: jest.fn(),
+      status: 'ready',
     };
 
     const mockConfigService = {
@@ -35,11 +36,12 @@ describe('RedisService', () => {
   });
 
   describe('Redis disabled (no REDIS_URL)', () => {
-    it('should return a token string when Redis is disabled (no REDIS_URL)', async () => {
+    // G16-L-2C-3: a synthetic token means RUN — never SKIPPED.
+    it('should return acquired=true with a synthetic token when Redis is disabled', async () => {
       const { service } = createService({ redisUrl: '' });
       const result = await service.acquireLock('test-lock', 60);
-      expect(typeof result).toBe('string');
-      expect(result).not.toBeNull();
+      expect(result).toEqual({ acquired: true, token: expect.any(String), synthetic: true });
+      expect(result.acquired && result.token).toBeTruthy();
     });
 
     it('should return false when pinging disabled Redis', async () => {
@@ -48,26 +50,27 @@ describe('RedisService', () => {
       expect(result).toBe(false);
     });
 
-    it('should return a token even with error when disabled', async () => {
+    it('should still return a synthetic acquisition regardless of errors when disabled', async () => {
       const { service } = createService({ redisUrl: '' });
       const result = await service.acquireLock('test-lock', 60);
-      expect(typeof result).toBe('string');
+      expect(result.acquired).toBe(true);
     });
   });
 
   describe('Redis healthy - lock acquired', () => {
-    it('should return a unique token when lock is acquired', async () => {
+    it('should return a unique real token when lock is acquired', async () => {
       const { service, mockRedisClient } = createService({
         redisUrl: 'redis://localhost:6379',
         failOpenOnError: false,
       });
       mockRedisClient.set.mockResolvedValue('OK');
 
-      const token = await service.acquireLock('test-lock', 60);
+      const result = await service.acquireLock('test-lock', 60);
 
-      expect(typeof token).toBe('string');
-      expect(token).not.toBeNull();
-      expect(mockRedisClient.set).toHaveBeenCalledWith('test-lock', token, 'EX', 60, 'NX');
+      if (!result.acquired) throw new Error('expected acquisition');
+      expect(result.synthetic).toBe(false);
+      expect(typeof result.token).toBe('string');
+      expect(mockRedisClient.set).toHaveBeenCalledWith('test-lock', result.token, 'EX', 60, 'NX');
     });
 
     it('should generate different tokens for separate acquisitions', async () => {
@@ -77,30 +80,40 @@ describe('RedisService', () => {
       });
       mockRedisClient.set.mockResolvedValue('OK');
 
-      const token1 = await service.acquireLock('lock-1', 60);
-      const token2 = await service.acquireLock('lock-2', 60);
+      const result1 = await service.acquireLock('lock-1', 60);
+      const result2 = await service.acquireLock('lock-2', 60);
 
-      expect(token1).not.toEqual(token2);
+      if (!result1.acquired || !result2.acquired) throw new Error('expected acquisitions');
+      expect(result1.token).not.toEqual(result2.token);
     });
   });
 
   describe('Redis healthy - lock contention', () => {
-    it('should return null when lock is already held (contention)', async () => {
+    it('should return LOCK_CONTENDED when lock is already held (contention)', async () => {
       const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
       mockRedisClient.set.mockResolvedValue(null);
 
       const result = await service.acquireLock('test-lock', 60);
-      expect(result).toBeNull();
+      expect(result).toEqual({ acquired: false, reason: 'LOCK_CONTENDED' });
     });
   });
 
   describe('Redis configured + error + failOpen=false (production default)', () => {
-    it('should return null when Redis throws error and failOpenOnError=false', async () => {
+    it('should return not-acquired with REDIS_ERROR when Redis throws (fail-closed)', async () => {
       const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
       mockRedisClient.set.mockRejectedValue(new Error('Redis connection failed'));
 
       const result = await service.acquireLock('test-lock', 60);
-      expect(result).toBeNull();
+      expect(result).toEqual({ acquired: false, reason: 'REDIS_ERROR' });
+    });
+
+    it('should return REDIS_UNAVAILABLE when the connection is permanently gone (status=end)', async () => {
+      const { service, mockRedisClient } = createService({ redisUrl: 'redis://localhost:6379', failOpenOnError: false });
+      mockRedisClient.status = 'end';
+      mockRedisClient.set.mockRejectedValue(new Error('Stream isn\'t writeable and enableOfflienQueue is false'));
+
+      const result = await service.acquireLock('test-lock', 60);
+      expect(result).toEqual({ acquired: false, reason: 'REDIS_UNAVAILABLE' });
     });
 
     it('should log error when Redis throws', async () => {
@@ -112,7 +125,7 @@ describe('RedisService', () => {
   });
 
   describe('Redis configured + error + failOpen=true (explicit degraded mode)', () => {
-    it('should return a token when Redis throws and failOpenOnError=true', async () => {
+    it('should return a synthetic acquisition when Redis throws and failOpenOnError=true', async () => {
       const { service, mockRedisClient } = createService({
         redisUrl: 'redis://localhost:6379',
         failOpenOnError: true,
@@ -120,7 +133,7 @@ describe('RedisService', () => {
       mockRedisClient.set.mockRejectedValue(new Error('Redis connection failed'));
 
       const result = await service.acquireLock('test-lock', 60);
-      expect(typeof result).toBe('string');
+      expect(result).toEqual({ acquired: true, token: expect.any(String), synthetic: true });
     });
   });
 

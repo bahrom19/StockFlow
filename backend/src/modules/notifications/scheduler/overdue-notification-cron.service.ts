@@ -43,10 +43,15 @@ export class OverdueNotificationCronService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async scanOverdueInvoices(): Promise<void> {
     const lockKey = 'overdue-notifications';
-    const ownerToken = await this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_SEC);
-    if (!ownerToken) {
+    // G16-L-2C-3: discriminated lock result — a synthetic token (Redis
+    // disabled in dev / explicit fail-open) means RUN, never SKIPPED.
+    const lock = await this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_SEC);
+    if (!lock.acquired) {
+      // Best-effort terminal SKIPPED row; JobRunService.skip never throws.
+      await this.jobRunService.skip('notifications.scan-overdue', lock.reason);
       return;
     }
+    const ownerToken = lock.token;
 
     const runId = await this.jobRunService.start('notifications.scan-overdue');
     try {

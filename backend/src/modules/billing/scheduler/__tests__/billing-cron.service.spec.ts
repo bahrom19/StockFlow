@@ -1,4 +1,5 @@
 import { BillingCronService } from '../billing-cron.service';
+import type { LockAcquisitionResult } from '../../../../infrastructure/cache/redis.service';
 
 // Observability stub: JobRun persistence is non-authoritative infrastructure and
 // must never influence billing behaviour under test.
@@ -6,7 +7,16 @@ const jobRunStub = () =>
   ({
     start: jest.fn().mockResolvedValue('jobrun-test-id'),
     finish: jest.fn().mockResolvedValue(undefined),
+    skip: jest.fn().mockResolvedValue(undefined),
   }) as any;
+
+// G16-L-2C-3: acquireLock returns a discriminated result, not string|null.
+const ACQUIRED = (token: string): LockAcquisitionResult => ({
+  acquired: true,
+  token,
+  synthetic: false,
+});
+const NOT_ACQUIRED = { acquired: false, reason: 'LOCK_CONTENDED' } as const;
 
 describe('BillingCronService - stable JobRun jobName mapping', () => {
   // Source-level pin: the 10 registered jobs must keep exactly these names.
@@ -77,7 +87,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-expired-trials';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).subscriptionRepository = {
@@ -102,7 +112,7 @@ describe('BillingCronService - TTL verification', () => {
         {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRun,
       );
       (service as any).redisService = {
-        acquireLock: jest.fn().mockResolvedValue('token-x'),
+        acquireLock: jest.fn().mockResolvedValue(ACQUIRED('token-x')),
         releaseLock: jest.fn().mockResolvedValue(true),
       };
       (service as any).subscriptionRepository = {
@@ -132,13 +142,16 @@ describe('BillingCronService - TTL verification', () => {
     it('does not execute business logic and does not start a JobRun on lock contention', async () => {
       const jobRun = jobRunStub();
       const service = buildService(jobRun);
-      (service as any).redisService.acquireLock.mockResolvedValue(null);
+      (service as any).redisService.acquireLock.mockResolvedValue(NOT_ACQUIRED);
 
       await service.processExpiredTrials();
 
       expect((service as any).subscriptionRepository.findExpiredTrials).not.toHaveBeenCalled();
       expect(jobRun.start).not.toHaveBeenCalled();
       expect(jobRun.finish).not.toHaveBeenCalled();
+      // G16-L-2C-3: expired-trials is exempt from skip rows on contention
+      // (fires every minute — a SKIPPED row per tick would be pure noise).
+      expect(jobRun.skip).not.toHaveBeenCalled();
       expect((service as any).redisService.releaseLock).not.toHaveBeenCalled();
     });
 
@@ -175,6 +188,107 @@ describe('BillingCronService - TTL verification', () => {
     });
   });
 
+  // ---- G16-L-2C-3: terminal SKIPPED rows when the lock is not acquired ----
+  describe('G16-L-2C-3: skip recording', () => {
+    const buildSkipService = (jobRun: any) => {
+      const service = new BillingCronService(
+        {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRun,
+      );
+      (service as any).redisService = {
+        acquireLock: jest.fn(),
+        releaseLock: jest.fn().mockResolvedValue(true),
+      };
+      (service as any).subscriptionRepository = {
+        findExpiredTrials: jest.fn().mockResolvedValue([]),
+      };
+      (service as any).companySubscriptionService = {
+        downgradeToFree: jest.fn().mockResolvedValue(undefined),
+      };
+      (service as any).prismaService = {
+        webhookEvent: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        companySubscription: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      };
+      return service;
+    };
+
+    it('records SKIPPED/LOCK_CONTENDED for cleanupOldData and executes no business logic', async () => {
+      const jobRun = jobRunStub();
+      const service = buildSkipService(jobRun);
+      (service as any).redisService.acquireLock.mockResolvedValue(NOT_ACQUIRED);
+
+      await service.cleanupOldData();
+
+      expect(jobRun.skip).toHaveBeenCalledWith('billing.cleanup', 'LOCK_CONTENDED');
+      expect((service as any).prismaService.webhookEvent.deleteMany).not.toHaveBeenCalled();
+      expect((service as any).prismaService.companySubscription.updateMany).not.toHaveBeenCalled();
+      expect(jobRun.start).not.toHaveBeenCalled();
+      expect(jobRun.finish).not.toHaveBeenCalled();
+      expect((service as any).redisService.releaseLock).not.toHaveBeenCalled();
+    });
+
+    it('records SKIPPED/REDIS_UNAVAILABLE (fail-closed Redis down)', async () => {
+      const jobRun = jobRunStub();
+      const service = buildSkipService(jobRun);
+      (service as any).redisService.acquireLock.mockResolvedValue({
+        acquired: false,
+        reason: 'REDIS_UNAVAILABLE',
+      });
+
+      await service.cleanupOldData();
+
+      expect(jobRun.skip).toHaveBeenCalledWith('billing.cleanup', 'REDIS_UNAVAILABLE');
+      expect((service as any).prismaService.webhookEvent.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('records SKIPPED/REDIS_ERROR (fail-closed transient Redis failure)', async () => {
+      const jobRun = jobRunStub();
+      const service = buildSkipService(jobRun);
+      (service as any).redisService.acquireLock.mockResolvedValue({
+        acquired: false,
+        reason: 'REDIS_ERROR',
+      });
+
+      await service.cleanupOldData();
+
+      expect(jobRun.skip).toHaveBeenCalledWith('billing.cleanup', 'REDIS_ERROR');
+    });
+
+    it('expired-trials contention records NO SKIPPED row, but a Redis failure does', async () => {
+      const jobRun = jobRunStub();
+      const service = buildSkipService(jobRun);
+
+      (service as any).redisService.acquireLock.mockResolvedValue(NOT_ACQUIRED);
+      await service.processExpiredTrials();
+      expect(jobRun.skip).not.toHaveBeenCalled();
+
+      jobRun.skip.mockClear();
+      (service as any).redisService.acquireLock.mockResolvedValue({
+        acquired: false,
+        reason: 'REDIS_UNAVAILABLE',
+      });
+      await service.processExpiredTrials();
+      // Only LOCK_CONTENDED is exempt for expired-trials; Redis down is a real
+      // anomaly an operator must see even for a per-minute job.
+      expect(jobRun.skip).toHaveBeenCalledWith('billing.expired-trials', 'REDIS_UNAVAILABLE');
+    });
+
+    it('a synthetic token (Redis disabled / explicit fail-open) means RUN, never SKIPPED', async () => {
+      const jobRun = jobRunStub();
+      const service = buildSkipService(jobRun);
+      (service as any).redisService.acquireLock.mockResolvedValue({
+        acquired: true,
+        token: 'synthetic-dev-token',
+        synthetic: true,
+      });
+
+      await service.processExpiredTrials();
+
+      expect((service as any).subscriptionRepository.findExpiredTrials).toHaveBeenCalled();
+      expect(jobRun.skip).not.toHaveBeenCalled();
+      expect(jobRun.start).toHaveBeenCalledWith('billing.expired-trials');
+    });
+  });
+
   it('should call acquireLock with TTL 300 for generateRecurringInvoices', async () => {
     const service = new BillingCronService(
       {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
@@ -182,7 +296,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-recurring-invoices';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).subscriptionRepository = {
@@ -214,7 +328,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-retry-payments';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).subscriptionRepository = {
@@ -244,7 +358,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-retry-behavioral';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).subscriptionRepository = {
@@ -330,7 +444,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-suspend-overdue';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).subscriptionRepository = {
@@ -354,7 +468,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-expire-suspended';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).subscriptionRepository = {
@@ -381,7 +495,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-reset-usage';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).prismaService = {
@@ -402,7 +516,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-resume-paid';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).subscriptionRepository = {
@@ -429,7 +543,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-cleanup';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).prismaService = {
@@ -450,7 +564,7 @@ describe('BillingCronService - TTL verification', () => {
     );
 
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(null),
+      acquireLock: jest.fn().mockResolvedValue(NOT_ACQUIRED),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).subscriptionRepository = {
@@ -473,7 +587,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-atomic-recurring';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     const expiring = [
@@ -522,7 +636,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-recurring-partial';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     (service as any).subscriptionRepository = {
@@ -560,7 +674,7 @@ describe('BillingCronService - TTL verification', () => {
 
     const fakeToken = 'test-token-resume-drain';
     (service as any).redisService = {
-      acquireLock: jest.fn().mockResolvedValue(fakeToken),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED(fakeToken)),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     // Stateful pool simulates the live PAST_DUE set: successfully resumed

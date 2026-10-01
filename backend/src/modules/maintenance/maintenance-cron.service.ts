@@ -29,12 +29,21 @@ export class MaintenanceCronService {
   @Cron('0 4 * * *')
   async cleanupIdempotencyRecords(): Promise<number> {
     const lockKey = LOCK_PREFIX + LOCK_KEY;
-    const ownerToken = await this.redis.acquireLock(lockKey, LOCK_TTL_SEC);
+    // G16-L-2C-3: discriminated lock result. A synthetic token (Redis disabled
+    // in dev / explicit fail-open) means the job RUNS, never SKIPPED.
+    const lock = await this.redis.acquireLock(lockKey, LOCK_TTL_SEC);
 
-    if (!ownerToken) {
+    if (!lock.acquired) {
+      // Best-effort terminal SKIPPED row; JobRunService.skip never throws, so
+      // observability cannot break the cron.
+      await this.jobRunService.skip(
+        'maintenance.cleanup-idempotency',
+        lock.reason,
+      );
       this.logger.debug('Idempotency cleanup lock not acquired, skipping this run');
       return 0;
     }
+    const ownerToken = lock.token;
 
     const startTime = Date.now();
     let totalDeleted = 0;

@@ -1,7 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { JobRunStatus } from '@prisma/client';
-import { RedisService } from '../../../infrastructure/cache/redis.service';
+import {
+  RedisService,
+  LockAcquisitionResult,
+} from '../../../infrastructure/cache/redis.service';
 import { JobRunService } from '../../../common/observability/job-run.service';
 import { CompanySubscriptionRepository } from '../repositories/company-subscription.repository';
 import { CompanySubscriptionService } from '../services/company-subscription.service';
@@ -12,6 +15,19 @@ import { EventBus, EVENT_BUS } from '../../../common/events';
 
 const LOCK_PREFIX = 'cron:lock:';
 const SYSTEM_USER = 'system';
+
+// Lock key -> jobName used for JobRun rows (SKIPPED and started runs use the
+// same names, so the inspect-job-runs CLI and operators see one timeline).
+const SKIP_JOB_NAME = {
+  'expired-trials': 'billing.expired-trials',
+  'recurring-invoices': 'billing.recurring-invoices',
+  'retry-payments': 'billing.retry-payments',
+  'suspend-overdue': 'billing.suspend-overdue',
+  'expire-suspended': 'billing.expire-suspended',
+  'reset-usage': 'billing.reset-usage',
+  'resume-paid': 'billing.resume-paid',
+  cleanup: 'billing.cleanup',
+} as const satisfies Record<LockKey, string>;
 
 // Per-job lock TTLs (seconds).
 //
@@ -43,6 +59,11 @@ const LOCK_TTL_BY_JOB = {
 
 type LockKey = keyof typeof LOCK_TTL_BY_JOB;
 
+// G16-L-2C-3: lock keys that must NOT record a SKIPPED JobRun on contention.
+// expired-trials fires every 60s — a SKIPPED row per contended tick would be
+// per-minute noise drowning real signals. Observability stays silent here.
+const NO_SKIP_ON_CONTENTION: ReadonlySet<LockKey> = new Set(['expired-trials']);
+
 @Injectable()
 export class BillingCronService {
   private readonly logger = new Logger(BillingCronService.name);
@@ -60,10 +81,31 @@ export class BillingCronService {
 
   /**
    * Acquire a distributed lock for a cron job using Redis atomic SET NX EX.
-   * Returns a unique ownership token if acquired, null otherwise.
+   * Returns a discriminated result so the caller can record WHY the execution
+   * did not run (JobRun SKIPPED) — a synthetic token (Redis disabled/dev or
+   * explicit fail-open) is an ACQUISITION and always runs.
    */
-  private async acquireLock(lockKey: LockKey): Promise<string | null> {
+  private async acquireLock(lockKey: LockKey): Promise<LockAcquisitionResult> {
     return this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_BY_JOB[lockKey]);
+  }
+
+  /**
+   * G16-L-2C-3: record a best-effort terminal SKIPPED row for a job whose lock
+   * could not be acquired, then let the caller return without executing.
+   * Exempt: expired-trials on LOCK_CONTENDED (runs every minute — skip rows
+   * would be per-minute noise). JobRunService.skip never throws.
+   */
+  private async recordSkipOrReturn(
+    lockKey: LockKey,
+    lock: Extract<LockAcquisitionResult, { acquired: false }>,
+  ): Promise<void> {
+    if (
+      lock.reason === 'LOCK_CONTENDED' &&
+      NO_SKIP_ON_CONTENTION.has(lockKey)
+    ) {
+      return;
+    }
+    await this.jobRunService.skip(SKIP_JOB_NAME[lockKey], lock.reason);
   }
 
   /**
@@ -81,8 +123,12 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_MINUTE)
   async processExpiredTrials(): Promise<void> {
     const lockKey = 'expired-trials';
-    const ownerToken = await this.acquireLock(lockKey);
-    if (!ownerToken) return;
+    const lock = await this.acquireLock(lockKey);
+    if (!lock.acquired) {
+      await this.recordSkipOrReturn(lockKey, lock);
+      return;
+    }
+    const ownerToken = lock.token;
 
     const runId = await this.jobRunService.start('billing.expired-trials');
     try {
@@ -123,8 +169,12 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async generateRecurringInvoices(): Promise<void> {
     const lockKey = 'recurring-invoices';
-    const ownerToken = await this.acquireLock(lockKey);
-    if (!ownerToken) return;
+    const lock = await this.acquireLock(lockKey);
+    if (!lock.acquired) {
+      await this.recordSkipOrReturn(lockKey, lock);
+      return;
+    }
+    const ownerToken = lock.token;
 
     const runId = await this.jobRunService.start('billing.recurring-invoices');
     try {
@@ -170,8 +220,12 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_5_MINUTES)
   async retryFailedPayments(): Promise<void> {
     const lockKey = 'retry-payments';
-    const ownerToken = await this.acquireLock(lockKey);
-    if (!ownerToken) return;
+    const lock = await this.acquireLock(lockKey);
+    if (!lock.acquired) {
+      await this.recordSkipOrReturn(lockKey, lock);
+      return;
+    }
+    const ownerToken = lock.token;
 
     const runId = await this.jobRunService.start('billing.retry-payments');
     try {
@@ -233,8 +287,12 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_30_MINUTES)
   async suspendOverdueSubscriptions(): Promise<void> {
     const lockKey = 'suspend-overdue';
-    const ownerToken = await this.acquireLock(lockKey);
-    if (!ownerToken) return;
+    const lock = await this.acquireLock(lockKey);
+    if (!lock.acquired) {
+      await this.recordSkipOrReturn(lockKey, lock);
+      return;
+    }
+    const ownerToken = lock.token;
 
     const runId = await this.jobRunService.start('billing.suspend-overdue');
     try {
@@ -272,8 +330,12 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async expireSuspendedSubscriptions(): Promise<void> {
     const lockKey = 'expire-suspended';
-    const ownerToken = await this.acquireLock(lockKey);
-    if (!ownerToken) return;
+    const lock = await this.acquireLock(lockKey);
+    if (!lock.acquired) {
+      await this.recordSkipOrReturn(lockKey, lock);
+      return;
+    }
+    const ownerToken = lock.token;
 
     const runId = await this.jobRunService.start('billing.expire-suspended');
     try {
@@ -314,8 +376,12 @@ export class BillingCronService {
   @Cron('0 2 1 * *')
   async resetUsageRecords(): Promise<void> {
     const lockKey = 'reset-usage';
-    const ownerToken = await this.acquireLock(lockKey);
-    if (!ownerToken) return;
+    const lock = await this.acquireLock(lockKey);
+    if (!lock.acquired) {
+      await this.recordSkipOrReturn(lockKey, lock);
+      return;
+    }
+    const ownerToken = lock.token;
 
     const runId = await this.jobRunService.start('billing.reset-usage');
     try {
@@ -339,8 +405,12 @@ export class BillingCronService {
   @Cron(CronExpression.EVERY_5_MINUTES)
   async resumeAfterPayment(): Promise<void> {
     const lockKey = 'resume-paid';
-    const ownerToken = await this.acquireLock(lockKey);
-    if (!ownerToken) return;
+    const lock = await this.acquireLock(lockKey);
+    if (!lock.acquired) {
+      await this.recordSkipOrReturn(lockKey, lock);
+      return;
+    }
+    const ownerToken = lock.token;
 
     const runId = await this.jobRunService.start('billing.resume-paid');
     try {
@@ -423,8 +493,12 @@ export class BillingCronService {
   @Cron('0 3 * * *')
   async cleanupOldData(): Promise<void> {
     const lockKey = 'cleanup';
-    const ownerToken = await this.acquireLock(lockKey);
-    if (!ownerToken) return;
+    const lock = await this.acquireLock(lockKey);
+    if (!lock.acquired) {
+      await this.recordSkipOrReturn(lockKey, lock);
+      return;
+    }
+    const ownerToken = lock.token;
 
     const runId = await this.jobRunService.start('billing.cleanup');
     try {

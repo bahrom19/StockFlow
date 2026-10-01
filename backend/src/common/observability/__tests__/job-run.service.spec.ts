@@ -65,6 +65,52 @@ describe('JobRunService', () => {
     });
   });
 
+  // ---- G16-L-2C-3: terminal SKIPPED rows for executions that never ran ----
+  describe('skip()', () => {
+    it('creates a terminal SKIPPED row: startedAt=finishedAt=now, durationMs=0, no error', async () => {
+      mockPrisma.jobRun.create.mockResolvedValue({ id: 'skip-1' });
+      const now = new Date('2026-09-30T12:00:00.000Z');
+      jest.useFakeTimers().setSystemTime(now);
+
+      await service.skip('billing.cleanup', 'LOCK_CONTENDED');
+
+      expect(mockPrisma.jobRun.create).toHaveBeenCalledWith({
+        data: {
+          jobName: 'billing.cleanup',
+          status: JobRunStatus.SKIPPED,
+          startedAt: now,
+          finishedAt: now,
+          durationMs: 0,
+          errorMessage: null,
+          skipReason: 'LOCK_CONTENDED',
+        },
+        select: { id: true },
+      });
+
+      jest.useRealTimers();
+    });
+
+    it('persists each closed-vocabulary skip reason verbatim', async () => {
+      mockPrisma.jobRun.create.mockResolvedValue({ id: 'skip-2' });
+
+      await service.skip('billing.retry-payments', 'REDIS_UNAVAILABLE');
+      await service.skip('billing.retry-payments', 'REDIS_ERROR');
+
+      const reasons = mockPrisma.jobRun.create.mock.calls.map(
+        (c) => c[0].data.skipReason,
+      );
+      expect(reasons).toEqual(['REDIS_UNAVAILABLE', 'REDIS_ERROR']);
+    });
+
+    it('never throws when persistence fails — cron/business operation must not break', async () => {
+      mockPrisma.jobRun.create.mockRejectedValue(new Error('JobRun table missing'));
+
+      await expect(
+        service.skip('billing.cleanup', 'LOCK_CONTENDED'),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('finish()', () => {
     it('marks the run SUCCEEDED with finishedAt, durationMs and clears errorMessage', async () => {
       mockPrisma.jobRun.findUnique.mockResolvedValue({ startedAt: STARTED_AT });

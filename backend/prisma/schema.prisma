@@ -2468,10 +2468,14 @@ model IdempotencyRecord {
 /// business logic and is never the source of truth for any business state.
 /// A failed write here must never fail, delay or alter the business job —
 /// see `JobRunService` (every method swallows and logs its own errors).
+/// Terminal outcome for an execution that did NOT run because its distributed
+/// lock could not be acquired (contention, or Redis unavailable/error under
+/// fail-closed). Recorded so a silent skip is never invisible to operators.
 enum JobRunStatus {
   RUNNING
   SUCCEEDED
   FAILED
+  SKIPPED
 }
 
 model JobRun {
@@ -2487,6 +2491,11 @@ model JobRun {
   /// Concise failure diagnosis only — never a serialized exception object,
   /// never payment/customer data. Truncated by the service.
   errorMessage String?     @db.VarChar(500)
+  /// Closed vocabulary, set only on SKIPPED rows. Never free-form and never
+  /// derived from a raw Redis error (which could leak internals):
+  /// LOCK_CONTENDED | REDIS_UNAVAILABLE | REDIS_ERROR.
+  /// NULL for every other status.
+  skipReason   String?     @db.VarChar(32)
   /// Optional counters, populated only where the job already tracks them.
   processed Int?
   succeeded Int?

@@ -6,6 +6,17 @@ import { JobRunStatus } from '@prisma/client';
 const MAX_ERROR_LENGTH = 500;
 
 /**
+ * Closed vocabulary for why an execution did NOT run (G16-L-2C-3), stored
+ * verbatim in JobRun.skipReason. Structurally identical to RedisService's
+ * LockSkipReason — declared here so observability does not depend on the
+ * infrastructure/cache layer. Never extended with free-form/raw Redis errors.
+ */
+export type JobSkipReason =
+  | 'LOCK_CONTENDED'
+  | 'REDIS_UNAVAILABLE'
+  | 'REDIS_ERROR';
+
+/**
  * Durable, non-authoritative observability for scheduled/background jobs.
  *
  * Contract (G16-L-2 design audit, G16-L-2A):
@@ -87,6 +98,38 @@ export class JobRunService {
     } catch (error) {
       this.logger.warn(
         `JobRun finish failed for run ${runId} (continuing): ${this.describe(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Record an execution that never ran because its distributed lock could not
+   * be acquired (G16-L-2C): a single terminal SKIPPED row with
+   * startedAt = finishedAt = now and durationMs = 0. The caller then returns
+   * without executing the business operation.
+   *
+   * Best-effort, like every other method here: a failed write degrades to a
+   * log line and NEVER propagates — the cron/business operation must not
+   * break because observability could not record that it was skipped.
+   */
+  async skip(jobName: string, reason: JobSkipReason): Promise<void> {
+    const now = new Date();
+    try {
+      await this.prisma.jobRun.create({
+        data: {
+          jobName,
+          status: JobRunStatus.SKIPPED,
+          startedAt: now,
+          finishedAt: now,
+          durationMs: 0,
+          errorMessage: null,
+          skipReason: reason,
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `JobRun skip failed for "${jobName}" (continuing): ${this.describe(error)}`,
       );
     }
   }

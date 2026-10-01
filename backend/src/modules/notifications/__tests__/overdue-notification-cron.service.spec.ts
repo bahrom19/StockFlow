@@ -1,10 +1,21 @@
 import { OverdueNotificationCronService } from '../scheduler/overdue-notification-cron.service';
 import { NotificationsService } from '../notifications.service';
 import { OverdueInvoiceRepository } from '../repositories/overdue-invoice.repository';
-import { RedisService } from '../../../infrastructure/cache/redis.service';
+import {
+  RedisService,
+  LockAcquisitionResult,
+} from '../../../infrastructure/cache/redis.service';
 import { PrismaService } from '../../../common/prisma';
 
 describe('OverdueNotificationCronService — daily scan, dedupe bucket, error isolation', () => {
+  // G16-L-2C-3: acquireLock returns a discriminated result, not string|null.
+  const ACQUIRED = (token: string): LockAcquisitionResult => ({
+    acquired: true,
+    token,
+    synthetic: false,
+  });
+  const NOT_ACQUIRED = { acquired: false, reason: 'LOCK_CONTENDED' } as const;
+
   let cron: OverdueNotificationCronService;
   let redis: { acquireLock: jest.Mock; releaseLock: jest.Mock };
   let prisma: { company: { findMany: jest.Mock } };
@@ -34,7 +45,7 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
       )
       .mockReturnValue(new Date(2026, 8, 6, 0, 0, 0)); // 2026-09-06 local
     redis = {
-      acquireLock: jest.fn().mockResolvedValue('token-notifications'),
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED('token-notifications')),
       releaseLock: jest.fn().mockResolvedValue(true),
     };
     prisma = {
@@ -56,6 +67,7 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
       {
         start: jest.fn().mockResolvedValue('jobrun-test-id'),
         finish: jest.fn().mockResolvedValue(undefined),
+        skip: jest.fn().mockResolvedValue(undefined),
       } as any,
     );
   });
@@ -142,11 +154,11 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
   });
 
   it('lock not acquired → scan skipped; lock released even on failure', async () => {
-    redis.acquireLock.mockResolvedValue(null);
+    redis.acquireLock.mockResolvedValue(NOT_ACQUIRED);
     await cron.scanOverdueInvoices();
     expect(prisma.company.findMany).not.toHaveBeenCalled();
 
-    redis.acquireLock.mockResolvedValue('token-after-failure');
+    redis.acquireLock.mockResolvedValue(ACQUIRED('token-after-failure'));
     prisma.company.findMany.mockRejectedValue(new Error('boom'));
     await cron.scanOverdueInvoices();
     expect(redis.releaseLock).toHaveBeenCalled();
@@ -154,7 +166,7 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
 
   it('should release lock with owner token', async () => {
     const fakeToken = 'token-release-check';
-    redis.acquireLock.mockResolvedValue(fakeToken);
+    redis.acquireLock.mockResolvedValue(ACQUIRED(fakeToken));
 
     await cron.scanOverdueInvoices();
 
@@ -165,7 +177,7 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
   // large enough to cover a full tenant sweep while staying below the daily
   // interval. This pins the value so a future edit cannot silently regress it.
   it('should acquire lock with TTL 1800 (tenant sweep, below daily interval)', async () => {
-    redis.acquireLock.mockResolvedValue('token-ttl-check');
+    redis.acquireLock.mockResolvedValue(ACQUIRED('token-ttl-check'));
 
     await cron.scanOverdueInvoices();
 
@@ -191,10 +203,10 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
       );
     });
 
-    // Contention: no lock -> no business work AND no JobRun row at all.
-    // A SKIPPED status was deliberately NOT introduced (G16-L-2A-R2).
-    it('does not execute business logic and does not start a JobRun when the lock is contended', async () => {
-      redis.acquireLock.mockResolvedValue(null);
+    // Contention: no lock -> no business work, no RUNNING row, but (G16-L-2C-3)
+    // a terminal SKIPPED row IS recorded via jobRunService.skip().
+    it('does not execute business logic; contention records a SKIPPED row, not a run', async () => {
+      redis.acquireLock.mockResolvedValue(NOT_ACQUIRED);
       const jobRun = (cron as any).jobRunService;
 
       await cron.scanOverdueInvoices();
@@ -202,11 +214,15 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
       expect(prisma.company.findMany).not.toHaveBeenCalled();
       expect(jobRun.start).not.toHaveBeenCalled();
       expect(jobRun.finish).not.toHaveBeenCalled();
+      expect(jobRun.skip).toHaveBeenCalledWith(
+        'notifications.scan-overdue',
+        'LOCK_CONTENDED',
+      );
       expect(redis.releaseLock).not.toHaveBeenCalled();
     });
 
     it('releases the lock with the owner token after a successful run', async () => {
-      redis.acquireLock.mockResolvedValue('token-success');
+      redis.acquireLock.mockResolvedValue(ACQUIRED('token-success'));
 
       await cron.scanOverdueInvoices();
 

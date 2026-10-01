@@ -3,6 +3,27 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { randomUUID } from 'crypto';
 
+/**
+ * Why a lock acquisition did not happen (G16-L-2C).
+ *
+ * This is a CLOSED vocabulary written verbatim to JobRun.skipReason. It never
+ * contains a raw Redis error message, connection string, or any other internal
+ * detail — those are logged by RedisService and never leave it.
+ *
+ * There is deliberately NO 'LOCK_DISABLED' member: when Redis is disabled in
+ * development, acquireLock() returns a synthetic token and the job RUNS. A
+ * synthetic token means "execution proceeded", never "execution was skipped".
+ */
+export type LockSkipReason =
+  | 'LOCK_CONTENDED'
+  | 'REDIS_UNAVAILABLE'
+  | 'REDIS_ERROR';
+
+/** Discriminated result of a distributed lock acquisition. */
+export type LockAcquisitionResult =
+  | { acquired: true; token: string; synthetic: boolean }
+  | { acquired: false; reason: LockSkipReason };
+
 @Injectable()
 export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
@@ -102,18 +123,31 @@ export class RedisService implements OnModuleDestroy {
 
   /**
    * Acquire a distributed lock using Redis SET NX EX.
-   * Returns a unique ownership token if acquired, null otherwise.
-   * The token is stored as the Redis value for safe compare-and-delete release.
-   * When Redis is disabled, returns a synthetic token (runs without lock).
-   * When Redis is configured but fails, returns null (fail-closed) unless
-   * REDIS_LOCK_FAIL_OPEN_ON_ERROR=true is set.
+   *
+   * Returns a discriminated result so callers can distinguish WHY an execution
+   * did not run — required to record an honest JobRun SKIPPED row.
+   *
+   * Behaviour is unchanged from the previous string|null contract:
+   *   - Redis configured and free        -> acquired, real token
+   *   - Redis configured and held        -> not acquired, LOCK_CONTENDED
+   *   - Redis client absent (dev/no URL) -> acquired, SYNTHETIC token (runs unlocked)
+   *   - Redis configured but errors      -> fail-closed REDIS_ERROR, unless
+   *                                         REDIS_LOCK_FAIL_OPEN_ON_ERROR=true
+   *                                         (then acquired, synthetic token)
+   *
+   * `synthetic: true` always means the job proceeds WITHOUT real mutual
+   * exclusion and must never be reported as SKIPPED.
    */
-  async acquireLock(lockKey: string, ttlSeconds: number): Promise<string | null> {
+  async acquireLock(
+    lockKey: string,
+    ttlSeconds: number,
+  ): Promise<LockAcquisitionResult> {
     if (!this.client) {
       this.logger.debug(
         'Redis disabled — acquiring lock without Redis (fail-open for dev mode)',
       );
-      return randomUUID();
+      // Not a skip: execution proceeds, so this is an acquisition.
+      return { acquired: true, token: randomUUID(), synthetic: true };
     }
 
     try {
@@ -127,18 +161,30 @@ export class RedisService implements OnModuleDestroy {
       );
 
       if (result === 'OK') {
-        return token;
+        return { acquired: true, token, synthetic: false };
       }
 
       // Lock contention — Redis is healthy but lock is held by another process
       this.logger.debug(`Lock contention for ${lockKey}`);
-      return null;
+      return { acquired: false, reason: 'LOCK_CONTENDED' };
     } catch (error) {
-      // Redis failure — connection error, timeout, etc.
+      // Redis failure — connection error, timeout, etc. The raw error is logged
+      // here and deliberately NOT propagated into JobRun.skipReason.
       this.logger.error(
         `Redis acquireLock failed for ${lockKey}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
-      return this.failOpenOnError ? randomUUID() : null;
+      if (this.failOpenOnError) {
+        return { acquired: true, token: randomUUID(), synthetic: true };
+      }
+      // Fail-closed either way. 'end' means ioredis exhausted its retry budget
+      // and the connection is permanently gone (REDIS_UNAVAILABLE); any other
+      // failure is treated as a transient Redis error (REDIS_ERROR). Both prevent
+      // execution; they differ only in how an operator reads the alert.
+      const permanentlyDown = this.client.status === 'end';
+      return {
+        acquired: false,
+        reason: permanentlyDown ? 'REDIS_UNAVAILABLE' : 'REDIS_ERROR',
+      };
     }
   }
 
