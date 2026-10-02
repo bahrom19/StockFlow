@@ -250,7 +250,19 @@ void main() {
       expect(op.idempotencyKey, attemptedKey);
       expect(op.clientOperationId, attemptedKey);
       expect(op.idempotencyKey, op.clientOperationId);
-      expect(op.payload, dto.toJson());
+      // G16-N-3 P2-B-2: the payload carries the SAME operation identity —
+      // payload.clientOperationId == outbox key, so a post-TTL retry collides
+      // on @@unique([companyId, clientOperationId, type]) instead of
+      // re-executing.
+      final opPayload = op.payload;
+      expect(opPayload['clientOperationId'], attemptedKey);
+      expect(
+        opPayload,
+        {
+          ...dto.toJson(),
+          'clientOperationId': attemptedKey,
+        },
+      );
     });
 
     test('adjust 422 → business error, NOT enqueued', () async {
@@ -310,7 +322,156 @@ void main() {
       expect(op.idempotencyKey, attemptedKey);
       expect(op.clientOperationId, attemptedKey);
       expect(op.idempotencyKey, op.clientOperationId);
-      expect(op.payload, dto.toJson());
+      // G16-N-3 P2-B-2: same durable-identity invariant as adjust — payload
+      // carries the outbox key so both transfer legs are protected.
+      final opPayload = op.payload;
+      expect(opPayload['clientOperationId'], attemptedKey);
+      expect(
+        opPayload,
+        {
+          ...dto.toJson(),
+          'clientOperationId': attemptedKey,
+        },
+      );
+    });
+  });
+
+  group('Inventory durable operation identity — G16-N-3 P2-B-2', () {
+    test('adjust pre-mints one UUID shared by payload, key and outbox id',
+        () async {
+      final (container, spy, controller, _) =
+          await harness(failWith: _timeout);
+      const dto = AdjustStockDto(
+        productId: 'p1',
+        warehouseId: 'wh-1',
+        quantity: 5,
+      );
+
+      await container.read(adjustmentProvider.notifier).adjust(dto);
+
+      // Exactly one UUID minted for the logical operation: the transported
+      // header, the persisted payload field, the outbox idempotencyKey and
+      // the clientOperationId are all identical.
+      final transportedKey = spy.calls.single.key;
+      final op = controller.state.operations.single;
+      expect(op.payload['clientOperationId'], transportedKey);
+      expect(op.idempotencyKey, transportedKey);
+      expect(op.clientOperationId, transportedKey);
+    });
+
+    test('restart preserves the same clientOperationId (durable identity)',
+        () async {
+      final (container, spy, controller, storage) =
+          await harness(failWith: _timeout);
+      const dto = TransferStockDto(
+        productId: 'p1',
+        fromWarehouseId: 'wh-1',
+        toWarehouseId: 'wh-2',
+        quantity: 2,
+      );
+
+      await container.read(transferProvider.notifier).transfer(dto);
+      final parkedKey = controller.state.operations.single.idempotencyKey;
+
+      // Fresh controller over the SAME persisted storage == app restart.
+      final restarted = OutboxController(storage);
+      await restarted.hydrate();
+      final restored = restarted.state.operations.single;
+      expect(restored.idempotencyKey, parkedKey);
+      expect(restored.clientOperationId, parkedKey);
+      expect(restored.payload['clientOperationId'], parkedKey);
+    });
+
+    test('FAILED_PERMANENT → manual Retry preserves the operation identity',
+        () async {
+      final (container, spy, controller, _) =
+          await harness(failWith: _timeout);
+      const dto = AdjustStockDto(
+        productId: 'p1',
+        warehouseId: 'wh-1',
+        quantity: 5,
+      );
+
+      await container.read(adjustmentProvider.notifier).adjust(dto);
+      final originalKey =
+          controller.state.operations.single.idempotencyKey;
+
+      // Drive to FAILED_PERMANENT, then manually retry: the identity must
+      // survive the full budget reset (retryFailed carries it verbatim).
+      for (var i = 0;
+          i < OutboxController.maxRetryAttempts;
+          i++) {
+        await controller.markRetryableFailure(
+          controller.state.operations.single.clientOperationId,
+          'timeout',
+        );
+      }
+      expect(controller.state.operations.single.status,
+          OutboxStatus.failedPermanent);
+
+      await controller.retryFailed(
+        controller.state.operations.single.clientOperationId,
+      );
+      final retried = controller.state.operations.single;
+      expect(retried.status, OutboxStatus.pending);
+      expect(retried.attempts, 0);
+      expect(retried.idempotencyKey, originalKey);
+      expect(retried.clientOperationId, originalKey);
+      expect(retried.payload['clientOperationId'], originalKey);
+      expect(spy.calls.single.key, originalKey);
+    });
+
+    test('payload round-trips immutably through storage (restart-safe)',
+        () async {
+      final (container, _, controller, storage) =
+          await harness(failWith: _timeout);
+      const dto = AdjustStockDto(
+        productId: 'p1',
+        warehouseId: 'wh-1',
+        quantity: 5,
+        comment: 'cycle-count',
+      );
+
+      await container.read(adjustmentProvider.notifier).adjust(dto);
+      final before = Map<String, dynamic>.from(
+          controller.state.operations.single.payload);
+
+      final restarted = OutboxController(storage);
+      await restarted.hydrate();
+      // Verbatim round-trip: every field including the identity survives.
+      expect(
+        restarted.state.operations.single.payload,
+        before,
+      );
+    });
+
+    test('legacy queued operation without marker remains valid', () async {
+      final (container, _, controller, storage) =
+          await harness(failWith: _timeout);
+      // A pre-P2-B-2 payload has no clientOperationId: it must still park,
+      // persist and replay exactly as before (TTL-only protection).
+      const legacy = {
+        'productId': 'p1',
+        'warehouseId': 'wh-1',
+        'quantity': 5,
+      };
+      final queue = OutboxMutationQueue(
+        controller: controller,
+        currentUser: () => testUser,
+      );
+      final outcome = await queue.mutate<Object>(
+        kind: OutboxOperationKind.adjustStock,
+        payload: legacy,
+        online: false,
+      );
+
+      expect(outcome, isA<OutboxMutationQueued<Object>>());
+      final restarted = OutboxController(storage);
+      await restarted.hydrate();
+      final op = restarted.state.operations.single;
+      expect(op.payload, legacy);
+      expect(op.payload.containsKey('clientOperationId'), isFalse);
+      expect(op.idempotencyKey, isNotNull);
     });
   });
 

@@ -141,14 +141,26 @@ class AdjustmentNotifier extends StateNotifier<AsyncValue<StockMovement?>> {
     // Phase F4-D: send-or-park (see OutboxMutationQueue). The payload is the
     // DTO verbatim — warehouseId is already part of AdjustStockDto, no query
     // is needed for the /inventory/stock/adjust spec.
+    //
+    // G16-N-3 P2-B-2: durable operation identity is minted ONCE here and
+    // threaded into BOTH the payload and the outbox key, so
+    // payload.clientOperationId == outbox.idempotencyKey ==
+    // outbox.clientOperationId for every new logical operation. The server
+    // @@unique([companyId, clientOperationId, type]) then rejects any second
+    // execution permanently, independent of the 24h IdempotencyRecord TTL.
+    // A caller-supplied identity is preserved, never regenerated.
+    final operationId =
+        dto.clientOperationId ?? OutboxOperation.idGenerator();
+    final scopedDto = dto.copyWith(clientOperationId: operationId);
     final online = _ref.read(connectivityStatusProvider);
     final queue = _ref.read(outboxMutationQueueProvider);
     final repo = _ref.read(inventoryRepositoryProvider);
     final outcome = await queue.mutate<InvResult<StockMovement>>(
       kind: OutboxOperationKind.adjustStock,
-      payload: dto.toJson(),
+      payload: scopedDto.toJson(),
       online: online,
-      sendOnline: (key) => repo.adjustStock(dto, idempotencyKey: key),
+      clientOperationId: operationId,
+      sendOnline: (key) => repo.adjustStock(scopedDto, idempotencyKey: key),
       // Phase F5-A: transport-level failure of the ONLINE attempt (timeout /
       // network / connection error per the existing ErrorHandler mapping)
       // → park in the outbox under the SAME key. Business errors are not
@@ -192,14 +204,23 @@ class TransferNotifier extends StateNotifier<AsyncValue<List<StockMovement>?>> {
   Future<List<StockMovement>?> transfer(TransferStockDto dto, {String? offlineMessage}) async {
     state = const AsyncLoading();
     // Phase F4-D: send-or-park (see [AdjustmentNotifier.adjust]).
+    //
+    // G16-N-3 P2-B-2: same durable-identity contract — one pre-minted UUID in
+    // both the payload and the outbox key. Both transfer legs
+    // (TRANSFER_OUT + TRANSFER_IN) carry this SAME value; the composite
+    // unique includes movement type so the legs coexist.
+    final operationId =
+        dto.clientOperationId ?? OutboxOperation.idGenerator();
+    final scopedDto = dto.copyWith(clientOperationId: operationId);
     final online = _ref.read(connectivityStatusProvider);
     final queue = _ref.read(outboxMutationQueueProvider);
     final repo = _ref.read(inventoryRepositoryProvider);
     final outcome = await queue.mutate<InvResult<List<StockMovement>>>(
       kind: OutboxOperationKind.transferStock,
-      payload: dto.toJson(),
+      payload: scopedDto.toJson(),
       online: online,
-      sendOnline: (key) => repo.transferStock(dto, idempotencyKey: key),
+      clientOperationId: operationId,
+      sendOnline: (key) => repo.transferStock(scopedDto, idempotencyKey: key),
       // Phase F5-A: same fallback contract as [AdjustmentNotifier.adjust].
       //
       // G16-N-3 P2-A: central transport-uncertainty policy — HTTP 5xx parks

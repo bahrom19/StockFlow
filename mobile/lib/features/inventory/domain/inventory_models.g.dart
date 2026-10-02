@@ -185,6 +185,7 @@ _$AdjustStockDtoImpl _$$AdjustStockDtoImplFromJson(Map<String, dynamic> json) =>
       referenceType: json['referenceType'] as String?,
       referenceId: json['referenceId'] as String?,
       comment: json['comment'] as String?,
+      clientOperationId: json['clientOperationId'] as String?,
     );
 
 Map<String, dynamic> _$$AdjustStockDtoImplToJson(
@@ -197,6 +198,7 @@ Map<String, dynamic> _$$AdjustStockDtoImplToJson(
       'referenceType': instance.referenceType,
       'referenceId': instance.referenceId,
       'comment': instance.comment,
+      'clientOperationId': instance.clientOperationId,
     };
 
 _$TransferStockDtoImpl _$$TransferStockDtoImplFromJson(
@@ -207,6 +209,7 @@ _$TransferStockDtoImpl _$$TransferStockDtoImplFromJson(
       toWarehouseId: json['toWarehouseId'] as String,
       quantity: (json['quantity'] as num).toInt(),
       comment: json['comment'] as String?,
+      clientOperationId: json['clientOperationId'] as String?,
     );
 
 Map<String, dynamic> _$$TransferStockDtoImplToJson(
@@ -217,4 +220,5 @@ Map<String, dynamic> _$$TransferStockDtoImplToJson(
       'toWarehouseId': instance.toWarehouseId,
       'quantity': instance.quantity,
       'comment': instance.comment,
+      'clientOperationId': instance.clientOperationId,
     };

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   HttpStatus,
   Inject,
   Injectable,
@@ -24,6 +25,31 @@ import { InventoryAdjustedEvent, InventoryTransferredEvent } from '../events';
 @Injectable()
 export class StockService {
   private readonly logger = new Logger(StockService.name);
+
+  /**
+   * G16-N-3 P2-B-2: maps a duplicate durable-operation collision to 409.
+   *
+   * Only converts P2002 failures whose constraint target includes our
+   * operation-identity column — i.e. @@unique([companyId, clientOperationId,
+   * type]). Any other unique collision (concurrent stock-row creation, etc.)
+   * is rethrown untouched so unrelated conflicts keep their existing
+   * behavior. The message MUST contain the literal word "unique": the mobile
+   * outbox classifier recognizes it and confirms/removes the already-applied
+   * operation instead of retrying until FAILED_PERMANENT.
+   */
+  private static toDuplicateOperationConflict(err: unknown): unknown {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002' &&
+      Array.isArray((err.meta as { target?: unknown } | null)?.target) &&
+      (err.meta as { target: string[] }).target.includes('clientOperationId')
+    ) {
+      return new ConflictException(
+        'Inventory operation already applied (unique operation identity). Please refresh and retry.',
+      );
+    }
+    return err;
+  }
 
   constructor(
     private readonly inventoryRepository: InventoryRepository,
@@ -173,22 +199,35 @@ export class StockService {
       tx,
     );
 
-    const movement = await this.inventoryRepository.createStockMovement(
-      {
-        company: { connect: { id: companyId } },
-        product: { connect: { id: dto.productId } },
-        warehouse: { connect: { id: dto.warehouseId } },
-        type: StockMovementType.ADJUSTMENT,
-        quantity: dto.quantity,
-        beforeQuantity,
-        afterQuantity,
-        referenceType: dto.referenceType ?? 'ADJUSTMENT',
-        referenceId: dto.referenceId ?? stock.id,
-        comment: dto.comment ?? dto.reason ?? 'Stock adjustment',
-        user: userId ? { connect: { id: userId } } : undefined,
-      },
-      tx,
-    );
+    // G16-N-3 P2-B-2: durable business-operation identity. When the caller
+    // supplies clientOperationId (mobile outbox: the same UUID as the
+    // idempotency key), it is written onto the movement inside this
+    // transaction. A retried operation collides on
+    // @@unique([companyId, clientOperationId, type]) instead of executing
+    // twice — permanently, independent of the 24h IdempotencyRecord TTL.
+    // Absent (old clients) → NULL, which never collides: legacy behavior.
+    let movement;
+    try {
+      movement = await this.inventoryRepository.createStockMovement(
+        {
+          company: { connect: { id: companyId } },
+          product: { connect: { id: dto.productId } },
+          warehouse: { connect: { id: dto.warehouseId } },
+          type: StockMovementType.ADJUSTMENT,
+          quantity: dto.quantity,
+          beforeQuantity,
+          afterQuantity,
+          referenceType: dto.referenceType ?? 'ADJUSTMENT',
+          referenceId: dto.referenceId ?? stock.id,
+          comment: dto.comment ?? dto.reason ?? 'Stock adjustment',
+          clientOperationId: dto.clientOperationId,
+          user: userId ? { connect: { id: userId } } : undefined,
+        },
+        tx,
+      );
+    } catch (err) {
+      throw StockService.toDuplicateOperationConflict(err);
+    }
 
     // G16-H-1: single cost-basis ladder for POSITIVE stock entries, now
     // centralized: valued layers → product.costPrice (Decimal(0) included as
@@ -434,39 +473,55 @@ export class StockService {
 
     const refId = `${dto.fromWarehouseId}:${dto.toWarehouseId}`;
 
-    const outMovement = await this.inventoryRepository.createStockMovement(
-      {
-        company: { connect: { id: companyId } },
-        product: { connect: { id: dto.productId } },
-        warehouse: { connect: { id: dto.fromWarehouseId } },
-        type: StockMovementType.TRANSFER_OUT,
-        quantity: dto.quantity,
-        beforeQuantity: sourceBefore,
-        afterQuantity: sourceAfter,
-        referenceType: 'TRANSFER',
-        referenceId: refId,
-        comment: dto.comment ?? 'Stock transfer',
-        user: userId ? { connect: { id: userId } } : undefined,
-      },
-      tx,
-    );
+    // G16-N-3 P2-B-2: BOTH legs carry the SAME clientOperationId — the
+    // composite unique includes movement type, so OUT and IN coexist while a
+    // retried leg collides deterministically. Either leg's collision aborts
+    // the whole transaction (source/dest updates included).
+    let outMovement;
+    try {
+      outMovement = await this.inventoryRepository.createStockMovement(
+        {
+          company: { connect: { id: companyId } },
+          product: { connect: { id: dto.productId } },
+          warehouse: { connect: { id: dto.fromWarehouseId } },
+          type: StockMovementType.TRANSFER_OUT,
+          quantity: dto.quantity,
+          beforeQuantity: sourceBefore,
+          afterQuantity: sourceAfter,
+          referenceType: 'TRANSFER',
+          referenceId: refId,
+          comment: dto.comment ?? 'Stock transfer',
+          clientOperationId: dto.clientOperationId,
+          user: userId ? { connect: { id: userId } } : undefined,
+        },
+        tx,
+      );
+    } catch (err) {
+      throw StockService.toDuplicateOperationConflict(err);
+    }
 
-    const inMovement = await this.inventoryRepository.createStockMovement(
-      {
-        company: { connect: { id: companyId } },
-        product: { connect: { id: dto.productId } },
-        warehouse: { connect: { id: dto.toWarehouseId } },
-        type: StockMovementType.TRANSFER_IN,
-        quantity: dto.quantity,
-        beforeQuantity: destBefore,
-        afterQuantity: destAfter,
-        referenceType: 'TRANSFER',
-        referenceId: refId,
-        comment: dto.comment ?? 'Stock transfer',
-        user: userId ? { connect: { id: userId } } : undefined,
-      },
-      tx,
-    );
+    let inMovement;
+    try {
+      inMovement = await this.inventoryRepository.createStockMovement(
+        {
+          company: { connect: { id: companyId } },
+          product: { connect: { id: dto.productId } },
+          warehouse: { connect: { id: dto.toWarehouseId } },
+          type: StockMovementType.TRANSFER_IN,
+          quantity: dto.quantity,
+          beforeQuantity: destBefore,
+          afterQuantity: destAfter,
+          referenceType: 'TRANSFER',
+          referenceId: refId,
+          comment: dto.comment ?? 'Stock transfer',
+          clientOperationId: dto.clientOperationId,
+          user: userId ? { connect: { id: userId } } : undefined,
+        },
+        tx,
+      );
+    } catch (err) {
+      throw StockService.toDuplicateOperationConflict(err);
+    }
 
     await this.eventBus.publish(
       new InventoryTransferredEvent({

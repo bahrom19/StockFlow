@@ -988,6 +988,14 @@ model StockMovement {
   referenceId     String?           @db.VarChar(100)
   comment         String?           @db.Text
   createdBy       String?           @db.Uuid
+  // G16-N-3 P2-B-2: durable business-operation identity. Client-generated
+  // UUID minted once per logical inventory operation (adjust/transfer) and
+  // carried on every StockMovement row of that operation. NULL = legacy /
+  // non-participating rows (old clients, old rows); PostgreSQL treats NULLs
+  // as distinct so they never collide. Combined with the composite unique
+  // below, a retried operation collides deterministically instead of
+  // executing twice — permanently, independent of IdempotencyRecord TTL.
+  clientOperationId String?         @db.VarChar(255)
   rowVersion      Int               @default(0)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -1006,6 +1014,12 @@ model StockMovement {
   @@index([companyId, createdAt])
   @@index([productId, companyId])
   @@index([referenceType, referenceId])
+  // G16-N-3 P2-B-2: durable operation deduplication. The composite unique
+  // includes movement `type` so the two legs of one transfer (TRANSFER_OUT +
+  // TRANSFER_IN) carrying the SAME clientOperationId coexist, while a second
+  // attempt of either leg collides. NULL identities never collide
+  // (PostgreSQL semantics) — legacy rows and old clients are unaffected.
+  @@unique([companyId, clientOperationId, type])
 }
 
 model RolePermission {

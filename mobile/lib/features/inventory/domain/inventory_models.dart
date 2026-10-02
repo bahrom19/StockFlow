@@ -141,6 +141,12 @@ class AdjustStockDto with _$AdjustStockDto {
     String? referenceType,
     String? referenceId,
     String? comment,
+    // G16-N-3 P2-B-2: durable business-operation identity. Minted once per
+    // logical submit and carried in the outbox payload; the server unique
+    // @@unique([companyId, clientOperationId, type]) rejects a second
+    // execution permanently. Null = legacy path (old clients / old queued
+    // ops), which keeps the pre-existing TTL-only behavior.
+    String? clientOperationId,
   }) = _AdjustStockDto;
 
   factory AdjustStockDto.fromJson(Map<String, dynamic> json) =>
@@ -155,6 +161,8 @@ class TransferStockDto with _$TransferStockDto {
     required String toWarehouseId,
     required int quantity,
     String? comment,
+    // G16-N-3 P2-B-2: same durable-identity contract as AdjustStockDto.
+    String? clientOperationId,
   }) = _TransferStockDto;
 
   factory TransferStockDto.fromJson(Map<String, dynamic> json) =>

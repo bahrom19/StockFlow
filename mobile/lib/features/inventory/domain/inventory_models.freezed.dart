@@ -2073,7 +2073,13 @@ mixin _$AdjustStockDto {
   String? get reason => throw _privateConstructorUsedError;
   String? get referenceType => throw _privateConstructorUsedError;
   String? get referenceId => throw _privateConstructorUsedError;
-  String? get comment => throw _privateConstructorUsedError;
+  String? get comment =>
+      throw _privateConstructorUsedError; // G16-N-3 P2-B-2: durable business-operation identity. Minted once per
+// logical submit and carried in the outbox payload; the server unique
+// @@unique([companyId, clientOperationId, type]) rejects a second
+// execution permanently. Null = legacy path (old clients / old queued
+// ops), which keeps the pre-existing TTL-only behavior.
+  String? get clientOperationId => throw _privateConstructorUsedError;
 
   /// Serializes this AdjustStockDto to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -2098,7 +2104,8 @@ abstract class $AdjustStockDtoCopyWith<$Res> {
       String? reason,
       String? referenceType,
       String? referenceId,
-      String? comment});
+      String? comment,
+      String? clientOperationId});
 }
 
 /// @nodoc
@@ -2123,6 +2130,7 @@ class _$AdjustStockDtoCopyWithImpl<$Res, $Val extends AdjustStockDto>
     Object? referenceType = freezed,
     Object? referenceId = freezed,
     Object? comment = freezed,
+    Object? clientOperationId = freezed,
   }) {
     return _then(_value.copyWith(
       productId: null == productId
@@ -2153,6 +2161,10 @@ class _$AdjustStockDtoCopyWithImpl<$Res, $Val extends AdjustStockDto>
           ? _value.comment
           : comment // ignore: cast_nullable_to_non_nullable
               as String?,
+      clientOperationId: freezed == clientOperationId
+          ? _value.clientOperationId
+          : clientOperationId // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -2172,7 +2184,8 @@ abstract class _$$AdjustStockDtoImplCopyWith<$Res>
       String? reason,
       String? referenceType,
       String? referenceId,
-      String? comment});
+      String? comment,
+      String? clientOperationId});
 }
 
 /// @nodoc
@@ -2195,6 +2208,7 @@ class __$$AdjustStockDtoImplCopyWithImpl<$Res>
     Object? referenceType = freezed,
     Object? referenceId = freezed,
     Object? comment = freezed,
+    Object? clientOperationId = freezed,
   }) {
     return _then(_$AdjustStockDtoImpl(
       productId: null == productId
@@ -2225,6 +2239,10 @@ class __$$AdjustStockDtoImplCopyWithImpl<$Res>
           ? _value.comment
           : comment // ignore: cast_nullable_to_non_nullable
               as String?,
+      clientOperationId: freezed == clientOperationId
+          ? _value.clientOperationId
+          : clientOperationId // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -2239,7 +2257,8 @@ class _$AdjustStockDtoImpl implements _AdjustStockDto {
       this.reason,
       this.referenceType,
       this.referenceId,
-      this.comment});
+      this.comment,
+      this.clientOperationId});
 
   factory _$AdjustStockDtoImpl.fromJson(Map<String, dynamic> json) =>
       _$$AdjustStockDtoImplFromJson(json);
@@ -2258,10 +2277,17 @@ class _$AdjustStockDtoImpl implements _AdjustStockDto {
   final String? referenceId;
   @override
   final String? comment;
+// G16-N-3 P2-B-2: durable business-operation identity. Minted once per
+// logical submit and carried in the outbox payload; the server unique
+// @@unique([companyId, clientOperationId, type]) rejects a second
+// execution permanently. Null = legacy path (old clients / old queued
+// ops), which keeps the pre-existing TTL-only behavior.
+  @override
+  final String? clientOperationId;
 
   @override
   String toString() {
-    return 'AdjustStockDto(productId: $productId, warehouseId: $warehouseId, quantity: $quantity, reason: $reason, referenceType: $referenceType, referenceId: $referenceId, comment: $comment)';
+    return 'AdjustStockDto(productId: $productId, warehouseId: $warehouseId, quantity: $quantity, reason: $reason, referenceType: $referenceType, referenceId: $referenceId, comment: $comment, clientOperationId: $clientOperationId)';
   }
 
   @override
@@ -2280,13 +2306,15 @@ class _$AdjustStockDtoImpl implements _AdjustStockDto {
                 other.referenceType == referenceType) &&
             (identical(other.referenceId, referenceId) ||
                 other.referenceId == referenceId) &&
-            (identical(other.comment, comment) || other.comment == comment));
+            (identical(other.comment, comment) || other.comment == comment) &&
+            (identical(other.clientOperationId, clientOperationId) ||
+                other.clientOperationId == clientOperationId));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, productId, warehouseId, quantity,
-      reason, referenceType, referenceId, comment);
+      reason, referenceType, referenceId, comment, clientOperationId);
 
   /// Create a copy of AdjustStockDto
   /// with the given fields replaced by the non-null parameter values.
@@ -2313,7 +2341,8 @@ abstract class _AdjustStockDto implements AdjustStockDto {
       final String? reason,
       final String? referenceType,
       final String? referenceId,
-      final String? comment}) = _$AdjustStockDtoImpl;
+      final String? comment,
+      final String? clientOperationId}) = _$AdjustStockDtoImpl;
 
   factory _AdjustStockDto.fromJson(Map<String, dynamic> json) =
       _$AdjustStockDtoImpl.fromJson;
@@ -2331,7 +2360,14 @@ abstract class _AdjustStockDto implements AdjustStockDto {
   @override
   String? get referenceId;
   @override
-  String? get comment;
+  String?
+      get comment; // G16-N-3 P2-B-2: durable business-operation identity. Minted once per
+// logical submit and carried in the outbox payload; the server unique
+// @@unique([companyId, clientOperationId, type]) rejects a second
+// execution permanently. Null = legacy path (old clients / old queued
+// ops), which keeps the pre-existing TTL-only behavior.
+  @override
+  String? get clientOperationId;
 
   /// Create a copy of AdjustStockDto
   /// with the given fields replaced by the non-null parameter values.
@@ -2351,7 +2387,9 @@ mixin _$TransferStockDto {
   String get fromWarehouseId => throw _privateConstructorUsedError;
   String get toWarehouseId => throw _privateConstructorUsedError;
   int get quantity => throw _privateConstructorUsedError;
-  String? get comment => throw _privateConstructorUsedError;
+  String? get comment =>
+      throw _privateConstructorUsedError; // G16-N-3 P2-B-2: same durable-identity contract as AdjustStockDto.
+  String? get clientOperationId => throw _privateConstructorUsedError;
 
   /// Serializes this TransferStockDto to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -2374,7 +2412,8 @@ abstract class $TransferStockDtoCopyWith<$Res> {
       String fromWarehouseId,
       String toWarehouseId,
       int quantity,
-      String? comment});
+      String? comment,
+      String? clientOperationId});
 }
 
 /// @nodoc
@@ -2397,6 +2436,7 @@ class _$TransferStockDtoCopyWithImpl<$Res, $Val extends TransferStockDto>
     Object? toWarehouseId = null,
     Object? quantity = null,
     Object? comment = freezed,
+    Object? clientOperationId = freezed,
   }) {
     return _then(_value.copyWith(
       productId: null == productId
@@ -2419,6 +2459,10 @@ class _$TransferStockDtoCopyWithImpl<$Res, $Val extends TransferStockDto>
           ? _value.comment
           : comment // ignore: cast_nullable_to_non_nullable
               as String?,
+      clientOperationId: freezed == clientOperationId
+          ? _value.clientOperationId
+          : clientOperationId // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -2436,7 +2480,8 @@ abstract class _$$TransferStockDtoImplCopyWith<$Res>
       String fromWarehouseId,
       String toWarehouseId,
       int quantity,
-      String? comment});
+      String? comment,
+      String? clientOperationId});
 }
 
 /// @nodoc
@@ -2457,6 +2502,7 @@ class __$$TransferStockDtoImplCopyWithImpl<$Res>
     Object? toWarehouseId = null,
     Object? quantity = null,
     Object? comment = freezed,
+    Object? clientOperationId = freezed,
   }) {
     return _then(_$TransferStockDtoImpl(
       productId: null == productId
@@ -2479,6 +2525,10 @@ class __$$TransferStockDtoImplCopyWithImpl<$Res>
           ? _value.comment
           : comment // ignore: cast_nullable_to_non_nullable
               as String?,
+      clientOperationId: freezed == clientOperationId
+          ? _value.clientOperationId
+          : clientOperationId // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -2491,7 +2541,8 @@ class _$TransferStockDtoImpl implements _TransferStockDto {
       required this.fromWarehouseId,
       required this.toWarehouseId,
       required this.quantity,
-      this.comment});
+      this.comment,
+      this.clientOperationId});
 
   factory _$TransferStockDtoImpl.fromJson(Map<String, dynamic> json) =>
       _$$TransferStockDtoImplFromJson(json);
@@ -2506,10 +2557,13 @@ class _$TransferStockDtoImpl implements _TransferStockDto {
   final int quantity;
   @override
   final String? comment;
+// G16-N-3 P2-B-2: same durable-identity contract as AdjustStockDto.
+  @override
+  final String? clientOperationId;
 
   @override
   String toString() {
-    return 'TransferStockDto(productId: $productId, fromWarehouseId: $fromWarehouseId, toWarehouseId: $toWarehouseId, quantity: $quantity, comment: $comment)';
+    return 'TransferStockDto(productId: $productId, fromWarehouseId: $fromWarehouseId, toWarehouseId: $toWarehouseId, quantity: $quantity, comment: $comment, clientOperationId: $clientOperationId)';
   }
 
   @override
@@ -2525,13 +2579,15 @@ class _$TransferStockDtoImpl implements _TransferStockDto {
                 other.toWarehouseId == toWarehouseId) &&
             (identical(other.quantity, quantity) ||
                 other.quantity == quantity) &&
-            (identical(other.comment, comment) || other.comment == comment));
+            (identical(other.comment, comment) || other.comment == comment) &&
+            (identical(other.clientOperationId, clientOperationId) ||
+                other.clientOperationId == clientOperationId));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, productId, fromWarehouseId,
-      toWarehouseId, quantity, comment);
+      toWarehouseId, quantity, comment, clientOperationId);
 
   /// Create a copy of TransferStockDto
   /// with the given fields replaced by the non-null parameter values.
@@ -2556,7 +2612,8 @@ abstract class _TransferStockDto implements TransferStockDto {
       required final String fromWarehouseId,
       required final String toWarehouseId,
       required final int quantity,
-      final String? comment}) = _$TransferStockDtoImpl;
+      final String? comment,
+      final String? clientOperationId}) = _$TransferStockDtoImpl;
 
   factory _TransferStockDto.fromJson(Map<String, dynamic> json) =
       _$TransferStockDtoImpl.fromJson;
@@ -2570,7 +2627,10 @@ abstract class _TransferStockDto implements TransferStockDto {
   @override
   int get quantity;
   @override
-  String? get comment;
+  String?
+      get comment; // G16-N-3 P2-B-2: same durable-identity contract as AdjustStockDto.
+  @override
+  String? get clientOperationId;
 
   /// Create a copy of TransferStockDto
   /// with the given fields replaced by the non-null parameter values.
