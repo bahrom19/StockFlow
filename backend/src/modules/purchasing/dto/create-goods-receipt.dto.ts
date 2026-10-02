@@ -46,12 +46,12 @@ export class CreateGoodsReceiptDto {
   purchaseOrderId!: string;
 
   @ApiProperty({
-    description: 'Receipt number (auto-generated if not provided)',
-    required: false,
+    description:
+      'Receipt number (durable business-operation identity, unique per company)',
   })
-  @IsOptional()
   @IsString()
-  receiptNumber?: string;
+  @IsNotEmpty()
+  receiptNumber!: string;
 
   @ApiProperty({ description: 'Receipt date', required: false })
   @IsOptional()

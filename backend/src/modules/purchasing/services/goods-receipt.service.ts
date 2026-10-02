@@ -13,7 +13,6 @@ import {
   PurchaseOrderStatus,
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
-import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../common/prisma';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
@@ -161,12 +160,15 @@ export class GoodsReceiptService {
       });
     }
 
-    // Create the goods receipt. receiptNumber must be unique even for two
-    // concurrent requests in the same millisecond (Date.now() alone collided
-    // and surfaced as P2002 → 400 instead of the rowVersion 409 conflict).
-    const receiptNumber =
-      dto.receiptNumber ??
-      `GR-${companyId.substring(0, 8).toUpperCase()}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    // Create the goods receipt. receiptNumber is the durable
+    // business-operation identity (G16-N-3 P2-B-1): it MUST be
+    // client-generated exactly once per logical receipt — the DTO rejects
+    // absent/empty values before any transaction opens. A server-generated
+    // number would be fresh on every execution and could never dedupe, so no
+    // fallback exists here. Uniqueness is enforced by
+    // @@unique([companyId, receiptNumber]); a duplicate number from a retry
+    // of the same operation collides deterministically (P2002 → 409 below).
+    const receiptNumber = dto.receiptNumber;
 
     let receipt: Awaited<ReturnType<GoodsReceiptRepository['create']>> | null =
       null;
@@ -188,12 +190,16 @@ export class GoodsReceiptService {
     } catch (err) {
       // Rare defense-in-depth: any unique collision (e.g. a client-supplied
       // duplicate receiptNumber) is a concurrency conflict → 409, not 400/500.
+      // G16-N-3 P2-B-1: the message MUST contain the literal word "unique" so
+      // the existing mobile outbox classifier recognizes this 409 as an
+      // already-applied operation and confirms/removes it instead of
+      // retrying until FAILED_PERMANENT.
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       ) {
         throw new ConflictException(
-          'Goods receipt number already exists. Please refresh and retry.',
+          'Goods receipt number already exists (unique constraint). Please refresh and retry.',
         );
       }
       throw err;

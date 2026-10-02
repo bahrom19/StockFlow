@@ -4,6 +4,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { validate } from 'class-validator';
 import {
   Prisma,
   GoodsReceiptStatus,
@@ -20,6 +21,7 @@ import { EVENT_BUS } from '../../../common/events';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { CreateGoodsReceiptDto } from '../dto/create-goods-receipt.dto';
+import { CreateGoodsReceiptItemDto } from '../dto/create-goods-receipt.dto';
 
 const companyId = 'comp-1';
 const userId = 'user-1';
@@ -138,6 +140,7 @@ describe('GoodsReceiptService', () => {
     const validDto: CreateGoodsReceiptDto = {
       purchaseOrderId: poId,
       warehouseId,
+      receiptNumber: 'GR-VALID-001',
       items: [
         {
           purchaseOrderItemId: poItemId,
@@ -482,7 +485,12 @@ describe('GoodsReceiptService', () => {
       mockGrRepo.findById.mockResolvedValue(baseReceipt as any);
 
       const result = await service.create(
-        { purchaseOrderId: poId, warehouseId, items: [] },
+        {
+          purchaseOrderId: poId,
+          warehouseId,
+          receiptNumber: 'GR-EMPTY-001',
+          items: [],
+        },
         userId,
         companyId,
       );
@@ -494,6 +502,7 @@ describe('GoodsReceiptService', () => {
     const dto: CreateGoodsReceiptDto = {
       purchaseOrderId: poId,
       warehouseId,
+      receiptNumber: 'GR-H3-001',
       items: [
         {
           purchaseOrderItemId: poItemId,
@@ -807,6 +816,166 @@ describe('GoodsReceiptService', () => {
         }),
       );
       expect(glEngine.post.mock.calls[0][0].companyId).toBe('other-company');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-1: receiptNumber as durable business-operation identity
+  // ─────────────────────────────────────────────────────────────
+  describe('G16-N-3 P2-B-1 receiptNumber durability', () => {
+    const p2002 = (target: string[] = ['companyId', 'receiptNumber']) =>
+      new Prisma.PrismaClientKnownRequestError(
+        `Unique constraint failed on the fields: (${target.join(', ')})`,
+        { code: 'P2002', clientVersion: 'test', meta: { target } },
+      );
+
+    function receiptTx() {
+      return {
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: warehouseId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          }),
+        },
+        purchaseOrderItem: {
+          findFirst: jest.fn().mockResolvedValue(basePo.items[0]),
+          findUnique: jest.fn().mockResolvedValue(basePo.items[0]),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+    }
+
+    const receiptDto = (receiptNumber: string): CreateGoodsReceiptDto => ({
+      purchaseOrderId: poId,
+      warehouseId,
+      receiptNumber,
+      items: [
+        {
+          purchaseOrderItemId: poItemId,
+          productId,
+          quantity: 2,
+          unitCost: 10.0,
+        },
+      ],
+    });
+
+    describe('DTO contract', () => {
+      it('rejects a missing receiptNumber', async () => {
+        const dto = new CreateGoodsReceiptDto();
+        dto.purchaseOrderId = poId;
+        dto.warehouseId = warehouseId;
+        const errors = await validate(dto);
+        expect(errors.some((e) => e.property === 'receiptNumber')).toBe(true);
+      });
+
+      it('rejects an empty receiptNumber', async () => {
+        const dto = new CreateGoodsReceiptDto();
+        dto.purchaseOrderId = poId;
+        dto.warehouseId = warehouseId;
+        dto.receiptNumber = '';
+        const errors = await validate(dto);
+        expect(errors.some((e) => e.property === 'receiptNumber')).toBe(true);
+      });
+
+      it('accepts a valid receiptNumber', async () => {
+        const item = new CreateGoodsReceiptItemDto();
+        item.purchaseOrderItemId = poItemId;
+        item.productId = productId;
+        item.quantity = 2;
+        item.unitCost = 10.0;
+        const dto = new CreateGoodsReceiptDto();
+        dto.purchaseOrderId = poId;
+        dto.warehouseId = warehouseId;
+        dto.receiptNumber = 'GR-OK-001';
+        dto.items = [item];
+        const errors = await validate(dto);
+        expect(errors).toHaveLength(0);
+      });
+    });
+
+    describe('duplicate receiptNumber', () => {
+      it('second creation returns 409 ConflictException', async () => {
+        mockTransaction.mockImplementation((cb: any) => cb(receiptTx()));
+        mockPoRepo.findById.mockResolvedValue(basePo as any);
+        mockGrRepo.create.mockRejectedValue(p2002());
+
+        await expect(
+          service.create(receiptDto('GR-DUP-001'), userId, companyId),
+        ).rejects.toThrow(ConflictException);
+      });
+
+      it('duplicate message contains "unique" for the outbox classifier', async () => {
+        mockTransaction.mockImplementation((cb: any) => cb(receiptTx()));
+        mockPoRepo.findById.mockResolvedValue(basePo as any);
+        mockGrRepo.create.mockRejectedValue(p2002());
+
+        const err = await service
+          .create(receiptDto('GR-DUP-002'), userId, companyId)
+          .catch((e) => e);
+        expect(err).toBeInstanceOf(ConflictException);
+        expect(err.message.toLowerCase()).toContain('unique');
+      });
+
+      it('duplicate produces no second side effects', async () => {
+        mockTransaction.mockImplementation((cb: any) => cb(receiptTx()));
+        mockPoRepo.findById.mockResolvedValue(basePo as any);
+        mockGrRepo.create.mockRejectedValue(p2002());
+
+        await expect(
+          service.create(receiptDto('GR-DUP-003'), userId, companyId),
+        ).rejects.toThrow(ConflictException);
+
+        // Nothing after the receipt insert runs: no PO update, no event,
+        // no finance journal, no audit, no status fetch.
+        expect(mockPoService.updateStatusAfterReceipt).not.toHaveBeenCalled();
+        expect(mockEventBus.publish).not.toHaveBeenCalled();
+        expect(
+          mockFinanceService.createGoodsReceiptJournal,
+        ).not.toHaveBeenCalled();
+        expect(mockAuditLog.log).not.toHaveBeenCalled();
+        expect(mockGrRepo.updateStatus).not.toHaveBeenCalled();
+        expect(mockGrRepo.findById).not.toHaveBeenCalled();
+      });
+
+      it('rolls back: error propagates so the transaction cannot commit', async () => {
+        mockTransaction.mockImplementation((cb: any) => cb(receiptTx()));
+        mockPoRepo.findById.mockResolvedValue(basePo as any);
+        mockGrRepo.create.mockRejectedValue(p2002());
+
+        let thrown: unknown;
+        try {
+          await service.create(receiptDto('GR-DUP-004'), userId, companyId);
+        } catch (e) {
+          thrown = e;
+        }
+        expect(thrown).toBeInstanceOf(ConflictException);
+      });
+
+      it('different company + same receiptNumber is allowed', async () => {
+        mockTransaction.mockImplementation((cb: any) => cb(receiptTx()));
+        mockPoRepo.findById.mockResolvedValue(basePo as any);
+        mockGrRepo.create.mockResolvedValue({
+          ...baseReceipt,
+          companyId: 'comp-2',
+        } as any);
+        mockGrRepo.updateStatus.mockResolvedValue({} as any);
+        mockGrRepo.findById.mockResolvedValue({
+          ...baseReceipt,
+          companyId: 'comp-2',
+        } as any);
+
+        const result = await service.create(
+          receiptDto('GR-SHARED-001'),
+          userId,
+          'comp-2',
+        );
+        expect(result).toBeDefined();
+        // The service passes the caller's company through; tenant isolation
+        // lives in the DB unique ([companyId, receiptNumber]), not in code.
+        expect(mockGrRepo.create).toHaveBeenCalled();
+      });
     });
   });
 });
