@@ -157,11 +157,30 @@ class CashInOutRequest {
   final double amount;
   final String? reason;
 
-  const CashInOutRequest({required this.amount, this.reason});
+  /// G16-N-3 P2-B-3: durable business-operation identity. Minted once per
+  /// logical submit and carried in the outbox payload; the server
+  /// @@unique([companyId, clientOperationId]) on JournalEntry rejects any
+  /// second execution permanently. Null = legacy path (old queued ops).
+  final String? clientOperationId;
+
+  const CashInOutRequest(
+      {required this.amount, this.reason, this.clientOperationId});
+
+  CashInOutRequest copyWith({
+    double? amount,
+    String? reason,
+    String? clientOperationId,
+  }) =>
+      CashInOutRequest(
+        amount: amount ?? this.amount,
+        reason: reason ?? this.reason,
+        clientOperationId: clientOperationId ?? this.clientOperationId,
+      );
 
   Map<String, dynamic> toJson() => {
         'amount': amount,
         if (reason != null && reason!.isNotEmpty) 'reason': reason,
+        if (clientOperationId != null) 'clientOperationId': clientOperationId,
       };
 }
 

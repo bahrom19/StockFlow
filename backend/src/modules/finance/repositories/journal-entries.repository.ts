@@ -43,6 +43,9 @@ export class JournalEntriesRepository {
       companyId: string;
       financialPeriodId: string;
       createdBy: string;
+      // G16-N-3 P2-B-3: durable operation identity, written in-tx when the
+      // caller supplies it. Absent → NULL (all existing callers, unchanged).
+      clientOperationId?: string | null;
       lines: Array<{
         accountId: string;
         debit: string;
@@ -61,6 +64,7 @@ export class JournalEntriesRepository {
         totalCredit: toDecimal(data.totalCredit) ?? new Decimal(0),
         referenceType: data.referenceType,
         referenceId: data.referenceId,
+        clientOperationId: data.clientOperationId ?? null,
         company: { connect: { id: data.companyId } },
         financialPeriod: { connect: { id: data.financialPeriodId } },
         createdByUser: { connect: { id: data.createdBy } },

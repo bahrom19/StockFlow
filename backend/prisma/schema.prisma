@@ -2078,6 +2078,15 @@ model JournalEntry {
   postedAt          DateTime?
   createdBy         String?            @db.Uuid
   rowVersion        Int                @default(0)
+  // G16-N-3 P2-B-3: durable business-operation identity. Client-generated
+  // UUID minted once per logical keyed operation (cash-in/cash-out) and
+  // carried on the operation's JournalEntry. NULL = legacy /
+  // non-participating rows (old clients, all other JE writers); PostgreSQL
+  // treats NULLs as distinct so they never collide. Combined with the
+  // composite unique below, a retried operation collides deterministically
+  // instead of executing twice — permanently, independent of the 24h
+  // IdempotencyRecord TTL.
+  clientOperationId String?            @db.VarChar(255)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -2088,6 +2097,11 @@ model JournalEntry {
   financialTransactions FinancialTransaction[] @relation("FinancialTransactionPosting")
 
   @@unique([companyId, financialPeriodId, entryNumber])
+  // G16-N-3 P2-B-3: durable operation deduplication. Company-scoped so the
+  // same operation id in two different companies never collides. NULL
+  // identities never collide (PostgreSQL semantics) — legacy rows and all
+  // non-participating JE writers are unaffected.
+  @@unique([companyId, clientOperationId])
   @@index([companyId])
   @@index([financialPeriodId])
   @@index([entryDate])

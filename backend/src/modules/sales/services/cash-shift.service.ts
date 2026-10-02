@@ -107,7 +107,8 @@ export class CashShiftService {
       }
 
       // Enforce document currency == Company.currency
-      const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+      const companyCurrency =
+        await this.companiesService.getBaseCurrency(companyId);
       if (dto.currency && dto.currency !== companyCurrency) {
         throw new BadRequestException(
           `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
@@ -458,52 +459,81 @@ export class CashShiftService {
     );
 
     const amountStr = amount.toFixed(4);
-    const posted = await this.glEngine.post(
-      {
-        companyId,
-        financialPeriodId: period.id,
-        entryDate: now,
-        description:
-          `Cash shift ${kind === 'cashIn' ? 'cash-in' : 'cash-out'} ` +
-          `${amountStr} on shift ${shift.id}` +
-          (dto.reason ? `: ${dto.reason}` : '') +
-          (idempotencyKey ? ` [key ${idempotencyKey}]` : ''),
-        referenceType: CASH_SHIFT_POSTING_REFERENCE_TYPE,
-        referenceId: shift.id,
-        createdBy: userId,
-        lines:
-          kind === 'cashIn'
-            ? [
-                {
-                  accountId: drawerAccountId,
-                  debit: amountStr,
-                  credit: '0.0000',
-                  description: `Cash ${kind} ${amountStr}`,
-                },
-                {
-                  accountId: counterpartAccountId,
-                  debit: '0.0000',
-                  credit: amountStr,
-                  description: `Cash ${kind} ${amountStr}`,
-                },
-              ]
-            : [
-                {
-                  accountId: counterpartAccountId,
-                  debit: amountStr,
-                  credit: '0.0000',
-                  description: `Cash ${kind} ${amountStr}`,
-                },
-                {
-                  accountId: drawerAccountId,
-                  debit: '0.0000',
-                  credit: amountStr,
-                  description: `Cash ${kind} ${amountStr}`,
-                },
-              ],
-      },
-      tx,
-    );
+    // G16-N-3 P2-B-3: the durable operation identity travels with the
+    // JournalEntry inside this same transaction. A retried operation collides
+    // on @@unique([companyId, clientOperationId]) instead of posting twice —
+    // permanently, independent of the 24h IdempotencyRecord TTL. Absent
+    // (old clients) → NULL, which never collides: legacy behavior.
+    let posted;
+    try {
+      posted = await this.glEngine.post(
+        {
+          companyId,
+          financialPeriodId: period.id,
+          entryDate: now,
+          description:
+            `Cash shift ${kind === 'cashIn' ? 'cash-in' : 'cash-out'} ` +
+            `${amountStr} on shift ${shift.id}` +
+            (dto.reason ? `: ${dto.reason}` : '') +
+            (idempotencyKey ? ` [key ${idempotencyKey}]` : ''),
+          referenceType: CASH_SHIFT_POSTING_REFERENCE_TYPE,
+          referenceId: shift.id,
+          createdBy: userId,
+          clientOperationId: dto.clientOperationId,
+          lines:
+            kind === 'cashIn'
+              ? [
+                  {
+                    accountId: drawerAccountId,
+                    debit: amountStr,
+                    credit: '0.0000',
+                    description: `Cash ${kind} ${amountStr}`,
+                  },
+                  {
+                    accountId: counterpartAccountId,
+                    debit: '0.0000',
+                    credit: amountStr,
+                    description: `Cash ${kind} ${amountStr}`,
+                  },
+                ]
+              : [
+                  {
+                    accountId: counterpartAccountId,
+                    debit: amountStr,
+                    credit: '0.0000',
+                    description: `Cash ${kind} ${amountStr}`,
+                  },
+                  {
+                    accountId: drawerAccountId,
+                    debit: '0.0000',
+                    credit: amountStr,
+                    description: `Cash ${kind} ${amountStr}`,
+                  },
+                ],
+        },
+        tx,
+      );
+    } catch (err) {
+      // G16-N-3 P2-B-3: narrow duplicate-operation mapping. ONLY a P2002
+      // whose constraint target includes our operation-identity column is a
+      // retried cash operation — any other unique collision (entryNumber
+      // sequence, etc.) rethrows untouched. The message MUST contain the
+      // literal word "unique": the mobile outbox classifier recognizes it and
+      // confirms/removes the already-applied operation instead of retrying
+      // until FAILED_PERMANENT. The throw aborts the whole transaction, so
+      // the counter update, balances and audit all roll back together.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        Array.isArray((err.meta as { target?: unknown } | null)?.target) &&
+        (err.meta as { target: string[] }).target.includes('clientOperationId')
+      ) {
+        throw new ConflictException(
+          'Cash operation already applied (unique operation identity). Please refresh and retry.',
+        );
+      }
+      throw err;
+    }
 
     await this.auditLog.log(
       {
@@ -657,7 +687,10 @@ export class CashShiftService {
     return fallback.id;
   }
 
-  private assertDrawerAccount(account: { code: string; accountType: string }): void {
+  private assertDrawerAccount(account: {
+    code: string;
+    accountType: string;
+  }): void {
     if (account.accountType !== 'ASSET') {
       throw new BadRequestException(
         `Cash drawer account "${account.code}" must be of type ASSET ` +
@@ -694,7 +727,10 @@ export class CashShiftService {
           'deleted, or belongs to another company.',
       );
     }
-    if (account.accountType !== 'EXPENSE' && account.accountType !== 'REVENUE') {
+    if (
+      account.accountType !== 'EXPENSE' &&
+      account.accountType !== 'REVENUE'
+    ) {
       throw new BadRequestException(
         `Counterpart account "${account.code}" must be an EXPENSE or REVENUE ` +
           `account (found ${account.accountType}). Balance-sheet, receivable, ` +

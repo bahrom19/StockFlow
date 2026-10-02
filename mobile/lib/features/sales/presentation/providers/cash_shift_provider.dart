@@ -190,16 +190,27 @@ class CashShiftNotifier extends StateNotifier<ShiftState> {
     // payload carries warehouseId INSIDE (the cashIn/cashOut outbox specs
     // build the required query from it), while the online repository call
     // keeps its explicit queryParameters contract.
+    //
+    // G16-N-3 P2-B-3: durable operation identity is minted ONCE here and
+    // threaded into BOTH the payload and the outbox key, so
+    // payload.clientOperationId == outbox.idempotencyKey ==
+    // outbox.clientOperationId for every new logical operation. The server
+    // @@unique([companyId, clientOperationId]) on JournalEntry then rejects
+    // any second execution permanently, independent of the 24h
+    // IdempotencyRecord TTL.
     final online = _ref.read(connectivityStatusProvider);
     final queue = _ref.read(outboxMutationQueueProvider);
     final repo = _ref.read(cashShiftRepositoryProvider);
-    final request = CashInOutRequest(amount: amount, reason: reason);
+    final operationId = OutboxOperation.idGenerator();
+    final request = CashInOutRequest(amount: amount, reason: reason)
+        .copyWith(clientOperationId: operationId);
     final payload = request.toJson()..['warehouseId'] = warehouseId;
 
     final outcome = await queue.mutate<ShiftResult<CashShift>>(
       kind: isIn ? OutboxOperationKind.cashIn : OutboxOperationKind.cashOut,
       payload: payload,
       online: online,
+      clientOperationId: operationId,
       sendOnline: (key) => isIn
           ? repo.cashIn(
               warehouseId: warehouseId,

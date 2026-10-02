@@ -16,6 +16,11 @@ export interface PostJournalEntryInput {
   referenceType?: string;
   referenceId?: string;
   createdBy: string;
+  // G16-N-3 P2-B-3: durable business-operation identity. When present it is
+  // written onto the JournalEntry inside the same transaction; the
+  // @@unique([companyId, clientOperationId]) constraint then rejects any
+  // second execution permanently. Absent (all existing callers) → NULL.
+  clientOperationId?: string;
   lines: Array<{
     accountId: string;
     debit: string;
@@ -110,6 +115,7 @@ export class GlEngineService {
           companyId: input.companyId,
           financialPeriodId: input.financialPeriodId,
           createdBy: input.createdBy,
+          clientOperationId: input.clientOperationId ?? null,
           lines: input.lines.map((l) => ({
             accountId: l.accountId,
             debit: l.debit || '0',

@@ -175,6 +175,10 @@ void main() {
       // Cash contract: warehouseId travels in the payload (the outbox spec
       // builds the query from it).
       expect(op.payload['warehouseId'], 'wh-1');
+      // G16-N-3 P2-B-3: payload carries the SAME operation identity — the
+      // server @@unique([companyId, clientOperationId]) on JournalEntry
+      // rejects any second execution permanently.
+      expect(op.payload['clientOperationId'], attemptedKey);
       // D3 feedback channel unchanged.
       final state = container.read(cashShiftProvider);
       expect(state, isA<ShiftError>());
@@ -222,6 +226,114 @@ void main() {
 
       expect(spy.calls, hasLength(1));
       expect(controller.state.operations, isEmpty);
+    });
+  });
+
+  group('Cash durable operation identity — G16-N-3 P2-B-3', () {
+    test('cash-in pre-mints one UUID shared by payload, key and outbox id',
+        () async {
+      final (container, spy, controller, _) =
+          await harness(failWith: _timeout);
+      final notifier = container.read(cashShiftProvider.notifier);
+      await notifier.loadShift('wh-1');
+
+      await notifier.cashIn(100, reason: 'float');
+
+      final transportedKey = spy.calls.single.key;
+      final op = controller.state.operations.single;
+      expect(op.payload['clientOperationId'], transportedKey);
+      expect(op.idempotencyKey, transportedKey);
+      expect(op.clientOperationId, transportedKey);
+    });
+
+    test('cash-out pre-mints one UUID shared by payload, key and outbox id',
+        () async {
+      final (container, spy, controller, _) =
+          await harness(failWith: _timeout);
+      final notifier = container.read(cashShiftProvider.notifier);
+      await notifier.loadShift('wh-1');
+
+      await notifier.cashOut(50);
+
+      final transportedKey = spy.calls.single.key;
+      final op = controller.state.operations.single;
+      expect(op.kind, OutboxOperationKind.cashOut);
+      expect(op.payload['clientOperationId'], transportedKey);
+      expect(op.idempotencyKey, transportedKey);
+      expect(op.clientOperationId, transportedKey);
+    });
+
+    test('restart preserves the same clientOperationId', () async {
+      final (container, spy, controller, storage) =
+          await harness(failWith: _timeout);
+      final notifier = container.read(cashShiftProvider.notifier);
+      await notifier.loadShift('wh-1');
+
+      await notifier.cashIn(100, reason: 'float');
+      final parkedKey = controller.state.operations.single.idempotencyKey;
+
+      final restarted = OutboxController(storage);
+      await restarted.hydrate();
+      final restored = restarted.state.operations.single;
+      expect(restored.idempotencyKey, parkedKey);
+      expect(restored.clientOperationId, parkedKey);
+      expect(restored.payload['clientOperationId'], parkedKey);
+      expect(spy.calls.single.key, parkedKey);
+    });
+
+    test('FAILED_PERMANENT → manual Retry preserves the operation identity',
+        () async {
+      final (container, spy, controller, _) =
+          await harness(failWith: _timeout);
+      final notifier = container.read(cashShiftProvider.notifier);
+      await notifier.loadShift('wh-1');
+
+      await notifier.cashIn(100, reason: 'float');
+      final originalKey =
+          controller.state.operations.single.idempotencyKey;
+
+      for (var i = 0; i < OutboxController.maxRetryAttempts; i++) {
+        await controller.markRetryableFailure(
+          controller.state.operations.single.clientOperationId,
+          'timeout',
+        );
+      }
+      expect(controller.state.operations.single.status,
+          OutboxStatus.failedPermanent);
+
+      await controller.retryFailed(
+        controller.state.operations.single.clientOperationId,
+      );
+      final retried = controller.state.operations.single;
+      expect(retried.status, OutboxStatus.pending);
+      expect(retried.attempts, 0);
+      expect(retried.idempotencyKey, originalKey);
+      expect(retried.clientOperationId, originalKey);
+      expect(retried.payload['clientOperationId'], originalKey);
+      expect(spy.calls.single.key, originalKey);
+    });
+
+    test('submitting twice creates two distinct operation IDs', () async {
+      final (container, spy, controller, _) =
+          await harness(failWith: _timeout);
+      final notifier = container.read(cashShiftProvider.notifier);
+      await notifier.loadShift('wh-1');
+
+      await notifier.cashIn(100, reason: 'first');
+      // Reset the submitting guard by reloading shift state, then submit
+      // a second independent logical operation.
+      await notifier.loadShift('wh-1');
+      await notifier.cashIn(50, reason: 'second');
+
+      expect(controller.state.operations, hasLength(2));
+      final keys = controller.state.operations
+          .map((o) => o.idempotencyKey)
+          .toSet();
+      expect(keys, hasLength(2));
+      for (final op in controller.state.operations) {
+        expect(op.payload['clientOperationId'], op.idempotencyKey);
+      }
+      expect(spy.calls, hasLength(2));
     });
   });
 

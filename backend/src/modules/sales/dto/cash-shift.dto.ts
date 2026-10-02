@@ -58,4 +58,14 @@ export class CashInOutDto {
   @IsOptional()
   @IsString()
   counterpartAccountId?: string;
+
+  // G16-N-3 P2-B-3: durable business-operation identity. Client-generated
+  // UUID minted once per logical cash-in/cash-out; retried attempts reuse
+  // it, and @@unique([companyId, clientOperationId]) on JournalEntry rejects
+  // a second execution permanently (independent of the 24h IdempotencyRecord
+  // TTL). Optional so old clients keep working.
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  clientOperationId?: string;
 }
