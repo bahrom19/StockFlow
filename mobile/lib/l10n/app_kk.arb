@@ -949,6 +949,12 @@
   "outboxKindGoodsReceipt": "Тауар қабылдау",
   "outboxOfflineSaleQueued": "Сату офлайн сақталды. Нөмір: {number}. Автоматты жіберілед.",
   "outboxOfflineQueuedMessage": "Интернетке қосылу жоқ. Өзгерістер offline сақталды және автоматты түрде жіберіледі.",
+  "outboxOperationAgeMinutes": "{count, plural, =1{1 минут бұрын} other{{count} минут бұрын}}",
+  "outboxOperationAgeHours": "{count, plural, =1{1 сағат бұрын} other{{count} сағат бұрын}}",
+  "outboxOperationAgeDays": "{count, plural, =1{1 күн бұрын} other{{count} күн бұрын}}",
+  "outboxOperationAgeUnknown": "Жасы белгісіз",
+  "outboxStaleRetryTitle": "Ескірген өзгерісті қайта жіберу керек пе?",
+  "outboxStaleRetryMessage": "Бұл өзгеріс ұзақ уақыт бұрын жасалған. Ол сол операция идентификаторымен қайта жіберіледі, сондықтан оны екі рет қолдану әлі де мүмкін емес. Жалғастыру керек пе?",
   "@outboxPendingItems": {
     "placeholders": {
       "count": {

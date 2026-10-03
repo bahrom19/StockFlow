@@ -18,6 +18,7 @@ import 'package:stockflow/core/outbox/outbox_indicator.dart';
 import 'package:stockflow/core/outbox/outbox_operation.dart';
 import 'package:stockflow/core/outbox/outbox_scheduler.dart';
 import 'package:stockflow/core/outbox/outbox_storage.dart';
+import 'package:stockflow/core/outbox/outbox_sync_service.dart';
 import 'package:stockflow/core/services/connectivity_service.dart';
 import 'package:stockflow/core/storage/preferences_storage.dart';
 
@@ -131,12 +132,15 @@ OutboxOperation mkOp(
   DateTime? nextAttemptAt,
   String? lastError,
   String? idempotencyKey,
+  // G16-N-3 P2-B-4 Phase 1: scope is EXACTLY companyId + userId.
+  String companyId = 'company-1',
+  String userId = 'user-1',
 }) {
   return OutboxOperation(
     clientOperationId: id,
     kind: kind,
-    companyId: 'company-1',
-    userId: 'user-1',
+    companyId: companyId,
+    userId: userId,
     payload: payload ?? _cashPayload,
     idempotencyKey: idempotencyKey ?? id,
     status: status,
@@ -177,6 +181,8 @@ void main() {
   Future<void> buildHarness({
     List<OutboxOperation> seeded = const [],
     bool online = true,
+    // G16-N-3 P2-B-4 Phase 1: which account is authenticated.
+    CurrentUser user = _user,
   }) async {
     base = DateTime(2026, 1, 1, 12);
     offset = Duration.zero;
@@ -191,7 +197,7 @@ void main() {
       overrides: [
         outboxStorageProvider.overrideWithValue(storage),
         apiClientProvider.overrideWithValue(api),
-        currentUserProvider.overrideWithValue(_user),
+        currentUserProvider.overrideWithValue(user),
         connectivityServiceProvider.overrideWithValue(connectivity),
         outboxControllerProvider.overrideWith(
           (ref) =>
@@ -654,6 +660,393 @@ void main() {
         l10n.outboxOfflineQueuedMessage,
         contains('Интернетке қосылу жоқ'),
       );
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 0 (F4) + Phase 1 (F2) — widget level.
+  //
+  // Phase 1 tests assert the LOAD-BEARING property: the authenticated user
+  // can never see, count, or read a foreign-scope operation. This is the
+  // mandatory precondition for Phase 3, where same-scope operations survive
+  // logout while foreign-scope ones remain in storage.
+  //
+  // Phase 0 tests assert age is DISPLAY ONLY: it is rendered, it may add one
+  // confirmation before a user-initiated retry, and it never blocks, never
+  // mutates and never alters the operation identity.
+  // ───────────────────────────────────────────────────────────────────
+  group('Phase 0 + Phase 1 (G16-N-3 P2-B-4)', () {
+    const otherUser =
+        CurrentUser(id: 'user-2', email: 'other@t', companyId: 'company-1');
+    // Cross-company isolation is exercised by authenticating the DEFAULT
+    // user-1 and seeding an op owned by company-2 — see the
+    // "different company" and "mixed queue" cases below.
+
+    OutboxOperation failedOp(
+      String id, {
+      DateTime? createdAt,
+      String companyId = 'company-1',
+      String userId = 'user-1',
+      String? lastError = 'boom',
+    }) =>
+        mkOp(
+          id,
+          status: OutboxStatus.failedPermanent,
+          createdAt: createdAt,
+          lastError: lastError,
+          companyId: companyId,
+          userId: userId,
+        );
+
+    // The retry scheduler is armed by OutboxIndicatorScope and fires an
+    // initial burst, so a PENDING op that must stay visible for assertions
+    // cannot be due — it would be dispatched and removed first.
+    // clock() == 2026-01-01 12:00.
+    final notDue = DateTime(2026, 1, 1, 13);
+    OutboxOperation heldOp(
+      String id, {
+      String companyId = 'company-1',
+      String userId = 'user-1',
+    }) =>
+        mkOp(id, nextAttemptAt: notDue, companyId: companyId, userId: userId);
+
+    // ── Phase 0: age display ──────────────────────────────────────────
+    testWidgets('failed dialog renders the operation age', (tester) async {
+      // clock() == base == 2026-01-01 12:00, so a 2025-12-01 createdAt is
+      // exactly 31 days old.
+      await buildHarness(
+        seeded: [failedOp('age-1', createdAt: DateTime(2025, 12, 1, 12))],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+      await openFailedDialog(tester);
+
+      expect(find.textContaining('31 days ago'), findsOneWidget);
+      // The error is still shown alongside the age.
+      expect(find.textContaining('boom'), findsOneWidget);
+    });
+
+    testWidgets('hours and minutes are rendered, not raw timestamps',
+        (tester) async {
+      await buildHarness(
+        seeded: [
+          failedOp('age-h', createdAt: DateTime(2026, 1, 1, 6)),
+          failedOp('age-m', createdAt: DateTime(2026, 1, 1, 11, 30)),
+        ],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+      await openFailedDialog(tester);
+
+      expect(find.textContaining('6 hours ago'), findsOneWidget);
+      expect(find.textContaining('30 minutes ago'), findsOneWidget);
+    });
+
+    testWidgets('a null createdAt renders an explicit "Age unknown"',
+        (tester) async {
+      await buildHarness(seeded: [failedOp('age-null')]);
+      await pumpApp(tester);
+      await tester.pump();
+      await openFailedDialog(tester);
+
+      expect(find.textContaining('Age unknown'), findsOneWidget);
+      // Nothing stale is inferred from an unknown age.
+      expect(find.text('Retry an old change?'), findsNothing);
+    });
+
+    // ── Phase 0: stale retry confirmation ─────────────────────────────
+    testWidgets('a stale operation asks for confirmation before retrying',
+        (tester) async {
+      await buildHarness(
+        seeded: [failedOp('stale-1', createdAt: DateTime(2020, 1, 1))],
+      );
+      // 5xx keeps the op in the queue so its post-retry state is observable.
+      api.responder = (_, __) => throw _serverError();
+      await pumpApp(tester);
+      await tester.pump();
+      await openFailedDialog(tester);
+
+      await tester.tap(find.byIcon(Icons.refresh));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.text('Retry an old change?'), findsOneWidget);
+
+      // Confirming retries normally.
+      await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump();
+      }
+
+      // Exactly one dispatch, carrying the ORIGINAL durable identity: the age
+      // confirmation never mints or rewrites an operation id.
+      expect(api.posts, hasLength(1));
+      expect(api.posts.single.headers?['Idempotency-Key'], 'stale-1');
+
+      final op = container.read(outboxControllerProvider).operations.single;
+      expect(op.status, OutboxStatus.pending);
+      expect(op.attempts, 1);
+      expect(op.clientOperationId, 'stale-1');
+      expect(op.idempotencyKey, 'stale-1');
+      expect(op.createdAt, DateTime(2020, 1, 1));
+    });
+
+    testWidgets('cancelling the stale confirmation changes nothing',
+        (tester) async {
+      await buildHarness(
+        seeded: [failedOp('stale-2', createdAt: DateTime(2020, 1, 1))],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+      await openFailedDialog(tester);
+
+      await tester.tap(find.byIcon(Icons.refresh));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('Retry an old change?'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final op = container.read(outboxControllerProvider).operations.single;
+      expect(op.status, OutboxStatus.failedPermanent);
+      expect(op.attempts, 0);
+      expect(op.lastError, 'boom');
+      expect(op.clientOperationId, 'stale-2');
+      expect(op.idempotencyKey, 'stale-2');
+      expect(op.createdAt, DateTime(2020, 1, 1));
+      // Cancelling is a true no-op: nothing was dispatched.
+      expect(api.posts, isEmpty);
+    });
+
+    testWidgets('a fresh operation retries without any confirmation',
+        (tester) async {
+      await buildHarness(
+        seeded: [failedOp('fresh-1', createdAt: DateTime(2025, 12, 20, 12))],
+      );
+      api.responder = (_, __) => throw _serverError();
+      await pumpApp(tester);
+      await tester.pump();
+      await openFailedDialog(tester);
+
+      await tester.tap(find.byIcon(Icons.refresh));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump();
+      }
+
+      // No confirmation gate for a <30-day operation.
+      expect(find.text('Retry an old change?'), findsNothing);
+      expect(api.posts, hasLength(1));
+      expect(api.posts.single.headers?['Idempotency-Key'], 'fresh-1');
+      final op = container.read(outboxControllerProvider).operations.single;
+      expect(op.status, OutboxStatus.pending);
+      expect(op.clientOperationId, 'fresh-1');
+    });
+
+    testWidgets('the stale confirmation is localized, not hardcoded',
+        (tester) async {
+      await buildHarness(
+        seeded: [failedOp('stale-ru', createdAt: DateTime(2020, 1, 1))],
+      );
+      await pumpApp(tester, locale: const Locale('ru'));
+      await tester.pump();
+      await openFailedDialog(tester);
+
+      await tester.tap(find.byIcon(Icons.refresh));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('Повторить старое изменение?'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Отмена'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        container.read(outboxControllerProvider).operations.single.status,
+        OutboxStatus.failedPermanent,
+      );
+    });
+
+    // ── Phase 1: scope isolation ──────────────────────────────────────
+    testWidgets('a foreign user\'s failed op is invisible and uncounted',
+        (tester) async {
+      await buildHarness(
+        seeded: [
+          failedOp('mine-f'),
+          failedOp('theirs-f', userId: 'user-2'),
+        ],
+        user: otherUser,
+      );
+      await pumpApp(tester);
+      await tester.pump();
+
+      // The badge counts ONLY user-2's single operation.
+      expect(find.textContaining('1 change failed to sync'), findsOneWidget);
+
+      await openFailedDialog(tester);
+      // user-2's own op is listed...
+      expect(find.byType(ListTile), findsOneWidget);
+      // ...and user-1's op — including its payload/error — is nowhere.
+      expect(find.text('mine-f'), findsNothing);
+      expect(find.textContaining('2 changes failed'), findsNothing);
+    });
+
+    testWidgets('a different company\'s op never contributes to any count',
+        (tester) async {
+      await buildHarness(
+        seeded: [
+          failedOp('x-co', companyId: 'company-1'),
+          failedOp('y-co', companyId: 'company-2'),
+        ],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+
+      expect(find.textContaining('1 change failed to sync'), findsOneWidget);
+      expect(find.textContaining('2 changes failed'), findsNothing);
+
+      await openFailedDialog(tester);
+      expect(find.byType(ListTile), findsOneWidget);
+      expect(find.text('y-co'), findsNothing);
+    });
+
+    testWidgets('a queue holding only foreign ops renders no outbox bar',
+        (tester) async {
+      await buildHarness(
+        seeded: [
+          failedOp('theirs-1', userId: 'user-2'),
+          failedOp('theirs-2', companyId: 'company-77'),
+        ],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+
+      // Neither the bar nor the error entry point is rendered, so nothing
+      // about the other accounts' backlog is disclosed.
+      expect(find.byIcon(Icons.cloud_upload_outlined), findsNothing);
+      expect(find.byIcon(Icons.error_outline), findsNothing);
+      expect(find.textContaining('failed to sync'), findsNothing);
+      // The content itself still renders.
+      expect(find.text('content'), findsOneWidget);
+    });
+
+    testWidgets('a foreign createSale payload saleNumber is never rendered',
+        (tester) async {
+      await buildHarness(
+        seeded: [
+          mkOp(
+            'theirs-sale',
+            kind: OutboxOperationKind.createSale,
+            payload: const {'saleNumber': 'OFF-SECRET-SALE'},
+            status: OutboxStatus.failedPermanent,
+            userId: 'user-2',
+          ),
+        ],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+
+      expect(find.byIcon(Icons.error_outline), findsNothing);
+      expect(find.text('OFF-SECRET-SALE'), findsNothing);
+    });
+
+    testWidgets('mixed queue: only the current scope is counted and listed',
+        (tester) async {
+      await buildHarness(
+        seeded: [
+          heldOp('mine-p'),
+          failedOp('mine-f'),
+          heldOp('theirs-p', userId: 'user-2'),
+          failedOp('theirs-f', userId: 'user-2'),
+          heldOp('other-co-p', companyId: 'company-2'),
+          failedOp('other-co-f', companyId: 'company-2'),
+        ],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+
+      // Exactly one pending and one failed operation belong to user-1.
+      expect(find.textContaining('1 pending change'), findsOneWidget);
+      expect(find.textContaining('1 change failed to sync'), findsOneWidget);
+
+      await openFailedDialog(tester);
+      expect(find.byType(ListTile), findsOneWidget);
+      expect(find.text('theirs-f'), findsNothing);
+      expect(find.text('other-co-f'), findsNothing);
+    });
+
+    testWidgets('an unauthenticated session renders no outbox bar',
+        (tester) async {
+      final prefs = PreferencesStorage();
+      await prefs.initialize();
+      final st = OutboxStorage(prefs);
+      await st.save([failedOp('anon-f')]);
+      container = ProviderContainer(
+        overrides: [
+          outboxStorageProvider.overrideWithValue(st),
+          apiClientProvider.overrideWithValue(api),
+          // No currentUserProvider override -> unauthenticated.
+          connectivityServiceProvider.overrideWithValue(connectivity),
+          outboxControllerProvider.overrideWith(
+            (ref) =>
+                OutboxController(ref.watch(outboxStorageProvider), now: clock),
+          ),
+          outboxSchedulerClockProvider.overrideWithValue(clock),
+        ],
+      );
+      addTearDown(container.dispose);
+      await pumpApp(tester);
+      await tester.pump();
+
+      expect(find.byIcon(Icons.cloud_upload_outlined), findsNothing);
+      expect(find.text('content'), findsOneWidget);
+    });
+
+    testWidgets('scope filtering mutates nothing — the queue is intact',
+        (tester) async {
+      await buildHarness(
+        seeded: [
+          failedOp('mine-f'),
+          failedOp('theirs-f', userId: 'user-2'),
+        ],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+      await openFailedDialog(tester);
+
+      // Both entries are still persisted, in full, with identity intact.
+      final ops = container.read(outboxControllerProvider).operations;
+      expect(ops, hasLength(2));
+      expect(
+        ops.map((o) => o.clientOperationId).toSet(),
+        {'mine-f', 'theirs-f'},
+      );
+      for (final o in ops) {
+        expect(o.idempotencyKey, o.clientOperationId);
+        expect(o.createdAt, isNull);
+        expect(o.status, OutboxStatus.failedPermanent);
+      }
+    });
+
+    testWidgets('a foreign-scope op is still never SENT by the worker',
+        (tester) async {
+      // Layer-2 confirmation: the sync worker's own scope guard is unchanged
+      // and remains the dispatch-time authority.
+      await buildHarness(
+        seeded: [
+          mkOp('mine-p'),
+          mkOp('theirs-p', userId: 'user-2'),
+          mkOp('other-co-p', companyId: 'company-2'),
+        ],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+
+      await container.read(outboxSyncProvider).syncAll();
+      await tester.pump();
+
+      final paths = api.posts.map((p) => p.path).toList();
+      expect(paths, hasLength(1));
     });
   });
 }

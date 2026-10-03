@@ -194,3 +194,94 @@ class OutboxOperation {
 
   static String _defaultGenerateId() => const Uuid().v4();
 }
+
+/// Largest unit an [OutboxOperationAge] reports in. An age is always rendered
+/// in the coarsest unit that yields a non-zero value, so "3 days" never reads
+/// as "4320 minutes".
+enum OutboxOperationAgeUnit { minutes, hours, days }
+
+/// Pure, immutable, **display-only** age descriptor for one queued operation.
+///
+/// G16-N-3 P2-B-4 Phase 0 (F1/F4). This type exists for the FAILED_PERMANENT
+/// UI and nothing else. It is deliberately NOT consulted by [isDue], by the
+/// retry budget, by the backoff schedule, by the failure classifier, or by any
+/// persistence path — an old age changes nothing about whether an operation may
+/// be retried. That is not a simplification: durable operation identity makes a
+/// replay safe at any age (the server rejects a second application via a
+/// permanent unique constraint, independent of the 24h IdempotencyRecord TTL),
+/// so treating age as a gate would only manufacture false permanent failures
+/// and silent loss. Age is presented to the user as information; the user
+/// decides.
+///
+/// [OutboxOperation.createdAt] is nullable — entries persisted by a pre-v1
+/// build have no timestamp — so the descriptor is nullable too and every
+/// consumer must handle "age unknown".
+class OutboxOperationAge {
+  const OutboxOperationAge._(this.value, this.unit);
+
+  const OutboxOperationAge.minutes(int value)
+      : this._(value, OutboxOperationAgeUnit.minutes);
+
+  const OutboxOperationAge.hours(int value)
+      : this._(value, OutboxOperationAgeUnit.hours);
+
+  const OutboxOperationAge.days(int value)
+      : this._(value, OutboxOperationAgeUnit.days);
+
+  /// Cosmetic staleness threshold, in days. Crossing it adds ONE extra
+  /// confirmation before an explicit user-initiated Retry; it never blocks the
+  /// retry, never mutates the operation, and is never evaluated by the worker.
+  static const int staleAfterDays = 30;
+
+  /// Magnitude of the age, always >= 0, always in the unit named by [unit].
+  final int value;
+
+  final OutboxOperationAgeUnit unit;
+
+  /// True when this age has reached [staleAfterDays].
+  ///
+  /// Only a whole-day age can be stale: the threshold is expressed in days, and
+  /// a sub-day age is by definition below it.
+  bool get isStale =>
+      unit == OutboxOperationAgeUnit.days && value >= staleAfterDays;
+
+  @override
+  bool operator ==(Object other) =>
+      other is OutboxOperationAge && other.value == value && other.unit == unit;
+
+  @override
+  int get hashCode => Object.hash(value, unit);
+
+  @override
+  String toString() => 'OutboxOperationAge($value ${unit.name})';
+}
+
+/// Display-only age accessors for [OutboxOperation].
+///
+/// Every member takes the reference instant explicitly instead of reading the
+/// clock, so results are deterministic under test and trivially pure.
+extension OutboxOperationAgeX on OutboxOperation {
+  /// Age of this operation at [now], or `null` when [OutboxOperation.createdAt]
+  /// is absent (legacy v1 entries) — callers must render an explicit
+  /// "unknown age" state rather than guessing.
+  ///
+  /// A [createdAt] in the future (clock skew, timezone drift) clamps to zero
+  /// instead of producing a negative age.
+  OutboxOperationAge? ageAt(DateTime now) {
+    final created = createdAt;
+    if (created == null) return null;
+    final elapsed = now.difference(created);
+    if (elapsed.isNegative) return const OutboxOperationAge.minutes(0);
+    if (elapsed.inDays >= 1) return OutboxOperationAge.days(elapsed.inDays);
+    if (elapsed.inHours >= 1) return OutboxOperationAge.hours(elapsed.inHours);
+    return OutboxOperationAge.minutes(elapsed.inMinutes);
+  }
+
+  /// True when this operation is at least [OutboxOperationAge.staleAfterDays]
+  /// old. Purely cosmetic — see [OutboxOperationAge].
+  ///
+  /// A `null` [createdAt] is never stale: with no age information the user
+  /// cannot be warned about something unknown, and inventing a warning would
+  /// make the legacy state unreachable to Retry.
+  bool isStaleAt(DateTime now) => ageAt(now)?.isStale ?? false;
+}

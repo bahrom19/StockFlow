@@ -932,6 +932,12 @@
   "outboxKindGoodsReceipt": "Goods receipt",
   "outboxOfflineSaleQueued": "Sale saved offline. Number: {number}. It will be sent automatically.",
   "outboxOfflineQueuedMessage": "No internet connection. Your changes were saved offline and will sync automatically.",
+  "outboxOperationAgeMinutes": "{count, plural, =1{1 minute ago} other{{count} minutes ago}}",
+  "outboxOperationAgeHours": "{count, plural, =1{1 hour ago} other{{count} hours ago}}",
+  "outboxOperationAgeDays": "{count, plural, =1{1 day ago} other{{count} days ago}}",
+  "outboxOperationAgeUnknown": "Age unknown",
+  "outboxStaleRetryTitle": "Retry an old change?",
+  "outboxStaleRetryMessage": "This change was created a long time ago. It will be sent again with the same operation identifier, so it still cannot be applied twice. Continue?",
   "@outboxPendingItems": {
     "placeholders": {
       "count": {

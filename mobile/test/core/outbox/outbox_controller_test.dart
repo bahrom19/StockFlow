@@ -5,6 +5,10 @@ import 'package:stockflow/core/outbox/outbox_operation.dart';
 import 'package:stockflow/core/outbox/outbox_storage.dart';
 import 'package:stockflow/core/storage/preferences_storage.dart';
 
+/// Exposes [OutboxState.isInScope] for a single operation in tests.
+bool inScopeOf(OutboxOperation o, String companyId, String userId) =>
+    OutboxState(operations: [o]).isInScope(o, companyId, userId);
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -27,13 +31,19 @@ void main() {
     String id, {
     DateTime? createdAt,
     OutboxStatus status = OutboxStatus.pending,
+    // G16-N-3 P2-B-4 Phase 1: scope is EXACTLY companyId + userId.
+    String companyId = 'company-1',
+    String userId = 'user-1',
+    String? idempotencyKey,
+    Map<String, dynamic>? payload,
   }) {
     return OutboxOperation(
       clientOperationId: id,
       kind: OutboxOperationKind.createSale,
-      companyId: 'company-1',
-      userId: 'user-1',
-      payload: const {'saleNumber': 'OFF-x'},
+      companyId: companyId,
+      userId: userId,
+      payload: payload ?? const {'saleNumber': 'OFF-x'},
+      idempotencyKey: idempotencyKey,
       status: status,
       createdAt: createdAt,
     );
@@ -50,8 +60,7 @@ void main() {
       expect(c.state.operations.single.clientOperationId, 'op-1');
     });
 
-    test('duplicate clientOperationId is a no-op (no second entry)',
-        () async {
+    test('duplicate clientOperationId is a no-op (no second entry)', () async {
       final c = await controller();
       await c.enqueue(op('same-id'));
 
@@ -100,8 +109,7 @@ void main() {
       expect(second.state.operations.single.clientOperationId, 'survivor');
     });
 
-    test('retryable failure returns the op to PENDING with backoff',
-        () async {
+    test('retryable failure returns the op to PENDING with backoff', () async {
       final base = DateTime(2026, 1, 1, 12);
       final c = await controller(now: () => base);
       await c.enqueue(op('flaky'));
@@ -270,7 +278,8 @@ void main() {
         expect(first.nextAttemptAt, base.add(const Duration(seconds: 30)));
       });
 
-      test('restart: persisted attempts survive; the cap still demotes after '
+      test(
+          'restart: persisted attempts survive; the cap still demotes after '
           'a restart', () async {
         final base = DateTime(2026, 1, 1, 12);
         // Run 1: three retryable failures are persisted with their backoff.
@@ -310,6 +319,261 @@ void main() {
         expect(persisted.attempts, OutboxController.maxRetryAttempts);
         expect(run3.state.failedCount, 1);
       });
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 0 + Phase 1.
+  //
+  // Phase 0: createdAt must survive every lifecycle transition and every
+  // manual retry — the age display is only trustworthy if the timestamp is
+  // immutable, and age must never gate a retry.
+  //
+  // Phase 1: the scope-filtered accessors must be exact and must never mutate
+  // or drop anything from the persisted queue.
+  // ───────────────────────────────────────────────────────────────────────
+  group('Phase 0 — createdAt preservation and stale retry', () {
+    final base = DateTime(2026, 1, 1, 12);
+    final oldCreatedAt = base.subtract(const Duration(days: 400));
+
+    test('retryFailed preserves the original createdAt verbatim', () async {
+      final seeded = op(
+        'stale-1',
+        createdAt: oldCreatedAt,
+        status: OutboxStatus.failedPermanent,
+        idempotencyKey: 'stale-1',
+      );
+      final c = await controller(seeded: [seeded], now: () => base);
+
+      final before = c.state.operations.single;
+      expect(before.createdAt, oldCreatedAt);
+      expect(before.isStaleAt(base), isTrue);
+
+      await c.retryFailed('stale-1');
+
+      final after = c.state.operations.single;
+      // A 400-day-old operation is retried normally: no age gate, no demotion,
+      // no silent loss. Durable identity makes the replay safe.
+      expect(after.status, OutboxStatus.pending);
+      expect(after.attempts, 0);
+      expect(after.isDue(base), isTrue);
+      // createdAt is untouched by the retry.
+      expect(after.createdAt, oldCreatedAt);
+    });
+
+    test('every lifecycle transition preserves createdAt', () async {
+      final c = await controller(now: () => base);
+      await c
+          .enqueue(op('lc-1', createdAt: oldCreatedAt, idempotencyKey: 'lc-1'));
+
+      await c.markSending('lc-1');
+      expect(c.state.operations.single.createdAt, oldCreatedAt);
+
+      await c.markRetryableFailure('lc-1', 'boom');
+      expect(c.state.operations.single.createdAt, oldCreatedAt);
+
+      await c.markPermanentFailure('lc-1', 'nope');
+      expect(c.state.operations.single.createdAt, oldCreatedAt);
+
+      await c.retryFailed('lc-1');
+      final retried = c.state.operations.single;
+      expect(retried.createdAt, oldCreatedAt);
+      // And identity is still intact across the whole chain.
+      expect(retried.clientOperationId, 'lc-1');
+      expect(retried.idempotencyKey, 'lc-1');
+    });
+
+    test('the retry budget cap also preserves createdAt', () async {
+      final c = await controller(now: () => base);
+      await c.enqueue(
+          op('cap-1', createdAt: oldCreatedAt, idempotencyKey: 'cap-1'));
+
+      for (var i = 0; i < OutboxController.maxRetryAttempts; i++) {
+        await c.markRetryableFailure('cap-1', 'timeout');
+      }
+      final capped = c.state.operations.single;
+      expect(capped.status, OutboxStatus.failedPermanent);
+      expect(capped.createdAt, oldCreatedAt);
+      // The demotion to FAILED_PERMANENT is caused by the budget, never by age.
+      expect(capped.isStaleAt(base), isTrue);
+      expect(capped.attempts, OutboxController.maxRetryAttempts);
+    });
+
+    test('enqueue stamps createdAt only when absent', () async {
+      final c = await controller(now: () => base);
+      await c.enqueue(op('stamp-none', idempotencyKey: 'stamp-none'));
+      expect(c.state.operations.single.createdAt, base);
+
+      final explicit = oldCreatedAt;
+      await c.enqueue(op('stamp-explicit', createdAt: explicit));
+      expect(
+        c.state.operations
+            .firstWhere((o) => o.clientOperationId == 'stamp-explicit')
+            .createdAt,
+        explicit,
+      );
+    });
+  });
+
+  group('Phase 1 — scope-filtered accessors', () {
+    OutboxOperation pending(String id,
+            {String c = 'company-1', String u = 'user-1'}) =>
+        op(id, status: OutboxStatus.pending, companyId: c, userId: u);
+
+    OutboxOperation failed(String id,
+            {String c = 'company-1', String u = 'user-1'}) =>
+        op(id, status: OutboxStatus.failedPermanent, companyId: c, userId: u);
+
+    test('unresolvedFor returns only ops matching BOTH companyId and userId',
+        () async {
+      // NOTE: a SENDING entry cannot be seeded through storage — load()
+      // normalises sending -> pending (pre-existing restart-recovery rule), so
+      // the sending state is produced through markSending() instead.
+      final c = await controller(
+        seeded: [
+          pending('mine-p'),
+          pending('mine-s'),
+          failed('mine-f'),
+          pending('other-user-p', u: 'user-2'),
+          failed('other-user-f', u: 'user-2'),
+          pending('other-company-p', c: 'company-2'),
+          failed('other-company-f', c: 'company-2'),
+          // Same userId, different company: still foreign.
+          pending('mixed-company', c: 'company-2'),
+          // Same company, different userId: still foreign.
+          failed('mixed-user', u: 'user-9'),
+        ],
+      );
+      await c.markSending('mine-s');
+
+      final mine = c.state.unresolvedFor('company-1', 'user-1');
+      expect(
+        mine.map((o) => o.clientOperationId).toSet(),
+        {'mine-p', 'mine-s', 'mine-f'},
+      );
+
+      expect(c.state.pendingCountFor('company-1', 'user-1'), 1);
+      expect(c.state.sendingCountFor('company-1', 'user-1'), 1);
+      expect(c.state.failedCountFor('company-1', 'user-1'), 1);
+
+      // A foreign-scope op that happens to be SENDING stays invisible.
+      await c.markSending('other-user-p');
+      expect(c.state.sendingCountFor('company-1', 'user-1'), 1);
+      expect(c.state.unresolvedFor('company-1', 'user-1'), hasLength(3));
+    });
+
+    test('a foreign-only queue reports zero for every scoped counter',
+        () async {
+      final c = await controller(
+        seeded: [
+          failed('a-f', u: 'user-2'),
+          pending('a-p', c: 'company-2'),
+        ],
+      );
+
+      expect(c.state.unresolvedFor('company-1', 'user-1'), isEmpty);
+      expect(c.state.pendingCountFor('company-1', 'user-1'), 0);
+      expect(c.state.sendingCountFor('company-1', 'user-1'), 0);
+      expect(c.state.failedCountFor('company-1', 'user-1'), 0);
+      // The unscoped counters still see them — they remain for compatibility,
+      // which is exactly why no user-visible surface may use them.
+      expect(c.state.operations, hasLength(2));
+      expect(c.state.pendingCount, 1);
+      expect(c.state.failedCount, 1);
+    });
+
+    test('isInScope matches only on the exact companyId + userId pair', () {
+      final mine = op('x', companyId: 'company-1', userId: 'user-1');
+      expect(inScopeOf(mine, 'company-1', 'user-1'), isTrue);
+      expect(inScopeOf(mine, 'company-1', 'user-2'), isFalse);
+      expect(inScopeOf(mine, 'company-2', 'user-1'), isFalse);
+    });
+
+    test('mixed queue counts are exact', () async {
+      final c = await controller(
+        seeded: [
+          pending('mine-1'),
+          pending('mine-2'),
+          pending('mine-3'),
+          failed('mine-4'),
+          pending('foreign-1', u: 'user-2'),
+          failed('foreign-2', c: 'company-9'),
+        ],
+      );
+      await c.markSending('mine-3');
+
+      expect(c.state.unresolvedFor('company-1', 'user-1'), hasLength(4));
+      expect(c.state.pendingCountFor('company-1', 'user-1'), 2);
+      expect(c.state.sendingCountFor('company-1', 'user-1'), 1);
+      expect(c.state.failedCountFor('company-1', 'user-1'), 1);
+    });
+
+    test(
+        'filtering is pure — the underlying queue is neither mutated nor '
+        'reordered nor deleted', () async {
+      final seeded = [
+        pending('p-1'),
+        failed('f-1', u: 'user-2'),
+        pending('p-2'),
+      ];
+      final c = await controller(seeded: seeded);
+      final before =
+          c.state.operations.map((o) => o.clientOperationId).toList();
+
+      // Filter repeatedly, including for a scope that matches nothing.
+      c.state.unresolvedFor('company-1', 'user-1');
+      c.state.unresolvedFor('company-1', 'user-1');
+      c.state.unresolvedFor('nobody', 'nobody');
+
+      expect(
+        c.state.operations.map((o) => o.clientOperationId).toList(),
+        before,
+      );
+      expect(c.state.operations, hasLength(3));
+    });
+
+    test('the filtered view is unmodifiable and identity fields are intact',
+        () async {
+      final c = await controller(
+        seeded: [
+          op('id-1',
+              companyId: 'company-1',
+              userId: 'user-1',
+              idempotencyKey: 'id-1',
+              payload: const {'clientOperationId': 'id-1'}),
+        ],
+      );
+
+      final view = c.state.unresolvedFor('company-1', 'user-1');
+      expect(view, hasLength(1));
+      expect(() => view.add(view.single), throwsUnsupportedError);
+
+      final o = view.single;
+      expect(o.clientOperationId, 'id-1');
+      expect(o.idempotencyKey, 'id-1');
+      expect(o.payload['clientOperationId'], 'id-1');
+      expect(o.companyId, 'company-1');
+      expect(o.userId, 'user-1');
+    });
+
+    test('scope filtering survives a restart (persisted scope is restored)',
+        () async {
+      final prefs = PreferencesStorage();
+      await prefs.initialize();
+      final storage = OutboxStorage(prefs);
+      await storage.save([
+        pending('keep-1'),
+        failed('keep-2'),
+        failed('foreign-1', u: 'user-2'),
+      ]);
+
+      final c = OutboxController(storage, now: () => DateTime(2026, 1, 1));
+      await c.hydrate();
+
+      expect(c.state.unresolvedFor('company-1', 'user-1'), hasLength(2));
+      expect(c.state.failedCountFor('company-1', 'user-1'), 1);
+      expect(c.state.failedCountFor('company-1', 'user-2'), 1);
+      expect(c.state.unresolvedFor('company-1', 'user-2'), hasLength(1));
     });
   });
 }

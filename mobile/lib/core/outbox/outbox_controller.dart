@@ -23,6 +23,63 @@ class OutboxState {
 
   bool get isEmpty => operations.isEmpty;
   bool get isNotEmpty => operations.isNotEmpty;
+
+  // ── G16-N-3 P2-B-4 Phase 1 (F2): scope-safe views ──────────────────────
+  //
+  // The unscoped counters above stay for backward compatibility, but they must
+  // NOT be used for anything the authenticated user sees. On a shared till the
+  // persisted queue can legitimately hold operations belonging to a previous
+  // user or a previous company, and a global count would leak their existence
+  // (and, through the failed-ops dialog, their payload) across the account
+  // boundary.
+  //
+  // Scope is EXACTLY companyId + userId — the same pair the sync worker's
+  // dispatch-time scope guard compares. Filtering here is a second, independent
+  // layer; the worker guard is unchanged and remains the authority on whether
+  // an operation may actually be SENT.
+
+  /// Operations belonging to [companyId] + [userId] that are still
+  /// unresolved, i.e. every non-terminal status.
+  ///
+  /// All three [OutboxStatus] values are unresolved by construction: an
+  /// operation leaves the queue only via `confirmSent` (server confirmation or
+  /// a recognised duplicate), the user's explicit `discard`, or a scope change.
+  /// There is therefore no "completed" entry to exclude here.
+  ///
+  /// Purely a filter — the returned list is unmodifiable and the underlying
+  /// [operations] are never mutated, reordered or removed.
+  List<OutboxOperation> unresolvedFor(String companyId, String userId) {
+    return operations
+        .where((o) => o.companyId == companyId && o.userId == userId)
+        .toList(growable: false);
+  }
+
+  bool isInScope(OutboxOperation op, String companyId, String userId) =>
+      op.companyId == companyId && op.userId == userId;
+
+  /// PENDING operations visible to [companyId] + [userId].
+  int pendingCountFor(String companyId, String userId) => operations
+      .where((o) =>
+          o.companyId == companyId &&
+          o.userId == userId &&
+          o.status == OutboxStatus.pending)
+      .length;
+
+  /// SENDING operations visible to [companyId] + [userId].
+  int sendingCountFor(String companyId, String userId) => operations
+      .where((o) =>
+          o.companyId == companyId &&
+          o.userId == userId &&
+          o.status == OutboxStatus.sending)
+      .length;
+
+  /// FAILED_PERMANENT operations visible to [companyId] + [userId].
+  int failedCountFor(String companyId, String userId) => operations
+      .where((o) =>
+          o.companyId == companyId &&
+          o.userId == userId &&
+          o.status == OutboxStatus.failedPermanent)
+      .length;
 }
 
 /// In-memory owner of the outbox queue.
@@ -100,9 +157,8 @@ class OutboxController extends StateNotifier<OutboxState> {
   }
 
   /// Marks the op as being sent right now.
-  Future<void> markSending(String clientOperationId) =>
-      _mutate(clientOperationId,
-          (o) => o.copyWith(status: OutboxStatus.sending));
+  Future<void> markSending(String clientOperationId) => _mutate(
+      clientOperationId, (o) => o.copyWith(status: OutboxStatus.sending));
 
   /// Retryable failure: back to PENDING with exponential backoff — until the
   /// F5-B budget is exhausted. When the NEXT attempt would reach
@@ -244,7 +300,9 @@ class OutboxController extends StateNotifier<OutboxState> {
       final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
       final bt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
       final cmp = at.compareTo(bt);
-      return cmp != 0 ? cmp : a.clientOperationId.compareTo(b.clientOperationId);
+      return cmp != 0
+          ? cmp
+          : a.clientOperationId.compareTo(b.clientOperationId);
     });
     return copy;
   }

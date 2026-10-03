@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/outbox/outbox_controller.dart';
 import 'package:stockflow/core/outbox/outbox_operation.dart';
 import 'package:stockflow/core/outbox/outbox_scheduler.dart';
@@ -27,16 +28,30 @@ class OutboxIndicatorScope extends ConsumerWidget {
     // no UI impact).
     ref.watch(outboxSchedulerProvider);
     final state = ref.watch(outboxControllerProvider);
-    if (state.isEmpty) return child;
+    // G16-N-3 P2-B-4 Phase 1 (F2): every count and every rendered entry is
+    // scoped to the AUTHENTICATED identity (companyId + userId). On a shared
+    // till the persisted queue may hold another user's operations; a global
+    // count would disclose their existence, and the failed-ops dialog would
+    // disclose their payload. Unauthenticated => nothing is this user's to
+    // see, so the bar is suppressed entirely.
+    final user = ref.watch(currentUserProvider);
+    if (user == null) return child;
+    final companyId = user.companyId;
+    final userId = user.id;
+    // Scope-local emptiness, NOT `state.isEmpty`: a queue holding only
+    // foreign-scope operations must render as "no outbox activity" for this
+    // user rather than advertising another account's backlog.
+    if (state.unresolvedFor(companyId, userId).isEmpty) return child;
 
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final pending = state.pendingCount + state.sendingCount;
-    final failed = state.failedCount;
+    final pending = state.pendingCountFor(companyId, userId) +
+        state.sendingCountFor(companyId, userId);
+    final failed = state.failedCountFor(companyId, userId);
     // True while the worker is actively flushing entries (F5-C wiring drives
     // the same controller state). The UI disables the manual "Send now" tap
     // during that window so repeated taps cannot stack burst attempts.
-    final isSending = state.sendingCount > 0;
+    final isSending = state.sendingCountFor(companyId, userId) > 0;
     final label = failed > 0
         ? '${l10n.outboxPendingItems(pending)}  •  ${l10n.outboxFailedItems(failed)}'
         : l10n.outboxPendingItems(pending);
@@ -95,7 +110,14 @@ class OutboxIndicatorScope extends ConsumerWidget {
                       IconButton(
                         tooltip: l10n.outboxFailedTitle,
                         icon: const Icon(Icons.error_outline, size: 20),
-                        onPressed: () => _showFailedDialog(context, ref, l10n),
+                        onPressed: () => _showFailedDialog(
+                          context,
+                          ref,
+                          l10n,
+                          companyId,
+                          userId,
+                          ref.read(outboxSchedulerClockProvider),
+                        ),
                       ),
                   ],
                 ),
@@ -129,10 +151,35 @@ class OutboxIndicatorScope extends ConsumerWidget {
     }
   }
 
+  /// Localized, human-readable age of one queued operation.
+  ///
+  /// Display only (G16-N-3 P2-B-4 Phase 0 / F4). A `null` [OutboxOperationAge]
+  /// means the operation carries no `createdAt` — a legacy v1 entry — and is
+  /// rendered as an explicit "age unknown" rather than a fabricated value.
+  static String _ageLabel(
+    OutboxOperation op,
+    DateTime now,
+    AppLocalizations l10n,
+  ) {
+    final age = op.ageAt(now);
+    if (age == null) return l10n.outboxOperationAgeUnknown;
+    switch (age.unit) {
+      case OutboxOperationAgeUnit.minutes:
+        return l10n.outboxOperationAgeMinutes(age.value);
+      case OutboxOperationAgeUnit.hours:
+        return l10n.outboxOperationAgeHours(age.value);
+      case OutboxOperationAgeUnit.days:
+        return l10n.outboxOperationAgeDays(age.value);
+    }
+  }
+
   void _showFailedDialog(
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l10n,
+    String companyId,
+    String userId,
+    DateTime Function() clock,
   ) {
     showDialog<void>(
       context: context,
@@ -143,9 +190,19 @@ class OutboxIndicatorScope extends ConsumerWidget {
         // safe controller no-op.
         return Consumer(
           builder: (context, dialogRef, _) {
+            // G16-N-3 P2-B-4 Phase 1 (F2): scope filter is applied BEFORE the
+            // list is built, so `_failedItemTitle` can never be reached with a
+            // foreign operation and no payload field (saleNumber, kind,
+            // lastError) of another user/company can be rendered. This is the
+            // mandatory precondition for Phase 3, where same-scope operations
+            // survive logout and foreign-scope ones remain in storage.
+            //
+            // The clock comes from the outbox clock provider rather than
+            // DateTime.now() so the rendered age is deterministic under test.
+            final now = clock();
             final ops = dialogRef
                 .watch(outboxControllerProvider)
-                .operations
+                .unresolvedFor(companyId, userId)
                 .where((o) => o.status == OutboxStatus.failedPermanent)
                 .toList(growable: false);
             return AlertDialog(
@@ -164,13 +221,28 @@ class OutboxIndicatorScope extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      subtitle: op.lastError == null
-                          ? null
-                          : Text(
+                      // Error and age are SEPARATE Text widgets rather than one joined
+                      // string: the existing subtitle contract (the raw
+                      // lastError is findable on its own) is preserved, and a
+                      // screen reader announces the failure reason before the
+                      // age.
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (op.lastError != null)
+                            Text(
                               op.lastError!,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
+                          Text(
+                            _ageLabel(op, now, l10n),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -178,9 +250,26 @@ class OutboxIndicatorScope extends ConsumerWidget {
                             tooltip: l10n.retry,
                             icon: const Icon(Icons.refresh),
                             onPressed: () async {
+                              // G16-N-3 P2-B-4 Phase 0 (F1/F4): a stale
+                              // operation asks for ONE extra confirmation.
+                              // This is purely cosmetic — it never blocks the
+                              // retry, never mutates the operation and never
+                              // changes the outcome, because durable operation
+                              // identity makes a replay safe at any age.
+                              // Cancelling leaves the entry untouched.
+                              if (op.isStaleAt(now)) {
+                                final proceed = await _confirmStaleRetry(
+                                  dialogContext,
+                                  l10n,
+                                );
+                                if (proceed != true) return;
+                              }
                               final controller = dialogRef.read(
                                 outboxControllerProvider.notifier,
                               );
+                              // retryFailed() preserves clientOperationId,
+                              // idempotencyKey, payload and createdAt
+                              // verbatim — unchanged in Phase 0/1.
                               await controller.retryFailed(
                                 op.clientOperationId,
                               );
@@ -215,6 +304,33 @@ class OutboxIndicatorScope extends ConsumerWidget {
           },
         );
       },
+    );
+  }
+
+  /// Confirmation shown before re-sending an operation that is at least
+  /// [OutboxOperationAge.staleAfterDays] old. Returns true only on an explicit
+  /// Retry; `null` (dismissed) and false (Cancel) both abort without touching
+  /// the operation.
+  Future<bool?> _confirmStaleRetry(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (confirmContext) => AlertDialog(
+        title: Text(l10n.outboxStaleRetryTitle),
+        content: Text(l10n.outboxStaleRetryMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(confirmContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(confirmContext).pop(true),
+            child: Text(l10n.retry),
+          ),
+        ],
+      ),
     );
   }
 }
