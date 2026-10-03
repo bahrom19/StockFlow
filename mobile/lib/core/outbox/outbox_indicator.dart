@@ -52,14 +52,25 @@ class OutboxIndicatorScope extends ConsumerWidget {
     // the same controller state). The UI disables the manual "Send now" tap
     // during that window so repeated taps cannot stack burst attempts.
     final isSending = state.sendingCountFor(companyId, userId) > 0;
-    final label = failed > 0
-        ? '${l10n.outboxPendingItems(pending)}  •  ${l10n.outboxFailedItems(failed)}'
-        : l10n.outboxPendingItems(pending);
+    // G16-N-3 P2-B-4 Phase 2: persistent queue pressure. Scoped exactly like
+    // every other number on this bar, so a foreign account's backlog can
+    // neither be counted here nor be inferred from its presence. This is a
+    // WARNING surface only — enqueue is not gated at the soft cap.
+    final capacityUsed = state.capacityUsedFor(companyId, userId);
+    final underPressure = capacityUsed >= OutboxController.softCapacityLimit;
+    final pendingLabel = l10n.outboxPendingItems(pending);
+    final failedLabel = failed > 0 ? l10n.outboxFailedItems(failed) : null;
+    final pressureLabel =
+        underPressure ? l10n.outboxQueuePressure(capacityUsed) : null;
+    final segments = <String>[
+      pendingLabel,
+      if (failedLabel != null) failedLabel,
+      if (pressureLabel != null) pressureLabel,
+    ].join('  •  ');
+    final label = segments;
     // Screen-reader label for the whole compact bar: the same localized,
     // generic wording the visible text shows. No new ARB keys.
-    final barLabel = failed > 0
-        ? '${l10n.outboxPendingItems(pending)}. ${l10n.outboxFailedItems(failed)}.'
-        : l10n.outboxPendingItems(pending);
+    final barLabel = '$segments.';
 
     return Column(
       children: [

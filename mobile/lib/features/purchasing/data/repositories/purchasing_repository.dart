@@ -3,6 +3,7 @@ import 'package:stockflow/core/api/api_client.dart';
 import 'package:stockflow/core/errors/error_handler.dart';
 import 'package:stockflow/core/errors/failures.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
+import 'package:stockflow/core/outbox/outbox_controller.dart';
 import 'package:stockflow/core/outbox/outbox_mutation_queue.dart';
 import 'package:stockflow/core/outbox/outbox_operation.dart';
 import 'package:stockflow/features/purchasing/domain/purchasing_models.dart';
@@ -161,6 +162,13 @@ class PurchasingRepository {
           kind: OutboxOperationKind.goodsReceipt,
           payload: request.toJson(),
         );
+      } on OutboxCapacityExceeded catch (e) {
+        // G16-N-3 P2-B-4 Phase 2: the bounded queue refused the park. The
+        // receipt was never persisted, so this is a refusal, not a network
+        // problem — and it must never be reported as "saved offline".
+        return PurchasingFailure(
+          ValidationFailure(message: e.toString()),
+        );
       } on StateError catch (e) {
         return PurchasingFailure(NetworkFailure(message: e.message));
       }
@@ -203,6 +211,12 @@ class PurchasingRepository {
             // once, exactly like the offline branch, and it becomes both
             // clientOperationId and idempotencyKey.
             clientOperationId: idempotencyKey,
+          );
+        } on OutboxCapacityExceeded catch (e) {
+          // Phase 2: identical refusal mapping on the transport-uncertain
+          // fallback path.
+          return PurchasingFailure(
+            ValidationFailure(message: e.toString()),
           );
         } on StateError catch (queueError) {
           return PurchasingFailure(

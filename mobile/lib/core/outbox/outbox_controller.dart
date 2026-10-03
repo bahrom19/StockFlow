@@ -5,6 +5,45 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'outbox_operation.dart';
 import 'outbox_storage.dart';
 
+/// Outcome of [OutboxController.enqueue].
+///
+/// G16-N-3 P2-B-4 Phase 2. A dedicated result replaces the previous `bool`
+/// because `false` was already ambiguous — it meant "duplicate" — and because
+/// BOTH direct callers previously discarded the return value entirely, so a
+/// refusal would have been indistinguishable from a successful park.
+enum OutboxEnqueueOutcome {
+  /// The operation was appended and persisted.
+  added,
+
+  /// An operation with the same `clientOperationId` was already queued, so the
+  /// enqueue was a no-op. The already-queued operation is authoritative and is
+  /// left untouched — its identity is never rewritten.
+  duplicate,
+
+  /// The current scope already holds [OutboxController.hardCapacityLimit]
+  /// unresolved operations. Nothing was mutated or persisted.
+  capacityRefused,
+}
+
+/// Raised when an enqueue is refused because the current scope is at
+/// [OutboxController.hardCapacityLimit].
+///
+/// Deliberately NOT a [StateError]: `StateError` already means "no
+/// authenticated user" and existing `on StateError` handlers must keep that
+/// single meaning. An uncaught instance therefore fails loudly instead of
+/// being silently reported to the user as "saved offline".
+class OutboxCapacityExceeded implements Exception {
+  const OutboxCapacityExceeded(this.limit);
+
+  /// The hard cap that was reached.
+  final int limit;
+
+  @override
+  String toString() =>
+      'OutboxCapacityExceeded: the offline queue already holds $limit '
+      'unresolved changes for this account.';
+}
+
 /// Immutable snapshot of the outbox for UI and the sync worker.
 class OutboxState {
   const OutboxState({this.operations = const <OutboxOperation>[]});
@@ -80,6 +119,27 @@ class OutboxState {
           o.userId == userId &&
           o.status == OutboxStatus.failedPermanent)
       .length;
+
+  /// G16-N-3 P2-B-4 Phase 2: total unresolved operations visible to
+  /// [companyId] + [userId] — the number the capacity gate is evaluated
+  /// against and the number the pressure warning may display.
+  ///
+  /// Derived from [unresolvedFor] so the gate, the badge and the warning can
+  /// never disagree: there is exactly one definition of "how full is this
+  /// queue". Scope is companyId + userId, so a foreign account's backlog is
+  /// never counted here and can never be inferred from it.
+  int capacityUsedFor(String companyId, String userId) =>
+      unresolvedFor(companyId, userId).length;
+
+  /// True when this scope has reached the soft cap (visible pressure). The
+  /// queue is still fully functional — enqueue is not gated here.
+  bool isAtSoftCapacity(String companyId, String userId) =>
+      capacityUsedFor(companyId, userId) >= OutboxController.softCapacityLimit;
+
+  /// True when this scope has reached the hard cap, so the next enqueue will
+  /// be refused.
+  bool isAtHardCapacity(String companyId, String userId) =>
+      capacityUsedFor(companyId, userId) >= OutboxController.hardCapacityLimit;
 }
 
 /// In-memory owner of the outbox queue.
@@ -108,6 +168,28 @@ class OutboxController extends StateNotifier<OutboxState> {
   /// policy ONLY — the sync worker's error classification (what is
   /// retryable vs permanent) is intentionally untouched.
   static const int maxRetryAttempts = 12;
+
+  // ── G16-N-3 P2-B-4 Phase 2: bounded queue capacity (PD-3) ──────────────
+  //
+  // PD-3 rules encoded here, deliberately:
+  //  * no time-based eviction of anything;
+  //  * PENDING and SENDING are NEVER auto-removed;
+  //  * FAILED_PERMANENT is NEVER evicted by age;
+  //  * growth is bounded by VISIBLE PRESSURE plus a user-resolvable refusal.
+  //
+  // Every persisted operation counts, because `OutboxStatus` has exactly three
+  // values and a confirmed operation is removed immediately — there is no
+  // terminal "sent" row that could accumulate.
+
+  /// At or above this many operations **in the current scope**, the indicator
+  /// surfaces persistent queue pressure. Enqueue still succeeds — this is a
+  /// warning, never a gate.
+  static const int softCapacityLimit = 50;
+
+  /// At or above this many operations **in the current scope**, enqueue is
+  /// refused. Existing operations are left completely untouched and nothing is
+  /// deleted to make room.
+  static const int hardCapacityLimit = 200;
 
   final OutboxStorage _storage;
   final DateTime Function() _now;
@@ -139,20 +221,50 @@ class OutboxController extends StateNotifier<OutboxState> {
     state = OutboxState(operations: _sorted(ops));
   }
 
-  /// Appends a new operation. Returns false when an op with the same
-  /// [op.clientOperationId] is already queued — duplicate enqueue is a no-op.
-  Future<bool> enqueue(OutboxOperation op) {
+  /// Appends a new operation, subject to the bounded-queue capacity gate.
+  ///
+  /// G16-N-3 P2-B-4 Phase 2. Every step below runs INSIDE [_serialize], which
+  /// is the single lock every queue mutation passes through (enqueue, _mutate,
+  /// confirmSent, clearForLogout). Placing the capacity decision in the same
+  /// critical section as the append is what makes the hard cap atomic: two
+  /// concurrent enqueues cannot both observe "below the cap", because the
+  /// second does not begin until the first has finished appending AND saving.
+  /// No additional locking, transaction or version counter is required.
+  ///
+  /// Order is deliberate and load-bearing:
+  ///   1. hydrate — so the count is correct even on a cold start;
+  ///   2. duplicate detection — MUST precede capacity, otherwise the F5-A
+  ///      fallback (which re-enqueues under the SAME clientOperationId) would
+  ///      be wrongly refused the moment the queue is full;
+  ///   3. capacity gate — refuses only NEW work, never recovery;
+  ///   4. append + persist.
+  ///
+  /// On [OutboxEnqueueOutcome.capacityRefused] nothing is mutated: `state` is
+  /// untouched, [_storage.save] is not called, and no identity field of [op] is
+  /// read, rewritten or regenerated. There is deliberately NO time-based
+  /// eviction to make room (PD-3) — capacity is released only by the user
+  /// resolving work (discard / retry / successful send), which is what keeps a
+  /// full queue from becoming a deadlock.
+  Future<OutboxEnqueueOutcome> enqueue(OutboxOperation op) {
     return _serialize(() async {
       await _hydrateLocked();
       if (state.operations
           .any((o) => o.clientOperationId == op.clientOperationId)) {
-        return false;
+        return OutboxEnqueueOutcome.duplicate;
+      }
+      // Capacity is SCOPED: this operation's own companyId + userId, the same
+      // pair the Phase 1 accessors and the sync worker's dispatch guard use.
+      // A foreign scope's backlog must never consume this scope's capacity,
+      // and must never be visible to it.
+      if (state.unresolvedFor(op.companyId, op.userId).length >=
+          hardCapacityLimit) {
+        return OutboxEnqueueOutcome.capacityRefused;
       }
       final withDefaults = op.copyWith(createdAt: op.createdAt ?? _now());
       final ops = [...state.operations, withDefaults];
       state = OutboxState(operations: _sorted(ops));
       await _storage.save(state.operations);
-      return true;
+      return OutboxEnqueueOutcome.added;
     });
   }
 

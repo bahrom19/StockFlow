@@ -24,7 +24,13 @@ class OfflineSaleQueue {
   /// (already written into the payload) so the UI can show it immediately.
   ///
   /// Duplicate safety: enqueueing the same [clientOperationId] twice is a
-  /// no-op — the controller keeps the first entry and reports `false`.
+  /// no-op — the controller keeps the first entry and reports
+  /// [OutboxEnqueueOutcome.duplicate].
+  ///
+  /// G16-N-3 P2-B-4 Phase 2: throws [OutboxCapacityExceeded] when the current
+  /// scope is at [OutboxController.hardCapacityLimit]. The caller MUST NOT
+  /// clear the cart or claim the sale was saved in that case — the sale was
+  /// never persisted, so discarding it would silently destroy it.
   Future<String> enqueueCreateSale({
     required CreateSaleRequest request,
     String? clientOperationId,
@@ -46,7 +52,13 @@ class OfflineSaleQueue {
       payload: request.copyWith(saleNumber: saleNumber).toJson(),
       createdAt: DateTime.now(),
     );
-    await _ref.read(outboxControllerProvider.notifier).enqueue(op);
+    // Phase 2: the outcome is no longer discarded — a refusal must reach the
+    // POS instead of being reported as "Sale saved offline".
+    final outcome =
+        await _ref.read(outboxControllerProvider.notifier).enqueue(op);
+    if (outcome == OutboxEnqueueOutcome.capacityRefused) {
+      throw const OutboxCapacityExceeded(OutboxController.hardCapacityLimit);
+    }
     return saleNumber;
   }
 }

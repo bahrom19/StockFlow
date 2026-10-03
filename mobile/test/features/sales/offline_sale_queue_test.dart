@@ -53,8 +53,7 @@ void main() {
       final (container, controller) = await harness();
       final queue = container.read(offlineSaleQueueProvider);
 
-      final saleNumber =
-          await queue.enqueueCreateSale(request: request());
+      final saleNumber = await queue.enqueueCreateSale(request: request());
 
       expect(saleNumber, startsWith('OFF-'));
       final op = controller.state.operations.single;
@@ -120,6 +119,60 @@ void main() {
         () => queue.enqueueCreateSale(request: request()),
         throwsStateError,
       );
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 2 — CREATE_SALE at the hard cap.
+  //
+  // Data-safety contract: the POS must be able to tell that the sale was NOT
+  // persisted, so it can keep the cart. Reporting "saved offline" here would
+  // make the caller discard a sale that exists nowhere.
+  // ───────────────────────────────────────────────────────────────────────
+  group('Phase 2 — CREATE_SALE capacity refusal', () {
+    test('throws OutboxCapacityExceeded at the hard cap and persists nothing',
+        () async {
+      final (container, controller) = await harness();
+      final queue = container.read(offlineSaleQueueProvider);
+
+      for (var i = 0; i < OutboxController.hardCapacityLimit; i++) {
+        await controller.enqueue(OutboxOperation(
+          clientOperationId: 'seed-$i',
+          kind: OutboxOperationKind.createSale,
+          companyId: 'company-1',
+          userId: 'user-1',
+          payload: {'saleNumber': 'OFF-seed-$i'},
+          createdAt: DateTime(2026, 1, 1),
+        ));
+      }
+      final before = controller.state.operations.length;
+
+      await expectLater(
+        queue.enqueueCreateSale(request: request()),
+        throwsA(isA<OutboxCapacityExceeded>()),
+      );
+
+      // The sale was NOT parked — the cart must survive.
+      expect(controller.state.operations, hasLength(before));
+      // Every persisted sale is one of the seeded ones — the refused sale
+      // left no trace anywhere.
+      expect(
+        controller.state.operations
+            .where((o) =>
+                (o.payload['saleNumber'] as String).startsWith('OFF-seed-'))
+            .length,
+        before,
+      );
+    });
+
+    test('below the hard cap the sale still enqueues normally', () async {
+      final (container, controller) = await harness();
+      final queue = container.read(offlineSaleQueueProvider);
+
+      final saleNumber = await queue.enqueueCreateSale(request: request());
+
+      expect(saleNumber, startsWith('OFF-'));
+      expect(controller.state.operations, hasLength(1));
     });
   });
 }

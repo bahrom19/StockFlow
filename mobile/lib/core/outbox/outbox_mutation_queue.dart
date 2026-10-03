@@ -12,6 +12,7 @@ import 'package:stockflow/core/outbox/outbox_operation.dart';
 Options? idempotencyHeader(String? idempotencyKey) => idempotencyKey == null
     ? null
     : Options(headers: {'Idempotency-Key': idempotencyKey});
+
 /// Outcome of [OutboxMutationQueue.mutate].
 sealed class OutboxMutationOutcome<T> {
   const OutboxMutationOutcome();
@@ -167,6 +168,12 @@ class OutboxMutationQueue {
       return OutboxMutationQueued<T>(id);
     } on StateError catch (e) {
       return OutboxMutationRejected<T>(e.message);
+    } on OutboxCapacityExceeded catch (e) {
+      // Phase 2: the bounded-queue refusal rides the SAME generic rejection
+      // channel as every other "could not park" reason, so cash/inventory
+      // providers surface it through their existing message path with no new
+      // UI and no new outcome type.
+      return OutboxMutationRejected<T>(e.toString());
     }
   }
 
@@ -195,11 +202,20 @@ class OutboxMutationQueue {
       return OutboxMutationQueued<T>(id);
     } on StateError catch (e) {
       return OutboxMutationRejected<T>(e.message);
+      // Phase 2: identical mapping on the transport-uncertainty fallback path.
+    } on OutboxCapacityExceeded catch (e) {
+      return OutboxMutationRejected<T>(e.toString());
     }
   }
 
   /// Offline-only path. Throws [StateError] when there is no authenticated
   /// user — the same generic semantics as the legacy offline sale queue.
+  ///
+  /// G16-N-3 P2-B-4 Phase 2: also throws [OutboxCapacityExceeded] when the
+  /// current scope is at [OutboxController.hardCapacityLimit]. That is a
+  /// DISTINCT exception type on purpose — [StateError] keeps its single
+  /// meaning ("no authenticated user") so existing handlers cannot swallow a
+  /// capacity refusal and report it to the user as "saved offline".
   ///
   /// Duplicate safety: re-enqueueing the same [clientOperationId] is a
   /// controller-level no-op (the first entry wins).
@@ -226,7 +242,15 @@ class OutboxMutationQueue {
       idempotencyKey: opId,
       createdAt: DateTime.now(),
     );
-    await _controller.enqueue(op);
+    // Phase 2: the controller's return value is NO LONGER discarded. A
+    // refusal must never be reported to the user as a successful park.
+    final outcome = await _controller.enqueue(op);
+    if (outcome == OutboxEnqueueOutcome.capacityRefused) {
+      throw const OutboxCapacityExceeded(OutboxController.hardCapacityLimit);
+    }
+    // `added` and `duplicate` both mean "this operation is queued under
+    // opId" — a duplicate is the pre-existing, already-persisted entry, which
+    // is exactly what the caller wants to report.
     return opId;
   }
 }

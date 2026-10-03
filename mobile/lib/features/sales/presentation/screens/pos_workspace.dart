@@ -15,6 +15,7 @@ import 'package:stockflow/core/currency/currency_selector.dart';
 import 'package:stockflow/core/currency/money.dart';
 import 'package:stockflow/core/localization/error_labels.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
+import 'package:stockflow/core/outbox/outbox_controller.dart';
 import 'package:stockflow/core/services/connectivity_service.dart';
 import 'package:stockflow/core/services/receipt_print_service.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
@@ -576,9 +577,27 @@ class _PosWorkspaceState extends ConsumerState<PosWorkspace> {
         currency: cart.currency,
         notes: cart.notes,
       );
-      final number = await ref
-          .read(offlineSaleQueueProvider)
-          .enqueueCreateSale(request: request);
+      final String number;
+      try {
+        number = await ref
+            .read(offlineSaleQueueProvider)
+            .enqueueCreateSale(request: request);
+      } on OutboxCapacityExceeded {
+        // G16-N-3 P2-B-4 Phase 2: the bounded queue refused this sale, so it
+        // was NEVER persisted. Clearing the cart here — the pre-existing
+        // unconditional behaviour — would destroy the sale while the UI
+        // claimed it had been saved. Keep the cart intact and tell the user
+        // to send or discard queued changes first.
+        if (!mounted) return;
+        setState(() => _isCompleting = false);
+        // `isError` defaults to true, which is what an error snackbar needs.
+        _showSnack(
+          context.l10n.outboxQueueFull(
+            OutboxController.hardCapacityLimit,
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       setState(() => _isCompleting = false);
       ref.read(cartProvider.notifier).clear();

@@ -55,7 +55,8 @@ void main() {
 
       final added = await c.enqueue(op('op-1'));
 
-      expect(added, isTrue);
+      // Phase 2: enqueue returns an explicit outcome, not a bool.
+      expect(added, OutboxEnqueueOutcome.added);
       expect(c.state.pendingCount, 1);
       expect(c.state.operations.single.clientOperationId, 'op-1');
     });
@@ -66,7 +67,7 @@ void main() {
 
       final addedAgain = await c.enqueue(op('same-id'));
 
-      expect(addedAgain, isFalse);
+      expect(addedAgain, OutboxEnqueueOutcome.duplicate);
       expect(c.state.operations, hasLength(1));
     });
 
@@ -574,6 +575,277 @@ void main() {
       expect(c.state.failedCountFor('company-1', 'user-1'), 1);
       expect(c.state.failedCountFor('company-1', 'user-2'), 1);
       expect(c.state.unresolvedFor('company-1', 'user-2'), hasLength(1));
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 2 — bounded queue capacity (PD-3).
+  //
+  // Invariants under test:
+  //  * capacity is SCOPED to companyId + userId;
+  //  * the gate is atomic inside the existing _serialize lock;
+  //  * a refusal mutates NOTHING (no state change, no save, no identity write);
+  //  * recovery (retryFailed / discard / confirmSent) is NEVER gated, so a
+  //    full queue can always be drained by the user;
+  //  * dedupe is evaluated BEFORE capacity.
+  // ───────────────────────────────────────────────────────────────────────
+  group('Phase 2 — bounded queue capacity', () {
+    const soft = OutboxController.softCapacityLimit;
+    const hard = OutboxController.hardCapacityLimit;
+
+    // The shared `controller()` helper reuses ONE SharedPreferences mock per
+    // test, so a second controller would hydrate the first one's writes.
+    // Phase 2 needs genuinely independent queues, hence this reset.
+    Future<OutboxController> fresh() async {
+      SharedPreferences.setMockInitialValues({});
+      return controller();
+    }
+
+    OutboxOperation fill(String prefix, int count,
+            {String c = 'company-1', String u = 'user-1'}) =>
+        op(
+          '$prefix-$count',
+          companyId: c,
+          userId: u,
+          idempotencyKey: '$prefix-$count',
+          createdAt: DateTime(2026, 1, 1),
+        );
+
+    Future<void> seed(OutboxController c, int n,
+        {String prefix = 'seed',
+        String company = 'company-1',
+        String user = 'user-1'}) async {
+      for (var i = 0; i < n; i++) {
+        final r = await c.enqueue(
+          fill(prefix, i, c: company, u: user),
+        );
+        expect(r, OutboxEnqueueOutcome.added);
+      }
+    }
+
+    test('limits are the PD-3 approved values', () {
+      expect(soft, 50);
+      expect(hard, 200);
+    });
+
+    test('1-4: empty, 49, 50 and 199 all enqueue successfully', () async {
+      final c0 = await fresh();
+      expect(await c0.enqueue(op('a')), OutboxEnqueueOutcome.added);
+
+      final c49 = await fresh();
+      await seed(c49, 49);
+      expect(c49.state.capacityUsedFor('company-1', 'user-1'), 49);
+      expect(await c49.enqueue(op('fiftieth')), OutboxEnqueueOutcome.added);
+      expect(c49.state.capacityUsedFor('company-1', 'user-1'), 50);
+      // 50 is pressure, NOT a gate.
+      expect(c49.state.isAtSoftCapacity('company-1', 'user-1'), isTrue);
+      expect(c49.state.isAtHardCapacity('company-1', 'user-1'), isFalse);
+
+      final c199 = await fresh();
+      await seed(c199, 199, prefix: 'h');
+      expect(
+          await c199.enqueue(op('two-hundredth')), OutboxEnqueueOutcome.added);
+      expect(c199.state.capacityUsedFor('company-1', 'user-1'), 200);
+    });
+
+    test('5: at the hard cap enqueue is refused', () async {
+      final c = await fresh();
+      await seed(c, hard);
+
+      final outcome = await c.enqueue(op('overflow'));
+
+      expect(outcome, OutboxEnqueueOutcome.capacityRefused);
+      expect(c.state.capacityUsedFor('company-1', 'user-1'), hard);
+    });
+
+    test('13: refusal mutates nothing — state, order and identity intact',
+        () async {
+      final c = await fresh();
+      await seed(c, hard);
+      final before = c.state.operations;
+      final beforeIds = before.map((o) => o.clientOperationId).toList();
+      final rejected = op('overflow', idempotencyKey: 'overflow');
+
+      expect(await c.enqueue(rejected), OutboxEnqueueOutcome.capacityRefused);
+
+      expect(c.state.operations, hasLength(hard));
+      expect(
+        c.state.operations.map((o) => o.clientOperationId).toList(),
+        beforeIds,
+      );
+      // Ordering preserved.
+      expect(
+        c.state.operations.map((o) => o.clientOperationId).toList(),
+        beforeIds,
+      );
+      // The rejected operation was never mutated or persisted.
+      expect(rejected.clientOperationId, 'overflow');
+      expect(rejected.idempotencyKey, 'overflow');
+    });
+
+    test('6: discard at the cap frees capacity naturally', () async {
+      final c = await fresh();
+      await seed(c, hard);
+
+      expect(await c.enqueue(op('nope')), OutboxEnqueueOutcome.capacityRefused);
+
+      await c.discard('seed-0');
+
+      expect(c.state.capacityUsedFor('company-1', 'user-1'), hard - 1);
+      expect(await c.enqueue(op('now-fits')), OutboxEnqueueOutcome.added);
+      expect(c.state.capacityUsedFor('company-1', 'user-1'), hard);
+    });
+
+    test('7: foreign-scope operations never consume this scope capacity',
+        () async {
+      final c = await fresh();
+      // 200 ops belonging to somebody else.
+      await seed(c, hard, prefix: 'foreign', user: 'user-2');
+      expect(c.state.capacityUsedFor('company-1', 'user-1'), 0);
+      expect(c.state.capacityUsedFor('company-1', 'user-2'), hard);
+
+      // Our scope still accepts work.
+      expect(await c.enqueue(op('mine')), OutboxEnqueueOutcome.added);
+      expect(await c.enqueue(op('mine-2')), OutboxEnqueueOutcome.added);
+    });
+
+    test('8: mixed company/user scopes are counted and gated independently',
+        () async {
+      final c = await fresh();
+      await seed(c, hard, prefix: 'c1u1');
+      await seed(c, hard, prefix: 'c1u2', user: 'user-2');
+      await seed(c, hard, prefix: 'c2u1', company: 'company-2');
+
+      expect(c.state.capacityUsedFor('company-1', 'user-1'), hard);
+      expect(c.state.capacityUsedFor('company-1', 'user-2'), hard);
+      expect(c.state.capacityUsedFor('company-2', 'user-1'), hard);
+
+      // Every scope is individually at its cap.
+      expect(await c.enqueue(op('x', userId: 'user-2')),
+          OutboxEnqueueOutcome.capacityRefused);
+      expect(await c.enqueue(op('y', companyId: 'company-2')),
+          OutboxEnqueueOutcome.capacityRefused);
+      expect(await c.enqueue(op('z')), OutboxEnqueueOutcome.capacityRefused);
+      // Total persisted count is untouched by any refusal.
+      expect(c.state.operations, hasLength(hard * 3));
+    });
+
+    test('9: PENDING + SENDING + FAILED_PERMANENT all count', () async {
+      final c = await fresh();
+      await c.enqueue(op('p'));
+      await c.enqueue(op('s'));
+      await c.enqueue(op('f'));
+      await c.markSending('s');
+      await c.markPermanentFailure('p', 'boom');
+
+      expect(c.state.pendingCountFor('company-1', 'user-1'), 1);
+      expect(c.state.sendingCountFor('company-1', 'user-1'), 1);
+      expect(c.state.failedCountFor('company-1', 'user-1'), 1);
+      expect(c.state.capacityUsedFor('company-1', 'user-1'), 3);
+    });
+
+    test('duplicate is evaluated BEFORE capacity (F5-A same-key replay)',
+        () async {
+      final c = await fresh();
+      await seed(c, hard);
+
+      // Same id, queue full => duplicate, NOT a refusal.
+      expect(await c.enqueue(op('seed-0')), OutboxEnqueueOutcome.duplicate);
+    });
+
+    test('11: retryFailed is never capacity-gated (no deadlock)', () async {
+      final c = await fresh();
+      await seed(c, hard - 1);
+      await c.enqueue(op('stuck', idempotencyKey: 'stuck'));
+      await c.markPermanentFailure('stuck', 'permanent');
+      expect(c.state.capacityUsedFor('company-1', 'user-1'), hard);
+
+      // The queue is full, yet recovery must still work.
+      await c.retryFailed('stuck');
+
+      final recovered =
+          c.state.operations.firstWhere((o) => o.clientOperationId == 'stuck');
+      expect(recovered.status, OutboxStatus.pending);
+      expect(recovered.attempts, 0);
+      expect(recovered.idempotencyKey, 'stuck');
+    });
+
+    test('12: refusal never rewrites identity of queued operations', () async {
+      final c = await fresh();
+      await seed(c, hard);
+      final snapshot = {
+        for (final o in c.state.operations)
+          o.clientOperationId: (o.idempotencyKey, o.payload),
+      };
+
+      await c.enqueue(op('overflow', idempotencyKey: 'overflow'));
+
+      for (final o in c.state.operations) {
+        expect(o.idempotencyKey, snapshot[o.clientOperationId]!.$1);
+        expect(o.payload, snapshot[o.clientOperationId]!.$2);
+      }
+    });
+
+    test('14: concurrent enqueue at 199 admits exactly one', () async {
+      final c = await fresh();
+      await seed(c, hard - 1);
+
+      // Fire 10 concurrent enqueues. The gate lives inside _serialize, so the
+      // first wins and every other must observe the now-full queue.
+      final results = await Future.wait([
+        for (var i = 0; i < 10; i++) c.enqueue(op('race-$i')),
+      ]);
+
+      expect(
+          results.where((r) => r == OutboxEnqueueOutcome.added), hasLength(1));
+      expect(
+        results.where((r) => r == OutboxEnqueueOutcome.capacityRefused),
+        hasLength(9),
+      );
+      // The hard cap holds exactly — never exceeded.
+      expect(c.state.capacityUsedFor('company-1', 'user-1'), hard);
+      expect(c.state.operations, hasLength(hard));
+    });
+
+    test('10: the cap still holds after a restart', () async {
+      final prefs = PreferencesStorage();
+      await prefs.initialize();
+      final storage = OutboxStorage(prefs);
+      final first = OutboxController(storage);
+      await first.hydrate();
+      await seed(first, hard);
+
+      // Simulate a cold start against the same persisted storage.
+      final restarted = OutboxController(storage);
+      await restarted.hydrate();
+      expect(restarted.state.capacityUsedFor('company-1', 'user-1'), hard);
+      expect(await restarted.enqueue(op('after-restart')),
+          OutboxEnqueueOutcome.capacityRefused);
+
+      await restarted.discard('seed-0');
+      expect(
+          await restarted.enqueue(op('fits-now')), OutboxEnqueueOutcome.added);
+    });
+
+    test('capacity pressure accessors agree with the gate', () async {
+      final c = await fresh();
+      await seed(c, soft);
+      expect(c.state.isAtSoftCapacity('company-1', 'user-1'), isTrue);
+      expect(c.state.isAtHardCapacity('company-1', 'user-1'), isFalse);
+
+      await seed(c, hard - soft, prefix: 'more');
+      expect(c.state.isAtHardCapacity('company-1', 'user-1'), isTrue);
+      // A foreign scope is unaffected by our pressure.
+      expect(c.state.isAtSoftCapacity('company-1', 'user-9'), isFalse);
+      expect(c.state.isAtHardCapacity('company-9', 'user-1'), isFalse);
+    });
+
+    test('OutboxCapacityExceeded carries the limit and is not a StateError',
+        () {
+      const e = OutboxCapacityExceeded(OutboxController.hardCapacityLimit);
+      expect(e.limit, 200);
+      expect(e, isNot(isA<StateError>()));
+      expect(e.toString(), contains('200'));
     });
   });
 }

@@ -61,7 +61,8 @@ void main() {
   }
 
   group('OutboxMutationQueue (Phase F4-D)', () {
-    test('offline enqueue: idempotencyKey == clientOperationId, scoped, pending',
+    test(
+        'offline enqueue: idempotencyKey == clientOperationId, scoped, pending',
         () async {
       final (container, controller, _) = await harness();
       final queue = container.read(outboxMutationQueueProvider);
@@ -128,7 +129,8 @@ void main() {
       );
     });
 
-    test('cash offline payload carries warehouseId verbatim (spec builds the query from it)',
+    test(
+        'cash offline payload carries warehouseId verbatim (spec builds the query from it)',
         () async {
       final (container, controller, _) = await harness();
       final queue = container.read(outboxMutationQueueProvider);
@@ -177,7 +179,8 @@ void main() {
       expect(options!.headers!['Idempotency-Key'], 'key-abc');
     });
 
-    test('offline → restart → online flush: same key, cash query built, body stripped',
+    test(
+        'offline → restart → online flush: same key, cash query built, body stripped',
         () async {
       final (container, _, storage) = await harness();
       final queue = container.read(outboxMutationQueueProvider);
@@ -213,7 +216,8 @@ void main() {
       expect(restarted.state.operations, isEmpty);
     });
 
-    test('repeated flush after success performs NO second request (no double execution)',
+    test(
+        'repeated flush after success performs NO second request (no double execution)',
         () async {
       final (container, _, storage) = await harness();
       final queue = container.read(outboxMutationQueueProvider);
@@ -241,7 +245,8 @@ void main() {
       expect(spy.calls, hasLength(1));
     });
 
-    test('goodsReceipt payload is stored verbatim (existing contract preserved)',
+    test(
+        'goodsReceipt payload is stored verbatim (existing contract preserved)',
         () async {
       final (container, controller, _) = await harness();
       final queue = container.read(outboxMutationQueueProvider);
@@ -262,6 +267,98 @@ void main() {
       expect(op.kind, OutboxOperationKind.goodsReceipt);
       expect(op.payload, grPayload);
       expect(op.idempotencyKey, op.clientOperationId);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 2 — capacity refusal surfaces as a REJECTION, never
+  // as "saved offline". This is the contract the cash/inventory providers
+  // already consume via OutboxMutationRejected.
+  // ───────────────────────────────────────────────────────────────────────
+  group('Phase 2 — capacity refusal propagation', () {
+    Future<void> fillToCap(OutboxController controller) async {
+      for (var i = 0; i < OutboxController.hardCapacityLimit; i++) {
+        await controller.enqueue(OutboxOperation(
+          clientOperationId: 'seed-$i',
+          kind: OutboxOperationKind.cashIn,
+          companyId: testUser.companyId,
+          userId: testUser.id,
+          payload: const {'amount': 1.0},
+          idempotencyKey: 'seed-$i',
+          createdAt: DateTime(2026, 1, 1),
+        ));
+      }
+    }
+
+    test('offline mutate at the hard cap => OutboxMutationRejected', () async {
+      final (container, controller, _) = await harness();
+      final queue = container.read(outboxMutationQueueProvider);
+      await fillToCap(controller);
+
+      final outcome = await queue.mutate<int>(
+        kind: OutboxOperationKind.cashIn,
+        payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+        online: false,
+      );
+
+      expect(outcome, isA<OutboxMutationRejected<int>>());
+      expect((outcome as OutboxMutationRejected<int>).reason,
+          contains('OutboxCapacityExceeded'));
+      // Nothing was parked and nothing was mutated.
+      expect(controller.state.operations, hasLength(200));
+    });
+
+    test('enqueueOffline itself throws OutboxCapacityExceeded', () async {
+      final (container, controller, _) = await harness();
+      final queue = container.read(outboxMutationQueueProvider);
+      await fillToCap(controller);
+
+      await expectLater(
+        queue.enqueueOffline(
+          kind: OutboxOperationKind.goodsReceipt,
+          payload: const {'n': 1},
+        ),
+        throwsA(isA<OutboxCapacityExceeded>()),
+      );
+      expect(controller.state.operations, hasLength(200));
+    });
+
+    test('an unauthenticated caller still gets StateError, not a refusal',
+        () async {
+      final (container, _, _) = await harness(user: null);
+      final queue = container.read(outboxMutationQueueProvider);
+
+      await expectLater(
+        queue.enqueueOffline(
+          kind: OutboxOperationKind.cashIn,
+          payload: const {'amount': 1.0},
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('a foreign scope at the cap does not block this scope', () async {
+      final (container, controller, _) = await harness();
+      final queue = container.read(outboxMutationQueueProvider);
+      // Fill a DIFFERENT scope directly on the controller.
+      for (var i = 0; i < OutboxController.hardCapacityLimit; i++) {
+        await controller.enqueue(OutboxOperation(
+          clientOperationId: 'foreign-$i',
+          kind: OutboxOperationKind.cashIn,
+          companyId: 'other-company',
+          userId: 'other-user',
+          payload: const {'amount': 1.0},
+          idempotencyKey: 'foreign-$i',
+          createdAt: DateTime(2026, 1, 1),
+        ));
+      }
+
+      final outcome = await queue.mutate<int>(
+        kind: OutboxOperationKind.cashIn,
+        payload: const {'amount': 100.0},
+        online: false,
+      );
+      expect(outcome, isA<OutboxMutationQueued<int>>());
     });
   });
 }

@@ -1049,4 +1049,65 @@ void main() {
       expect(paths, hasLength(1));
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 2 — visible queue pressure on the existing bar.
+  //
+  // The warning must be SCOPED: a foreign account sitting at 200 must not
+  // put this account's bar into a pressure state, and must never leak a
+  // count.
+  // ─────────────────────────────────────────────────────────────────────
+  group('Phase 2 — queue pressure indicator', () {
+    List<OutboxOperation> bulk(int n, {String userId = 'user-1'}) => [
+          for (var i = 0; i < n; i++)
+            mkOp(
+              'bulk-$i',
+              userId: userId,
+              nextAttemptAt: DateTime(2026, 1, 1, 13),
+            ),
+        ];
+
+    testWidgets('no pressure below the soft cap', (tester) async {
+      await buildHarness(seeded: bulk(OutboxController.softCapacityLimit - 1));
+      await pumpApp(tester);
+      await tester.pump();
+
+      expect(find.textContaining('waiting to sync'), findsNothing);
+      expect(find.textContaining('pending change'), findsOneWidget);
+    });
+
+    testWidgets('pressure is visible at the soft cap', (tester) async {
+      await buildHarness(seeded: bulk(OutboxController.softCapacityLimit));
+      await pumpApp(tester);
+      await tester.pump();
+
+      expect(find.textContaining('waiting to sync'), findsOneWidget);
+      // Still fully functional — the soft cap never gates anything.
+      expect(find.byIcon(Icons.cloud_upload_outlined), findsOneWidget);
+    });
+
+    testWidgets('pressure is localized (RU)', (tester) async {
+      await buildHarness(seeded: bulk(OutboxController.softCapacityLimit));
+      await pumpApp(tester, locale: const Locale('ru'));
+      await tester.pump();
+
+      expect(find.textContaining('ожидают отправки'), findsOneWidget);
+    });
+
+    testWidgets('a foreign scope at the hard cap shows no pressure here',
+        (tester) async {
+      await buildHarness(
+        seeded: bulk(OutboxController.hardCapacityLimit, userId: 'user-2'),
+        user: const CurrentUser(
+            id: 'user-1', email: 'u@t', companyId: 'company-1'),
+      );
+      await pumpApp(tester);
+      await tester.pump();
+
+      // Nothing at all is rendered for this user.
+      expect(find.byIcon(Icons.cloud_upload_outlined), findsNothing);
+      expect(find.textContaining('waiting to sync'), findsNothing);
+      expect(find.text('content'), findsOneWidget);
+    });
+  });
 }
