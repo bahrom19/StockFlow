@@ -14,7 +14,7 @@ import { InventoryCountEntity } from '../entities';
 import { InventoryCountMapper } from '../mappers/inventory-count.mapper';
 import { InventoryRepository } from '../repositories/inventory.repository';
 import { InventoryCountedEvent, InventoryAdjustedEvent } from '../events';
-import { CostingService } from './costing.service';
+import { CostingService, FifoConsumptionResult } from './costing.service';
 
 @Injectable()
 export class InventoryCountService {
@@ -175,18 +175,22 @@ export class InventoryCountService {
         // a count must not create unvalued positive stock. Negative
         // differences consume via consumeFifoLayers below (unchanged).
         let unitCost: string | undefined;
+        // G16-N-4 P1-A: audit-only classification of the actual basis used.
+        let costBasis: 'AVERAGE' | 'COST_PRICE' | undefined;
         if (item.difference > 0) {
-          const resolved = await this.costingService.resolvePositiveEntryUnitCost(
-            item.productId,
-            companyId,
-            tx,
-          );
+          const resolved =
+            await this.costingService.resolvePositiveEntryUnitCost(
+              item.productId,
+              companyId,
+              tx,
+            );
           if (resolved.source === 'NONE') {
             throw new BadRequestException(
               `Cannot complete count ${count.countNumber}: no cost basis for product ${item.productId}. Set product costPrice or receive stock with a unit cost first.`,
             );
           }
           unitCost = resolved.unitCost!.toString();
+          costBasis = resolved.source;
         }
 
         const afterQty = item.actualQuantity;
@@ -203,6 +207,7 @@ export class InventoryCountService {
 
         // G15-05-A cost-layer sync. Strict: any failure rolls back the
         // entire count — stock must never move without its valuation.
+        let fifo: FifoConsumptionResult | null = null;
         if (item.difference > 0) {
           if (unitCost) {
             await this.costingService.recordInboundLayer(
@@ -218,7 +223,11 @@ export class InventoryCountService {
           }
           // No cost basis: stock + movement only, explicitly no layer/GL.
         } else {
-          await this.costingService.consumeFifoLayers(
+          // G16-N-4 P1-A: capture the canonical consumption result —
+          // fifo.totalCost is the authoritative financial cost of the
+          // shrinkage (layered cost + FALLBACK B), exactly what the GL must
+          // post. Not recalculated from average cost or unitCost × quantity.
+          fifo = await this.costingService.consumeFifoLayers(
             item.productId,
             companyId,
             Math.abs(item.difference),
@@ -247,27 +256,44 @@ export class InventoryCountService {
 
         // G15-05-A financial leg: reuse the canonical inventory.adjusted
         // path so the existing InventoryFinanceHandler posts Dr/Cr 1300/5100
-        // (plus AccountBalance) inside this same transaction. Skipped only
-        // when no valuation basis exists (handler would zero-skip anyway).
-        if (unitCost) {
-          await this.eventBus.publish(
-            new InventoryAdjustedEvent({
-              productId: item.productId,
-              companyId,
-              warehouseId: count.warehouseId,
-              quantity: item.difference,
-              beforeQuantity: item.expectedQuantity,
-              afterQuantity: item.actualQuantity,
-              reason: `count ${count.countNumber}`,
-              adjustedBy: userId,
-              referenceType: 'INVENTORY_COUNT',
-              referenceId: count.id,
-              comment: `Count adjustment for ${count.countNumber}`,
-              unitCost,
-            }),
-            { context: { transactionClient: tx } },
-          );
-        }
+        // (plus AccountBalance) inside this same transaction.
+        //
+        // G16-N-4 P1-A: the event is now published UNCONDITIONALLY. Before
+        // this fix it was gated on `if (unitCost)` — and unitCost is resolved
+        // only for positive differences — so shrinkage never reached the
+        // finance handler: inventory valuation fell (FIFO) while the GL
+        // inventory balance stayed inflated. Negative differences now carry
+        // the authoritative FIFO consumption cost (totalCost + derived
+        // unitCost for observability); zero/missing-cost cases are handled by
+        // the handler's canonical zero-amount skip (GL_SKIP_ZERO_AMOUNT).
+        await this.eventBus.publish(
+          new InventoryAdjustedEvent({
+            productId: item.productId,
+            companyId,
+            warehouseId: count.warehouseId,
+            quantity: item.difference,
+            beforeQuantity: item.expectedQuantity,
+            afterQuantity: item.actualQuantity,
+            reason: `count ${count.countNumber}`,
+            adjustedBy: userId,
+            referenceType: 'INVENTORY_COUNT',
+            referenceId: count.id,
+            comment: `Count adjustment for ${count.countNumber}`,
+            ...(item.difference > 0
+              ? {
+                  unitCost,
+                  costBasis,
+                }
+              : {
+                  unitCost: fifo!.totalCost
+                    .div(Math.abs(item.difference))
+                    .toString(),
+                  totalCost: fifo!.totalCost.toString(),
+                  costBasis: 'FIFO' as const,
+                }),
+          }),
+          { context: { transactionClient: tx } },
+        );
 
         await this.eventBus.publish(
           new InventoryCountedEvent({

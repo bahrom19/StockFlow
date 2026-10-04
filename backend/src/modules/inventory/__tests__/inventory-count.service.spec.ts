@@ -318,4 +318,149 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
       expect.anything(),
     );
   });
+
+  // ── G16-N-4 P1-A: shrinkage GL integrity ─────────────────────────────
+  // Before this fix the financial event was gated on `if (unitCost)`, and
+  // unitCost was resolved only for POSITIVE differences — so a negative
+  // count (shrinkage) consumed FIFO valuation but never reached the finance
+  // handler: no inventory.adjusted, no JournalEntry, no AccountBalance.
+  const adjustedCalls = () =>
+    mockEventBus.publish.mock.calls.filter(
+      ([event]: any) => event?.eventName === 'inventory.adjusted',
+    );
+
+  it('G16-N-4: publishes inventory.adjusted for a negative difference with authoritative FIFO totalCost', async () => {
+    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(15, 10)]));
+    mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(15));
+    // Multi-layer consumption: 3 @ 100 + 2 @ 120 → totalCost 540 (avg 108).
+    mockCosting.consumeFifoLayers.mockResolvedValueOnce({
+      totalCost: new Decimal('540'),
+      layers: [
+        { layerId: 'l1', quantity: 3, unitCost: '100', cost: '300' },
+        { layerId: 'l2', quantity: 2, unitCost: '120', cost: '240' },
+      ],
+      fallbackCost: new Decimal('0'),
+    });
+
+    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+
+    const adjusted = adjustedCalls();
+    expect(adjusted).toHaveLength(1);
+    // Authoritative totalCost passes through AS-IS — not avg-cost × qty,
+    // not unitCost × qty. unitCost in the payload is observability-only
+    // (totalCost / |difference| = 540 / 5 = 108).
+    expect(adjusted[0][0].payload).toEqual(
+      expect.objectContaining({
+        productId,
+        companyId,
+        warehouseId,
+        quantity: -5,
+        beforeQuantity: 15,
+        afterQuantity: 10,
+        referenceType: 'INVENTORY_COUNT',
+        referenceId: 'count-1',
+        totalCost: '540',
+        unitCost: '108',
+        costBasis: 'FIFO',
+      }),
+    );
+    // Published inside the transaction so GL + balances commit atomically.
+    expect(adjusted[0][1]).toEqual(
+      expect.objectContaining({
+        context: expect.objectContaining({ transactionClient: mockTx }),
+      }),
+    );
+  });
+
+  it('G16-N-4: includes FIFO fallback cost in the GL payload', async () => {
+    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 4)]));
+    mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+    // Layers cover 4 @ 100 = 400; shortfall 2 units FALLBACK-B-priced at
+    // costPrice 180 = 360 → totalCost 760.
+    mockCosting.consumeFifoLayers.mockResolvedValueOnce({
+      totalCost: new Decimal('760'),
+      layers: [{ layerId: 'l1', quantity: 4, unitCost: '100', cost: '400' }],
+      fallbackCost: new Decimal('360'),
+    });
+
+    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+
+    const adjusted = adjustedCalls();
+    expect(adjusted).toHaveLength(1);
+    expect(adjusted[0][0].payload).toEqual(
+      expect.objectContaining({
+        quantity: -6,
+        totalCost: '760',
+        unitCost: new Decimal('760').div(6).toString(),
+        costBasis: 'FIFO',
+      }),
+    );
+  });
+
+  it('G16-N-4: publishes the event even when shrinkage cost is zero (handler zero-skips)', async () => {
+    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(5, 3)]));
+    mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(5));
+    // Valid zero-cost basis: shrinkage of genuinely zero-valued stock.
+    mockCosting.consumeFifoLayers.mockResolvedValueOnce({
+      totalCost: new Decimal('0'),
+      layers: [],
+      fallbackCost: new Decimal('0'),
+    });
+
+    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+
+    // The event IS published; the finance handler's canonical zero-amount
+    // skip (GL_SKIP_ZERO_AMOUNT) decides that nothing is posted.
+    const adjusted = adjustedCalls();
+    expect(adjusted).toHaveLength(1);
+    expect(adjusted[0][0].payload).toEqual(
+      expect.objectContaining({
+        quantity: -2,
+        totalCost: '0',
+        unitCost: '0',
+        costBasis: 'FIFO',
+      }),
+    );
+  });
+
+  it('G16-N-4: positive differences still publish the legacy unitCost payload (no totalCost)', async () => {
+    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 15)]));
+    mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
+
+    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+
+    const adjusted = adjustedCalls();
+    expect(adjusted).toHaveLength(1);
+    const payload = adjusted[0][0].payload;
+    expect(payload).toEqual(
+      expect.objectContaining({
+        quantity: 5,
+        unitCost: '20',
+        costBasis: 'AVERAGE',
+      }),
+    );
+    expect(payload.totalCost).toBeUndefined();
+  });
+
+  it('G16-N-4: GL failure on a negative difference rolls back the whole count', async () => {
+    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(15, 10)]));
+    mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(15));
+    mockEventBus.publish.mockRejectedValueOnce(new Error('GL posting failed'));
+
+    await expect(
+      service.complete('count-1', { rowVersion: 0 } as any, companyId, userId),
+    ).rejects.toThrow('GL posting failed');
+
+    // The movement is written BEFORE the finance leg in code order — in the
+    // real DB transaction the GL failure rolls stock/FIFO/movement/count back
+    // together (single $transaction). In this unit mock the observable
+    // downstream side effects must not have happened: no audit log, no
+    // inventory.counted publication after the failed leg.
+    expect(mockAuditLog.log).not.toHaveBeenCalled();
+    expect(
+      mockEventBus.publish.mock.calls.filter(
+        ([event]: any) => event?.eventName === 'inventory.counted',
+      ),
+    ).toHaveLength(0);
+  });
 });

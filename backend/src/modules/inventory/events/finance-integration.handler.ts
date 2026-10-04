@@ -170,13 +170,18 @@ export class InventoryFinanceHandler implements EventHandler {
     }
 
     const diff = payload.afterQuantity - payload.beforeQuantity;
-    const unitCost = payload.unitCost
-      ? new Decimal(payload.unitCost)
-      : new Decimal(0);
-    const amount = unitCost.mul(Math.abs(diff));
-
+    // G16-N-4 P1-A: when the publisher supplies an authoritative totalCost
+    // (inventory-count shrinkage: the canonical consumeFifoLayers().totalCost),
+    // it IS the GL amount — do not re-derive unitCost × |diff|, which would
+    // flatten multi-layer FIFO consumption into an average-unit-cost
+    // multiplication. Absent (all legacy publishers) → existing behavior.
     // Zero-value adjustments (e.g. product without a cost price) have nothing
     // to post — skip rather than fail the whole inventory transaction.
+    const amount = payload.totalCost
+      ? new Decimal(payload.totalCost)
+      : (payload.unitCost ? new Decimal(payload.unitCost) : new Decimal(0)).mul(
+          Math.abs(diff),
+        );
     if (amount.isZero()) {
       const reference = this.toReference(payload);
       this.logger.warn(
