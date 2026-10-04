@@ -137,7 +137,7 @@ describe('Stripe webhook route — raw body wiring (G16-N-4 P1-B)', () => {
       });
     });
 
-    it('rejects a tampered body before the engine sees it', async () => {
+    it('forwards the mutated bytes to verification verbatim', async () => {
       const res = await postRaw(
         h.url,
         RAW_BODY.replace('evt_raw_wiring', 'evt_tampered'),
