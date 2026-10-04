@@ -118,9 +118,13 @@ class _FakeConnectivity implements ConnectivityService {
 
 const _user = CurrentUser(id: 'user-1', email: 'u@t', companyId: 'company-1');
 
+/// G16-N-3 P2-B-5: a keyed kind's durable identity lives in the PAYLOAD, not
+/// only on the operation — this mirrors CashInOutRequest.toJson() in
+/// cash_shift_provider. Without it the worker correctly refuses to dispatch.
 const _cashPayload = <String, dynamic>{
   'warehouseId': 'wh-1',
   'amount': 100,
+  'clientOperationId': 'fixture-identity',
 };
 
 OutboxOperation mkOp(
@@ -1108,6 +1112,256 @@ void main() {
       expect(find.byIcon(Icons.cloud_upload_outlined), findsNothing);
       expect(find.textContaining('waiting to sync'), findsNothing);
       expect(find.text('content'), findsOneWidget);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-5 — blocked-operation resolution surface.
+  //
+  // A blocked operation is PENDING, so it never reaches the FAILED_PERMANENT
+  // dialog and had no per-item affordance at all. These tests pin that it is
+  // individually visible, resolvable, scope-safe, and that "Send anyway" is a
+  // disclosed risk acceptance rather than a silent retry.
+  // ───────────────────────────────────────────────────────────────────────
+  group('P2-B-5 blocked-operation surface', () {
+    /// A legacy keyed op: operation-level ids set, NO payload identity.
+    OutboxOperation legacyOp(
+      String id, {
+      OutboxOperationKind kind = OutboxOperationKind.cashIn,
+      Map<String, dynamic>? payload,
+    }) {
+      return OutboxOperation(
+        clientOperationId: id,
+        kind: kind,
+        companyId: 'company-1',
+        userId: 'user-1',
+        payload: payload ??
+            const {'amount': 10.0, 'warehouseId': 'wh-1'},
+        idempotencyKey: id,
+        createdAt: DateTime(2026, 1, 1),
+      );
+    }
+
+    Finder blockedButton() => find.byIcon(Icons.help_outline);
+
+    /// The per-item actions live inside a collapsed ExpansionTile — expanding it
+    /// IS the "View details" affordance.
+    Future<void> expandFirstItem(WidgetTester tester) async {
+      await tester.tap(find.byType(ExpansionTile).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+
+    testWidgets('blocked operations raise their own affordance and are listed '
+        'individually', (tester) async {
+      await buildHarness(seeded: [legacyOp('blk-1'), legacyOp('blk-2')]);
+      await pumpApp(tester);
+      await tester.pump();
+
+      expect(blockedButton(), findsOneWidget);
+      // The FAILED affordance must NOT appear: nothing is failedPermanent.
+      expect(find.byIcon(Icons.error_outline), findsNothing);
+
+      await tester.tap(blockedButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      // Both operations are listed. Following the established convention the
+      // raw operation UUID is NOT surfaced (see the existing failed-list
+      // assertions); entries are identified by their localized kind.
+      expect(find.text('Cash in'), findsNWidgets(2));
+    });
+
+    testWidgets('an operation WITH a durable identity raises no blocked '
+        'affordance', (tester) async {
+      await buildHarness(seeded: [mkOp('ok-1')]);
+      await pumpApp(tester);
+      await tester.pump();
+      expect(blockedButton(), findsNothing);
+    });
+
+    testWidgets('goodsReceipt and createSale are never blocked', (tester) async {
+      await buildHarness(
+        seeded: [
+          OutboxOperation(
+            clientOperationId: 'gr-1',
+            kind: OutboxOperationKind.goodsReceipt,
+            companyId: 'company-1',
+            userId: 'user-1',
+            payload: const {'receiptNumber': 'GR-1'},
+            createdAt: DateTime(2026, 1, 1),
+          ),
+          OutboxOperation(
+            clientOperationId: 'sale-1',
+            kind: OutboxOperationKind.createSale,
+            companyId: 'company-1',
+            userId: 'user-1',
+            payload: const {'saleNumber': 'OFF-1'},
+            createdAt: DateTime(2026, 1, 1),
+          ),
+        ],
+      );
+      await pumpApp(tester);
+      await tester.pump();
+      expect(blockedButton(), findsNothing);
+    });
+
+    testWidgets('the blocked list is scoped: another user sees no blocked '
+        'affordance for it', (tester) async {
+      await buildHarness(
+        seeded: [legacyOp('blk-1')],
+        user: const CurrentUser(
+          id: 'user-2',
+          email: 'other@test',
+          companyId: 'company-2',
+        ),
+      );
+      await pumpApp(tester);
+      await tester.pump();
+      expect(blockedButton(), findsNothing);
+    });
+
+    testWidgets('Discard removes the operation and releases its capacity',
+        (tester) async {
+      await buildHarness(seeded: [legacyOp('blk-1')]);
+      await pumpApp(tester);
+      await tester.pump();
+      await tester.tap(blockedButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      await expandFirstItem(tester);
+      await tester.tap(find.text(AppLocalizations.of(
+        tester.element(find.byType(AlertDialog).first),
+      )!.outboxIdentityMissingDiscard).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final state = container.read(outboxControllerProvider);
+      expect(state.unresolvedFor('company-1', 'user-1'), isEmpty);
+      expect(state.capacityUsedFor('company-1', 'user-1'), 0);
+    });
+
+    testWidgets('Send anyway requires an explicit confirmation and the dialog '
+        'discloses the duplicate risk', (tester) async {
+      await buildHarness(seeded: [legacyOp('blk-1')]);
+      await pumpApp(tester);
+      await tester.pump();
+      await tester.tap(blockedButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(AlertDialog).first),
+      )!;
+      await expandFirstItem(tester);
+      await tester.tap(find.text(l10n.outboxIdentityMissingConfirm).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      // A SECOND dialog now demands the explicit risk acceptance.
+      expect(find.text(l10n.outboxIdentityMissingTitle), findsWidgets);
+      expect(find.text(l10n.outboxIdentityMissingConfirm), findsWidgets);
+      // Nothing was dispatched merely by opening the dialogs.
+      expect(api.posts, isEmpty);
+      expect(
+        container.read(outboxControllerProvider).operations.single.status,
+        OutboxStatus.pending,
+      );
+    });
+
+    testWidgets('confirming Send anyway dispatches the ORIGINAL payload with '
+        'no identity minted', (tester) async {
+      await buildHarness(seeded: [legacyOp('blk-1')]);
+      await pumpApp(tester);
+      await tester.pump();
+      await tester.tap(blockedButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(AlertDialog).first),
+      )!;
+      await expandFirstItem(tester);
+      await tester.tap(find.text(l10n.outboxIdentityMissingConfirm).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.tap(find.text(l10n.outboxIdentityMissingConfirm).last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(api.posts, hasLength(1));
+      // The ORIGINAL operation identity travelled with the request — nothing was
+      // regenerated. (The "no clientOperationId is minted into the payload"
+      // half of this invariant is pinned at the worker level in
+      // outbox_durable_identity_guard_test.dart.)
+      expect(api.posts.single.headers?['Idempotency-Key'], 'blk-1');
+      expect(
+        container.read(outboxControllerProvider).operations,
+        isEmpty,
+        reason: 'a confirmed send that succeeds removes the operation',
+      );
+    });
+
+    testWidgets('cancelling the confirmation mutates nothing', (tester) async {
+      await buildHarness(seeded: [legacyOp('blk-1')]);
+      await pumpApp(tester);
+      await tester.pump();
+      await tester.tap(blockedButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(AlertDialog).first),
+      )!;
+      await expandFirstItem(tester);
+      await tester.tap(find.text(l10n.outboxIdentityMissingConfirm).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.tap(find.text(l10n.cancel).last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(api.posts, isEmpty);
+      final op = container.read(outboxControllerProvider).operations.single;
+      expect(op.status, OutboxStatus.pending);
+      expect(op.attempts, 0);
+      expect(op.nextAttemptAt, isNull);
+      expect(op.payload.containsKey('clientOperationId'), isFalse);
+    });
+
+    testWidgets('the blocked surface is independent of the failed/stale '
+        'surface', (tester) async {
+      await buildHarness(seeded: [
+        legacyOp('blk-1'),
+        mkOp('failed-1', status: OutboxStatus.failedPermanent, lastError: 'x'),
+      ]);
+      await pumpApp(tester);
+      await tester.pump();
+
+      // Both affordances coexist.
+      expect(blockedButton(), findsOneWidget);
+      expect(find.byIcon(Icons.error_outline), findsOneWidget);
+
+      // The failed dialog still lists only the failedPermanent entry.
+      await tester.tap(find.byIcon(Icons.error_outline));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('Cash in'), findsWidgets);
+    });
+
+    testWidgets('RU localization renders the blocked affordance', (
+      tester,
+    ) async {
+      await buildHarness(seeded: [legacyOp('blk-1')]);
+      await pumpApp(tester, locale: const Locale('ru'));
+      await tester.pump();
+      expect(blockedButton(), findsOneWidget);
+      await tester.tap(blockedButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('Требуется вашего подтверждения'), findsWidgets);
     });
   });
 }

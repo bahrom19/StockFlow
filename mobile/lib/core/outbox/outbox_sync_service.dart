@@ -18,6 +18,7 @@ class OutboxSyncResult {
     this.failedPermanent = 0,
     this.retried = 0,
     this.skipped = 0,
+    this.blocked = 0,
   });
 
   /// Ops the server accepted (2xx).
@@ -38,6 +39,15 @@ class OutboxSyncResult {
   /// Ops left untouched (offline, no user, foreign scope, not due yet, or a
   /// kind with no registered dispatch spec).
   final int skipped;
+
+  /// G16-N-3 P2-B-5: operations NOT dispatched because their payload carries no
+  /// durable business-operation identity (see
+  /// `OutboxOperationSpec.hasDurableBusinessIdentity`).
+  ///
+  /// Counted separately from [skipped] so a safety block is never reported as a
+  /// mere skip, and never as a retry: a blocked operation consumes no attempt, no
+  /// backoff and no error state.
+  final int blocked;
 
   /// Ops whose state changed during the pass.
   int get processed => sent + duplicates + failedPermanent + retried;
@@ -109,17 +119,33 @@ class OutboxSyncService {
 
   /// Processes the due queue, FIFO. Safe to call concurrently — a second
   /// overlapping call is a no-op (the running pass covers the whole queue).
-  Future<OutboxSyncResult> syncAll() async {
+  /// G16-N-3 P2-B-5 — [riskAcceptedOperationIds] waives the DURABLE-IDENTITY
+  /// gate for the listed operations, and ONLY for this single invocation.
+  ///
+  /// It is never persisted and never widens any other gate: the scope gate, the
+  /// auth-epoch gate and the pre-dispatch identity re-check all still run, so a
+  /// risk-accepted operation is still only ever dispatched under its OWN
+  /// authenticated scope.
+  ///
+  /// This exists solely for the explicit, disclosed "Send anyway" action in the
+  /// blocked-operation list. Accepting the risk of a possible duplicate does not
+  /// make the operation safe to retry unattended — which is exactly why the
+  /// scheduler keeps passing the empty set.
+  Future<OutboxSyncResult> syncAll({
+    Set<String> riskAcceptedOperationIds = const {},
+  }) async {
     if (_inFlight) return const OutboxSyncResult();
     _inFlight = true;
     try {
-      return await _syncAllGuarded();
+      return await _syncAllGuarded(riskAcceptedOperationIds);
     } finally {
       _inFlight = false;
     }
   }
 
-  Future<OutboxSyncResult> _syncAllGuarded() async {
+  Future<OutboxSyncResult> _syncAllGuarded(
+    Set<String> riskAcceptedOperationIds,
+  ) async {
     // Never flush while OFFLINE and never without an authenticated user —
     // the scope guard would skip everything anyway.
     if (!_isOnline()) return const OutboxSyncResult();
@@ -131,6 +157,7 @@ class OutboxSyncService {
     var failedPermanent = 0;
     var retried = 0;
     var skipped = 0;
+    var blocked = 0;
 
     // Snapshot before the loop: ids/scopes/payloads are immutable; statuses
     // are mutated only through the controller's serialized guard.
@@ -183,6 +210,24 @@ class OutboxSyncService {
           '${op.clientOperationId} skipped, never dispatched',
         );
         skipped++;
+        continue;
+      }
+
+      // G16-N-3 P2-B-5: durable-identity gate. Placed AFTER the scope/epoch
+      // gate and the spec lookup, and deliberately BEFORE [markSending] so a
+      // blocked operation is never mutated at all: no SENDING, no attempt, no
+      // backoff, no lastError, nothing persisted. It is the same "leave it
+      // exactly as it was" outcome as the P2-1 abort, reached without any
+      // reversible state transition.
+      //
+      // Without a durable identity the backend can only dedupe for the 24h life
+      // of an IdempotencyRecord. Past that, a replayed cash/stock mutation would
+      // execute a SECOND time. `continue` (never `break`) because a blocked
+      // operation does not invalidate the burst — later valid operations must
+      // still be dispatched.
+      if (!spec.hasDurableBusinessIdentity(op) &&
+          !riskAcceptedOperationIds.contains(op.clientOperationId)) {
+        blocked++;
         continue;
       }
 
@@ -281,6 +326,7 @@ class OutboxSyncService {
       failedPermanent: failedPermanent,
       retried: retried,
       skipped: skipped,
+      blocked: blocked,
     );
     if (result.processed > 0) {
       _logger.info(

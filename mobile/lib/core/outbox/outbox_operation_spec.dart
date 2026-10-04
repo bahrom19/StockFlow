@@ -46,6 +46,47 @@ typedef OutboxQueryResolver = Map<String, dynamic>? Function(
   Map<String, dynamic> payload,
 );
 
+/// Reads the durable business-operation identity out of a PERSISTED payload.
+///
+/// G16-N-3 P2-B-5. Must be PURE: it may read [payload] but never mutate it.
+typedef OutboxIdentityResolver = String? Function(Map<String, dynamic> payload);
+
+/// Returns the trimmed value of [key] when it is a usable identity string.
+///
+/// Shared by every per-kind resolver so "what counts as an identity" is defined
+/// exactly once: absent, null, non-String, empty and whitespace-only all mean
+/// "no durable identity".
+String? _identityField(Map<String, dynamic> payload, String key) {
+  final value = payload[key];
+  if (value is! String) return null;
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+/// The four keyed kinds carry `clientOperationId` in the body, which the backend
+/// writes onto the durable row inside its own transaction:
+/// `@@unique([companyId, clientOperationId])` on JournalEntry (P2-B-3) and
+/// `@@unique([companyId, clientOperationId, type])` on StockMovement (P2-B-2).
+/// That collision is what makes a replay impossible PERMANENTLY, independently
+/// of the backend's 24h IdempotencyRecord TTL.
+///
+/// It is read from the PAYLOAD and never from `operation.idempotencyKey` /
+/// `operation.clientOperationId`: those two fields are populated by
+/// `OutboxMutationQueue.enqueueOffline` from a freshly minted UUID WITHOUT
+/// injecting it into the payload, so an operation can look "keyed" while the
+/// request body carries no identity at all. Reading the payload is the only
+/// place that reflects what the server actually receives.
+String? _clientOperationId(Map<String, dynamic> payload) =>
+    _identityField(payload, 'clientOperationId');
+
+/// CREATE_SALE's durable identity: the client-generated unique `saleNumber`.
+String? _saleNumber(Map<String, dynamic> payload) =>
+    _identityField(payload, 'saleNumber');
+
+/// GOODS_RECEIPT's durable identity: the mandatory unique `receiptNumber`.
+String? _receiptNumber(Map<String, dynamic> payload) =>
+    _identityField(payload, 'receiptNumber');
+
 /// Static description of HOW one [OutboxOperationKind] is dispatched.
 class OutboxOperationSpec {
   const OutboxOperationSpec({
@@ -53,6 +94,7 @@ class OutboxOperationSpec {
     required this.endpoint,
     this.buildQuery,
     this.chainedFollowUp,
+    this.readIdentity,
   });
 
   final OutboxOperationKind kind;
@@ -69,6 +111,27 @@ class OutboxOperationSpec {
 
   /// Optional post-success follow-up (CREATE_SALE: complete a DRAFT sale).
   final OutboxChainedFollowUp? chainedFollowUp;
+
+  /// G16-N-3 P2-B-5: the payload field that carries this kind's DURABLE
+  /// business-operation identity, or null when the kind has none registered.
+  ///
+  /// Durable identity is what lets the BACKEND reject a replay forever, rather
+  /// than only for the 24h lifetime of an IdempotencyRecord. Every kind
+  /// registered in [OutboxOperationRegistry.specs] must supply one.
+  final OutboxIdentityResolver? readIdentity;
+
+  /// G16-N-3 P2-B-5 — does [op] carry a durable business-operation identity in
+  /// the payload that will actually be POSTed?
+  ///
+  /// Pure, deterministic and total: no auth, network, storage or clock access,
+  /// no mutation. A kind with no registered [readIdentity] — including any kind
+  /// unknown to this build — FAILS CLOSED (false), so an unrecognised operation
+  /// can never be auto-dispatched on the assumption that it is safe.
+  bool hasDurableBusinessIdentity(OutboxOperation op) {
+    final reader = readIdentity;
+    if (reader == null) return false;
+    return reader(op.payload) != null;
+  }
 
   /// JSON body the sync worker must POST for [payload] (F4-B).
   ///
@@ -102,6 +165,10 @@ const OutboxOperationSpec createSaleSpec = OutboxOperationSpec(
   kind: OutboxOperationKind.createSale,
   endpoint: ApiEndpoints.sales,
   chainedFollowUp: _completeChainedIfDraft,
+  // Durable identity is the client-generated `saleNumber`
+  // (@@unique([companyId, saleNumber])). CREATE_SALE has NO Idempotency-Key and
+  // NO clientOperationId by design, so requiring one here would block every sale.
+  readIdentity: _saleNumber,
 );
 
 /// CREATE_SALE-specific chained follow-up (formerly `_completeChainedIfDraft`
@@ -154,27 +221,36 @@ const OutboxOperationSpec cashInSpec = OutboxOperationSpec(
   kind: OutboxOperationKind.cashIn,
   endpoint: ApiEndpoints.cashShiftCashIn,
   buildQuery: _warehouseIdQuery,
+  readIdentity: _clientOperationId,
 );
 
 const OutboxOperationSpec cashOutSpec = OutboxOperationSpec(
   kind: OutboxOperationKind.cashOut,
   endpoint: ApiEndpoints.cashShiftCashOut,
   buildQuery: _warehouseIdQuery,
+  readIdentity: _clientOperationId,
 );
 
 const OutboxOperationSpec adjustStockSpec = OutboxOperationSpec(
   kind: OutboxOperationKind.adjustStock,
   endpoint: ApiEndpoints.stockAdjustments,
+  readIdentity: _clientOperationId,
 );
 
 const OutboxOperationSpec transferStockSpec = OutboxOperationSpec(
   kind: OutboxOperationKind.transferStock,
   endpoint: ApiEndpoints.stockTransfers,
+  readIdentity: _clientOperationId,
 );
 
 const OutboxOperationSpec goodsReceiptSpec = OutboxOperationSpec(
   kind: OutboxOperationKind.goodsReceipt,
   endpoint: ApiEndpoints.goodsReceipt,
+  // Durable identity is the mandatory client-generated `receiptNumber`
+  // (@@unique([companyId, receiptNumber])). A goods-receipt payload
+  // intentionally carries NO clientOperationId, so requiring one here would
+  // block every goods receipt forever.
+  readIdentity: _receiptNumber,
 );
 
 /// Registry: kind → dispatch spec.

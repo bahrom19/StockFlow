@@ -131,6 +131,11 @@ void main() {
 
       final outcome = await queue.mutate<FakeResult>(
         kind: OutboxOperationKind.cashIn,
+        // No identity in the payload ON PURPOSE: this test exercises the
+        // AUTO-MINT path, where `mutate()` mints the key internally AFTER the
+        // payload was built. Such an operation is exactly the legacy shape the
+        // P2-B-5 guard refuses to auto-dispatch. It is never flushed here — the
+        // assertions are about same-key reuse and a single mint.
         payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
         online: true,
         sendOnline: (key) async {
@@ -200,7 +205,12 @@ void main() {
 
         final outcome = await queue.mutate<FakeResult>(
           kind: OutboxOperationKind.cashOut,
-          payload: const {'amount': 10.0, 'warehouseId': 'wh-1'},
+          // P2-B-5: durable identity lives in the payload.
+          payload: {
+            'amount': 10.0,
+            'warehouseId': 'wh-1',
+            'clientOperationId': 'key-${failure.message}',
+          },
           online: true,
           clientOperationId: 'key-${failure.message}',
           sendOnline: (_) async => FakeErr(failure),
@@ -239,7 +249,14 @@ void main() {
       Future<OutboxMutationOutcome<FakeResult>> attempt() =>
           queue.mutate<FakeResult>(
             kind: OutboxOperationKind.goodsReceipt,
-            payload: const {'purchaseOrderId': 'po-1'},
+            // P2-B-5: mirror the minted key into the payload; without it
+            // the worker correctly refuses to auto-dispatch.
+            payload: const {
+              'purchaseOrderId': 'po-1',
+              // P2-B-5: GOODS_RECEIPT's durable identity is the mandatory
+              // `receiptNumber`, NOT clientOperationId.
+              'receiptNumber': 'GR-K-1',
+            },
             online: true,
             clientOperationId: 'dup-1',
             sendOnline: (_) async =>
@@ -316,6 +333,9 @@ void main() {
           'amount': 100.0,
           'reason': 'float',
           'warehouseId': 'wh-1',
+          // P2-B-5: a keyed caller threads the SAME identity into the payload,
+          // which is what the flushed request body must carry.
+          'clientOperationId': 'A',
         },
         online: true,
         clientOperationId: 'A',
@@ -350,7 +370,13 @@ void main() {
       // warehouseId rides as the query — built by the spec from the payload.
       expect(call.query, {'warehouseId': 'wh-1'});
       // …and NEVER leaks into the body (backend whitelist).
-      expect(call.data, {'amount': 100.0, 'reason': 'float'});
+      // P2-B-5: the body carries the durable identity too — that IS the request
+      // the backend dedupes on. `warehouseId` stays lifted into the query.
+      expect(call.data, {
+        'amount': 100.0,
+        'reason': 'float',
+        'clientOperationId': 'A',
+      });
       expect((call.data as Map).containsKey('warehouseId'), isFalse);
       // The Outbox retry transports the ORIGINAL key — never a new UUID.
       expect(call.key, 'A');
@@ -523,7 +549,12 @@ void main() {
 
       final outcome = await queue.mutate<FakeResult>(
         kind: OutboxOperationKind.cashIn,
-        payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+        // P2-B-5: durable identity lives in the payload.
+        payload: const {
+          'amount': 100.0,
+          'warehouseId': 'wh-1',
+          'clientOperationId': 'K-504',
+        },
         online: true,
         clientOperationId: 'K-504',
         sendOnline: (key) async {
@@ -596,7 +627,14 @@ void main() {
       // 1) ONLINE attempt transports K, receives 500 → parked under K.
       final outcome = await queue.mutate<FakeResult>(
         kind: OutboxOperationKind.goodsReceipt,
-        payload: const {'purchaseOrderId': 'po-1'},
+        // P2-B-5: mirror the minted key into the payload; without it
+        // the worker correctly refuses to auto-dispatch.
+        payload: const {
+          'purchaseOrderId': 'po-1',
+          // P2-B-5: GOODS_RECEIPT's durable identity is the mandatory
+          // `receiptNumber`, NOT clientOperationId.
+          'receiptNumber': 'GR-K-1',
+        },
         online: true,
         sendOnline: (key) async {
           seen.add(key);

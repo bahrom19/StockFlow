@@ -126,7 +126,11 @@ OutboxOperation cashOp(
     kind: OutboxOperationKind.cashIn,
     companyId: company,
     userId: 'user-1',
-    payload: const {'warehouseId': 'wh-1', 'amount': 100},
+    // G16-N-3 P2-B-5: the payload carries `clientOperationId`, exactly as
+    // CashInOutRequest.toJson() does in cash_shift_provider. The operation-level
+    // id alone is NOT enough: the durable identity the backend dedupes on lives
+    // in the request BODY.
+    payload: {'warehouseId': 'wh-1', 'amount': 100, 'clientOperationId': id},
     status: status,
     idempotencyKey: id,
   );
@@ -468,7 +472,8 @@ void main() {
           kind: OutboxOperationKind.cashIn,
           companyId: 'company-1',
           userId: 'user-1',
-          payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+          // Payload identity, not just the operation-level id (P2-B-5).
+          payload: {'amount': 100.0, 'warehouseId': 'wh-1', 'clientOperationId': id},
           idempotencyKey: id,
           createdAt: DateTime(2026, 1, 1),
         );

@@ -945,6 +945,10 @@
   "logoutKeepPending": "Sign out and keep pending work",
   "logoutDiscardPending": "Discard pending work and sign out",
   "logoutCleanupFailed": "You are signed out, but pending changes could not be cleared from this device. They may reappear the next time you sign in.",
+  "outboxIdentityMissingTitle": "Needs your confirmation",
+  "outboxIdentityMissingBody": "This change has no durable identity, so the server can only recognise it for 24 hours. It may already have been applied. Sending it again may create a duplicate financial or inventory operation. Discarding is the safest action; sending anyway is your acceptance of that risk, not a guaranteed-safe retry.",
+  "outboxIdentityMissingConfirm": "Send anyway",
+  "outboxIdentityMissingDiscard": "Discard",
   "@outboxPendingItems": {
     "placeholders": {
       "count": {

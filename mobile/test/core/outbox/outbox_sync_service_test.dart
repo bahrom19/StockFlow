@@ -453,7 +453,8 @@ void main() {
         kind: OutboxOperationKind.adjustStock,
         companyId: 'company-1',
         userId: 'user-1',
-        payload: const {'warehouseId': 'w-1', 'quantity': 5},
+        // P2-B-5: keyed kinds need the durable identity in the payload.
+        payload: const {'warehouseId': 'w-1', 'quantity': 5, 'clientOperationId': 'id-adjust'},
         createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
       );
       final c = await controller(seeded: [op]);
@@ -487,6 +488,9 @@ void main() {
           'warehouseId': 'w-1',
           'amount': 100,
           'reason': 'top-up',
+          // P2-B-5: the durable identity the backend dedupes on travels in the
+          // BODY, not only on the operation.
+          'clientOperationId': 'idem-cash-1',
         },
         idempotencyKey: 'idem-cash-1',
         createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
@@ -545,7 +549,12 @@ void main() {
         kind: OutboxOperationKind.cashIn,
         companyId: 'company-1',
         userId: 'user-1',
-        payload: {'warehouseId': 'w-1', 'amount': 50},
+        // P2-B-5: durable identity in the payload (see above).
+        payload: {
+          'warehouseId': 'w-1',
+          'amount': 50,
+          'clientOperationId': 'idem-retry-1',
+        },
         idempotencyKey: 'idem-retry-1',
       );
       await storage.save([op]);
@@ -724,7 +733,8 @@ void main() {
           kind: OutboxOperationKind.cashIn,
           companyId: company,
           userId: user,
-          payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+          // P2-B-5: durable identity lives in the payload.
+          payload: {'amount': 100.0, 'warehouseId': 'wh-1', 'clientOperationId': id},
           idempotencyKey: id,
           createdAt: DateTime(2026, 1, 1),
         );
@@ -886,7 +896,8 @@ void main() {
           kind: OutboxOperationKind.cashIn,
           companyId: 'company-1',
           userId: 'user-1',
-          payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+          // P2-B-5: durable identity lives in the payload.
+          payload: {'amount': 100.0, 'warehouseId': 'wh-1', 'clientOperationId': id},
           idempotencyKey: id,
           createdAt: DateTime(2026, 1, 1),
           status: status,
@@ -1005,7 +1016,8 @@ void main() {
           kind: OutboxOperationKind.cashIn,
           companyId: 'company-1',
           userId: 'user-1',
-          payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+          // P2-B-5: durable identity lives in the payload.
+          payload: {'amount': 100.0, 'warehouseId': 'wh-1', 'clientOperationId': id},
           idempotencyKey: id,
           createdAt: DateTime(2026, 1, 1),
         );

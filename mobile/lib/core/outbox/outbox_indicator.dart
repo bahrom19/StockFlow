@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/auth/auth_state.dart';
 import 'package:stockflow/core/outbox/outbox_controller.dart';
 import 'package:stockflow/core/outbox/outbox_operation.dart';
+import 'package:stockflow/core/outbox/outbox_operation_spec.dart';
 import 'package:stockflow/core/outbox/outbox_scheduler.dart';
 import 'package:stockflow/core/outbox/outbox_sync_service.dart';
 
@@ -48,6 +49,15 @@ class OutboxIndicatorScope extends ConsumerWidget {
     final pending = state.pendingCountFor(companyId, userId) +
         state.sendingCountFor(companyId, userId);
     final failed = state.failedCountFor(companyId, userId);
+    // G16-N-3 P2-B-5: operations the worker refuses to auto-dispatch because
+    // their payload carries no durable business-operation identity. Derived from
+    // the SAME scoped list every other number on this bar uses, so another
+    // account's blocked work can be neither counted nor listed here.
+    // "blocked" is a DERIVED state, not an OutboxOperation status: nothing is
+    // persisted, so a restart simply re-derives it.
+    final blocked = _blockedOperations(
+      state.unresolvedFor(companyId, userId),
+    );
     // True while the worker is actively flushing entries (F5-C wiring drives
     // the same controller state). The UI disables the manual "Send now" tap
     // during that window so repeated taps cannot stack burst attempts.
@@ -130,6 +140,25 @@ class OutboxIndicatorScope extends ConsumerWidget {
                           ref.read(outboxSchedulerClockProvider),
                         ),
                       ),
+                    // G16-N-3 P2-B-5: a SIBLING of the failed affordance, not a
+                    // mode of it. A blocked operation is PENDING (never
+                    // FAILED_PERMANENT), so the failed dialog's filter would
+                    // never list it and its Retry/Discard actions would be
+                    // unreachable. Without this surface a blocked operation
+                    // would be counted but individually invisible and
+                    // unresolvable while still consuming capacity.
+                    if (blocked.isNotEmpty)
+                      IconButton(
+                        tooltip: l10n.outboxIdentityMissingTitle,
+                        icon: const Icon(Icons.help_outline, size: 20),
+                        onPressed: () => _showBlockedDialog(
+                          context,
+                          ref,
+                          l10n,
+                          blocked,
+                          ref.read(outboxSchedulerClockProvider),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -182,6 +211,139 @@ class OutboxIndicatorScope extends ConsumerWidget {
       case OutboxOperationAgeUnit.days:
         return l10n.outboxOperationAgeDays(age.value);
     }
+  }
+
+  /// G16-N-3 P2-B-5 — the operations this worker refuses to auto-dispatch.
+  ///
+  /// DERIVED, never persisted: an operation is blocked exactly when the spec
+  /// registered for its kind finds no durable business-operation identity in the
+  /// payload. It keeps its own status (PENDING) and its own identity fields; only
+  /// its DISPATCHABILITY is withheld. The caller passes an already-scoped list,
+  /// so this helper adds no scope decision of its own.
+  static List<OutboxOperation> _blockedOperations(
+    List<OutboxOperation> scoped,
+  ) {
+    final specs = OutboxOperationRegistry.specs;
+    return scoped.where((op) {
+      final spec = specs[op.kind];
+      // Fail closed for a kind this build does not know: an unrecognised
+      // operation is never assumed safe to send.
+      if (spec == null) return true;
+      return !spec.hasDurableBusinessIdentity(op);
+    }).toList(growable: false);
+  }
+
+  /// G16-N-3 P2-B-5 — per-item resolution surface for blocked operations.
+  ///
+  /// Deliberately separate from [_showFailedDialog]: a blocked operation is not
+  /// FAILED_PERMANENT, so it never appears there and its actions are otherwise
+  /// unreachable. Every item exposes View details / Send anyway / Discard.
+  void _showBlockedDialog(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    List<OutboxOperation> blocked,
+    DateTime Function() clock,
+  ) {
+    final now = clock();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.outboxIdentityMissingTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.outboxIdentityMissingBody),
+              const SizedBox(height: 12),
+              for (final op in blocked)
+                _blockedItem(dialogContext, ref, l10n, op, now),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.goBack),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One blocked operation: kind, reference, age, and the three actions.
+  Widget _blockedItem(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    OutboxOperation op,
+    DateTime now,
+  ) {
+    return ExpansionTile(
+      // Human label via the SAME per-kind switch the failed list uses; the
+      // document number doubles as the user-facing reference when present.
+      title: Text(_blockedItemTitle(op, l10n)),
+      subtitle: Text(
+        '${_blockedItemReference(op) ?? ''} · ${_ageLabel(op, now, l10n)}',
+      ),
+      childrenPadding: const EdgeInsets.symmetric(horizontal: 8),
+      children: [
+        // Details are read-only and deliberately minimal: kind, age and the
+        // identity-bearing field only. The raw payload is NOT dumped.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _blockedItemTitle(op, l10n),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              if (_blockedItemReference(op) case final reference?)
+                Text(reference, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                _ageLabel(op, now, l10n),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () async {
+                // Explicit, disclosed risk acceptance — NOT a retry. Scoped to
+                // this single syncAll invocation and never persisted, so the
+                // scheduler keeps refusing to auto-dispatch this operation.
+                final proceed = await _confirmSendAnyway(
+                  context,
+                  l10n,
+                );
+                if (proceed != true) return;
+                if (!context.mounted) return;
+                await ref
+                    .read(outboxSyncProvider)
+                    .syncAll(riskAcceptedOperationIds: {op.clientOperationId});
+              },
+              child: Text(l10n.outboxIdentityMissingConfirm),
+            ),
+            TextButton(
+              onPressed: () async {
+                // Zero-risk terminal action: removes the operation and releases
+                // the capacity it was holding.
+                await ref
+                    .read(outboxControllerProvider.notifier)
+                    .discard(op.clientOperationId);
+              },
+              child: Text(l10n.outboxIdentityMissingDiscard),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   void _showFailedDialog(
@@ -322,6 +484,74 @@ class OutboxIndicatorScope extends ConsumerWidget {
   /// [OutboxOperationAge.staleAfterDays] old. Returns true only on an explicit
   /// Retry; `null` (dismissed) and false (Cancel) both abort without touching
   /// the operation.
+  /// G16-N-3 P2-B-5 — the explicit risk-acceptance confirmation.
+  ///
+  /// This is NOT a retry confirmation. The operation has NO durable identity, so
+  /// the backend can only dedupe it while its 24h IdempotencyRecord lives; past
+  /// that a replay executes the mutation a second time. The copy must therefore
+  /// state all five facts and must never imply the send is safe. `true` means
+  /// "I accept that this may duplicate", nothing more. `false`/null mutate
+  /// nothing.
+  Future<bool?> _confirmSendAnyway(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (confirmContext) => AlertDialog(
+        title: Text(l10n.outboxIdentityMissingTitle),
+        content: Text(l10n.outboxIdentityMissingBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(confirmContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          // Destructive: discarding can never duplicate anything, so it is
+          // offered as the safest action rather than hidden.
+          TextButton(
+            onPressed: () => Navigator.of(confirmContext).pop(false),
+            child: Text(l10n.outboxIdentityMissingDiscard),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(confirmContext).pop(true),
+            child: Text(l10n.outboxIdentityMissingConfirm),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// G16-N-3 P2-B-5 — human label for a blocked item. Reuses the same per-kind
+  /// localization as the failed list, so a kind is named identically wherever it
+  /// is surfaced.
+  static String _blockedItemTitle(OutboxOperation op, AppLocalizations l10n) {
+    switch (op.kind) {
+      case OutboxOperationKind.createSale:
+        return l10n.outboxKindCreateSale;
+      case OutboxOperationKind.cashIn:
+        return l10n.outboxKindCashIn;
+      case OutboxOperationKind.cashOut:
+        return l10n.outboxKindCashOut;
+      case OutboxOperationKind.adjustStock:
+        return l10n.outboxKindAdjustStock;
+      case OutboxOperationKind.transferStock:
+        return l10n.outboxKindTransferStock;
+      case OutboxOperationKind.goodsReceipt:
+        return l10n.outboxKindGoodsReceipt;
+    }
+  }
+
+  /// The document number that IS this operation's durable identity, when the kind
+  /// has one. Read from the payload only — the same source the predicate uses —
+  /// so a blocked item can never display an identity the worker would not see.
+  static String? _blockedItemReference(OutboxOperation op) {
+    for (final key in const ['saleNumber', 'receiptNumber']) {
+      final value = op.payload[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    return null;
+  }
+
   Future<bool?> _confirmStaleRetry(
     BuildContext context,
     AppLocalizations l10n,

@@ -186,7 +186,14 @@ void main() {
       final queue = container.read(outboxMutationQueueProvider);
       final queuedId = await queue.enqueueOffline(
         kind: OutboxOperationKind.cashIn,
-        payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+        // P2-B-5: enqueueOffline mints the id AFTER the payload is built, so a
+        // caller that does not thread it in produces an operation the worker
+        // correctly refuses to auto-dispatch. Mirror it explicitly here.
+        payload: const {
+          'amount': 100.0,
+          'warehouseId': 'wh-1',
+          'clientOperationId': 'queued-cash-1',
+        },
       );
 
       // Simulate an app restart: a fresh controller hydrated from the SAME
@@ -212,7 +219,12 @@ void main() {
       // The SAME key minted at enqueue time is transported as the header.
       expect(call.headers?['Idempotency-Key'], queuedId);
       // The body is the payload minus the query keys (backend whitelist).
-      expect(call.data, {'amount': 100.0});
+      // P2-B-5: `warehouseId` is lifted into the query, but the durable
+      // identity is a business field and correctly stays in the body.
+      expect(call.data, {
+        'amount': 100.0,
+        'clientOperationId': 'queued-cash-1',
+      });
       expect(restarted.state.operations, isEmpty);
     });
 
@@ -223,7 +235,12 @@ void main() {
       final queue = container.read(outboxMutationQueueProvider);
       await queue.enqueueOffline(
         kind: OutboxOperationKind.cashOut,
-        payload: const {'amount': 50.0, 'warehouseId': 'wh-1'},
+        // P2-B-5: durable identity in the payload.
+        payload: const {
+          'amount': 50.0,
+          'warehouseId': 'wh-1',
+          'clientOperationId': 'cash-out-1',
+        },
       );
 
       final restarted = OutboxController(storage);
@@ -355,7 +372,12 @@ void main() {
 
       final outcome = await queue.mutate<int>(
         kind: OutboxOperationKind.cashIn,
-        payload: const {'amount': 100.0},
+        // P2-B-5: mirror the identity so this parked operation is
+        // dispatchable on the next burst.
+        payload: const {
+          'amount': 100.0,
+          'clientOperationId': 'second-cash',
+        },
         online: false,
       );
       expect(outcome, isA<OutboxMutationQueued<int>>());
