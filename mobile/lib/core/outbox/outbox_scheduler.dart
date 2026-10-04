@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stockflow/core/logger/app_logger.dart';
 import 'package:stockflow/core/services/connectivity_service.dart';
+import 'package:stockflow/core/auth/auth_state.dart';
 
 import 'outbox_controller.dart';
 import 'outbox_operation.dart';
@@ -87,6 +88,27 @@ class OutboxRetryScheduler {
   /// calls with an unchanged queue never accumulate timers or bursts.
   void notifyChanged() {
     if (_disposed) return;
+    _rearm();
+  }
+
+  /// G16-N-3 P2-B-4 Phase 3 remediation — re-evaluate after an AUTH SCOPE
+  /// change, which makes a previously-fired queue state newly dispatchable.
+  ///
+  /// The hot-loop guard in [_fire] fingerprints the PENDING queue (ids,
+  /// attempts, deadlines) but deliberately knows nothing about WHO may dispatch
+  /// it. A burst that ran while logged out — where the worker correctly skipped
+  /// every operation — therefore consumed that fingerprint without dispatching
+  /// anything. A later sign-in re-entered [_rearm] with an identical
+  /// fingerprint and was suppressed, stranding PD-1's preserved backlog:
+  /// signing back in would never resume it.
+  ///
+  /// Clearing the fingerprint is the minimal correct response. It is safe
+  /// against hot loops because it runs only on a discrete auth transition (an
+  /// explicit sign-in/sign-out), never on ordinary queue churn, and [_rearm]
+  /// still cancels any previous timer before arming a new one.
+  void notifyScopeChanged() {
+    if (_disposed) return;
+    _lastFiredFingerprint = '';
     _rearm();
   }
 
@@ -235,9 +257,35 @@ final outboxSchedulerProvider = Provider<OutboxRetryScheduler>((ref) {
     scheduler.notifyChanged();
   });
 
+  // Phase 3: re-evaluate on every auth transition. Signing OUT must not
+  // leave a timer hunting for work it can never dispatch, and — the
+  // case the connectivity/state listeners cannot cover — signing back IN
+  // must re-arm, because a sign-in changes no outbox state and would
+  // otherwise leave a disarmed scheduler with a preserved backlog
+  // waiting forever.
+  ref.listen<AuthState>(authStateProvider, (previous, next) {
+    if (_scopeOf(previous) != _scopeOf(next)) {
+      // Re-evaluate only AFTER the notification settles. While the listener
+      // runs, `currentUserProvider` can still resolve to the PREVIOUS scope
+      // (null on a sign-in), so a synchronous burst would find no authenticated
+      // user, skip the whole queue and strand the preserved backlog.
+      Future.microtask(scheduler.notifyScopeChanged);
+    }
+  });
+
   // Initial probe: covers the case where this provider is first watched AFTER
   // the queue was already hydrated — listen would never fire for the current
   // value, and a persisted backlog must be flushed on cold start.
   scheduler.notifyChanged();
   return scheduler;
 });
+
+/// Auth scope identity for scheduler re-arm decisions: the (companyId, userId)
+/// pair the sync worker will dispatch under, or null when nobody is
+/// authenticated. null is a distinct, meaningful value here — it means
+/// "paused", not "unchanged".
+(String?, String?)? _scopeOf(AuthState? state) {
+  final user =
+      state is AuthAuthenticated ? (state as AuthAuthenticated).user : null;
+  return user == null ? null : (user.companyId, user.id);
+}

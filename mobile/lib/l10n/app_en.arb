@@ -940,6 +940,11 @@
   "outboxStaleRetryMessage": "This change was created a long time ago. It will be sent again with the same operation identifier, so it still cannot be applied twice. Continue?",
   "outboxQueuePressure": "{count, plural, =1{1 change is waiting to sync} other{{count} changes are waiting to sync}} — send or resolve them to keep accepting new changes",
   "outboxQueueFull": "Cannot save this change: your offline queue is full ({count}). Send or discard queued changes first, then try again.",
+  "logoutPendingTitle": "Pending offline changes",
+  "logoutPendingMessage": "{count, plural, =1{You have 1 change that has not synced yet.} other{You have {count} changes that have not synced yet.}} Sign out and keep them for your next session, or discard them.",
+  "logoutKeepPending": "Sign out and keep pending work",
+  "logoutDiscardPending": "Discard pending work and sign out",
+  "logoutCleanupFailed": "You are signed out, but pending changes could not be cleared from this device. They may reappear the next time you sign in.",
   "@outboxPendingItems": {
     "placeholders": {
       "count": {

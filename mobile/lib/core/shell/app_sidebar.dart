@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:stockflow/core/outbox/outbox_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_state.dart';
@@ -55,7 +56,11 @@ class AppSidebar extends ConsumerWidget {
             initials: _initials(user?.fullName ?? 'U'),
             onProfile: () => context.go(RouteNames.profile),
             onSettings: () => context.go(RouteNames.settings),
-            onLogout: () => ref.read(authStateProvider.notifier).logout(),
+            onLogout: () => confirmSignOutWithPendingWork(
+              context: context,
+              ref: ref,
+              l10n: context.l10n,
+            ),
           ),
         ],
       ),

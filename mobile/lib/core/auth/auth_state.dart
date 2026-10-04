@@ -138,7 +138,38 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> logout() async {
+  /// G16-N-3 P2-B-4 Phase 3 — sign out.
+  ///
+  /// [discardPendingWork] selects the destructive PD-1 path
+  /// ("Discard pending work and sign out"); the default preserves the outgoing
+  /// scope's operations so the same cashier resumes them after signing back in.
+  ///
+  /// Ordering matters, and was deliberately inverted from the pre-Phase-3
+  /// sequence, which cleared TOKENS while the identity was still resolved — a
+  /// window in which a burst could start a dispatch with no credentials. The
+  /// safe order is:
+  ///
+  ///   1. capture the outgoing identity (only knowable here);
+  ///   2. invalidate the AuthState, so `currentUserProvider` becomes null. The
+  ///      sync scope guard then fails closed, and every enqueue path that
+  ///      builds an outbox operation reads `currentUserProvider` first and
+  ///      refuses to build one without an authenticated identity (for example
+  ///      `OfflineSaleQueue.enqueueCreateSale` throws a StateError). Nothing
+  ///      new can therefore be enqueued or dispatched while cleanup runs.
+  ///      NOTE: `OutboxController.enqueue` itself does NOT consult auth state —
+  ///      this invariant is enforced by the callers, not by the controller;
+  ///   3. clear tokens;
+  ///   4. clean the queue for the captured scope (preserve same-scope + drop
+  ///      foreign, or drop everything when discarding).
+  ///
+  /// `cleanupForLogout` additionally bumps the outbox auth epoch, aborting any
+  /// burst already in flight.
+  Future<LogoutResult> logout({bool discardPendingWork = false}) async {
+    // 1. Capture the outgoing identity BEFORE the state is invalidated.
+    final outgoing =
+        state is AuthAuthenticated ? (state as AuthAuthenticated).user : null;
+
+    // Remote sign-out stays fire-and-forget, as before.
     final storage = _ref.read(tokenStorageProvider);
     final refreshTokenValue = await storage.getRefreshToken();
     unawaited(
@@ -146,12 +177,46 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
             refreshTokenValue: refreshTokenValue,
           ),
     );
-    await storage.clearTokens();
-    // Offline 1B-min: queued offline sales are wiped on logout — they carry
-    // the leaving user's company/user scope and must never be flushed under
-    // another account. (The sync worker's scope guard is the second layer.)
-    await _ref.read(outboxControllerProvider.notifier).clearForLogout();
+
+    final outbox = _ref.read(outboxControllerProvider.notifier);
+
+    // 2. Invalidate identity first, and bump the epoch so an in-flight burst
+    //    re-validates before dispatching anything else.
     state = const AuthUnauthenticated();
+    outbox.bumpAuthEpoch();
+
+    // 3. Credentials.
+    await storage.clearTokens();
+
+    if (outgoing == null) {
+      // Nothing was authenticated: there is no outgoing scope to preserve and
+      // no identity to reason about. Keep the legacy full wipe so a stale queue
+      // from an earlier session cannot survive an anonymous sign-out.
+      try {
+        return LogoutResult(queuePersisted: await outbox.clearForLogout());
+      } catch (e) {
+        _logger.error('Outbox cleanup failed during logout', e);
+        return const LogoutResult(queuePersisted: false);
+      }
+    }
+
+    // 4. PD-1 / PD-2 selective cleanup for the captured outgoing scope.
+    try {
+      final persisted = await outbox.cleanupForLogout(
+        outgoing.companyId,
+        outgoing.id,
+        discardSameScope: discardPendingWork,
+      );
+      // false == the store rejected the write without throwing. Report it
+      // honestly instead of claiming the cleanup succeeded (P2-2 remediation).
+      return LogoutResult(queuePersisted: persisted);
+    } catch (e) {
+      // Honest failure: do NOT claim the cleanup succeeded. The in-memory queue
+      // has already been reduced, but persistence did not confirm, so the
+      // caller must surface this to the user.
+      _logger.error('Outbox cleanup failed during logout', e);
+      return const LogoutResult(queuePersisted: false);
+    }
   }
 }
 
@@ -184,3 +249,14 @@ final currentUserPermissionsProvider = Provider<List<String>>((ref) {
 });
 
 final isOfflineProvider = StateProvider<bool>((ref) => false);
+
+/// Outcome of a sign-out, so the caller can report honestly whether the queue
+/// cleanup actually persisted.
+class LogoutResult {
+  const LogoutResult({required this.queuePersisted});
+
+  /// False when the cleanup could not be written to storage. The in-memory
+  /// queue has already been reduced, but the caller MUST NOT claim the discard
+  /// succeeded.
+  final bool queuePersisted;
+}

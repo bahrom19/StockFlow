@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stockflow/core/auth/auth_state.dart';
 
 import 'outbox_operation.dart';
 import 'outbox_storage.dart';
@@ -194,6 +195,23 @@ class OutboxController extends StateNotifier<OutboxState> {
   final OutboxStorage _storage;
   final DateTime Function() _now;
 
+  // ── G16-N-3 P2-B-4 Phase 3: auth lifecycle epoch (in-memory only) ──────
+  //
+  // NOT persisted, deliberately. It is a burst-abort signal, not durable
+  // state: a restart re-derives the truth from `currentUserProvider`, so an
+  // epoch that survives a restart would be meaningless. It exists so a sync
+  // burst that STARTED under one identity can detect, mid-pass, that the
+  // authenticated scope moved on, and stop before it dispatches anything
+  // further under the wrong credentials.
+  int _authEpoch = 0;
+
+  /// Monotonic counter bumped on every authenticated-scope change.
+  int get authEpoch => _authEpoch;
+
+  /// Bumps the lifecycle epoch. Called by the provider's auth listener and by
+  /// [cleanupForLogout]'s caller path; never touches operation identity.
+  void bumpAuthEpoch() => _authEpoch++;
+
   /// Read-only snapshot for the sync worker and UI — the protected
   /// [state] member must not be reached from outside this class.
   OutboxState get snapshot => state;
@@ -271,6 +289,26 @@ class OutboxController extends StateNotifier<OutboxState> {
   /// Marks the op as being sent right now.
   Future<void> markSending(String clientOperationId) => _mutate(
       clientOperationId, (o) => o.copyWith(status: OutboxStatus.sending));
+
+  /// G16-N-3 P2-B-4 Phase 3 remediation (P2-1) — identity lifecycle stop.
+  ///
+  /// Returns an operation that was already marked SENDING back to PENDING
+  /// because the authenticated scope changed in the window between
+  /// [markSending] and the actual dispatch, so the request was NEVER issued.
+  ///
+  /// This is deliberately NOT [markRetryableFailure]: no HTTP request was made,
+  /// so the operation must not consume the F5-B retry budget, must not accrue
+  /// backoff, and must not risk demotion to FAILED_PERMANENT. [attempts],
+  /// [nextAttemptAt] and [lastError] are all left exactly as they were, and
+  /// every identity field ([clientOperationId], [idempotencyKey], [createdAt],
+  /// companyId, userId) is untouched. It is the same "stay PENDING" outcome the
+  /// sync worker's loop-top identity guard produces for untouched operations.
+  Future<void> releaseDispatchAborted(String clientOperationId) {
+    return _mutate(
+      clientOperationId,
+      (o) => o.copyWith(status: OutboxStatus.pending),
+    );
+  }
 
   /// Retryable failure: back to PENDING with exponential backoff — until the
   /// F5-B budget is exhausted. When the NEXT attempt would reach
@@ -386,10 +424,64 @@ class OutboxController extends StateNotifier<OutboxState> {
       confirmSent(clientOperationId);
 
   /// Logout: wipe everything (both memory and persistence).
-  Future<void> clearForLogout() {
+  ///
+  /// Returns the platform write result (false == the store rejected the write
+  /// without throwing) so the caller can report an honest outcome.
+  Future<bool> clearForLogout() {
     return _serialize(() async {
       state = const OutboxState();
-      await _storage.clear();
+      return _storage.clear();
+    });
+  }
+
+  /// G16-N-3 P2-B-4 Phase 3 — selective logout cleanup (PD-1 + PD-2).
+  ///
+  /// Replaces the unconditional [clearForLogout] wipe at sign-out:
+  ///  * operations belonging to the OUTGOING scope `(companyId, userId)` are
+  ///    RETAINED by default (PD-1: "sign out and keep pending work"), so the
+  ///    same cashier signing back in resumes exactly where they left off;
+  ///  * every FOREIGN-scope operation is REMOVED (PD-2), so another
+  ///    account's work can never be dispatched, displayed or counted;
+  ///  * [discardSameScope] = true takes the destructive PD-1 path and removes
+  ///    the outgoing scope as well, leaving an empty queue.
+  ///
+  /// Runs inside [_serialize], so it is exclusive with `enqueue`, `_mutate`
+  /// and `confirmSent`: nothing can interleave between the filter and the
+  /// write. The persistence step is the SAME single-key whole-list overwrite
+  /// [OutboxStorage.save] already performs — this is NOT a database
+  /// transaction and no transactional guarantee is claimed. A crash leaves
+  /// either the old or the new list, never a torn one, and any surviving
+  /// foreign entries stay INERT: Phase 1 hides them from every UI surface and
+  /// the sync worker's scope guard refuses to dispatch them, so they are
+  /// removed again on the next lifecycle cleanup.
+  ///
+  /// Never mutates ownership: no `companyId`, `userId`, `idempotencyKey`,
+  /// `clientOperationId` or `createdAt` is written here. Only whole entries
+  /// are kept or dropped.
+  ///
+  /// Returns the platform write result (false == the store rejected the write
+  /// without throwing). A `false` here leaves the PREVIOUS list on disk: the
+  /// in-memory queue has already been reduced, but persistence did not
+  /// confirm. That direction is fail-safe — a surviving list keeps the
+  /// outgoing scope's work recoverable, and any foreign entries that survive
+  /// stay inert behind the Phase 1 scoped visibility and the sync worker's
+  /// scope guard. The caller must not report success on `false`.
+  Future<bool> cleanupForLogout(
+    String outgoingCompanyId,
+    String outgoingUserId, {
+    bool discardSameScope = false,
+  }) {
+    // Stop any burst that started under the outgoing identity BEFORE the
+    // queue is rewritten, so nothing can dispatch mid-cleanup.
+    _authEpoch++;
+    return _serialize(() async {
+      final remaining = state.operations.where((o) {
+        final sameScope =
+            o.companyId == outgoingCompanyId && o.userId == outgoingUserId;
+        return sameScope ? !discardSameScope : false;
+      }).toList(growable: false);
+      state = OutboxState(operations: _sorted(remaining));
+      return _storage.save(state.operations);
     });
   }
 
@@ -424,8 +516,30 @@ class OutboxController extends StateNotifier<OutboxState> {
 /// main.dart. Tests override this provider directly with an in-memory setup.
 final outboxControllerProvider =
     StateNotifierProvider<OutboxController, OutboxState>((ref) {
-  return OutboxController(ref.watch(outboxStorageProvider));
+  final notifier = OutboxController(ref.watch(outboxStorageProvider));
+  // G16-N-3 P2-B-4 Phase 3: an authentication transition must invalidate any
+  // sync burst that started under the PREVIOUS identity, so a preserved
+  // same-scope operation can never be dispatched with the next account's
+  // credentials. Same lifecycle pattern already proven by `heldSalesProvider`
+  // (held_sales_provider.dart) and the POS cart (`sales_provider.dart`).
+  //
+  // This listener deliberately does NOT clean the queue: after an
+  // `-> unauthenticated` transition the OUTGOING identity is unknowable here,
+  // so foreign-scope removal stays owned by `logout()`, which captured it.
+  // Bumping the epoch is enough — foreign entries are already inert.
+  ref.listen<AuthState>(authStateProvider, (prev, next) {
+    if (_scopeOf(prev) == _scopeOf(next)) return;
+    notifier.bumpAuthEpoch();
+  });
+  return notifier;
 });
+
+/// The authenticated identity carried by an [AuthState], or null when the
+/// session is not authenticated. Used only to detect a scope transition.
+({String companyId, String userId})? _scopeOf(AuthState? state) {
+  if (state is! AuthAuthenticated) return null;
+  return (companyId: state.user.companyId, userId: state.user.id);
+}
 
 /// Fires once per controller lifetime: hydrates the persisted queue
 /// (restart survival — ops enqueued while OFFLINE must surface after the app

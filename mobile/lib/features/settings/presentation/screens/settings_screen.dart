@@ -10,6 +10,7 @@ import 'package:stockflow/core/currency/currency_catalog.dart';
 import 'package:stockflow/core/currency/currency_provider.dart';
 import 'package:stockflow/core/company/company_provider.dart';
 import 'package:stockflow/core/localization/l10n_ext.dart';
+import 'package:stockflow/core/outbox/outbox_indicator.dart';
 import 'package:stockflow/core/localization/locale_provider.dart';
 import 'package:stockflow/core/navigation/route_names.dart';
 import 'package:stockflow/core/theme/app_spacing.dart';
@@ -121,7 +122,11 @@ class SettingsScreen extends ConsumerWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () => ref.read(authStateProvider.notifier).logout(),
+              onPressed: () => confirmSignOutWithPendingWork(
+                context: context,
+                ref: ref,
+                l10n: context.l10n,
+              ),
               style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
               icon: const Icon(Icons.logout, color: Colors.red),
               label: Text(context.l10n.signOut,

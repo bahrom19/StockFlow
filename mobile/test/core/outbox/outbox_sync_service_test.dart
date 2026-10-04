@@ -56,6 +56,32 @@ DioException _connectionError() {
   );
 }
 
+/// G16-N-3 Phase 3 P2-1 — deterministic driver for the pre-dispatch identity
+/// gate. The gate sits between `markSending` (which persists status=sending)
+/// and `_post`. This double watches the storage write and flips the live
+/// authenticated identity at exactly that moment, so the gate is reached
+/// WITHOUT any real network timing dependency.
+class _FlipIdentityOnSendingWrite extends PreferencesStorage {
+  _FlipIdentityOnSendingWrite(this._onSendingPersisted);
+
+  final void Function() _onSendingPersisted;
+
+  /// Re-armable, so repeated flaps can be driven in one test.
+  bool armed = true;
+  int flips = 0;
+
+  @override
+  Future<bool> setStringList(String key, List<String> value) async {
+    final result = await super.setStringList(key, value);
+    if (armed && value.any((v) => v.contains('"status":"sending"'))) {
+      armed = false;
+      flips++;
+      _onSendingPersisted();
+    }
+    return result;
+  }
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -678,6 +704,467 @@ void main() {
       final again = await svc.syncAll();
       expect(again.processed, 0);
       expect(seenKeys, hasLength(2));
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 3 — F1: a burst must never dispatch an operation
+  // under a different authenticated identity than the one it was queued for.
+  // ───────────────────────────────────────────────────────────────────────
+  group('Phase 3 F1 — identity races', () {
+    const userA =
+        CurrentUser(id: 'user-1', email: 'a@t', companyId: 'company-1');
+    const userB =
+        CurrentUser(id: 'user-2', email: 'b@t', companyId: 'company-2');
+
+    OutboxOperation cashOp(String id,
+            {String company = 'company-1', String user = 'user-1'}) =>
+        OutboxOperation(
+          clientOperationId: id,
+          kind: OutboxOperationKind.cashIn,
+          companyId: company,
+          userId: user,
+          payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+          idempotencyKey: id,
+          createdAt: DateTime(2026, 1, 1),
+        );
+
+    test(
+        '6. A→B before dispatch: identity change mid-burst stops the '
+        'burst; the next op stays '
+        'PENDING and is never dispatched', () async {
+      final c = await controller(seeded: [cashOp('r1'), cashOp('r2')]);
+      final spy = _PostSpy();
+      // Live identity: A when the burst starts, B after the first response.
+      var live = userA;
+
+      final svc = OutboxSyncService(
+        controller: c,
+        post: spy.always((_, __) {
+          // The auth state changes WHILE op r1 is in flight.
+          live = userB;
+          return {'id': 'cash-1', 'status': 'COMPLETED'};
+        }),
+        currentUser: () => live,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      );
+
+      final result = await svc.syncAll();
+
+      // Only the first, in-scope request was made.
+      expect(spy.calls, hasLength(1));
+      expect(result.sent, 1);
+      // r2 remains queued, untouched, and still dispatchable for A later.
+      final remaining = c.state.operations.map((o) => o.clientOperationId);
+      expect(remaining, ['r2']);
+      expect(
+        c.state.operations.single.status,
+        OutboxStatus.pending,
+        reason: 'an identity switch must leave the op PENDING, never SENDING',
+      );
+    });
+
+    test(
+        '9. retry during an identity change: an auth-epoch bump mid-burst '
+        'stops the burst even when the user '
+        'object is unchanged', () async {
+      final c = await controller(seeded: [cashOp('e1'), cashOp('e2')]);
+      final spy = _PostSpy();
+      final svc = OutboxSyncService(
+        controller: c,
+        post: spy.always((_, __) {
+          // What the auth listener does on ANY scope-relevant transition.
+          c.bumpAuthEpoch();
+          return {'id': 'cash-1', 'status': 'COMPLETED'};
+        }),
+        currentUser: () => userA,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      );
+
+      final result = await svc.syncAll();
+
+      expect(spy.calls, hasLength(1));
+      expect(result.sent, 1);
+      final remaining = c.state.operations.map((o) => o.clientOperationId);
+      expect(remaining, ['e2']);
+      expect(c.state.operations.single.status, OutboxStatus.pending);
+    });
+
+    test(
+        '7. A→B after dispatch: an already-dispatched request is NOT '
+        'cancelled; its result is '
+        'applied to its own operation id', () async {
+      // Ids sort 'first' < 'second', so the dispatch order is deterministic.
+      final c = await controller(seeded: [cashOp('first'), cashOp('second')]);
+      final spy = _PostSpy();
+      var live = userA;
+
+      final svc = OutboxSyncService(
+        controller: c,
+        post: spy.always((_, __) {
+          // Identity changes after dispatch — the in-flight request keeps the
+          // credentials it was issued under and must still settle.
+          live = userB;
+          return {'id': 'cash-1', 'status': 'COMPLETED'};
+        }),
+        currentUser: () => live,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      );
+
+      final result = await svc.syncAll();
+
+      expect(result.sent, 1);
+      // Confirmed by its OWN id, not rebound to the current (B) user.
+      expect(c.state.operations.map((o) => o.clientOperationId), ['second']);
+      expect(c.state.operations.single.companyId, 'company-1');
+      expect(c.state.operations.single.userId, 'user-1');
+    });
+
+    test('19. unauthenticated session: a burst never starts', () async {
+      final c = await controller(seeded: [cashOp('orphan')]);
+      final spy = _PostSpy();
+      final svc = OutboxSyncService(
+        controller: c,
+        post: spy.always((_, __) => {'id': 'x', 'status': 'COMPLETED'}),
+        currentUser: () => null,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      );
+
+      final result = await svc.syncAll();
+
+      expect(spy.calls, isEmpty);
+      expect(result.sent, 0);
+      // Not deleted, just not dispatched.
+      expect(c.state.operations, hasLength(1));
+    });
+
+    test('4. B can neither dispatch nor see A operations', () async {
+      final c = await controller(
+        seeded: [
+          cashOp('mine'),
+          cashOp('theirs', company: 'company-2', user: 'user-2'),
+        ],
+      );
+      final spy = _PostSpy();
+      final svc = OutboxSyncService(
+        controller: c,
+        post: spy.always((_, __) => {'id': 'x', 'status': 'COMPLETED'}),
+        currentUser: () => userA,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      );
+
+      final result = await svc.syncAll();
+
+      expect(spy.calls, hasLength(1));
+      expect(result.sent, 1);
+      expect(c.state.operations.map((o) => o.clientOperationId), ['theirs']);
+      // Untouched: still PENDING and still owned by B.
+      final theirs = c.state.operations.single;
+      expect(theirs.status, OutboxStatus.pending);
+      expect(theirs.companyId, 'company-2');
+      expect(theirs.userId, 'user-2');
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 3 remediation (P2-1) — the pre-dispatch identity
+  // gate must NOT consume the F5-B retry budget, because no HTTP request was
+  // ever issued. Matrix scenario 6 ("A→B before dispatch").
+  // ───────────────────────────────────────────────────────────────────────
+  group('Phase 3 P2-1 — pre-dispatch gate does not charge retry budget', () {
+    const userA = CurrentUser(id: 'user-1', email: 'a@t', companyId: 'company-1');
+    const userB = CurrentUser(id: 'user-2', email: 'b@t', companyId: 'company-2');
+
+    OutboxOperation cashOp(String id, {OutboxStatus status = OutboxStatus.pending}) =>
+        OutboxOperation(
+          clientOperationId: id,
+          kind: OutboxOperationKind.cashIn,
+          companyId: 'company-1',
+          userId: 'user-1',
+          payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+          idempotencyKey: id,
+          createdAt: DateTime(2026, 1, 1),
+          status: status,
+        );
+
+    test('6 (P2-1 remediation). A→B before dispatch: op stays PENDING with '
+        'attempts/backoff/lastError '
+        'untouched, no HTTP request, burst stops', () async {
+      SharedPreferences.setMockInitialValues({});
+      var live = userA;
+      final prefs = _FlipIdentityOnSendingWrite(() => live = userB);
+      await prefs.initialize();
+      final storage = OutboxStorage(prefs);
+      await storage.save([cashOp('g1'), cashOp('g2')]);
+      final c = OutboxController(storage);
+      await c.hydrate();
+
+      final spy = _PostSpy();
+      final svc = OutboxSyncService(
+        controller: c,
+        post: spy.always((_, __) => {'id': 'x', 'status': 'COMPLETED'}),
+        currentUser: () => live,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      );
+
+      final result = await svc.syncAll();
+
+      // The gate fired: the identity flipped during the markSending write.
+      expect(prefs.flips, 1, reason: 'gate must be the path exercised');
+      // No request was issued for ANY operation.
+      expect(spy.calls, isEmpty, reason: 'gate must prevent the HTTP call');
+      expect(result.sent, 0);
+
+      // g1 was marked SENDING, then released: PENDING again, no penalty.
+      final g1 = c.state.operations.firstWhere((o) => o.clientOperationId == 'g1');
+      expect(g1.status, OutboxStatus.pending);
+      expect(g1.attempts, 0, reason: 'no request was made — no retry consumed');
+      expect(g1.nextAttemptAt, isNull, reason: 'no backoff may be applied');
+      expect(g1.lastError, isNull, reason: 'no misleading error may be written');
+
+      // Identity + durable identity untouched.
+      expect(g1.companyId, 'company-1');
+      expect(g1.userId, 'user-1');
+      expect(g1.idempotencyKey, 'g1');
+      expect(g1.createdAt, DateTime(2026, 1, 1));
+
+      // Burst stopped: g2 was never even considered, still pristine PENDING.
+      final g2 = c.state.operations.firstWhere((o) => o.clientOperationId == 'g2');
+      expect(g2.status, OutboxStatus.pending);
+      expect(g2.attempts, 0);
+
+      // ...and the released state is PERSISTED, not just in memory.
+      final reloaded = OutboxController(OutboxStorage(prefs));
+      await reloaded.hydrate();
+      expect(
+        reloaded.state.operations.every((o) => o.status == OutboxStatus.pending),
+        isTrue,
+      );
+    });
+
+    test('6b (P2-1 remediation). repeated identity flaps never accumulate '
+        'attempts and can never '
+        'reach FAILED_PERMANENT', () async {
+      SharedPreferences.setMockInitialValues({});
+      var live = userA;
+      final prefs = _FlipIdentityOnSendingWrite(() => live = userB);
+      await prefs.initialize();
+      final storage = OutboxStorage(prefs);
+      await storage.save([cashOp('flap')]);
+      final c = OutboxController(storage);
+      await c.hydrate();
+
+      final spy = _PostSpy();
+      final svc = OutboxSyncService(
+        controller: c,
+        post: spy.always((_, __) => {'id': 'x', 'status': 'COMPLETED'}),
+        currentUser: () => live,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      );
+
+      // Far more flaps than the F5-B budget (12).
+      for (var i = 0; i < OutboxController.maxRetryAttempts + 5; i++) {
+        prefs.armed = true; // re-arm the flipper for this burst
+        live = userA; // A signs back in, so the next burst can start
+        c.bumpAuthEpoch(); // and the burst captures a fresh epoch
+        await svc.syncAll();
+      }
+
+      final op = c.state.operations.single;
+      expect(spy.calls, isEmpty, reason: 'no flap may ever reach the network');
+      expect(op.status, OutboxStatus.pending);
+      expect(op.attempts, 0, reason: 'identity stops are not delivery failures');
+      expect(op.nextAttemptAt, isNull);
+      expect(op.lastError, isNull);
+      expect(
+        op.status,
+        isNot(OutboxStatus.failedPermanent),
+        reason: 'P2-1: must be impossible to fail an undispatched op',
+      );
+      expect(prefs.flips, OutboxController.maxRetryAttempts + 5);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 3 — matrix scenarios 8 (rapid A→B→A) and
+  // 10-13 (failure classes arriving AFTER an identity change).
+  // ───────────────────────────────────────────────────────────────────────
+  group('Phase 3 — rapid scope churn and post-dispatch failures', () {
+    const userA = CurrentUser(id: 'user-1', email: 'a@t', companyId: 'company-1');
+    const userB = CurrentUser(id: 'user-2', email: 'b@t', companyId: 'company-2');
+
+    OutboxOperation cashOp(String id) => OutboxOperation(
+          clientOperationId: id,
+          kind: OutboxOperationKind.cashIn,
+          companyId: 'company-1',
+          userId: 'user-1',
+          payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+          idempotencyKey: id,
+          createdAt: DateTime(2026, 1, 1),
+        );
+
+    DioException networkFailure() => DioException(
+          requestOptions: RequestOptions(path: '/cash-in'),
+          type: DioExceptionType.connectionError,
+        );
+
+    test('8. rapid A→B→A: nothing of A dispatches under B, A resumes its own '
+        'backlog, durable identity unchanged', () async {
+      final c = await controller(seeded: [cashOp('r1'), cashOp('r2')]);
+      var live = userA;
+
+      OutboxSyncService make() => OutboxSyncService(
+            controller: c,
+            post: _PostSpy().always((_, __) {
+              live = userB; // scope changes WHILE r1 is in flight
+              return {'id': 'cash-1', 'status': 'COMPLETED'};
+            }),
+            currentUser: () => live,
+            isOnline: () => true,
+            specs: OutboxOperationRegistry.specs,
+          );
+
+      // --- A: r1 goes out, then the scope flips to B mid-burst.
+      final first = await make().syncAll();
+      expect(first.sent, 1);
+      final pendingId =
+          c.state.operations.single.clientOperationId;
+      expect(pendingId, 'r2');
+
+      // --- B is now authenticated: a burst must dispatch NOTHING of A's.
+      final underB = await OutboxSyncService(
+        controller: c,
+        post: _PostSpy().always((_, __) => {'id': 'never', 'status': 'COMPLETED'}),
+        currentUser: () => userB,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      ).syncAll();
+      expect(underB.sent, 0);
+      expect(c.state.operations, hasLength(1));
+      // B cannot see, count or own A's operation.
+      expect(c.state.unresolvedFor('company-2', 'user-2'), isEmpty);
+      expect(c.state.pendingCountFor('company-2', 'user-2'), 0);
+
+      // --- A returns and resumes exactly where it left off.
+      final resumed = await OutboxSyncService(
+        controller: c,
+        post: _PostSpy().always((_, __) => {'id': 'cash-2', 'status': 'COMPLETED'}),
+        currentUser: () => userA,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      ).syncAll();
+      expect(resumed.sent, 1);
+      expect(c.state.operations, isEmpty);
+    });
+
+    test('18. A operation retains its own identity (idempotency key) across '
+        'the churn '
+        '(idempotency key unchanged, never rebound to B)', () async {
+      final c = await controller(seeded: [cashOp('keeper')]);
+      var live = userA;
+      final spy = _PostSpy();
+      final svc = OutboxSyncService(
+        controller: c,
+        // Fail fast so the op stays queued, then flip the scope.
+        post: spy.always((_, __) {
+          live = userB;
+          throw _status(503);
+        }),
+        currentUser: () => live,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      );
+
+      await svc.syncAll();
+
+      final op = c.state.operations.single;
+      expect(op.clientOperationId, 'keeper');
+      expect(op.idempotencyKey, 'keeper');
+      expect(op.createdAt, DateTime(2026, 1, 1));
+      expect(op.companyId, 'company-1');
+      expect(op.userId, 'user-1');
+      // B sees nothing.
+      expect(c.state.unresolvedFor('company-2', 'user-2'), isEmpty);
+      // ...and the key that would be sent is still A's.
+      expect(spy.calls.single.$4?['Idempotency-Key'], 'keeper');
+    });
+
+    // Matrix 10-13: the response arrives after the identity already changed.
+    // Classification semantics must be EXACTLY the pre-Phase-3 ones — these
+    // are genuine transport/server failures, so they DO consume retry budget
+    // (unlike the P2-1 pre-dispatch gate).
+    final postChangeCases = <String, Object>{
+      '10. 401 after change → retryable': _status(401),
+      '11. 409 (non-duplicate) after change → retryable': _status(409),
+      '12. 5xx after change → retryable': _status(503),
+      '13. network failure after change → retryable': networkFailure(),
+    };
+
+    postChangeCases.forEach((title, failure) {
+      test('$title — applied by clientOperationId, never rebound to B',
+          () async {
+        final c = await controller(seeded: [cashOp('pc-1')]);
+        var live = userA;
+        final svc = OutboxSyncService(
+          controller: c,
+          post: _PostSpy().always((_, __) {
+            live = userB; // identity changes before the failure surfaces
+            throw failure;
+          }),
+          currentUser: () => live,
+          isOnline: () => true,
+          specs: OutboxOperationRegistry.specs,
+        );
+
+        final result = await svc.syncAll();
+
+        expect(result.sent, 0);
+        expect(result.retried, 1, reason: 'classification unchanged by Phase 3');
+        final op = c.state.operations.single;
+        expect(op.clientOperationId, 'pc-1');
+        // Still A's operation — result applied by id, not to B.
+        expect(op.companyId, 'company-1');
+        expect(op.userId, 'user-1');
+        expect(op.idempotencyKey, 'pc-1');
+        // Genuine failure → retry budget IS consumed (unchanged semantics).
+        expect(op.status, OutboxStatus.pending);
+        expect(op.attempts, 1);
+        // B sees nothing of it.
+        expect(c.state.unresolvedFor('company-2', 'user-2'), isEmpty);
+      });
+    });
+
+    test('409 duplicate after change → still confirmed by its own id (never '
+        'rebased onto B)', () async {
+      final c = await controller(seeded: [cashOp('dup-after')]);
+      var live = userA;
+      final svc = OutboxSyncService(
+        controller: c,
+        post: _PostSpy().always((_, __) {
+          live = userB;
+          throw _status(409, data: {
+            'message': 'A record with the same unique value already exists',
+          });
+        }),
+        currentUser: () => live,
+        isOnline: () => true,
+        specs: OutboxOperationRegistry.specs,
+      );
+
+      final result = await svc.syncAll();
+
+      expect(result.duplicates, 1);
+      expect(result.sent, 0);
+      // Recognized duplicate → removed, by its own clientOperationId.
+      expect(c.state.operations, isEmpty);
+      expect(c.state.unresolvedFor('company-2', 'user-2'), isEmpty);
     });
   });
 }

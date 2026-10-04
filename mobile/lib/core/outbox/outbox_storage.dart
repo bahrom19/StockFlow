@@ -48,14 +48,31 @@ class OutboxStorage {
     return ops;
   }
 
-  Future<void> save(List<OutboxOperation> ops) async {
-    await _prefs.setStringList(
+  /// Overwrites the whole queue and returns the platform write result.
+  ///
+  /// G16-N-3 P2-B-4 Phase 3 remediation (P2-2): the underlying store signals a
+  /// REJECTED write by returning false WITHOUT throwing, so the result is
+  /// propagated unchanged and never coerced to true. Callers that must not
+  /// overstate success — the logout cleanup path, which reports
+  /// `LogoutResult.queuePersisted` to the user — depend on this. Callers with
+  /// no success/failure contract of their own (enqueue, _mutate,
+  /// confirmSent) keep their existing behaviour and ignore it.
+  ///
+  /// A thrown exception is deliberately NOT caught here: it continues to
+  /// propagate to the caller exactly as before.
+  ///
+  /// Still NOT a database transaction; no atomicity beyond this single
+  /// whole-list overwrite is claimed.
+  Future<bool> save(List<OutboxOperation> ops) async {
+    return _prefs.setStringList(
       _key,
       ops.map((o) => jsonEncode(o.toJson())).toList(growable: false),
     );
   }
 
-  Future<void> clear() => _prefs.remove(_key);
+  /// Removes the whole queue, returning the platform write result under the
+  /// same contract as [save] (false == rejected without throwing).
+  Future<bool> clear() => _prefs.remove(_key);
 }
 
 /// The single app instance is created in `main()` (over the warmed

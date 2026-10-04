@@ -135,8 +135,36 @@ class OutboxSyncService {
     // Snapshot before the loop: ids/scopes/payloads are immutable; statuses
     // are mutated only through the controller's serialized guard.
     final snapshot = _controller.snapshot.operations;
+
+    // G16-N-3 P2-B-4 Phase 3 (closes F1). Capture BOTH the identity and the
+    // lifecycle epoch at burst start. The loop below re-validates them before
+    // every operation and again immediately before each dispatch, so an
+    // operation belonging to the burst-start scope can never be sent after
+    // that scope stopped being the authenticated one.
+    final burstCompanyId = user.companyId;
+    final burstUserId = user.id;
+    final burstEpoch = _controller.authEpoch;
+
+    /// True while the burst-start scope is still the authenticated one AND no
+    /// lifecycle transition has occurred since the burst began.
+    bool burstStillValid() {
+      if (_controller.authEpoch != burstEpoch) return false;
+      final live = _currentUser();
+      return live != null &&
+          live.companyId == burstCompanyId &&
+          live.id == burstUserId;
+    }
     for (final op in snapshot) {
-      final inScope = op.companyId == user.companyId && op.userId == user.id;
+      // Phase 3: an identity transition ABORTS the whole burst. Nothing
+      // further is dispatched under a scope that is no longer authenticated;
+      // every remaining operation simply stays persisted and PENDING, to be
+      // picked up by the next burst under whichever identity owns it.
+      if (!burstStillValid()) {
+        skipped += snapshot.length;
+        break;
+      }
+      final inScope =
+          op.companyId == burstCompanyId && op.userId == burstUserId;
       if (op.status != OutboxStatus.pending ||
           !inScope ||
           !op.isDue(DateTime.now())) {
@@ -161,6 +189,32 @@ class OutboxSyncService {
       // PENDING → sending (persisted; a crash here recovers as
       // sending → PENDING on the next hydrate).
       await _controller.markSending(op.clientOperationId);
+
+      // Phase 3: LAST gate before the network call. The Dio auth
+      // interceptor reads the bearer token per request, so this is the
+      // final point at which the credentials about to be attached can be
+      // guaranteed to belong to THIS operation's scope. If they do not, the
+      // request is not made at all: the operation is returned to PENDING,
+      // left persisted, and the burst stops. Because NO request was issued it
+      // must not consume retry budget either — see
+      // OutboxController.releaseDispatchAborted.
+      //
+      // An already-dispatched request is deliberately NOT cancelled — it
+      // completes under the credentials captured at dispatch, and its
+      // result is applied to this operation by its own clientOperationId,
+      // never rebound to the current user.
+      final live = _currentUser();
+      if (_controller.authEpoch != burstEpoch ||
+          live == null ||
+          live.companyId != op.companyId ||
+          live.id != op.userId) {
+        // Identity lifecycle stop, NOT a delivery failure: the request was
+        // never issued, so the operation returns to PENDING with its attempts,
+        // backoff and lastError untouched (P2-1 remediation).
+        await _controller.releaseDispatchAborted(op.clientOperationId);
+        skipped++;
+        break;
+      }
 
       try {
         // Query parameters (F4-B: the cash kinds' query-only `warehouseId`)

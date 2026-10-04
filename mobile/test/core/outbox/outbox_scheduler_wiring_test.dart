@@ -441,4 +441,161 @@ void main() {
       },
     );
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 3 — matrix scenario 20: the scheduler must re-arm
+  // after a sign-in, because a sign-in changes NO outbox state and therefore
+  // cannot reach the outbox-state or connectivity listeners.
+  //
+  // This harness deliberately does NOT override currentUserProvider, so the
+  // authenticated scope is derived from the real authStateProvider exactly as
+  // in the app.
+  // ───────────────────────────────────────────────────────────────────────
+  group('Phase 3 scenario 20 — scheduler pause/resume across auth', () {
+    /// Real event-loop settling (no FakeAsync zone in a plain test).
+    Future<void> _settle() async {
+      // pumpEventQueue drains microtasks AND the real async gaps (each queue
+      // hop awaits a SharedPreferences write), which a fixed number of
+      // zero-duration delays does not reliably cover.
+      await pumpEventQueue(times: 40);
+    }
+
+    const userA = CurrentUser(id: 'user-1', email: 'a@t', companyId: 'company-1');
+    const userB = CurrentUser(id: 'user-2', email: 'b@t', companyId: 'company-2');
+
+    OutboxOperation backlogOp(String id) => OutboxOperation(
+          clientOperationId: id,
+          kind: OutboxOperationKind.cashIn,
+          companyId: 'company-1',
+          userId: 'user-1',
+          payload: const {'amount': 100.0, 'warehouseId': 'wh-1'},
+          idempotencyKey: id,
+          createdAt: DateTime(2026, 1, 1),
+        );
+
+    test(
+      '20. scheduler resume after login: unauthenticated → sign in re-arms '
+      'once, dispatches nothing while logged out, then resumes A\'s own backlog',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = PreferencesStorage();
+        await prefs.initialize();
+        final storage = OutboxStorage(prefs);
+        // A's preserved backlog is already on disk (PD-1 normal logout).
+        await storage.save([backlogOp('resume-1')]);
+
+        final schedule = <_FakeTimer>[];
+        final api = _SpyApi()
+          ..responder = (_, __) =>
+              {'id': 'cash-1', 'status': 'COMPLETED'};
+        var clock = DateTime(2026, 1, 1);
+        final connectivity = _FakeConnectivity(initialOnline: true);
+
+        final container = ProviderContainer(
+          overrides: [
+            outboxStorageProvider.overrideWithValue(storage),
+            apiClientProvider.overrideWithValue(api),
+            connectivityServiceProvider.overrideWithValue(connectivity),
+            outboxControllerProvider.overrideWith(
+              (ref) => OutboxController(ref.watch(outboxStorageProvider), now: () => clock),
+            ),
+            outboxSchedulerClockProvider.overrideWithValue(() => clock),
+            outboxSchedulerTimerFactoryProvider.overrideWithValue(
+              (Duration delay, void Function() onFire) =>
+                  _FakeTimer(schedule, delay, onFire),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final auth = container.read(authStateProvider.notifier);
+        final controller = container.read(outboxControllerProvider.notifier);
+        await controller.hydrate();
+
+        // Start LOGGED OUT with a backlog on disk.
+        container.read(outboxInitProvider);
+        container.read(outboxSchedulerProvider);
+        await _settle();
+
+        // Nothing may be dispatched or even scheduled while unauthenticated.
+        expect(api.posts, isEmpty);
+        expect(schedule, isEmpty);
+
+        // A signs in → the scheduler must re-arm exactly ONCE.
+        // ignore: invalid_use_of_protected_member
+        auth.state = AuthAuthenticated(userA);
+        await _settle();
+
+        // The backlog was DUE, so re-arm fires exactly ONE immediate burst
+        // rather than arming a timer. One sign-in must produce exactly one
+        // dispatch — never a duplicate.
+        expect(api.posts, hasLength(1));
+        expect(api.posts.single.headers?['Idempotency-Key'], 'resume-1');
+        expect(controller.state.operations, isEmpty);
+        // No stray timer left behind for an already-flushed queue.
+        expect(schedule, isEmpty);
+        expect(schedule.where((t) => t.isActive), isEmpty);
+
+        clock = clock.add(const Duration(minutes: 1));
+      },
+    );
+
+    test(
+      '20b. sign-in as B never dispatches or claims A\'s preserved backlog',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = PreferencesStorage();
+        await prefs.initialize();
+        final storage = OutboxStorage(prefs);
+        await storage.save([backlogOp('a-only')]);
+
+        final schedule = <_FakeTimer>[];
+        final api = _SpyApi()
+          ..responder = (_, __) =>
+              {'id': 'cash-1', 'status': 'COMPLETED'};
+        var clock = DateTime(2026, 1, 1);
+        final container = ProviderContainer(
+          overrides: [
+            outboxStorageProvider.overrideWithValue(storage),
+            apiClientProvider.overrideWithValue(api),
+            connectivityServiceProvider
+                .overrideWithValue(_FakeConnectivity(initialOnline: true)),
+            outboxControllerProvider.overrideWith(
+              (ref) => OutboxController(ref.watch(outboxStorageProvider), now: () => clock),
+            ),
+            outboxSchedulerClockProvider.overrideWithValue(() => clock),
+            outboxSchedulerTimerFactoryProvider.overrideWithValue(
+              (Duration delay, void Function() onFire) =>
+                  _FakeTimer(schedule, delay, onFire),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final auth = container.read(authStateProvider.notifier);
+        final controller = container.read(outboxControllerProvider.notifier);
+        await controller.hydrate();
+        container.read(outboxInitProvider);
+        container.read(outboxSchedulerProvider);
+        await _settle();
+
+        // B signs in first.
+        // ignore: invalid_use_of_protected_member
+        auth.state = AuthAuthenticated(userB);
+        await _settle();
+
+        // B's scope has nothing due, so nothing is sent and no timer is armed
+        // for A's work — the scope filter, not a wipe, is what protects it.
+        expect(api.posts, isEmpty);
+        expect(schedule, isEmpty);
+        // A's operation is still intact and still owned by A.
+        expect(controller.state.operations, hasLength(1));
+        expect(controller.state.operations.single.companyId, 'company-1');
+        expect(controller.state.operations.single.userId, 'user-1');
+        expect(controller.state.unresolvedFor('company-2', 'user-2'), isEmpty);
+
+        clock = clock.add(const Duration(minutes: 1));
+      },
+    );
+  });
 }

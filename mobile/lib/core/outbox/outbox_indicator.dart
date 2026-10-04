@@ -345,3 +345,70 @@ class OutboxIndicatorScope extends ConsumerWidget {
     );
   }
 }
+
+/// G16-N-3 P2-B-4 Phase 3 — shared sign-out confirmation for the outbox.
+///
+/// Implemented as ONE helper (rather than a dialog duplicated across the three
+/// sign-out entry points) because all three need identical behaviour, and
+/// because the decision depends on outbox state: the number of unresolved
+/// operations belonging to the CURRENT authenticated scope.
+///
+/// Two outcomes, matching the approved PD-1:
+///  * **keep** — sign out and PRESERVE the outgoing scope's operations, so the
+///    same cashier resumes them after signing back in;
+///  * **discard** — sign out and remove them (and all foreign-scope entries).
+///
+/// Cancelling leaves the user signed in and the queue untouched. With no
+/// unresolved operations in scope, sign-out proceeds immediately without a
+/// dialog — there is nothing to decide about.
+Future<void> confirmSignOutWithPendingWork({
+  required BuildContext context,
+  required WidgetRef ref,
+  required AppLocalizations l10n,
+}) async {
+  final user = ref.read(currentUserProvider);
+  final state = ref.read(outboxControllerProvider);
+
+  final pending =
+      user == null ? 0 : state.unresolvedFor(user.companyId, user.id).length;
+
+  var discardPendingWork = false;
+  if (pending > 0) {
+    final choice = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.logoutPendingTitle),
+        content: Text(l10n.logoutPendingMessage(pending)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.cancel),
+          ),
+          // Destructive PD-1 path.
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.logoutDiscardPending),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.logoutKeepPending),
+          ),
+        ],
+      ),
+    );
+    // null => cancelled: stay signed in, touch nothing.
+    if (choice == null) return;
+    discardPendingWork = choice;
+  }
+
+  final result = await ref
+      .read(authStateProvider.notifier)
+      .logout(discardPendingWork: discardPendingWork);
+  if (!result.queuePersisted && context.mounted) {
+    // Honest failure: the sign-out DID complete, but the queue cleanup did not
+    // persist. Never report a discard that did not happen.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.logoutCleanupFailed)),
+    );
+  }
+}

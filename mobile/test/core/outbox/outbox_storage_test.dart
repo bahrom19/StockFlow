@@ -6,6 +6,28 @@ import 'package:stockflow/core/outbox/outbox_operation.dart';
 import 'package:stockflow/core/outbox/outbox_storage.dart';
 import 'package:stockflow/core/storage/preferences_storage.dart';
 
+/// Writes succeed and the value stays readable.
+class _OkPrefs extends PreferencesStorage {}
+
+/// G16-N-3 Phase 3 P2-2: every write is REJECTED WITHOUT throwing — the
+/// silent-failure case the storage contract must propagate honestly.
+class _RejectingWritesPrefs extends PreferencesStorage {
+  int saveCalls = 0;
+  int clearCalls = 0;
+
+  @override
+  Future<bool> setStringList(String key, List<String> value) async {
+    saveCalls++;
+    return false;
+  }
+
+  @override
+  Future<bool> remove(String key) async {
+    clearCalls++;
+    return false;
+  }
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -170,6 +192,75 @@ void main() {
 
       expect(loaded.single.idempotencyKey, 'idem-key-1');
       expect(loaded.single.schemaVersion, 1);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // G16-N-3 P2-B-4 Phase 3 remediation (P2-2) — honest persistence result.
+  //
+  // The platform store reports a REJECTED write by returning false WITHOUT
+  // throwing. save() must propagate that verbatim so the logout flow can never
+  // report queuePersisted: true for a write that did not happen.
+  // ───────────────────────────────────────────────────────────────────────
+  group('Phase 3 P2-2 — save() propagates the platform write result', () {
+    OutboxOperation sample(String id) => OutboxOperation(
+          clientOperationId: id,
+          kind: OutboxOperationKind.cashIn,
+          companyId: 'company-1',
+          userId: 'user-1',
+          payload: const {'amount': 10.0, 'warehouseId': 'wh-1'},
+          idempotencyKey: id,
+          createdAt: DateTime(2026, 1, 1),
+        );
+
+    test('save() returns TRUE when the store accepts the write', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = _OkPrefs();
+      await prefs.initialize();
+
+      final result = await OutboxStorage(prefs).save([sample('ok-1')]);
+
+      expect(result, isTrue);
+    });
+
+    test('save() returns FALSE — not true, not an exception — when the store '
+        'rejects the write', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = _RejectingWritesPrefs();
+      await prefs.initialize();
+
+      final result = await OutboxStorage(prefs).save([sample('rejected-1')]);
+
+      expect(result, isFalse, reason: 'false must never be coerced to true');
+      expect(prefs.saveCalls, 1);
+    });
+
+    test('clear() propagates the same contract', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = _RejectingWritesPrefs();
+      await prefs.initialize();
+
+      expect(await OutboxStorage(prefs).clear(), isFalse);
+      expect(prefs.clearCalls, 1);
+    });
+
+    test('a rejected save leaves the PREVIOUS list intact (fail-safe '
+        'direction) and keeps it loadable', () async {
+      SharedPreferences.setMockInitialValues({});
+      final good = _OkPrefs();
+      await good.initialize();
+      final store = OutboxStorage(good);
+      await store.save([sample('survivor')]);
+
+      // Now swap in a rejecting store for the cleanup write.
+      final rejecting = _RejectingWritesPrefs();
+      await rejecting.initialize();
+      final result = await OutboxStorage(rejecting).save(const []);
+
+      expect(result, isFalse);
+      // The old list is still there — nothing was half-written.
+      final reloaded = await store.load();
+      expect(reloaded.map((o) => o.clientOperationId), ['survivor']);
     });
   });
 }
