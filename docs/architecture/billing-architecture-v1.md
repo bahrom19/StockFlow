@@ -684,9 +684,9 @@ export class BillingCronService {
 |--------|------|-------------|-------------|
 | `GET` | `/api/billing/plans` | List public plans | `billing:read` |
 | `GET` | `/api/billing/plans/:id` | Get plan details | `billing:read` |
-| `POST` | `/api/billing/plans` | Create plan (admin) | `admin:billing` |
-| `PATCH` | `/api/billing/plans/:id` | Update plan (admin) | `admin:billing` |
-| `DELETE` | `/api/billing/plans/:id` | Soft-delete plan (admin) | `admin:billing` |
+| `POST` | `/api/billing/plans` | Create plan (**platform operator**) | `admin:billing` + platform operator |
+| `PATCH` | `/api/billing/plans/:id` | Update plan (**platform operator**) | `admin:billing` + platform operator |
+| `DELETE` | `/api/billing/plans/:id` | Soft-delete plan (**platform operator**) | `admin:billing` + platform operator |
 | `GET` | `/api/billing/subscription` | Get my company's subscription | `billing:read` |
 | `POST` | `/api/billing/subscription` | Subscribe to plan (from trial) | `billing:create` |
 | `PATCH` | `/api/billing/subscription/plan` | Change plan (upgrade/downgrade) | `billing:update` |
@@ -731,7 +731,12 @@ async createCheckout(
 | `billing:read` | View subscription, invoices, features |
 | `billing:update` | Change plan, cancel/resume subscription |
 | `billing:delete` | Delete payment methods |
-| `admin:billing` | Admin: manage plans, override subscriptions |
+| `admin:billing` | Admin: override subscriptions (tenant-scoped) |
+
+> **G16-N-4 P0-A:** `admin:billing` **no longer authorises plan mutation on its
+> own.** `SubscriptionPlan` is a global catalog without `companyId`, shared by
+> every tenant, so `POST`/`PATCH`/`DELETE /api/billing/plans` additionally
+> require platform-operator identity. See §13.4.
 
 ### 13.2 Webhook Security
 
@@ -751,6 +756,53 @@ Stripe Webhook:
 | `/api/webhooks/stripe` | 100/min | IP-based |
 | `/api/billing/checkout` | 10/min per user | User-based |
 | `/api/billing/*` | 60/min per user | User-based |
+
+### 13.4 Platform Operator (global resources)
+
+`SubscriptionPlan` and `Permission` are **global**: neither has a `companyId`.
+Both were previously writable by any tenant that held `admin:billing` /
+`roles:create` / `roles:update` / `roles:delete` — and
+`PermissionsSeedService.assignPermissionsToAdminRoles()` grants the entire
+permission catalog to every tenant `Admin` role, so no privilege escalation was
+required to reach them.
+
+Authorization is now additive:
+
+```
+authenticated principal (JwtAuthGuard)
+  AND platform operator identity (PlatformOperatorGuard)
+  AND existing tenant permission (RolesGuard)
+```
+
+* `PlatformOperatorGuard` runs **before** `RolesGuard`, is a no-op on routes
+  without `@RequirePlatformOperator()`, and never inspects `RolePermission`,
+  `Role`, `Company`, `email` or `companyId`.
+* Platform identity comes only from the immutable environment allowlist
+  `PLATFORM_OPERATOR_USER_IDS=<uuid>[,<uuid>...]` (`platform` config
+  namespace). It is not a Permission row, not a Role, not a company membership
+  and not an email — `User.email` is tenant-writable via `PATCH /users/:id`, so
+  email identity is forgeable and was rejected.
+* Missing, empty or malformed configuration yields an **empty** allowlist:
+  platform-protected writes return `403`. It never falls back to tenant RBAC and
+  never blocks application startup.
+* A platform operator still needs the tenant permission — the platform check
+  never bypasses `RolesGuard`.
+* Reads (`GET`) are unchanged and remain available to ordinary tenants.
+
+Audit provenance: `AuditLog.companyId` is nullable, and global mutations are
+recorded with `companyId = null` (`PLAN_CREATED`, `PLAN_UPDATED`,
+`PLAN_DELETED`, `PERMISSION_CREATED`, `PERMISSION_UPDATED`,
+`PERMISSION_DELETED`). A global row has no owning tenant, so borrowing a tenant
+companyId would assert a false security boundary. Permission deletion writes its
+audit row **before** the delete inside one transaction, because
+`RolePermission.permissionId` is `ON DELETE CASCADE`.
+
+Bootstrap: the plan catalog is seeded by migration
+`20261004090100_platform_bootstrap_free_plan`, which inserts the required
+`code = 'free'` plan with `ON CONFLICT ("code") DO NOTHING` and restores a
+soft-deleted `free` row. It needs no operator, no permission and no running
+application, which is what breaks the circular dependency
+(operator → permission → permission created by operator).
 
 ---
 

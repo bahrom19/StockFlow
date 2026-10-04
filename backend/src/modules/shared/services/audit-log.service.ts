@@ -3,7 +3,15 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
 export interface AuditLogEntry {
-  companyId: string;
+  /**
+   * G16-N-4 P0-A: nullable so GLOBAL resource mutations (SubscriptionPlan,
+   * Permission) record truthful provenance. A platform operator acts outside
+   * every tenant, so there is no owning companyId to write. Tenant actions
+   * must keep passing their real companyId — a tenant audit row written with
+   * NULL, or a platform row written with a tenant id, would both misstate the
+   * security boundary.
+   */
+  companyId: string | null;
   userId: string;
   entityType: string;
   entityId: string;

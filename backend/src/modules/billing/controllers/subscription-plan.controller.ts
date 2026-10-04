@@ -19,10 +19,12 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { PlatformOperatorGuard } from '../../../common/guards/platform-operator.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { RequirePermission } from '../../rbac/decorators/require-permission.decorator';
+import { RequirePlatformOperator } from '../../rbac/decorators/require-platform-operator.decorator';
 import { RolesGuard } from '../../rbac/guards/roles.guard';
 import { SubscriptionPlanService } from '../services/subscription-plan.service';
 import { CreateSubscriptionPlanDto } from '../dto/create-subscription-plan.dto';
@@ -33,12 +35,18 @@ import { SubscriptionPlanEntity } from '../entities/subscription-plan.entity';
 @ApiTags('billing / subscription-plans')
 @ApiBearerAuth()
 @Controller('billing/plans')
-@UseGuards(JwtAuthGuard, RolesGuard)
+// G16-N-4 P0-A: SubscriptionPlan is a GLOBAL catalog (no companyId).
+// PlatformOperatorGuard runs BEFORE RolesGuard so the platform boundary can
+// never be satisfied by tenant RBAC, and after JwtAuthGuard so an
+// authenticated principal exists. RolesGuard still runs and still enforces
+// `admin:billing`: the two requirements are additive.
+@UseGuards(JwtAuthGuard, PlatformOperatorGuard, RolesGuard)
 export class SubscriptionPlanController {
   constructor(private readonly planService: SubscriptionPlanService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @RequirePlatformOperator()
   @RequirePermission('admin:billing')
   @ApiOperation({ summary: 'Create a subscription plan' })
   @ApiBody({ type: CreateSubscriptionPlanDto })
@@ -51,7 +59,9 @@ export class SubscriptionPlanController {
     @Body() dto: CreateSubscriptionPlanDto,
     @CurrentUser() user: JwtPayload,
   ): Promise<SubscriptionPlanEntity> {
-    return this.planService.create(dto, user.companyId, user.userId);
+    // G16-N-4 P0-A: global resource — no owning tenant, so audit companyId
+    // is NULL. The actor is still recorded.
+    return this.planService.create(dto, null, user.userId);
   }
 
   @Get()
@@ -96,6 +106,7 @@ export class SubscriptionPlanController {
   }
 
   @Patch(':id')
+  @RequirePlatformOperator()
   @RequirePermission('admin:billing')
   @ApiOperation({ summary: 'Update a subscription plan' })
   @ApiBody({ type: UpdateSubscriptionPlanDto })
@@ -109,14 +120,21 @@ export class SubscriptionPlanController {
     @Body() dto: UpdateSubscriptionPlanDto,
     @CurrentUser() user: JwtPayload,
   ): Promise<SubscriptionPlanEntity> {
-    return this.planService.update(id, dto, user.companyId, user.userId);
+    return this.planService.update(id, dto, null, user.userId);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePlatformOperator()
   @RequirePermission('admin:billing')
   @ApiOperation({ summary: 'Delete a subscription plan' })
-  async softDelete(@Param('id') id: string): Promise<void> {
-    return this.planService.softDelete(id);
+  async softDelete(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<void> {
+    // G16-N-4 P0-A: the actor is now passed so the global deletion is
+    // auditable (PLAN_DELETED). Previously no principal was read here at all,
+    // so a tenant admin could erase a global plan with zero audit trail.
+    return this.planService.softDelete(id, user.userId);
   }
 }

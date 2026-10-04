@@ -26,6 +26,14 @@ export const envValidationSchema = Joi.object({
     .falsy('false')
     .default(false),
 
+  // G16-N-4 P0-A: platform operator allowlist for global-resource writes
+  // (SubscriptionPlan, Permission). Optional so a deployment without it still
+  // boots; the runtime effect of an absent/empty/malformed value is an EMPTY
+  // allowlist, i.e. platform-protected writes are denied (fail closed).
+  // Per-entry UUID validation happens in platform.config.ts so a malformed
+  // value can never turn into a boot failure or an accidental allow.
+  PLATFORM_OPERATOR_USER_IDS: Joi.string().optional().allow(''),
+
   // AI Configuration
   AI_PROVIDER: Joi.string().valid('openai').default('openai'),
   AI_API_KEY: Joi.string().min(10).optional().allow(''),
@@ -33,7 +41,15 @@ export const envValidationSchema = Joi.object({
   AI_TEMPERATURE: Joi.number().min(0).max(2).optional().default(0.7),
   AI_MAX_TOKENS: Joi.number().min(1).max(8192).optional().default(2048),
   AI_TIMEOUT_MS: Joi.number().min(1000).max(120000).optional().default(30000),
-  AI_REQUEST_TIMEOUT_MS: Joi.number().min(60000).max(300000).optional().default(120000),
+  AI_REQUEST_TIMEOUT_MS: Joi.number()
+    .min(60000)
+    .max(300000)
+    .optional()
+    .default(120000),
   // AI-7: Application safety ceiling for provider context (NOT model context window)
-  AI_CONTEXT_MAX_TOKENS: Joi.number().min(4000).max(128000).optional().default(120000),
+  AI_CONTEXT_MAX_TOKENS: Joi.number()
+    .min(4000)
+    .max(128000)
+    .optional()
+    .default(120000),
 }).required();

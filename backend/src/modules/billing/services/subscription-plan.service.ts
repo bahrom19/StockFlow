@@ -20,9 +20,15 @@ export class SubscriptionPlanService {
     private readonly prismaService: PrismaService,
   ) {}
 
+  /**
+   * G16-N-4 P0-A: SubscriptionPlan is a GLOBAL resource. `companyId` is
+   * therefore `string | null` and the controller passes `null`, so a global
+   * plan mutation is never attributed to a tenant. The actor `userId` is
+   * still recorded.
+   */
   async create(
     dto: CreateSubscriptionPlanDto,
-    companyId: string,
+    companyId: string | null,
     userId: string,
   ): Promise<SubscriptionPlanEntity> {
     const existing = await this.planRepository.findByCode(dto.code);
@@ -105,10 +111,11 @@ export class SubscriptionPlanService {
     return SubscriptionPlanMapper.toEntity(plan);
   }
 
+  /** G16-N-4 P0-A: see create() — `companyId` is null for global plans. */
   async update(
     id: string,
     dto: UpdateSubscriptionPlanDto,
-    companyId: string,
+    companyId: string | null,
     userId: string,
   ): Promise<SubscriptionPlanEntity> {
     const existing = await this.planRepository.findById(id);
@@ -145,10 +152,36 @@ export class SubscriptionPlanService {
     return SubscriptionPlanMapper.toEntity(updated);
   }
 
-  async softDelete(id: string): Promise<void> {
+  /**
+   * G16-N-4 P0-A: the global plan deletion is now audited.
+   *
+   * Previously this method took no actor and wrote no audit row, so a tenant
+   * administrator holding `admin:billing` could soft-delete a global plan with
+   * no attribution whatsoever. The PLAN_DELETED row carries the resource
+   * identity (code + name) needed to reconstruct what was removed, and
+   * `companyId: null` because a global plan has no owning tenant.
+   */
+  async softDelete(id: string, userId: string): Promise<void> {
     const existing = await this.planRepository.findById(id);
     if (!existing) throw new NotFoundException(`Plan ${id} not found`);
     const rowVer = existing.rowVersion ?? 0;
     await this.planRepository.softDelete(id, rowVer);
+    await this.prismaService.auditLog.create({
+      data: {
+        action: 'PLAN_DELETED',
+        entity: 'SubscriptionPlan',
+        entityId: id,
+        oldValues: {
+          code: existing.code,
+          name: existing.name,
+          priceMonthly: existing.priceMonthly.toString(),
+          priceYearly: existing.priceYearly.toString(),
+          currency: existing.currency,
+          isActive: existing.isActive,
+        },
+        companyId: null,
+        userId,
+      },
+    });
   }
 }

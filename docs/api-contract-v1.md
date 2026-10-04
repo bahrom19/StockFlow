@@ -975,8 +975,22 @@ enum PurchaseOrderStatus {
 
 | Method | Path | Permission | Описание |
 |--------|------|------------|----------|
-| CRUD | `/rbac/permissions` | `roles:*` | Управление permissions |
+| GET | `/rbac/permissions` | `roles:read` | Чтение каталога permissions |
 | GET | `/rbac/permissions/code/:code` | `roles:read` | Поиск по коду |
+| POST | `/rbac/permissions` | `roles:create` + platform operator | Создание permission |
+| PATCH | `/rbac/permissions/:id` | `roles:update` + platform operator | Изменение permission |
+| DELETE | `/rbac/permissions/:id` | `roles:delete` + platform operator | Удаление permission |
+
+> **G16-N-4 P0-A — глобальный ресурс.** `Permission` — глобальный каталог
+> авторизации (нет `companyId`), и все `RolePermission` всех компаний ссылаются
+> на него. Поэтому записи (`POST`/`PATCH`/`DELETE`) доступны **только**
+> platform operator'у, и проверка является **аддитивной**:
+> `platform operator` **AND** `roles:create`/`roles:update`/`roles:delete`.
+> Platform-идентичность задаётся неизменяемым allowlist пользовательских ID в
+> переменной окружения `PLATFORM_OPERATOR_USER_IDS` — это не Permission, не Role,
+> не членство в компании и не email, поэтому tenant RBAC не может её выдать или
+> обойти. Чтение (`GET`) остаётся на `roles:read` и platform-идентичности не
+> требует. Аудит таких операций пишется с `companyId = null`.
 
 ### Roles
 Базовый путь: `/rbac/roles`
@@ -997,8 +1011,21 @@ enum PurchaseOrderStatus {
 
 | Method | Path | Permission | Описание |
 |--------|------|------------|----------|
-| CRUD | `/billing/plans` | `admin:billing` / `billing:read` | Тарифные планы |
+| GET | `/billing/plans` | `billing:read` | Чтение каталога тарифов |
 | GET | `/billing/plans/code/:code` | `billing:read` | Поиск по коду |
+| POST | `/billing/plans` | `admin:billing` + platform operator | Создание тарифа |
+| PATCH | `/billing/plans/:id` | `admin:billing` + platform operator | Изменение тарифа |
+| DELETE | `/billing/plans/:id` | `admin:billing` + platform operator | Soft-delete тарифа |
+
+> **G16-N-4 P0-A — глобальный ресурс.** `SubscriptionPlan` — глобальный каталог
+> (нет `companyId`), общий для всех компаний. Записи (`POST`/`PATCH`/`DELETE`)
+> доступны **только** platform operator'у, и проверка **аддитивная**:
+> `platform operator` **AND** `admin:billing`. Проверка platform-идентичности
+> выполняется `PlatformOperatorGuard` до `RolesGuard` и опирается только на
+> `PLATFORM_OPERATOR_USER_IDS`, поэтому tenant RBAC её не удовлетворяет и не
+> заменяет. При отсутствии/пустом/некорректном значении переменной все эти
+> операции возвращают `403`. Чтение остаётся на `billing:read`. Аудит:
+> `PLAN_CREATED` / `PLAN_UPDATED` / `PLAN_DELETED` с `companyId = null`.
 
 ### Company Subscriptions
 Базовый путь: `/billing/subscription`

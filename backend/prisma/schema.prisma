@@ -1082,19 +1082,24 @@ model PasswordResetToken {
 }
 
 model AuditLog {
-  id         String    @id @default(uuid()) @db.Uuid
-  companyId  String    @db.Uuid
-  userId     String?   @db.Uuid
-  entity     String    @db.VarChar(255)
-  entityId   String    @db.VarChar(255)
-  action     String    @db.VarChar(100)
-  oldValues  Json?
-  newValues  Json?
-  ipAddress  String?   @db.VarChar(45)
-  userAgent  String?   @db.VarChar(1000)
-  createdAt  DateTime  @default(now())
-  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id String  @id @default(uuid()) @db.Uuid
+  // G16-N-4 P0-A: nullable so platform-scope actions on GLOBAL resources
+  // (SubscriptionPlan, Permission) record truthful provenance. A platform
+  // mutation has no owning tenant; recording it under a tenant companyId
+  // would assert a false security boundary. Non-platform (tenant) rows keep
+  // their real companyId and the Company FK behaviour is unchanged.
+  companyId String? @db.Uuid
+  userId    String? @db.Uuid
+  entity    String  @db.VarChar(255)
+  entityId  String  @db.VarChar(255)
+  action    String  @db.VarChar(100)
+  oldValues Json?
+  newValues Json?
+  ipAddress String? @db.VarChar(45)
+  userAgent String? @db.VarChar(1000)
+  createdAt DateTime @default(now())
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([userId])

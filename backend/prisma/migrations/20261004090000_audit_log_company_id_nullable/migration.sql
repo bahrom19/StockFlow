@@ -1,0 +1,33 @@
+-- G16-N-4 P0-A: make AuditLog.companyId nullable for truthful platform provenance.
+--
+-- Why:
+--   Global resources (SubscriptionPlan, Permission) are not owned by a tenant,
+--   but their mutations are performed by a platform operator who is not a
+--   member of any tenant company. AuditLog.companyId was NOT NULL, so a
+--   platform action could only be recorded by borrowing some tenant's
+--   companyId — which asserts a false security boundary in the very trail
+--   that exists to detect boundary violations (the pre-existing
+--   PLAN_UPDATED rows were written under the mutating tenant's companyId for
+--   exactly this reason).
+--
+-- What this migration does:
+--   * DROP NOT NULL on "AuditLog"."companyId" only. Nothing else changes.
+--
+-- Safety properties (no backfill, no data rewrite, no new table/column):
+--   1. Metadata-only: relaxing a NOT NULL constraint cannot invalidate any
+--      existing row. Every current tenant audit row keeps its real companyId.
+--   2. The "AuditLog_companyId_fkey" foreign key to "Company" is retained
+--      untouched, so tenant rows still cascade on company deletion and NULL
+--      rows are simply not owned by any company.
+--   3. Indexes (companyId), (companyId, createdAt), (userId), (entity),
+--      (action), (createdAt), (entity, entityId) are all preserved and remain
+--      valid — PostgreSQL indexes NULLs.
+--
+-- Compatibility:
+--   * Writers are unaffected: every tenant writer still passes an explicit
+--     companyId, which remains valid for a nullable column.
+--   * Readers filtering `companyId = $1` naturally exclude platform rows,
+--     which is the desired tenant-audit semantics. Any future reader that must
+--     observe platform actions has to query `companyId IS NULL` explicitly.
+
+ALTER TABLE "AuditLog" ALTER COLUMN "companyId" DROP NOT NULL;

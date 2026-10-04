@@ -207,14 +207,114 @@ describe('SubscriptionPlanService', () => {
         ...mockPlan,
         deletedAt: new Date(),
       } as any);
-      await expect(service.softDelete('plan-1')).resolves.toBeUndefined();
+      await expect(
+        service.softDelete('plan-1', 'user-1'),
+      ).resolves.toBeUndefined();
     });
 
     it('should throw if plan not found', async () => {
       mockRepo.findById.mockResolvedValue(null);
-      await expect(service.softDelete('missing')).rejects.toThrow(
+      await expect(service.softDelete('missing', 'user-1')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  // ── G16-N-4 P0-A: global-resource audit provenance ───────────────────────
+  describe('audit provenance for GLOBAL plans (G16-N-4 P0-A)', () => {
+    it('T22: PLAN_CREATED records the actor and companyId NULL', async () => {
+      mockRepo.findByCode.mockResolvedValue(null);
+      mockRepo.create.mockResolvedValue(mockPlan as any);
+
+      await service.create(
+        { code: 'starter', name: 'Starter', priceMonthly: 0, priceYearly: 0 },
+        null,
+        'operator-1',
+      );
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'PLAN_CREATED',
+          entity: 'SubscriptionPlan',
+          entityId: 'plan-1',
+          companyId: null,
+          userId: 'operator-1',
+        }),
+      });
+    });
+
+    it('T23: PLAN_UPDATED records the actor and companyId NULL', async () => {
+      mockRepo.findById.mockResolvedValue(mockPlan as any);
+      mockRepo.update.mockResolvedValue({
+        ...mockPlan,
+        name: 'Renamed',
+      } as any);
+
+      await service.update('plan-1', { name: 'Renamed' }, null, 'operator-1');
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'PLAN_UPDATED',
+          entity: 'SubscriptionPlan',
+          entityId: 'plan-1',
+          companyId: null,
+          userId: 'operator-1',
+        }),
+      });
+    });
+
+    it('T24: PLAN_DELETED records the actor, companyId NULL and resource identity', async () => {
+      mockRepo.findById.mockResolvedValue(mockPlan as any);
+      mockRepo.softDelete.mockResolvedValue({
+        ...mockPlan,
+        deletedAt: new Date(),
+      } as any);
+
+      await service.softDelete('plan-1', 'operator-1');
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'PLAN_DELETED',
+          entity: 'SubscriptionPlan',
+          entityId: 'plan-1',
+          companyId: null,
+          userId: 'operator-1',
+          oldValues: expect.objectContaining({
+            code: 'starter',
+            name: 'Starter',
+          }),
+        }),
+      });
+    });
+
+    it('T24b: a global deletion is never performed without an audit row', async () => {
+      mockRepo.findById.mockResolvedValue(mockPlan as any);
+      mockRepo.softDelete.mockResolvedValue({ ...mockPlan } as any);
+      (prisma.auditLog.create as jest.Mock).mockRejectedValue(
+        new Error('audit unavailable'),
+      );
+
+      await expect(service.softDelete('plan-1', 'operator-1')).rejects.toThrow(
+        'audit unavailable',
+      );
+      // The delete did happen first, but the failure is surfaced — never a
+      // silent 204 with no trace.
+      expect(mockRepo.softDelete).toHaveBeenCalled();
+    });
+
+    it('T30: a tenant-scoped audit row still keeps its real companyId', async () => {
+      mockRepo.findByCode.mockResolvedValue(null);
+      mockRepo.create.mockResolvedValue(mockPlan as any);
+
+      await service.create(
+        { code: 'starter', name: 'Starter', priceMonthly: 0, priceYearly: 0 },
+        'comp-1',
+        'user-1',
+      );
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ companyId: 'comp-1' }),
+      });
     });
   });
 
