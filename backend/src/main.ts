@@ -14,6 +14,12 @@ async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
+    // G16-N-4 P1-B: capture the RAW request bytes on every parsed request
+    // (`req.rawBody`, a Buffer). Stripe signs the exact bytes it sends, so the
+    // webhook signature can only be verified against those bytes — never
+    // against a re-serialized parse tree. Fail-closed enforcement lives in
+    // StripeWebhookController. All other bootstrap behaviour is unchanged.
+    rawBody: true,
   });
 
   const configService = app.get(ConfigService);

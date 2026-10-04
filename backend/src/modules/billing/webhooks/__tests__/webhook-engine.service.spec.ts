@@ -72,6 +72,64 @@ describe('WebhookEngineService.verifySignature (G13-03-08-01 fail-closed)', () =
     expect(engine.verifySignature(payload, 'v1=deadbeef')).toBe(false);
     expect(engine.verifySignature(payload, '')).toBe(false);
   });
+
+  // ── G16-N-4 P1-B: raw bytes are authoritative; no re-serialization ──
+  describe('raw Buffer payload', () => {
+    // Formatting a re-serialization destroys: extra whitespace + escaped slashes.
+    const rawText =
+      '{ "id": "evt_raw",  "object": "event", "data": { "object": { "url": "https:\\/\\/example.com\\/a" } } }';
+    const rawBytes = Buffer.from(rawText, 'utf8');
+
+    it('uses raw bytes whose representation a re-serialization would change', () => {
+      const engine = makeEngine(secret, false);
+      // Guard the premise: this payload is exactly the case the old
+      // `JSON.stringify(req.body)` path got wrong.
+      expect(JSON.stringify(JSON.parse(rawText))).not.toBe(rawText);
+
+      expect(
+        engine.verifySignature(rawBytes, sign(secret, rawText, timestamp)),
+      ).toBe(true);
+    });
+
+    it('rejects a re-serialized/canonicalized payload for a raw-signed event', () => {
+      const engine = makeEngine(secret, false);
+      const reserialized = Buffer.from(
+        JSON.stringify(JSON.parse(rawText)),
+        'utf8',
+      );
+      expect(reserialized.equals(rawBytes)).toBe(false);
+
+      expect(
+        engine.verifySignature(reserialized, sign(secret, rawText, timestamp)),
+      ).toBe(false);
+    });
+
+    it('rejects tampered raw bytes', () => {
+      const engine = makeEngine(secret, false);
+      const tampered = Buffer.from(
+        rawText.replace('evt_raw', 'evt_forg'),
+        'utf8',
+      );
+
+      expect(
+        engine.verifySignature(tampered, sign(secret, rawText, timestamp)),
+      ).toBe(false);
+    });
+
+    it('rejects an empty raw Buffer', () => {
+      const engine = makeEngine(secret, false);
+      expect(
+        engine.verifySignature(Buffer.alloc(0), sign(secret, '', timestamp)),
+      ).toBe(false);
+    });
+
+    it('keeps string callers working (backward compatibility)', () => {
+      const engine = makeEngine(secret, false);
+      expect(
+        engine.verifySignature(payload, sign(secret, payload, timestamp)),
+      ).toBe(true);
+    });
+  });
 });
 
 describe('WebhookEngineService.handleSubscriptionDeleted (G13-03-08-02 single event)', () => {

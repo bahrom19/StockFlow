@@ -37,7 +37,20 @@ export class StripeWebhookController {
     if (!signature) {
       throw new BadRequestException('Missing stripe-signature header');
     }
-    const rawBody = req.rawBody?.toString() ?? JSON.stringify(req.body);
+    // G16-N-4 P1-B: Stripe signs the exact HTTP bytes it sent, so the
+    // signature can only be verified against those bytes. Re-serializing the
+    // parsed body (the previous `JSON.stringify(req.body)` fallback) produces
+    // different bytes than the ones Stripe signed — it is not a valid
+    // verification source and is therefore removed. Nest's raw-body capture
+    // (`rawBody: true` in main.ts) is the only accepted source: if it is
+    // unavailable or empty the webhook is rejected without ever reaching the
+    // engine.
+    const rawBody = req.rawBody;
+    if (!Buffer.isBuffer(rawBody) || rawBody.length === 0) {
+      throw new BadRequestException(
+        'Raw request body is unavailable — webhook rejected',
+      );
+    }
     const isValid = this.webhookEngine.verifySignature(rawBody, signature);
     if (!isValid) {
       throw new BadRequestException('Invalid stripe-signature');

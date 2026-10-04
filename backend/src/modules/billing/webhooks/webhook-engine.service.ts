@@ -96,8 +96,15 @@ export class WebhookEngineService {
   /**
    * Verify Stripe webhook signature using constant-time HMAC-SHA256 comparison.
    * Accepts Stripe's standard format: t=timestamp,v1=signature
+   *
+   * G16-N-4 P1-B: `payload` accepts the RAW request bytes (Buffer, captured by
+   * Nest's `rawBody` option) — the only faithful representation of what Stripe
+   * signed. A `string` stays supported for existing callers, but it must
+   * already be the signed bytes: this method never parses or re-serializes the
+   * payload, because `JSON.stringify(JSON.parse(bytes))` is not guaranteed to
+   * reproduce `bytes`.
    */
-  verifySignature(payload: string, signature: string): boolean {
+  verifySignature(payload: Buffer | string, signature: string): boolean {
     if (this.skipSignatureVerification) return true;
 
     // G13-03-08-01: fail closed — an unconfigured secret rejects every
@@ -108,6 +115,12 @@ export class WebhookEngineService {
       );
       return false;
     }
+
+    // Stripe delivers webhook bodies as UTF-8 JSON; decoding the raw Buffer
+    // with an explicit encoding keeps the HMAC input byte-faithful.
+    const body = Buffer.isBuffer(payload) ? payload.toString('utf8') : payload;
+    // Defensive: an empty payload can never carry a valid signature.
+    if (body.length === 0) return false;
 
     try {
       const parts = signature
@@ -122,9 +135,9 @@ export class WebhookEngineService {
       const expectedSig = parts['v1'];
       if (!timestamp || !expectedSig) return false;
 
-      const signedPayload = `${timestamp}.${payload}`;
+      const signedPayload = `${timestamp}.${body}`;
       const computedSig = createHmac('sha256', this.webhookSecret)
-        .update(signedPayload)
+        .update(signedPayload, 'utf8')
         .digest('hex');
 
       return timingSafeEqual(
