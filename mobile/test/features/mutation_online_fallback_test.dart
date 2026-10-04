@@ -589,6 +589,10 @@ void main() {
 
   group('PurchasingRepository.createGoodsReceipt — F5-A fallback', () {
     CreateGoodsReceiptRequest request() => const CreateGoodsReceiptRequest(
+          // G16-N-3 P2-B-5-R1: durable identity, fixed once for this
+          // request so the online attempt, the fallback and every
+          // replay share it.
+          receiptNumber: 'GR-B',
           purchaseOrderId: 'po-1',
           warehouseId: 'wh-1',
           items: [
@@ -718,6 +722,8 @@ void main() {
       // Verbatim payload (JSON round-tripped through storage → plain maps).
       expect(call.data, <String, dynamic>{
         'purchaseOrderId': 'po-1',
+          // P2-B-5-R1: the durable identity rides along verbatim.
+          'receiptNumber': 'GR-B',
         'warehouseId': 'wh-1',
         'notes': null,
         'items': [

@@ -258,6 +258,7 @@ _$CreateGoodsReceiptRequestImpl _$$CreateGoodsReceiptRequestImplFromJson(
           .map(
               (e) => CreateGoodsReceiptItem.fromJson(e as Map<String, dynamic>))
           .toList(),
+      receiptNumber: json['receiptNumber'] as String,
     );
 
 Map<String, dynamic> _$$CreateGoodsReceiptRequestImplToJson(
@@ -267,6 +268,7 @@ Map<String, dynamic> _$$CreateGoodsReceiptRequestImplToJson(
       'warehouseId': instance.warehouseId,
       'notes': instance.notes,
       'items': instance.items,
+      'receiptNumber': instance.receiptNumber,
     };
 
 _$CreateGoodsReceiptItemImpl _$$CreateGoodsReceiptItemImplFromJson(

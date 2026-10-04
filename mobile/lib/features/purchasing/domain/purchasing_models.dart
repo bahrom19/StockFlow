@@ -195,6 +195,22 @@ class CreateGoodsReceiptRequest with _$CreateGoodsReceiptRequest {
     required String warehouseId,
     String? notes,
     required List<CreateGoodsReceiptItem> items,
+    /// G16-N-3 P2-B-5-R1 — durable business-operation identity, restored to the
+    /// mobile request.
+    ///
+    /// The backend requires this field (`@IsString() @IsNotEmpty()`, no server
+    /// fallback) and enforces `@@unique([companyId, receiptNumber])`, so it —
+    /// not the 24h IdempotencyRecord — is what makes a replay of this operation
+    /// permanently impossible.
+    ///
+    /// It is `required` on purpose, and it is supplied by the CALLER before the
+    /// request is constructed, exactly as the offline sale flow mints its
+    /// `saleNumber`. It must NOT be minted by the repository or at dispatch
+    /// time: every path serializes `request.toJson()`, so a number fixed here
+    /// survives the online attempt, the F5-A fallback, offline parking, retry and
+    /// replay unchanged. Minting per-path would let the parked copy diverge from
+    /// the failed attempt and silently defeat the durable identity.
+    required String receiptNumber,
   }) = _CreateGoodsReceiptRequest;
 
   factory CreateGoodsReceiptRequest.fromJson(Map<String, dynamic> json) =>

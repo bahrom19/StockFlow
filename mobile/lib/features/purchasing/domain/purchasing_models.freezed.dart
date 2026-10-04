@@ -2677,6 +2677,23 @@ mixin _$CreateGoodsReceiptRequest {
   String? get notes => throw _privateConstructorUsedError;
   List<CreateGoodsReceiptItem> get items => throw _privateConstructorUsedError;
 
+  /// G16-N-3 P2-B-5-R1 — durable business-operation identity, restored to the
+  /// mobile request.
+  ///
+  /// The backend requires this field (`@IsString() @IsNotEmpty()`, no server
+  /// fallback) and enforces `@@unique([companyId, receiptNumber])`, so it —
+  /// not the 24h IdempotencyRecord — is what makes a replay of this operation
+  /// permanently impossible.
+  ///
+  /// It is `required` on purpose, and it is supplied by the CALLER before the
+  /// request is constructed, exactly as the offline sale flow mints its
+  /// `saleNumber`. It must NOT be minted by the repository or at dispatch
+  /// time: every path serializes `request.toJson()`, so a number fixed here
+  /// survives the online attempt, the F5-A fallback, offline parking, retry and
+  /// replay unchanged. Minting per-path would let the parked copy diverge from
+  /// the failed attempt and silently defeat the durable identity.
+  String get receiptNumber => throw _privateConstructorUsedError;
+
   /// Serializes this CreateGoodsReceiptRequest to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
 
@@ -2697,7 +2714,8 @@ abstract class $CreateGoodsReceiptRequestCopyWith<$Res> {
       {String purchaseOrderId,
       String warehouseId,
       String? notes,
-      List<CreateGoodsReceiptItem> items});
+      List<CreateGoodsReceiptItem> items,
+      String receiptNumber});
 }
 
 /// @nodoc
@@ -2720,6 +2738,7 @@ class _$CreateGoodsReceiptRequestCopyWithImpl<$Res,
     Object? warehouseId = null,
     Object? notes = freezed,
     Object? items = null,
+    Object? receiptNumber = null,
   }) {
     return _then(_value.copyWith(
       purchaseOrderId: null == purchaseOrderId
@@ -2738,6 +2757,10 @@ class _$CreateGoodsReceiptRequestCopyWithImpl<$Res,
           ? _value.items
           : items // ignore: cast_nullable_to_non_nullable
               as List<CreateGoodsReceiptItem>,
+      receiptNumber: null == receiptNumber
+          ? _value.receiptNumber
+          : receiptNumber // ignore: cast_nullable_to_non_nullable
+              as String,
     ) as $Val);
   }
 }
@@ -2755,7 +2778,8 @@ abstract class _$$CreateGoodsReceiptRequestImplCopyWith<$Res>
       {String purchaseOrderId,
       String warehouseId,
       String? notes,
-      List<CreateGoodsReceiptItem> items});
+      List<CreateGoodsReceiptItem> items,
+      String receiptNumber});
 }
 
 /// @nodoc
@@ -2777,6 +2801,7 @@ class __$$CreateGoodsReceiptRequestImplCopyWithImpl<$Res>
     Object? warehouseId = null,
     Object? notes = freezed,
     Object? items = null,
+    Object? receiptNumber = null,
   }) {
     return _then(_$CreateGoodsReceiptRequestImpl(
       purchaseOrderId: null == purchaseOrderId
@@ -2795,6 +2820,10 @@ class __$$CreateGoodsReceiptRequestImplCopyWithImpl<$Res>
           ? _value._items
           : items // ignore: cast_nullable_to_non_nullable
               as List<CreateGoodsReceiptItem>,
+      receiptNumber: null == receiptNumber
+          ? _value.receiptNumber
+          : receiptNumber // ignore: cast_nullable_to_non_nullable
+              as String,
     ));
   }
 }
@@ -2806,7 +2835,8 @@ class _$CreateGoodsReceiptRequestImpl implements _CreateGoodsReceiptRequest {
       {required this.purchaseOrderId,
       required this.warehouseId,
       this.notes,
-      required final List<CreateGoodsReceiptItem> items})
+      required final List<CreateGoodsReceiptItem> items,
+      required this.receiptNumber})
       : _items = items;
 
   factory _$CreateGoodsReceiptRequestImpl.fromJson(Map<String, dynamic> json) =>
@@ -2826,9 +2856,27 @@ class _$CreateGoodsReceiptRequestImpl implements _CreateGoodsReceiptRequest {
     return EqualUnmodifiableListView(_items);
   }
 
+  /// G16-N-3 P2-B-5-R1 — durable business-operation identity, restored to the
+  /// mobile request.
+  ///
+  /// The backend requires this field (`@IsString() @IsNotEmpty()`, no server
+  /// fallback) and enforces `@@unique([companyId, receiptNumber])`, so it —
+  /// not the 24h IdempotencyRecord — is what makes a replay of this operation
+  /// permanently impossible.
+  ///
+  /// It is `required` on purpose, and it is supplied by the CALLER before the
+  /// request is constructed, exactly as the offline sale flow mints its
+  /// `saleNumber`. It must NOT be minted by the repository or at dispatch
+  /// time: every path serializes `request.toJson()`, so a number fixed here
+  /// survives the online attempt, the F5-A fallback, offline parking, retry and
+  /// replay unchanged. Minting per-path would let the parked copy diverge from
+  /// the failed attempt and silently defeat the durable identity.
+  @override
+  final String receiptNumber;
+
   @override
   String toString() {
-    return 'CreateGoodsReceiptRequest(purchaseOrderId: $purchaseOrderId, warehouseId: $warehouseId, notes: $notes, items: $items)';
+    return 'CreateGoodsReceiptRequest(purchaseOrderId: $purchaseOrderId, warehouseId: $warehouseId, notes: $notes, items: $items, receiptNumber: $receiptNumber)';
   }
 
   @override
@@ -2841,13 +2889,15 @@ class _$CreateGoodsReceiptRequestImpl implements _CreateGoodsReceiptRequest {
             (identical(other.warehouseId, warehouseId) ||
                 other.warehouseId == warehouseId) &&
             (identical(other.notes, notes) || other.notes == notes) &&
-            const DeepCollectionEquality().equals(other._items, _items));
+            const DeepCollectionEquality().equals(other._items, _items) &&
+            (identical(other.receiptNumber, receiptNumber) ||
+                other.receiptNumber == receiptNumber));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, purchaseOrderId, warehouseId,
-      notes, const DeepCollectionEquality().hash(_items));
+      notes, const DeepCollectionEquality().hash(_items), receiptNumber);
 
   /// Create a copy of CreateGoodsReceiptRequest
   /// with the given fields replaced by the non-null parameter values.
@@ -2868,11 +2918,11 @@ class _$CreateGoodsReceiptRequestImpl implements _CreateGoodsReceiptRequest {
 
 abstract class _CreateGoodsReceiptRequest implements CreateGoodsReceiptRequest {
   const factory _CreateGoodsReceiptRequest(
-          {required final String purchaseOrderId,
-          required final String warehouseId,
-          final String? notes,
-          required final List<CreateGoodsReceiptItem> items}) =
-      _$CreateGoodsReceiptRequestImpl;
+      {required final String purchaseOrderId,
+      required final String warehouseId,
+      final String? notes,
+      required final List<CreateGoodsReceiptItem> items,
+      required final String receiptNumber}) = _$CreateGoodsReceiptRequestImpl;
 
   factory _CreateGoodsReceiptRequest.fromJson(Map<String, dynamic> json) =
       _$CreateGoodsReceiptRequestImpl.fromJson;
@@ -2885,6 +2935,24 @@ abstract class _CreateGoodsReceiptRequest implements CreateGoodsReceiptRequest {
   String? get notes;
   @override
   List<CreateGoodsReceiptItem> get items;
+
+  /// G16-N-3 P2-B-5-R1 — durable business-operation identity, restored to the
+  /// mobile request.
+  ///
+  /// The backend requires this field (`@IsString() @IsNotEmpty()`, no server
+  /// fallback) and enforces `@@unique([companyId, receiptNumber])`, so it —
+  /// not the 24h IdempotencyRecord — is what makes a replay of this operation
+  /// permanently impossible.
+  ///
+  /// It is `required` on purpose, and it is supplied by the CALLER before the
+  /// request is constructed, exactly as the offline sale flow mints its
+  /// `saleNumber`. It must NOT be minted by the repository or at dispatch
+  /// time: every path serializes `request.toJson()`, so a number fixed here
+  /// survives the online attempt, the F5-A fallback, offline parking, retry and
+  /// replay unchanged. Minting per-path would let the parked copy diverge from
+  /// the failed attempt and silently defeat the durable identity.
+  @override
+  String get receiptNumber;
 
   /// Create a copy of CreateGoodsReceiptRequest
   /// with the given fields replaced by the non-null parameter values.

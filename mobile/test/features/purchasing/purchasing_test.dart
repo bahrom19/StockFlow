@@ -184,10 +184,17 @@ void main() {
       final req = CreateGoodsReceiptRequest(
         purchaseOrderId: 'po-1', warehouseId: 'wh-1',
         items: [CreateGoodsReceiptItem(purchaseOrderItemId: 'poi-1', productId: 'p-1', quantity: 5, unitCost: 50.0)],
+        // G16-N-3 P2-B-5-R1: the durable identity is supplied by the
+        // caller, before the request is constructed.
+        receiptNumber: 'GR-TEST-1',
       );
       final json = req.toJson();
       expect(json['purchaseOrderId'], 'po-1');
       expect((json['items'] as List).length, 1);
+      // The durable identity MUST reach the wire: it is what the
+      // backend dedupes on, permanently, beyond the 24h
+      // IdempotencyRecord TTL.
+      expect(json['receiptNumber'], 'GR-TEST-1');
     });
   });
 

@@ -166,6 +166,8 @@ void main() {
 
   group('PurchasingRepository — goodsReceipt (Phase F4-D)', () {
     CreateGoodsReceiptRequest request() => const CreateGoodsReceiptRequest(
+            // G16-N-3 P2-B-5-R1: durable identity supplied by the caller.
+            receiptNumber: 'GR-T4',
           purchaseOrderId: 'po-1',
           warehouseId: 'wh-1',
           items: [
