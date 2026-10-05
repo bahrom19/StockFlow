@@ -82,6 +82,7 @@ describe('TaskService', () => {
     expect(result.id).toBe('task-1');
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'CREATE' }),
+      mockTx,
     );
   });
 
@@ -137,6 +138,7 @@ describe('TaskService', () => {
     await service.remove('task-1', companyId, userId);
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'DELETE' }),
+      mockTx,
     );
   });
 

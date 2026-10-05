@@ -106,6 +106,7 @@ describe('CustomersService', () => {
     expect(result.id).toBe('cust-1');
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'CREATE' }),
+      mockTx,
     );
     expect(mockEventBus.publish).toHaveBeenCalled();
   });
@@ -273,6 +274,7 @@ describe('CustomersService', () => {
     expect(result.firstName).toBe('Jane');
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'UPDATE' }),
+      mockTx,
     );
     expect(mockEventBus.publish).toHaveBeenCalled();
   });
@@ -291,6 +293,7 @@ describe('CustomersService', () => {
     expect(result.deletedAt).not.toBeNull();
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'DELETE' }),
+      mockTx,
     );
     expect(mockEventBus.publish).toHaveBeenCalled();
   });

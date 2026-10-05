@@ -97,15 +97,18 @@ export class LoyaltyService {
         tx,
         rowVersion: account.rowVersion,
       });
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'LoyaltyAccount',
-        entityId: account.id,
-        action: 'UPDATE',
-        before: account,
-        after: updated,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'LoyaltyAccount',
+          entityId: account.id,
+          action: 'UPDATE',
+          before: account,
+          after: updated,
+        },
+        tx,
+      );
       await this.eventBus.publish(
         new CustomerLoyaltyUpdatedEvent(
           dto.customerId,
@@ -147,15 +150,18 @@ export class LoyaltyService {
         tx,
         rowVersion: account.rowVersion,
       });
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'LoyaltyAccount',
-        entityId: account.id,
-        action: 'UPDATE',
-        before: account,
-        after: updated,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'LoyaltyAccount',
+          entityId: account.id,
+          action: 'UPDATE',
+          before: account,
+          after: updated,
+        },
+        tx,
+      );
       await this.eventBus.publish(
         new CustomerLoyaltyUpdatedEvent(
           dto.customerId,

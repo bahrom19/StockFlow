@@ -96,6 +96,7 @@ describe('OpportunityService', () => {
     );
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'UPDATE' }),
+      mockTx,
     );
   });
 
@@ -104,6 +105,7 @@ describe('OpportunityService', () => {
     await service.remove('opp-1', companyId, userId);
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'DELETE' }),
+      mockTx,
     );
   });
 

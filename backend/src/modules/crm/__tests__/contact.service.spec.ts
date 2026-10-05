@@ -73,6 +73,7 @@ describe('ContactService', () => {
     expect(result.id).toBe('contact-1');
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'CREATE' }),
+      mockTx,
     );
   });
 
@@ -107,6 +108,7 @@ describe('ContactService', () => {
     );
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'UPDATE' }),
+      mockTx,
     );
   });
 
@@ -120,6 +122,7 @@ describe('ContactService', () => {
     );
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'DELETE' }),
+      mockTx,
     );
   });
 

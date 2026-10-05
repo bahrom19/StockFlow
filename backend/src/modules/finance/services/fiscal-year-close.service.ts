@@ -406,19 +406,22 @@ export class FiscalYearCloseService {
       });
 
       // 8. Audit log
-      await this.auditLog.log({
-        companyId,
-        userId: closedBy,
-        entityType: 'FiscalYear',
-        entityId: fiscalYear.id,
-        action: 'CLOSE',
-        before: { isClosed: false },
-        after: {
-          isClosed: true,
-          retainedEarningsEntryId: result.id,
-          closedPeriods: closedPeriodIds.length,
+      await this.auditLog.log(
+        {
+          companyId,
+          userId: closedBy,
+          entityType: 'FiscalYear',
+          entityId: fiscalYear.id,
+          action: 'CLOSE',
+          before: { isClosed: false },
+          after: {
+            isClosed: true,
+            retainedEarningsEntryId: result.id,
+            closedPeriods: closedPeriodIds.length,
+          },
         },
-      });
+        tx,
+      );
 
       return {
         fiscalYearId: fiscalYear.id,

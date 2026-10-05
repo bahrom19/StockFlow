@@ -99,15 +99,18 @@ export class CustomersService {
         tx,
       );
 
-      await this.auditLogService.log({
-        companyId: currentUser.companyId,
-        userId: currentUser.userId,
-        entityType: 'Customer',
-        entityId: createdCustomer.id,
-        action: 'CREATE',
-        before: null,
-        after: createdCustomer,
-      });
+      await this.auditLogService.log(
+        {
+          companyId: currentUser.companyId,
+          userId: currentUser.userId,
+          entityType: 'Customer',
+          entityId: createdCustomer.id,
+          action: 'CREATE',
+          before: null,
+          after: createdCustomer,
+        },
+        tx,
+      );
 
       await this.eventBus.publish(
         new CustomerCreatedEvent({
@@ -252,15 +255,18 @@ export class CustomersService {
           tx,
         );
 
-        await this.auditLogService.log({
-          companyId: currentUser.companyId,
-          userId: currentUser.userId,
-          entityType: 'Customer',
-          entityId: id,
-          action: 'UPDATE',
-          before,
-          after: updated,
-        });
+        await this.auditLogService.log(
+          {
+            companyId: currentUser.companyId,
+            userId: currentUser.userId,
+            entityType: 'Customer',
+            entityId: id,
+            action: 'UPDATE',
+            before,
+            after: updated,
+          },
+          tx,
+        );
 
         await this.eventBus.publish(
           new CustomerUpdatedEvent({
@@ -306,15 +312,18 @@ export class CustomersService {
           tx,
         );
 
-        await this.auditLogService.log({
-          companyId: currentUser.companyId,
-          userId: currentUser.userId,
-          entityType: 'Customer',
-          entityId: id,
-          action: 'DELETE',
-          before,
-          after: null,
-        });
+        await this.auditLogService.log(
+          {
+            companyId: currentUser.companyId,
+            userId: currentUser.userId,
+            entityType: 'Customer',
+            entityId: id,
+            action: 'DELETE',
+            before,
+            after: null,
+          },
+          tx,
+        );
 
         await this.eventBus.publish(
           new CustomerDeletedEvent({

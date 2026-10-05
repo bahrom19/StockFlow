@@ -111,6 +111,7 @@ describe('FiscalYearCloseService (G15-01)', () => {
     );
     expect(mockAuditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'CLOSE' }),
+      mockTx,
     );
     expect(result.retainedEarningsEntryId).toBe('je-1');
     expect(result.closedPeriodIds).toEqual(['period-1', 'period-12']);

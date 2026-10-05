@@ -36,15 +36,18 @@ export class CustomerNoteService {
         customer: { connect: { id: customerId } },
       };
       const created = await this.repository.create(data, tx);
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'CustomerNote',
-        entityId: created.id,
-        action: 'CREATE',
-        before: null,
-        after: created,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'CustomerNote',
+          entityId: created.id,
+          action: 'CREATE',
+          before: null,
+          after: created,
+        },
+        tx,
+      );
       return this.mapper.toEntity(created);
     });
   }
@@ -78,15 +81,18 @@ export class CustomerNoteService {
     return this.prisma.$transaction(async (tx) => {
       const before = await this.repository.findByIdOrThrow(id, companyId);
       await this.repository.softDelete(id, companyId, tx);
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'CustomerNote',
-        entityId: id,
-        action: 'DELETE',
-        before,
-        after: null,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'CustomerNote',
+          entityId: id,
+          action: 'DELETE',
+          before,
+          after: null,
+        },
+        tx,
+      );
     });
   }
 

@@ -38,15 +38,18 @@ export class CustomerAddressService {
         customer: { connect: { id: dto.customerId } },
       };
       const created = await this.repository.create(data, tx);
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'CustomerAddress',
-        entityId: created.id,
-        action: 'CREATE',
-        before: null,
-        after: created,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'CustomerAddress',
+          entityId: created.id,
+          action: 'CREATE',
+          before: null,
+          after: created,
+        },
+        tx,
+      );
       return this.mapper.toEntity(created);
     });
   }
@@ -100,15 +103,18 @@ export class CustomerAddressService {
       if (dto.postalCode !== undefined) data.postalCode = dto.postalCode;
       if (dto.isDefault !== undefined) data.isDefault = dto.isDefault;
       const updated = await this.repository.update({ id, companyId, data, tx });
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'CustomerAddress',
-        entityId: id,
-        action: 'UPDATE',
-        before,
-        after: updated,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'CustomerAddress',
+          entityId: id,
+          action: 'UPDATE',
+          before,
+          after: updated,
+        },
+        tx,
+      );
       return this.mapper.toEntity(updated);
     });
   }
@@ -117,15 +123,18 @@ export class CustomerAddressService {
     return this.prisma.$transaction(async (tx) => {
       const before = await this.repository.findByIdOrThrow(id, companyId);
       await this.repository.softDelete(id, companyId, tx);
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'CustomerAddress',
-        entityId: id,
-        action: 'DELETE',
-        before,
-        after: null,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'CustomerAddress',
+          entityId: id,
+          action: 'DELETE',
+          before,
+          after: null,
+        },
+        tx,
+      );
     });
   }
 

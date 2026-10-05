@@ -42,15 +42,18 @@ export class TaskService {
       };
       if (dto.customerId) data.customer = { connect: { id: dto.customerId } };
       const created = await this.repository.create(data, tx);
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'Task',
-        entityId: created.id,
-        action: 'CREATE',
-        before: null,
-        after: created,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'Task',
+          entityId: created.id,
+          action: 'CREATE',
+          before: null,
+          after: created,
+        },
+        tx,
+      );
       return this.mapper.toEntity(created);
     });
   }
@@ -137,15 +140,18 @@ export class TaskService {
         data.completedAt = new Date();
       }
       const updated = await this.repository.update({ id, companyId, data, tx });
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'Task',
-        entityId: id,
-        action: 'UPDATE',
-        before,
-        after: updated,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'Task',
+          entityId: id,
+          action: 'UPDATE',
+          before,
+          after: updated,
+        },
+        tx,
+      );
       return this.mapper.toEntity(updated);
     });
   }
@@ -154,15 +160,18 @@ export class TaskService {
     return this.prisma.$transaction(async (tx) => {
       const before = await this.repository.findByIdOrThrow(id, companyId);
       await this.repository.softDelete(id, companyId, tx);
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'Task',
-        entityId: id,
-        action: 'DELETE',
-        before,
-        after: null,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'Task',
+          entityId: id,
+          action: 'DELETE',
+          before,
+          after: null,
+        },
+        tx,
+      );
     });
   }
 }

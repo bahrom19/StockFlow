@@ -49,15 +49,18 @@ export class OpportunityService {
         customer: { connect: { id: dto.customerId } },
       };
       const created = await this.repository.create(data, tx);
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'SalesOpportunity',
-        entityId: created.id,
-        action: 'CREATE',
-        before: null,
-        after: created,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'SalesOpportunity',
+          entityId: created.id,
+          action: 'CREATE',
+          before: null,
+          after: created,
+        },
+        tx,
+      );
       return this.mapper.toEntity(created);
     });
   }
@@ -146,15 +149,18 @@ export class OpportunityService {
       if (dto.assignedTo !== undefined) data.assignedTo = dto.assignedTo;
       if (dto.notes !== undefined) data.notes = dto.notes;
       const updated = await this.repository.update({ id, companyId, data, tx });
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'SalesOpportunity',
-        entityId: id,
-        action: 'UPDATE',
-        before,
-        after: updated,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'SalesOpportunity',
+          entityId: id,
+          action: 'UPDATE',
+          before,
+          after: updated,
+        },
+        tx,
+      );
       return this.mapper.toEntity(updated);
     });
   }
@@ -163,15 +169,18 @@ export class OpportunityService {
     return this.prisma.$transaction(async (tx) => {
       const before = await this.repository.findByIdOrThrow(id, companyId);
       await this.repository.softDelete(id, companyId, tx);
-      await this.auditLog.log({
-        companyId,
-        userId,
-        entityType: 'SalesOpportunity',
-        entityId: id,
-        action: 'DELETE',
-        before,
-        after: null,
-      });
+      await this.auditLog.log(
+        {
+          companyId,
+          userId,
+          entityType: 'SalesOpportunity',
+          entityId: id,
+          action: 'DELETE',
+          before,
+          after: null,
+        },
+        tx,
+      );
     });
   }
 }
