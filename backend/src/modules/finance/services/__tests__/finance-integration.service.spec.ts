@@ -1116,18 +1116,24 @@ describe('FinanceIntegrationService', () => {
       );
 
       await expect(
-        handler.handle({ payload: partialEvent() } as any, {} as any),
+        handler.handle(
+          { eventId: 'evt-17', payload: partialEvent() } as any,
+          {} as any,
+        ),
       ).rejects.toThrow(/No transaction context/);
       expect(integration.onSalePartiallyRefunded).not.toHaveBeenCalled();
 
-      // and with a tx it delegates
+      // and with a tx it delegates. G16-N-4 P2: the event occurrence id is
+      // threaded through as the journal clientOperationId.
       const tx = {} as any;
-      await handler.handle({ payload: partialEvent() } as any, {
-        transactionClient: tx,
-      });
+      await handler.handle(
+        { eventId: 'evt-17', payload: partialEvent() } as any,
+        { transactionClient: tx },
+      );
       expect(integration.onSalePartiallyRefunded).toHaveBeenCalledWith(
         expect.objectContaining({ refundId }),
         tx,
+        'evt-17',
       );
     });
   });

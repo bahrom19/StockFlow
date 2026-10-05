@@ -22,6 +22,7 @@ describe('InventoryFinanceHandler — GL skip observability (G16-F F7–F11)', (
   let glEngine: { post: jest.Mock };
   let auditLog: { log: jest.Mock };
   let tx: {
+    journalEntry: { findFirst: jest.Mock };
     chartOfAccount: { findMany: jest.Mock };
     financialPeriod: { findFirst: jest.Mock };
   };
@@ -40,7 +41,12 @@ describe('InventoryFinanceHandler — GL skip observability (G16-F F7–F11)', (
     unitCost: '10',
   };
 
-  const event = { eventName: 'inventory.adjusted', payload };
+  // G16-N-4 P2: eventId is the journal clientOperationId / duplicate marker.
+  const event = {
+    eventName: 'inventory.adjusted',
+    eventId: 'evt-1',
+    payload,
+  };
 
   const accounts = [
     { id: 'acct-inventory', code: '1300' },
@@ -51,6 +57,7 @@ describe('InventoryFinanceHandler — GL skip observability (G16-F F7–F11)', (
     glEngine = { post: jest.fn().mockResolvedValue(undefined) };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     tx = {
+      journalEntry: { findFirst: jest.fn().mockResolvedValue(null) },
       chartOfAccount: { findMany: jest.fn().mockResolvedValue(accounts) },
       financialPeriod: {
         findFirst: jest
@@ -158,7 +165,11 @@ describe('InventoryFinanceHandler — GL skip observability (G16-F F7–F11)', (
 
   it('F10: zero amount → GL_SKIP_ZERO_AMOUNT (INFO semantics) with amount 0', async () => {
     await handler.handle(
-      { eventName: 'inventory.adjusted', payload: { ...payload, unitCost: undefined } },
+      {
+        eventName: 'inventory.adjusted',
+        eventId: 'evt-zero',
+        payload: { ...payload, unitCost: undefined },
+      },
       { transactionClient: tx },
     );
 

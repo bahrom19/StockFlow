@@ -9,6 +9,13 @@ import { FinanceIntegrationService } from '../services/finance-integration.servi
  * Requires a {@code Prisma.TransactionClient} in the context so the
  * reversal entries are created inside the same database transaction
  * as the refund status update.
+ *
+ * G16-N-4 P2 idempotency — FAIL CLOSED on a missing transaction context
+ * (was log-and-skip, which silently lost the reversal journal), and the
+ * event occurrence id (`eventId`) is threaded in as `clientOperationId`
+ * so a duplicate delivery is rejected by the existing
+ * `@@unique([companyId, clientOperationId])` constraint rather than
+ * reversing the sale a second time.
  */
 @Injectable()
 export class SaleRefundedEventHandler implements EventHandler<SaleRefundedEvent> {
@@ -22,12 +29,11 @@ export class SaleRefundedEventHandler implements EventHandler<SaleRefundedEvent>
   ): Promise<void> {
     const tx = context?.transactionClient;
     if (!tx) {
-      this.logger.error(
-        `No transaction context for sale.refunded event (saleId=${event.payload.saleId}). Reversal journal entries will NOT be created.`,
+      throw new Error(
+        `No transaction context for sale.refunded event (saleId=${event.payload.saleId}). The reversal journal cannot be posted outside the refund transaction.`,
       );
-      return;
     }
 
-    await this.integration.onSaleRefunded(event.payload, tx);
+    await this.integration.onSaleRefunded(event.payload, tx, event.eventId);
   }
 }

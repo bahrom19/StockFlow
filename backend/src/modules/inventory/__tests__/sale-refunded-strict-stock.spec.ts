@@ -73,7 +73,11 @@ describe('SaleRefundedEventHandler — exact restore (strict stock)', () => {
       { eventName: 'sale.refunded', payload: payload(3) } as any,
       {
         transactionClient: {
-          stockMovement: { create: createMovement },
+          stockMovement: {
+            create: createMovement,
+            // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+            findFirst: jest.fn().mockResolvedValue(null),
+          },
         },
       },
     );
@@ -106,7 +110,11 @@ describe('SaleRefundedEventHandler — exact restore (strict stock)', () => {
       { eventName: 'sale.refunded', payload: payload(2) } as any,
       {
         transactionClient: {
-          stockMovement: { create: createMovement },
+          stockMovement: {
+            create: createMovement,
+            // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+            findFirst: jest.fn().mockResolvedValue(null),
+          },
         },
       },
     );
@@ -126,7 +134,11 @@ describe('SaleRefundedEventHandler — exact restore (strict stock)', () => {
       { eventName: 'sale.refunded', payload: payload(5) } as any,
       {
         transactionClient: {
-          stockMovement: { create: createMovement },
+          stockMovement: {
+            create: createMovement,
+            // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+            findFirst: jest.fn().mockResolvedValue(null),
+          },
         },
       },
     );

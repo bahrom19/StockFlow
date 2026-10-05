@@ -36,7 +36,7 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
   let tx: {
     stock: { updateMany: jest.Mock };
     saleItem: { updateMany: jest.Mock };
-    stockMovement: { create: jest.Mock };
+    stockMovement: { create: jest.Mock; findFirst: jest.Mock };
   };
 
   const payload = (
@@ -78,7 +78,11 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
     saleItemUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
     tx = {
       stock: { updateMany },
-      stockMovement: { create: createMovement },
+      stockMovement: {
+        create: createMovement,
+        // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       saleItem: { updateMany: saleItemUpdateMany },
     };
     repo = {
@@ -369,7 +373,11 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
   it('passes the SAME transaction client to FIFO costing as used for stock and movement', async () => {
     const otherTx = {
       stock: { updateMany },
-      stockMovement: { create: createMovement },
+      stockMovement: {
+        create: createMovement,
+        // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       saleItem: { updateMany: saleItemUpdateMany },
     };
 

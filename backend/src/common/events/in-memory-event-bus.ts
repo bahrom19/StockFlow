@@ -24,6 +24,8 @@ import { EventHandler } from './event-handler.interface';
  *   publisher so the caller can decide whether to roll back.
  *   Handlers that should never throw (e.g. audit, notification)
  *   MUST catch exceptions internally.
+ * - Subscriptions are idempotent: registering the same handler instance
+ *   twice for the same event registers it once (G16-N-4 P2 idempotency).
  *
  * This implementation is a deliberate starting point:
  * - It is compatible with an Outbox pattern — swap the bus
@@ -66,6 +68,24 @@ export class InMemoryEventBus implements EventBus {
     options?: SubscribeOptions,
   ): void {
     const existing = this.handlers.get(eventName) ?? [];
+
+    // G16-N-4 P2 idempotency: subscribing the SAME handler instance twice
+    // for the SAME event is a no-op. Before this guard a duplicate
+    // registration ran the handler twice per publish, so a module wired up
+    // twice (or any future dynamic-module refactor that re-ran
+    // `onModuleInit`) would double every side effect — stock decrements,
+    // FIFO consumption, JournalEntry rows and AccountBalance increments.
+    // The blast radius was unbounded; the trigger was cheap and accidental.
+    //
+    // Identity is the handler INSTANCE (reference equality), scoped to one
+    // event name. Distinct handlers are unaffected; priorities are never
+    // re-evaluated for an already-registered handler, because a second
+    // registration of the same instance cannot express a new intent — it
+    // can only be an accident.
+    if (existing.some((entry) => entry.handler === handler)) {
+      return;
+    }
+
     existing.push({
       handler,
       priority: options?.priority ?? DEFAULT_EVENT_HANDLER_PRIORITY,

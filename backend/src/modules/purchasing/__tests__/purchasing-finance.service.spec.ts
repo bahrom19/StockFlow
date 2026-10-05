@@ -15,6 +15,8 @@ const accountIds = {
 
 function mockTx() {
   return {
+    // G16-N-4 P2: read-first duplicate gate for the receipt journal.
+    journalEntry: { findFirst: jest.fn().mockResolvedValue(null) },
     chartOfAccount: {
       findMany: jest.fn().mockResolvedValue(
         Object.entries(accountIds).map(([key, id]) => ({
@@ -302,6 +304,8 @@ describe('PurchasingFinanceService — G11-A per-operation account gate', () => 
   function txWithAccounts(codes: string[]) {
     const rows = codes.map((code) => ({ id: `acct-${code}`, code }));
     return {
+      // G16-N-4 P2: read-first duplicate gate for the receipt journal.
+      journalEntry: { findFirst: jest.fn().mockResolvedValue(null) },
       chartOfAccount: {
         findMany: jest
           .fn()

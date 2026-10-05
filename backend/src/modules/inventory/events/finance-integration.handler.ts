@@ -74,7 +74,11 @@ export class InventoryFinanceHandler implements EventHandler {
   ) {}
 
   async handle(
-    event: { eventName: string; payload: AdjustmentJournalPayload },
+    event: {
+      eventName: string;
+      eventId: string;
+      payload: AdjustmentJournalPayload;
+    },
     context?: Record<string, any>,
   ): Promise<void> {
     const tx = context?.transactionClient;
@@ -95,6 +99,28 @@ export class InventoryFinanceHandler implements EventHandler {
         payload.adjustedBy,
         reference,
         { reason: 'no transaction context on event' },
+      );
+      return;
+    }
+
+    // G16-N-4 P2 idempotency — read-first duplicate gate for the event-driven
+    // GL journal. The identity is the event occurrence id, NOT
+    // `(referenceType, referenceId)`: an inventory count publishes ONE
+    // `inventory.adjusted` event per counted item, all sharing
+    // ('INVENTORY_COUNT', countId), so that pair is not unique and must never
+    // be used as one — deduplicating on it would suppress every adjustment
+    // after the first and silently under-post the shrinkage.
+    //
+    // `eventId` is stable for one occurrence and reused via the existing
+    // `@@unique([companyId, clientOperationId])` on JournalEntry. The G16-F
+    // no-transaction observable-skip policy above is deliberately UNCHANGED.
+    const existing = await tx.journalEntry.findFirst({
+      where: { companyId: payload.companyId, clientOperationId: event.eventId },
+      select: { id: true },
+    });
+    if (existing) {
+      this.logger.log(
+        `inventory.adjusted journal already posted (eventId=${event.eventId}) — skipping duplicate`,
       );
       return;
     }
@@ -230,6 +256,9 @@ export class InventoryFinanceHandler implements EventHandler {
         referenceType: 'INVENTORY_ADJUSTMENT',
         referenceId: payload.referenceId ?? payload.productId,
         createdBy: payload.adjustedBy,
+        // G16-N-4 P2: one journal per event occurrence, enforced by the
+        // existing @@unique([companyId, clientOperationId]).
+        clientOperationId: event.eventId,
         lines,
       },
       tx,

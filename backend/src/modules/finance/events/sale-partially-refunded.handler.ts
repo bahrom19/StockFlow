@@ -13,6 +13,12 @@ import { FinanceIntegrationService } from '../services/finance-integration.servi
  * handler (which logs-and-skips without a tx), the partial path FAILS FAST:
  * a refund without a transaction context is a publisher contract violation
  * and must abort the whole operation rather than silently lose the journal.
+ *
+ * G16-N-4 P2 idempotency — the event occurrence id (`eventId`) is threaded in
+ * as `clientOperationId` so a duplicate delivery is rejected by the existing
+ * `@@unique([companyId, clientOperationId])` constraint. The inventory-side
+ * handler for the same event already guards duplicates via its
+ * `(companyId, 'REFUND', refundId)` StockMovement marker.
  */
 @Injectable()
 export class SalePartiallyRefundedEventHandler
@@ -35,6 +41,10 @@ export class SalePartiallyRefundedEventHandler
       );
     }
 
-    await this.integration.onSalePartiallyRefunded(event.payload, tx);
+    await this.integration.onSalePartiallyRefunded(
+      event.payload,
+      tx,
+      event.eventId,
+    );
   }
 }

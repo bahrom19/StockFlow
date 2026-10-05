@@ -172,6 +172,8 @@ describe('GoodsReceiptService', () => {
           update: jest.fn(),
         },
         stockMovement: { create: jest.fn() },
+        // G16-N-4 P2: read-first duplicate gate for the receipt journal.
+        journalEntry: { findFirst: jest.fn().mockResolvedValue(null) },
         goodsReceiptItem: { create: jest.fn() },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
@@ -477,6 +479,8 @@ describe('GoodsReceiptService', () => {
         },
         stock: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
         stockMovement: { create: jest.fn() },
+        // G16-N-4 P2: read-first duplicate gate for the receipt journal.
+        journalEntry: { findFirst: jest.fn().mockResolvedValue(null) },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(basePo as any);
@@ -677,6 +681,8 @@ describe('GoodsReceiptService', () => {
 
     function coaTx() {
       return {
+        // G16-N-4 P2: read-first duplicate gate for the receipt journal.
+        journalEntry: { findFirst: jest.fn().mockResolvedValue(null) },
         chartOfAccount: {
           findMany: jest.fn().mockResolvedValue([
             { id: 'acct-1300', code: '1300' },

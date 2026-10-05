@@ -118,17 +118,40 @@ describe('InMemoryEventBus', () => {
   });
 
   // ─────────────────────────────────────────────
-  // IDEMPOTENT SUBSCRIPTION
+  // IDEMPOTENT SUBSCRIPTION (G16-N-4 P2)
   // ─────────────────────────────────────────────
-  it('should allow subscribing the same handler multiple times', async () => {
+  it('registers the same handler instance once (duplicate subscribe is a no-op)', async () => {
     const handler: EventHandler = { handle: jest.fn() };
     bus.subscribe('test.event', handler);
-    bus.subscribe('test.event', handler); // Duplicate subscription
+    bus.subscribe('test.event', handler); // Duplicate registration
 
     await bus.publish(new TestEvent({ value: 'duplicate' }));
 
-    // Should be called twice (both subscriptions fire)
-    expect(handler.handle).toHaveBeenCalledTimes(2);
+    // A duplicated wiring must not double every handler side effect.
+    expect(handler.handle).toHaveBeenCalledTimes(1);
+  });
+
+  it('still registers distinct handler instances independently', async () => {
+    const first: EventHandler = { handle: jest.fn() };
+    const second: EventHandler = { handle: jest.fn() };
+
+    bus.subscribe('test.event', first);
+    bus.subscribe('test.event', second);
+
+    await bus.publish(new TestEvent({ value: 'distinct' }));
+
+    expect(first.handle).toHaveBeenCalledTimes(1);
+    expect(second.handle).toHaveBeenCalledTimes(1);
+  });
+
+  it('deduplicates per event name — the same handler on two events stays independent', async () => {
+    const handler: EventHandler = { handle: jest.fn() };
+    bus.subscribe('test.event', handler);
+    bus.subscribe('other.event', handler);
+
+    await bus.publish(new TestEvent({ value: 'per-event' }));
+
+    expect(handler.handle).toHaveBeenCalledTimes(1);
   });
 
   // ─────────────────────────────────────────────
@@ -215,14 +238,36 @@ describe('InMemoryEventBus', () => {
     expect(order).toEqual(['inventory', 'finance', 'notifications', 'default']);
   });
 
-  it('should fire duplicate subscriptions once per subscription when priorities are set', async () => {
+  it('does not register a duplicate subscription even when priorities are set', async () => {
     const handler: EventHandler = { handle: jest.fn() };
     bus.subscribe('test.event', handler, { priority: 10 });
     bus.subscribe('test.event', handler, { priority: 10 });
 
     await bus.publish(new TestEvent({ value: 'duplicate-priority' }));
 
-    expect(handler.handle).toHaveBeenCalledTimes(2);
+    expect(handler.handle).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps priority ordering intact across distinct handlers', async () => {
+    const order: string[] = [];
+    const late: EventHandler = {
+      handle: async () => {
+        order.push('late');
+      },
+    };
+    const early: EventHandler = {
+      handle: async () => {
+        order.push('early');
+      },
+    };
+
+    // Worst-case registration order: the lower priority is registered last.
+    bus.subscribe('test.event', late, { priority: 30 });
+    bus.subscribe('test.event', early, { priority: 10 });
+
+    await bus.publish(new TestEvent({ value: 'ordering' }));
+
+    expect(order).toEqual(['early', 'late']);
   });
 
   // ─────────────────────────────────────────────

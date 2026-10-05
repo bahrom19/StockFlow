@@ -12,6 +12,20 @@ import { PrismaService } from '../../../common/prisma';
  * and (G9-F3) restoring the FIFO cost value of the refunded goods through IN
  * CostLayers derived from the sale's own OUT layers.
  * Runs inside the originating transaction via `context.transactionClient`.
+ *
+ * G16-N-4 P2 idempotency — the StockMovement rows written here are the durable
+ * marker: a `(companyId, 'REFUND', saleId)` movement means this sale's full
+ * refund was already applied. A duplicate delivery returns as a clean no-op
+ * rather than restoring stock twice and inserting a second IN CostLayer
+ * (`restoreLayer` is an unguarded INSERT). The refund identifier is the SALE
+ * id here — the full-refund event carries no separate refundId — and REFUNDED
+ * is a terminal sale status, so one sale can never legitimately be fully
+ * refunded twice.
+ *
+ * G16-N-4 P2 transaction context — `transactionClient` is MANDATORY (was
+ * `?? this.prismaService`, which would have written stock and cost layers
+ * outside the refund transaction). The bus is the only invoker and always
+ * supplies it, so failing loudly is correct.
  */
 @Injectable()
 export class SaleRefundedEventHandler implements EventHandler<SaleRefundedEvent> {
@@ -27,7 +41,23 @@ export class SaleRefundedEventHandler implements EventHandler<SaleRefundedEvent>
     event: SaleRefundedEvent,
     context?: Record<string, any>,
   ): Promise<void> {
-    const tx = context?.transactionClient ?? this.prismaService;
+    const tx = context?.transactionClient;
+    if (!tx) {
+      throw new Error(
+        `No transaction context for sale.refunded event (saleId=${event.payload.saleId}). Stock and cost layers cannot be written outside the refund transaction.`,
+      );
+    }
+
+    // G16-N-4 P2: duplicate delivery → no-op, before any stock or cost write.
+    const alreadyApplied = await tx.stockMovement.findFirst({
+      where: {
+        companyId: event.payload.companyId,
+        referenceType: 'REFUND',
+        referenceId: event.payload.saleId,
+      },
+      select: { id: true },
+    });
+    if (alreadyApplied) return;
 
     for (const item of event.payload.items) {
       let stock = await this.inventoryRepository.findStockByProductAndWarehouse(

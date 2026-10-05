@@ -29,6 +29,33 @@ export interface PurchaseReceivedPayload {
  *
  * Creates stock records, cost layers, and optionally batch/lot tracking.
  * Runs inside the originating transaction.
+ *
+ * G16-N-4 P2 idempotency — the durable marker is the RECEIPT, not the order.
+ * One purchase order legitimately accepts MANY receipts (a PO stays
+ * receivable while PARTIALLY_RECEIVED), so `purchaseOrderId` must NEVER be
+ * used as a duplicate key: doing so would silently discard the stock and
+ * accrual of every receipt after the first. The marker is
+ * `receiptNumber` — client generated exactly once per logical receipt and
+ * already enforced by `@@unique([companyId, receiptNumber])` on GoodsReceipt.
+ *
+ * The existing movement `referenceType`/`referenceId` semantics are
+ * deliberately left untouched (`PURCHASE_RECEIPT` / `purchaseOrderId`), so
+ * the marker rides on `clientOperationId`, which reuses the existing
+ * `@@unique([companyId, clientOperationId, type])` constraint — no migration.
+ * It is suffixed with the item index because a single receipt legitimately
+ * writes several PURCHASE movements, and two lines of one receipt may carry
+ * the same product; the suffix keeps every write unique so a legitimate
+ * receipt can never trip P2002.
+ *
+ * KNOWN LIMITATION (design D-2, accepted): the pre-loop marker read is a
+ * replay guard, not a concurrent-delivery lock. A true concurrent duplicate
+ * of a MULTI-ITEM receipt is only stopped from the second item onward by the
+ * per-item unique. Closing that fully needs a dedicated applied-event table,
+ * which is deferred; this is recorded rather than papered over.
+ *
+ * G16-N-4 P2 transaction context — `transactionClient` is MANDATORY (was
+ * `?? this.prismaService`, which would have written stock and cost layers
+ * outside the goods-receipt transaction).
  */
 @Injectable()
 export class PurchaseReceivedEventHandler implements EventHandler {
@@ -43,10 +70,32 @@ export class PurchaseReceivedEventHandler implements EventHandler {
     event: { eventName: string; payload: PurchaseReceivedPayload },
     context?: Record<string, any>,
   ): Promise<void> {
-    const tx = context?.transactionClient ?? this.prismaService;
     const payload = event.payload;
+    const tx = context?.transactionClient;
+    if (!tx) {
+      throw new Error(
+        `No transaction context for purchase.received event (receipt ${payload.receiptNumber}). Stock and cost layers cannot be written outside the goods-receipt transaction.`,
+      );
+    }
 
-    for (const item of payload.items) {
+    // G16-N-4 P2: duplicate delivery of the SAME receipt → clean no-op.
+    // Scoped to the receipt, never to the purchase order.
+    const markerPrefix = `PURCHASE_RECEIPT:${payload.receiptNumber}:`;
+    const alreadyApplied = await tx.stockMovement.findFirst({
+      where: {
+        companyId: payload.companyId,
+        clientOperationId: { startsWith: markerPrefix },
+      },
+      select: { id: true },
+    });
+    if (alreadyApplied) {
+      this.logger.log(
+        `purchase.received for receipt ${payload.receiptNumber} was already applied — skipping duplicate.`,
+      );
+      return;
+    }
+
+    for (const [itemIndex, item] of payload.items.entries()) {
       let stock = await this.inventoryRepository.findStockByProductAndWarehouse(
         item.productId,
         payload.warehouseId,
@@ -130,6 +179,10 @@ export class PurchaseReceivedEventHandler implements EventHandler {
           afterQuantity: afterQty,
           referenceType: 'PURCHASE_RECEIPT',
           referenceId: payload.purchaseOrderId,
+          // G16-N-4 P2: receipt-scoped operation identity — the duplicate
+          // marker for this event. Unique per item so a multi-item receipt
+          // never collides with itself.
+          clientOperationId: `${markerPrefix}${itemIndex}`,
           comment: `Goods receipt ${payload.receiptNumber}`,
           createdBy: payload.receivedBy,
         },

@@ -76,7 +76,11 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
         {
           transactionClient: {
             stock: { updateMany },
-            stockMovement: { create: createMovement },
+            stockMovement: {
+              create: createMovement,
+              // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+              findFirst: jest.fn().mockResolvedValue(null),
+            },
             saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           },
         },
@@ -96,7 +100,11 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
         {
           transactionClient: {
             stock: { updateMany },
-            stockMovement: { create: createMovement },
+            stockMovement: {
+              create: createMovement,
+              // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+              findFirst: jest.fn().mockResolvedValue(null),
+            },
             saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           },
         },
@@ -114,7 +122,11 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
       {
         transactionClient: {
           stock: { updateMany },
-          stockMovement: { create: createMovement },
+          stockMovement: {
+            create: createMovement,
+            // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+            findFirst: jest.fn().mockResolvedValue(null),
+          },
           saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
         },
       },
@@ -155,7 +167,11 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
         {
           transactionClient: {
             stock: { updateMany },
-            stockMovement: { create: createMovement },
+            stockMovement: {
+              create: createMovement,
+              // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+              findFirst: jest.fn().mockResolvedValue(null),
+            },
             saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           },
         },
@@ -176,7 +192,11 @@ describe('SaleCompletedEventHandler — strict stock (Policy A)', () => {
         {
           transactionClient: {
             stock: { updateMany },
-            stockMovement: { create: createMovement },
+            stockMovement: {
+              create: createMovement,
+              // G16-N-4 P2: duplicate-delivery marker read (absent by default).
+              findFirst: jest.fn().mockResolvedValue(null),
+            },
             saleItem: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
           },
         },

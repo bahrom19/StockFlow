@@ -70,9 +70,17 @@ export interface EventBus {
    *
    * Multiple handlers may be registered for the same event; they are
    * executed in ascending {@link SubscribeOptions.priority} order, ties
-   * broken by registration order (G16-E). Priorities only reorder
-   * execution — a duplicate subscription still fires once per
-   * subscription.
+   * broken by registration order (G16-E).
+   *
+   * Registration is IDEMPOTENT per handler instance (G16-N-4 P2
+   * idempotency): subscribing the same handler instance twice for the
+   * same event name registers it ONCE, so it runs once per publish.
+   * This replaces the previous contract ("a duplicate subscription fires
+   * once per subscription"), which allowed a duplicated wiring — a module
+   * registering twice — to execute every handler side effect twice
+   * (stock, CostLayers, JournalEntry, AccountBalance) with no signal that
+   * anything was wrong. Distinct handlers are unaffected and priorities
+   * are untouched.
    */
   subscribe(
     eventName: string,

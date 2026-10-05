@@ -45,7 +45,17 @@ export class SalePartiallyRefundedEventHandler
     event: SalePartiallyRefundedEvent,
     context?: Record<string, any>,
   ): Promise<void> {
-    const tx = context?.transactionClient ?? this.prismaService;
+    const tx = context?.transactionClient;
+    // G16-N-4 P2: the marker below already makes a duplicate delivery a no-op;
+    // this hardens the transaction requirement. `?? this.prismaService` would
+    // have written stock and cost layers outside the refund transaction, so a
+    // later publisher failure would leave them committed and a retry would
+    // apply them twice. The bus is the only invoker and always supplies it.
+    if (!tx) {
+      throw new Error(
+        `No transaction context for sale.partially_refunded event (refundId=${event.payload.refundId}). Stock and cost layers cannot be written outside the refund transaction.`,
+      );
+    }
 
     // ── Idempotency gate ────────────────────────────────────────────
     // A second delivery of the same refund event must be a complete no-op.

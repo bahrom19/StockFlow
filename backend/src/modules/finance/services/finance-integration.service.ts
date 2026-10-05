@@ -36,13 +36,62 @@ export class FinanceIntegrationService {
   ) {}
 
   /**
+   * G16-N-4 P2 idempotency — read-first duplicate gate for the event-driven
+   * journal posts (sale.completed / sale.refunded / sale.partially_refunded).
+   *
+   * The EventBus can only deliver an event once per subscription today, but
+   * nothing in the delivery path forbids a second delivery, and every one of
+   * these handlers posts a JournalEntry whose `AccountBalance` effect is
+   * INCREMENTAL (`{ increment: debit }` in GlEngineService) — so a duplicate
+   * would permanently double the period and closing balances. There is also no
+   * unique key on `(referenceType, referenceId)`: a multi-item inventory count
+   * legitimately emits several journals sharing one reference, so that pair is
+   * NOT an identity and must never be used as one.
+   *
+   * The identity is `eventId`: stable for one event occurrence, unique across
+   * occurrences, and already carried by every DomainEvent. It is persisted as
+   * `JournalEntry.clientOperationId`, reusing the existing
+   * `@@unique([companyId, clientOperationId])` constraint.
+   *
+   * This read is the REPLAY fast path only. The unique constraint is the
+   * concurrency authority: a genuinely concurrent duplicate delivery loses the
+   * race with a P2002, which aborts the Prisma transaction. That error must
+   * escape to the caller — it is deliberately NOT caught here, because a
+   * failed statement aborts a PostgreSQL transaction and any further query on
+   * `tx` would fail. Callers must treat the P2002 as "already applied", never
+   * swallow it and keep issuing queries.
+   */
+  private async alreadyPosted(
+    companyId: string,
+    clientOperationId: string | undefined,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    if (!clientOperationId) return false;
+    const existing = await tx.journalEntry.findFirst({
+      where: { companyId, clientOperationId },
+      select: { id: true },
+    });
+    return existing !== null;
+  }
+
+  /**
    * Called when a Sale is completed.
    * Creates journal entries inside the SAME Prisma transaction.
    */
   async onSaleCompleted(
     event: SaleCompletedEventPayload,
     tx: Prisma.TransactionClient,
+    clientOperationId?: string,
   ): Promise<void> {
+    // G16-N-4 P2: duplicate delivery of this sale.completed occurrence is a
+    // clean no-op — no journal, no balance movement.
+    if (await this.alreadyPosted(event.companyId, clientOperationId, tx)) {
+      this.logger.log(
+        `sale.completed journal already posted (clientOperationId=${clientOperationId}) — skipping duplicate`,
+      );
+      return;
+    }
+
     const calendar = await this.calendarService.ensureCurrentCalendar(
       event.companyId,
       tx,
@@ -240,6 +289,7 @@ export class FinanceIntegrationService {
         referenceType: 'SALE',
         referenceId: event.saleId,
         createdBy: event.cashierId,
+        clientOperationId,
         lines,
       },
       tx,
@@ -303,7 +353,17 @@ export class FinanceIntegrationService {
   async onSaleRefunded(
     event: SaleRefundedEventPayload,
     tx: Prisma.TransactionClient,
+    clientOperationId?: string,
   ): Promise<void> {
+    // G16-N-4 P2: duplicate delivery of this sale.refunded occurrence is a
+    // clean no-op — no reversal journal, no balance movement.
+    if (await this.alreadyPosted(event.companyId, clientOperationId, tx)) {
+      this.logger.log(
+        `sale.refunded journal already posted (clientOperationId=${clientOperationId}) — skipping duplicate`,
+      );
+      return;
+    }
+
     const calendar = await this.calendarService.ensureCurrentCalendar(
       event.companyId,
       tx,
@@ -502,6 +562,7 @@ export class FinanceIntegrationService {
         referenceType: 'REFUND',
         referenceId: event.saleId,
         createdBy: event.cashierId,
+        clientOperationId,
         lines,
       },
       tx,
@@ -536,7 +597,21 @@ export class FinanceIntegrationService {
   async onSalePartiallyRefunded(
     event: SalePartiallyRefundedEventPayload,
     tx: Prisma.TransactionClient,
+    clientOperationId?: string,
   ): Promise<void> {
+    // G16-N-4 P2: duplicate delivery of this sale.partially_refunded
+    // occurrence is a clean no-op. Identity is the event occurrence, not the
+    // refundId: one sale legitimately accumulates MANY refunds, so refundId
+    // would be too coarse only if it were reused across refunds — it is not,
+    // but eventId is the exact "this occurrence was already applied" key and
+    // keeps the partial-refund path identical to the other two.
+    if (await this.alreadyPosted(event.companyId, clientOperationId, tx)) {
+      this.logger.log(
+        `sale.partially_refunded journal already posted (clientOperationId=${clientOperationId}) — skipping duplicate`,
+      );
+      return;
+    }
+
     const calendar = await this.calendarService.ensureCurrentCalendar(
       event.companyId,
       tx,
@@ -721,6 +796,7 @@ export class FinanceIntegrationService {
         referenceType: 'REFUND',
         referenceId: event.refundId,
         createdBy: event.createdBy,
+        clientOperationId,
         lines,
       },
       tx,

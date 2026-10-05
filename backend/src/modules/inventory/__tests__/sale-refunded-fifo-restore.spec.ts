@@ -33,7 +33,9 @@ describe('SaleRefundedEventHandler — G9-F3 FIFO CostLayer restore', () => {
   };
   let errorSpy: jest.Mock;
   let warnSpy: jest.Mock;
-  let tx: { stockMovement: { create: jest.Mock } };
+  let tx: {
+    stockMovement: { create: jest.Mock; findFirst: jest.Mock };
+  };
 
   const payload = (
     items: Array<{ productId: string; quantity: number }>,
@@ -91,7 +93,14 @@ describe('SaleRefundedEventHandler — G9-F3 FIFO CostLayer restore', () => {
       findOutLayersByReferenceAndProduct: jest.fn().mockResolvedValue([]),
       restoreLayer: jest.fn().mockResolvedValue(undefined),
     };
-    tx = { stockMovement: { create: jest.fn().mockResolvedValue({}) } };
+    // G16-N-4 P2: `findFirst` is the duplicate-delivery marker read — absent
+    // by default so the handler performs its normal restore.
+    tx = {
+      stockMovement: {
+        create: jest.fn().mockResolvedValue({}),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    };
     handler = new SaleRefundedEventHandler(
       repo as unknown as InventoryRepository,
       costing as unknown as CostingService,

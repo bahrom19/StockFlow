@@ -25,6 +25,8 @@ describe('InventoryFinanceHandler — journal direction', () => {
 
   const createEvent = (overrides: Record<string, any> = {}) => ({
     eventName: 'inventory.adjusted',
+    // G16-N-4 P2: the handler uses eventId as the journal clientOperationId.
+    eventId: 'evt-1',
     payload: {
       productId: 'prod-1',
       companyId: 'company-1',
@@ -59,6 +61,7 @@ describe('InventoryFinanceHandler — journal direction', () => {
     handler = module.get<InventoryFinanceHandler>(InventoryFinanceHandler);
 
     tx = {
+      journalEntry: { findFirst: jest.fn().mockResolvedValue(null) },
       chartOfAccount: {
         findMany: jest.fn().mockResolvedValue([
           { id: ACCOUNTS.INVENTORY, code: '1300' },

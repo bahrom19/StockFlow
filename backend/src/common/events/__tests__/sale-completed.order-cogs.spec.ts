@@ -180,6 +180,15 @@ describe('sale.completed ordering & FIFO COGS (G16-E, D2/D3/D7/D8)', () => {
           store.movements.push(data);
           return data;
         }),
+        // G16-N-4 P2: duplicate-delivery marker read. Absent here — the
+        // harness delivers each event once; duplicate-delivery coverage
+        // lives in the handler specs.
+        findFirst: jest.fn(async () => null),
+      },
+      // G16-N-4 P2: the real FinanceIntegrationService reads this to decide
+      // whether this event occurrence was already journaled.
+      journalEntry: {
+        findFirst: jest.fn(async () => null),
       },
       // G16-G: the completion handler persists each item's FIFO total cost
       // through this tx; a 0-count update must fail the sale transaction.

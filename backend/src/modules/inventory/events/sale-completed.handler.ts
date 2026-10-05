@@ -18,6 +18,20 @@ import { PrismaService } from '../../../common/prisma';
  * OUT summary layer — all within the SAME transaction. Costing errors
  * (CAS ConflictException, no cost basis, ...) are deliberately NOT swallowed:
  * they propagate to the publisher so the whole sale transaction rolls back.
+ *
+ * G16-N-4 P2 idempotency — the StockMovement rows this handler writes ARE the
+ * durable marker. Before any mutation it looks for an existing
+ * `(companyId, 'SALE', saleId)` movement; a duplicate delivery of the same
+ * sale.completed occurrence then returns as a clean no-op instead of
+ * decrementing stock a second time, consuming FIFO layers again and writing a
+ * second set of movements.
+ *
+ * G16-N-4 P2 transaction context — `transactionClient` is now MANDATORY. The
+ * previous `?? this.prismaService` fallback would have written stock, movements
+ * and CostLayers OUTSIDE the sale transaction, so they would survive a later
+ * publisher failure and a retry would apply them twice. There is no production
+ * caller that publishes without a context (the bus is the only invoker), so
+ * this branch was unreachable; failing loudly is correct.
  */
 @Injectable()
 export class SaleCompletedEventHandler implements EventHandler<SaleCompletedEvent> {
@@ -31,7 +45,24 @@ export class SaleCompletedEventHandler implements EventHandler<SaleCompletedEven
     event: SaleCompletedEvent,
     context?: Record<string, any>,
   ): Promise<void> {
-    const tx = context?.transactionClient ?? this.prismaService;
+    const tx = context?.transactionClient;
+    if (!tx) {
+      throw new Error(
+        `No transaction context for sale.completed event (saleId=${event.payload.saleId}). Stock and cost layers cannot be written outside the sale transaction.`,
+      );
+    }
+
+    // G16-N-4 P2: duplicate delivery → no-op. Read inside the same transaction
+    // so a rolled-back first attempt leaves no marker behind.
+    const alreadyApplied = await tx.stockMovement.findFirst({
+      where: {
+        companyId: event.payload.companyId,
+        referenceType: 'SALE',
+        referenceId: event.payload.saleId,
+      },
+      select: { id: true },
+    });
+    if (alreadyApplied) return;
 
     for (const item of event.payload.items) {
       const stock =

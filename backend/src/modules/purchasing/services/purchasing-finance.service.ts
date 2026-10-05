@@ -83,6 +83,38 @@ export class PurchasingFinanceService {
     // the CoA (same contract as the invoice/return early-return paths).
     if (totalAmount.isZero()) return;
 
+    // G16-N-4 P2 idempotency — read-first duplicate gate.
+    //
+    // Identity is `receiptNumber`, NOT `purchaseOrderId`: one purchase order
+    // legitimately accepts MANY receipts (a PO may be received while
+    // PARTIALLY_RECEIVED), so an order-scoped key would suppress the stock
+    // and the accrual of every receipt after the first. `receiptNumber` is
+    // the durable business-operation identity of a receipt — client
+    // generated exactly once per logical receipt and enforced by
+    // `@@unique([companyId, receiptNumber])` on GoodsReceipt.
+    //
+    // The design called for `eventId` here, but this journal is created by
+    // GoodsReceiptService DIRECTLY (after the `purchase.received` publish),
+    // not by an event handler, so no event occurrence exists in this scope.
+    // The receipt-scoped key is the correct equivalent and is strictly safer
+    // than an order-scoped one. The existing
+    // `@@unique([companyId, clientOperationId])` is reused — no migration.
+    //
+    // A concurrent duplicate still loses the race with a P2002 on insert;
+    // that error is deliberately NOT caught here (a failed statement aborts
+    // the PostgreSQL transaction, so no further query on `tx` is legal).
+    const clientOperationId = `GOODS_RECEIPT:${params.receiptNumber}`;
+    const alreadyPosted = await tx.journalEntry.findFirst({
+      where: { companyId: params.companyId, clientOperationId },
+      select: { id: true },
+    });
+    if (alreadyPosted) {
+      this.logger.log(
+        `Goods receipt journal already posted for ${params.receiptNumber} — skipping duplicate`,
+      );
+      return;
+    }
+
     // G11-A: per-operation account gate. A goods receipt posts ONLY
     // 1300 (Inventory, debit) and 2110 (GRNI, credit) — AP (2100) is credited
     // on invoice approval and 5200 is never touched here, so neither account
@@ -109,6 +141,7 @@ export class PurchasingFinanceService {
         referenceType: 'GOODS_RECEIPT',
         referenceId: params.receiptNumber,
         createdBy: params.createdBy,
+        clientOperationId,
         lines: [
           {
             accountId: accounts.inventory,
