@@ -150,4 +150,24 @@ describe('RFQService (G14-03-06 product validation)', () => {
       }),
     );
   });
+
+  // G16-N-4 P2: `purchase.rfq.created` has no subscriber today, so the
+  // publisher-side catch that used to discard a handler failure is gone. A
+  // rejected publish MUST now reject the DRAFT→SENT transaction (fail fast)
+  // instead of committing the status change with a silently lost event.
+  it('should reject when the purchase.rfq.created publish fails', async () => {
+    const mockTx = {
+      rFQItem: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+    mockRepo.findById.mockResolvedValue(baseRfq as any);
+    mockRepo.update.mockResolvedValue({ ...baseRfq, status: 'SENT' } as any);
+    mockEventBus.publish.mockRejectedValueOnce(
+      new Error('purchase.rfq.created handler failed'),
+    );
+
+    await expect(
+      service.transitionStatus('rfq-1', 'SENT' as any, userId, companyId),
+    ).rejects.toThrow('purchase.rfq.created handler failed');
+  });
 });

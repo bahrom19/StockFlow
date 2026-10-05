@@ -161,6 +161,29 @@ describe('PurchaseOrderService', () => {
       expect(mockEventBus.publish).toHaveBeenCalled();
     });
 
+    // G16-N-4 P2: `purchase.order.created` has no subscriber today, so the
+    // publisher-side catch that used to discard a handler failure is gone.
+    // A rejected publish MUST now reject this transaction (fail fast) instead
+    // of committing the purchase order with a silently lost event.
+    it('should reject when the purchase.order.created publish fails', async () => {
+      const mockTx = {
+        purchaseOrderItem: { createMany: jest.fn() },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ id: supplierId }),
+        },
+        product: { findMany: jest.fn().mockResolvedValue([{ id: productId }]) },
+      };
+      mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
+      mockRepo.create.mockResolvedValue(basePo as any);
+      mockEventBus.publish.mockRejectedValueOnce(
+        new Error('purchase.order.created handler failed'),
+      );
+
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        'purchase.order.created handler failed',
+      );
+    });
+
     it('should throw BadRequestException when order number already exists', async () => {
       mockRepo.findByOrderNumber.mockResolvedValue(basePo as any);
       const dto: CreatePurchaseOrderDto = {

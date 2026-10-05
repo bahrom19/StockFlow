@@ -242,4 +242,24 @@ describe('PurchaseOrderService — receipt-driven status events (changedBy: null
     await service.updateStatusAfterReceipt('po-1', 'comp-1', tx as never);
     expect(eventBus.publish).not.toHaveBeenCalled();
   });
+
+  // G16-N-4 P2: the receipt-driven publisher is the SECOND intentional
+  // best-effort site for `purchase.order.status.changed` (the first is
+  // `transitionStatus`, covered above). Both are notification-only and MUST
+  // keep tolerating a publish failure so the goods-receipt flow is unaffected.
+  it('receipt-driven publish failure is still non-fatal (best-effort)', async () => {
+    const { service, eventBus, tx } = makeService([
+      { quantity: 5, receivedQuantity: 5 },
+    ]);
+    eventBus.publish.mockRejectedValue(
+      new Error('purchase.order.status.changed handler failed'),
+    );
+
+    // Resolves (does not reject): the goods-receipt flow must survive a
+    // notification publish failure.
+    await expect(
+      service.updateStatusAfterReceipt('po-1', 'comp-1', tx as never),
+    ).resolves.toBeUndefined();
+    expect(eventBus.publish).toHaveBeenCalled();
+  });
 });

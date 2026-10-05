@@ -225,31 +225,29 @@ export class RFQService {
         tx,
       );
 
-      // Publish purchase.rfq.created event when sent
+      // Publish purchase.rfq.created event when sent.
+      // G16-N-4 P2: no try/catch here on purpose. `purchase.rfq.created` has no
+      // subscriber today; the previous catch discarded any handler failure and
+      // let the transition commit. A future handler failure MUST reject this
+      // transaction and roll the RFQ status change back.
       if (newStatus === RFQStatus.SENT) {
-        try {
-          await this.eventBus.publish(
-            new PurchaseRFQCreatedEvent({
-              rfqId: id,
-              companyId,
-              rfqNumber: rfq.rfqNumber,
-              rfqDate: rfq.rfqDate,
-              expectedDate: rfq.expectedDate,
-              createdBy: userId,
-              items: (await tx.rFQItem.findMany({ where: { rfqId: id } })).map(
-                (i) => ({
-                  productId: i.productId,
-                  quantity: i.quantity,
-                }),
-              ),
-            }),
-            { context: { transactionClient: tx } },
-          );
-        } catch (err) {
-          this.logger.warn(
-            `Failed to publish purchase.rfq.created: ${(err as Error).message}`,
-          );
-        }
+        await this.eventBus.publish(
+          new PurchaseRFQCreatedEvent({
+            rfqId: id,
+            companyId,
+            rfqNumber: rfq.rfqNumber,
+            rfqDate: rfq.rfqDate,
+            expectedDate: rfq.expectedDate,
+            createdBy: userId,
+            items: (await tx.rFQItem.findMany({ where: { rfqId: id } })).map(
+              (i) => ({
+                productId: i.productId,
+                quantity: i.quantity,
+              }),
+            ),
+          }),
+          { context: { transactionClient: tx } },
+        );
       }
 
       return RFQMapper.toEntity(updated);

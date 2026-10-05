@@ -200,35 +200,34 @@ export class PurchaseOrderService {
         tx,
       );
 
-      // Publish purchase.order.created event (for reference/analytics)
-      try {
-        await this.eventBus.publish(
-          new PurchaseOrderCreatedEvent({
-            purchaseOrderId: po.id,
-            companyId,
-            supplierId: dto.supplierId,
-            orderNumber: po.orderNumber,
-            orderDate: po.orderDate,
-            expectedDate: po.expectedDate,
-            subtotal: po.subtotal.toString(),
-            discountAmount: po.discountAmount.toString(),
-            taxAmount: po.taxAmount.toString(),
-            grandTotal: po.grandTotal.toString(),
-            currency: companyCurrency as string,
-            items: dto.items.map((i) => ({
-              productId: i.productId,
-              quantity: i.quantity,
-              unitCost: i.unitCost.toString(),
-              total: new Decimal(i.unitCost).mul(i.quantity).toString(),
-            })),
-          }),
-          { context: { transactionClient: tx } },
-        );
-      } catch (err) {
-        this.logger.warn(
-          `Failed to publish purchase.order.created: ${(err as Error).message}`,
-        );
-      }
+      // G16-N-4 P2: no try/catch here on purpose. `purchase.order.created` is
+      // a domain event with no subscriber today; the previous catch discarded
+      // any handler failure and let this transaction commit anyway. If a
+      // handler is ever subscribed, its failure MUST reject the transaction and
+      // roll the purchase order back — same fail-fast convention as
+      // goods-receipt `purchase.received`. Do NOT copy a best-effort catch here.
+      await this.eventBus.publish(
+        new PurchaseOrderCreatedEvent({
+          purchaseOrderId: po.id,
+          companyId,
+          supplierId: dto.supplierId,
+          orderNumber: po.orderNumber,
+          orderDate: po.orderDate,
+          expectedDate: po.expectedDate,
+          subtotal: po.subtotal.toString(),
+          discountAmount: po.discountAmount.toString(),
+          taxAmount: po.taxAmount.toString(),
+          grandTotal: po.grandTotal.toString(),
+          currency: companyCurrency as string,
+          items: dto.items.map((i) => ({
+            productId: i.productId,
+            quantity: i.quantity,
+            unitCost: i.unitCost.toString(),
+            total: new Decimal(i.unitCost).mul(i.quantity).toString(),
+          })),
+        }),
+        { context: { transactionClient: tx } },
+      );
 
       return PurchaseOrderMapper.toEntity(po);
     });
@@ -571,8 +570,16 @@ export class PurchaseOrderService {
 
       // Notifications V1 (N3): generic status-change event for EVERY real
       // transition — additive to purchase.order.approved (finance), which
-      // stays untouched. Wrapped so a notification/publish failure can never
-      // break the PO lifecycle.
+      // stays untouched.
+      //
+      // G16-N-4 P2 — INTENTIONAL BEST-EFFORT. `purchase.order.status.changed`
+      // is notification-only: its sole subscriber is
+      // PurchaseOrderStatusNotificationHandler, which already catches its own
+      // failures and logs them. A notification failure must NOT break the
+      // purchase-order business transaction, so this catch is DELIBERATE and
+      // logs the error. Do NOT copy this pattern onto critical/domain events —
+      // those must propagate so the transaction rolls back (see
+      // `purchase.order.created` above and goods-receipt `purchase.received`).
       try {
         await this.eventBus.publish(
           new PurchaseOrderStatusChangedEvent({
@@ -659,8 +666,13 @@ export class PurchaseOrderService {
   /**
    * N3: publish the generic status event for receipt-driven transitions
    * (PARTIALLY_RECEIVED / RECEIVED). This path has no acting user
-   * (system-driven from goods receipt), so `changedBy` is null. Wrapped in
-   * try/catch — must never break the goods receipt flow.
+   * (system-driven from goods receipt), so `changedBy` is null.
+   *
+   * G16-N-4 P2 — INTENTIONAL BEST-EFFORT, same reasoning as the
+   * `purchase.order.status.changed` publish in `updateStatus`: notification-only
+   * event, sole subscriber already catches internally, so this catch is
+   * deliberate and must never break the goods receipt flow. Do NOT copy this
+   * pattern onto critical/domain events.
    */
   private async publishStatusChangedFromReceipt(
     id: string,

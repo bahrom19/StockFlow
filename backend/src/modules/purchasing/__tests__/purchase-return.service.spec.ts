@@ -1051,6 +1051,56 @@ describe('PurchaseReturnService', () => {
       expect(mockEventBus.publish).toHaveBeenCalled();
     });
 
+    // G16-N-4 P2: `purchase.returned` has no subscriber today, so the
+    // publisher-side silent `catch (_err) {}` that used to discard a handler
+    // failure is gone. This exercises the COMPLETED-transition path that
+    // reads `purchaseReturnItem.findMany` immediately before publishing, and
+    // asserts the rejection now escapes and fails the whole transition.
+    it('should reject when the purchase.returned publish fails', async () => {
+      const approved = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
+      const mockTx = {
+        purchaseReturnItem: {
+          findMany: jest.fn().mockResolvedValue(baseReturn.items),
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+        goodsReceiptItem: {
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 5 } }]),
+        },
+        stock: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 's-1',
+            quantity: 50,
+            reservedQuantity: 0,
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        stockMovement: { create: jest.fn() },
+      };
+      mockTransaction.mockImplementation((cb: any) => cb(mockTx));
+      mockRepo.findById.mockResolvedValue(approved as any);
+      mockRepo.update.mockResolvedValue({
+        ...approved,
+        status: PurchaseReturnStatus.COMPLETED,
+      } as any);
+      mockEventBus.publish.mockRejectedValueOnce(
+        new Error('purchase.returned handler failed'),
+      );
+
+      await expect(
+        service.transitionStatus(
+          'pr-1',
+          PurchaseReturnStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
+      ).rejects.toThrow('purchase.returned handler failed');
+
+      // The findMany that feeds the event payload still ran on this path.
+      expect(mockTx.purchaseReturnItem.findMany).toHaveBeenCalled();
+    });
+
     it('should reject COMPLETED when stock is insufficient (strict stock)', async () => {
       const approved = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
       const mockTx = {
@@ -2309,21 +2359,34 @@ describe('PurchaseReturnService', () => {
       );
     });
 
-    it('should not break transaction when event publish fails', async () => {
+    // G16-N-4 P2: `purchase.return.cancelled` has no subscriber today. The
+    // former silent `catch (_err) {}` made publish failures invisible; it is
+    // now removed, so a rejected publish MUST reject the transaction (fail
+    // fast) rather than commit a cancellation with a silently lost event.
+    it('should reject when the purchase.return.cancelled publish fails', async () => {
       const tx = mockTx();
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
-      mockEventBus.publish.mockRejectedValueOnce(new Error('event failure'));
+      mockEventBus.publish.mockRejectedValueOnce(
+        new Error('purchase.return.cancelled handler failed'),
+      );
 
-      // Should not throw — event failure is non-critical
-      const result = await service.cancelCompleted('pr-1', userId, companyId);
-      expect(result).toBeDefined();
+      await expect(
+        service.cancelCompleted('pr-1', userId, companyId),
+      ).rejects.toThrow('purchase.return.cancelled handler failed');
     });
 
     it('should rollback when GL posting fails', async () => {

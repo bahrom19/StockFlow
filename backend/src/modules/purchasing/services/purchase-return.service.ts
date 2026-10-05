@@ -803,30 +803,30 @@ export class PurchaseReturnService {
       tx,
     );
 
-    // Publish purchase.returned event
-    try {
-      const eventItems = await tx.purchaseReturnItem.findMany({
-        where: { purchaseReturnId: id },
-      });
-      await this.eventBus.publish(
-        new PurchaseReturnedEvent({
-          purchaseReturnId: id,
-          companyId,
-          supplierId: ret.supplierId,
-          warehouseId: ret.warehouseId,
-          returnNumber: ret.returnNumber,
-          items: eventItems.map((i) => ({
-            productId: i.productId,
-            quantity: i.quantity,
-            unitCost: i.unitCost.toString(),
-            total: i.total.toString(),
-          })),
-        }),
-        { context: { transactionClient: tx } },
-      );
-    } catch (_err) {
-      // Non-critical event
-    }
+    // G16-N-4 P2: no try/catch here on purpose. `purchase.returned` has no
+    // subscriber today; the previous silent `catch (_err) {}` discarded the
+    // failure with no log at all. If a handler is ever subscribed, its failure
+    // MUST reject this transaction and roll the purchase return back rather
+    // than commit it silently.
+    const eventItems = await tx.purchaseReturnItem.findMany({
+      where: { purchaseReturnId: id },
+    });
+    await this.eventBus.publish(
+      new PurchaseReturnedEvent({
+        purchaseReturnId: id,
+        companyId,
+        supplierId: ret.supplierId,
+        warehouseId: ret.warehouseId,
+        returnNumber: ret.returnNumber,
+        items: eventItems.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitCost: i.unitCost.toString(),
+          total: i.total.toString(),
+        })),
+      }),
+      { context: { transactionClient: tx } },
+    );
 
     // G11-A: status-transition audit trail. Written inside the SAME
     // transaction and AFTER every business side effect (CAS, stock
@@ -1179,25 +1179,25 @@ export class PurchaseReturnService {
         tx,
       );
 
-      // 14. Publish event (non-critical — failure does not break transaction)
-      try {
-        await this.eventBus.publish(
-          new PurchaseReturnCancelledEvent({
-            purchaseReturnId: id,
-            companyId,
-            supplierId: ret.supplierId,
-            warehouseId: ret.warehouseId,
-            returnNumber: ret.returnNumber,
-            items: items.map((i) => ({
-              productId: i.productId,
-              quantity: i.quantity,
-            })),
-          }),
-          { context: { transactionClient: tx } },
-        );
-      } catch (_err) {
-        // Non-critical event
-      }
+      // 14. Publish event.
+      // G16-N-4 P2: no try/catch here on purpose — `purchase.return.cancelled`
+      // has no subscriber today, and the previous silent `catch (_err) {}`
+      // swallowed failures with no log. A future handler failure MUST reject
+      // this transaction and roll the cancellation back.
+      await this.eventBus.publish(
+        new PurchaseReturnCancelledEvent({
+          purchaseReturnId: id,
+          companyId,
+          supplierId: ret.supplierId,
+          warehouseId: ret.warehouseId,
+          returnNumber: ret.returnNumber,
+          items: items.map((i) => ({
+            productId: i.productId,
+            quantity: i.quantity,
+          })),
+        }),
+        { context: { transactionClient: tx } },
+      );
 
       // 15. Re-fetch and return
       const cancelled = await this.purchaseReturnRepository.findById(
