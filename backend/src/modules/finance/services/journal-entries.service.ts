@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JournalEntryStatus, Prisma } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { CreateJournalEntryDto } from '../dto/create-journal-entry.dto';
 import { UpdateJournalEntryDto } from '../dto/update-journal-entry.dto';
@@ -35,35 +34,35 @@ export class JournalEntriesService {
   ): Promise<JournalEntryEntity> {
     // Atomic transaction: validate period + generate entry number + create entry + audit log
     const entry = await this.prismaService.$transaction(async (tx) => {
-      const period = await this.periodsRepository.findById(
-        dto.financialPeriodId,
-        currentUser.companyId,
-        tx,
-      );
-      if (!period) throw new NotFoundException('Financial period not found');
-      if (period.status !== 'OPEN')
-        throw new BadRequestException('Financial period is not open');
-
-      let totalDebit = new Decimal(0);
-      let totalCredit = new Decimal(0);
-
-      for (const line of dto.lines) {
-        totalDebit = totalDebit.add(new Decimal(line.debit || 0));
-        totalCredit = totalCredit.add(new Decimal(line.credit || 0));
-      }
-
-      if (!totalDebit.equals(totalCredit)) {
-        throw new BadRequestException(
-          `Journal entry is unbalanced: debit=${totalDebit.toString()}, credit=${totalCredit.toString()}`,
-        );
-      }
+      const entryDate = dto.entryDate || new Date();
 
       // G16-B-02 PH1 (B02-01): every referenced account must belong to the
       // caller's company (active, non-deleted) before anything is persisted.
       // Prisma `connect` enforces existence only, never tenant ownership.
+      // This runs FIRST and throws NotFoundException, so a foreign account is
+      // indistinguishable from a missing one (no tenant-existence oracle).
       await this.validationService.validateAccountsBelongToCompany(
         dto.lines.map((l) => l.accountId),
         currentUser.companyId,
+        tx,
+      );
+
+      // G16-N-7 P2-B: the CANONICAL posting validator, invoked at DRAFT
+      // creation. It owns period-OPEN, entry-date-inside-period, >=2 lines,
+      // non-zero legs, balance and non-negative amounts. Account ownership was
+      // already proven above, so its own account step is now a redundant
+      // no-op and the oracle-free 404 semantics are preserved.
+      const { totalDebit, totalCredit } = await this.validationService.validate(
+        {
+          companyId: currentUser.companyId,
+          entryDate,
+          financialPeriodId: dto.financialPeriodId,
+          lines: dto.lines.map((l) => ({
+            accountId: l.accountId,
+            debit: l.debit || '0',
+            credit: l.credit || '0',
+          })),
+        },
         tx,
       );
 
@@ -75,7 +74,7 @@ export class JournalEntriesService {
 
       const result = await this.repository.createInTransaction(tx, {
         entryNumber,
-        entryDate: dto.entryDate || new Date(),
+        entryDate,
         description: dto.description || null,
         status: 'DRAFT',
         totalDebit: totalDebit.toString(),
@@ -214,13 +213,36 @@ export class JournalEntriesService {
       if (!period || period.status !== 'OPEN')
         throw new BadRequestException('Financial period is not open');
 
-      // G16-B-02 PH2 (B02-02): validate ownership of all persisted line accounts
-      // before committing the POST. Prisma `connect` enforces existence only,
-      // never tenant ownership — this guard ensures every referenced account
-      // belongs to the caller's company and is live.
+      // G16-B-02 PH2 (B02-02): validate ownership of all persisted line
+      // accounts before committing the POST. Prisma `connect` enforces
+      // existence only, never tenant ownership — this guard ensures every
+      // referenced account belongs to the caller's company and is live.
+      // It runs FIRST (404, oracle-free) for the same reason as in create().
+      const persistedLines = (before.lines ?? []).map((l) => ({
+        accountId: l.accountId,
+        debit: l.debit.toString(),
+        credit: l.credit.toString(),
+      }));
       await this.validationService.validateAccountsBelongToCompany(
-        (before.lines ?? []).map((l) => l.accountId),
+        persistedLines.map((l) => l.accountId),
         currentUser.companyId,
+        tx,
+      );
+
+      // G16-N-7 P2-B: re-run the CANONICAL validator immediately before the
+      // DRAFT -> POSTED transition. A journal may sit as a DRAFT for days, so
+      // every invariant that could have drifted in the meantime must be
+      // re-checked at the boundary that actually mutates the GL: the period
+      // may have closed, accounts may have been deactivated or soft-deleted,
+      // and a legacy row may carry an out-of-period entry date. Re-validating
+      // here is what stops such an entry from poisoning AccountBalance.
+      await this.validationService.validate(
+        {
+          companyId: currentUser.companyId,
+          entryDate: before.entryDate,
+          financialPeriodId: before.financialPeriodId,
+          lines: persistedLines,
+        },
         tx,
       );
 

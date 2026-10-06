@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JournalEntryStatus } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { JournalEntriesService } from '../journal-entries.service';
 import { JournalEntriesRepository } from '../../repositories/journal-entries.repository';
 import { FinancialPeriodsRepository } from '../../repositories/financial-periods.repository';
@@ -29,7 +30,10 @@ describe('JournalEntriesService.post — AccountBalance update (G15-06a)', () =>
   let prismaService: { $transaction: jest.Mock };
   let auditLog: { log: jest.Mock };
   let glEngine: { updateAccountBalances: jest.Mock };
-  let validationService: { validateAccountsBelongToCompany: jest.Mock };
+  let validationService: {
+    validateAccountsBelongToCompany: jest.Mock;
+    validate: jest.Mock;
+  };
 
   const currentUser = { userId: 'user-1', companyId: 'comp-1' } as any;
 
@@ -91,9 +95,15 @@ describe('JournalEntriesService.post — AccountBalance update (G15-06a)', () =>
       $transaction: jest.fn((cb: (t: unknown) => unknown) => cb(tx)),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
-    glEngine = { updateAccountBalances: jest.fn().mockResolvedValue(undefined) };
+    glEngine = {
+      updateAccountBalances: jest.fn().mockResolvedValue(undefined),
+    };
     validationService = {
       validateAccountsBelongToCompany: jest.fn().mockResolvedValue(undefined),
+      validate: jest.fn().mockResolvedValue({
+        totalDebit: new Decimal('100.0000'),
+        totalCredit: new Decimal('100.0000'),
+      }),
     };
 
     service = new JournalEntriesService(
@@ -238,7 +248,10 @@ describe('JournalEntriesService.post — account ownership (G16-B-02 PH2)', () =
   let tx: Record<string, unknown>;
   let repository: { findById: jest.Mock; update: jest.Mock };
   let periodsRepository: { findById: jest.Mock };
-  let validationService: { validateAccountsBelongToCompany: jest.Mock };
+  let validationService: {
+    validateAccountsBelongToCompany: jest.Mock;
+    validate: jest.Mock;
+  };
   let auditLog: { log: jest.Mock };
   let glEngine: { updateAccountBalances: jest.Mock };
 
@@ -302,9 +315,15 @@ describe('JournalEntriesService.post — account ownership (G16-B-02 PH2)', () =
     periodsRepository = { findById: jest.fn() };
     validationService = {
       validateAccountsBelongToCompany: jest.fn().mockResolvedValue(undefined),
+      validate: jest.fn().mockResolvedValue({
+        totalDebit: new Decimal('100.0000'),
+        totalCredit: new Decimal('100.0000'),
+      }),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
-    glEngine = { updateAccountBalances: jest.fn().mockResolvedValue(undefined) };
+    glEngine = {
+      updateAccountBalances: jest.fn().mockResolvedValue(undefined),
+    };
 
     service = new JournalEntriesService(
       repository as unknown as JournalEntriesRepository,
@@ -324,10 +343,7 @@ describe('JournalEntriesService.post — account ownership (G16-B-02 PH2)', () =
     );
     repository.findById.mockResolvedValue(
       draftEntry({
-        lines: [
-          line({ accountId: 'a-cash' }),
-          line({ accountId: 'a-evil' }),
-        ],
+        lines: [line({ accountId: 'a-cash' }), line({ accountId: 'a-evil' })],
       }),
     );
     periodsRepository.findById.mockResolvedValue(openPeriod);
@@ -336,11 +352,9 @@ describe('JournalEntriesService.post — account ownership (G16-B-02 PH2)', () =
       NotFoundException,
     );
 
-    expect(validationService.validateAccountsBelongToCompany).toHaveBeenCalledWith(
-      ['a-cash', 'a-evil'],
-      'comp-1',
-      tx,
-    );
+    expect(
+      validationService.validateAccountsBelongToCompany,
+    ).toHaveBeenCalledWith(['a-cash', 'a-evil'], 'comp-1', tx);
     expect(repository.update).not.toHaveBeenCalled();
     expect(glEngine.updateAccountBalances).not.toHaveBeenCalled();
     expect(auditLog.log).not.toHaveBeenCalled();
@@ -455,7 +469,10 @@ describe('JournalEntriesService.create — account ownership (G16-B-02 PH1)', ()
     createInTransaction: jest.Mock;
   };
   let periodsRepository: { findById: jest.Mock };
-  let validationService: { validateAccountsBelongToCompany: jest.Mock };
+  let validationService: {
+    validateAccountsBelongToCompany: jest.Mock;
+    validate: jest.Mock;
+  };
   let auditLog: { log: jest.Mock };
 
   const currentUser = { userId: 'user-1', companyId: 'comp-1' } as any;
@@ -484,6 +501,10 @@ describe('JournalEntriesService.create — account ownership (G16-B-02 PH1)', ()
     periodsRepository = { findById: jest.fn().mockResolvedValue(openPeriod) };
     validationService = {
       validateAccountsBelongToCompany: jest.fn().mockResolvedValue(undefined),
+      validate: jest.fn().mockResolvedValue({
+        totalDebit: new Decimal('100.0000'),
+        totalCredit: new Decimal('100.0000'),
+      }),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
 
@@ -543,7 +564,11 @@ describe('PostingValidationService.validateAccountsBelongToCompany (G16-B-02 PH1
   it('should resolve when all accounts belong to the company', async () => {
     const tx = txFor([{ id: 'a1' }, { id: 'a2' }]);
     await expect(
-      service.validateAccountsBelongToCompany(['a1', 'a2'], 'comp-1', tx as any),
+      service.validateAccountsBelongToCompany(
+        ['a1', 'a2'],
+        'comp-1',
+        tx as any,
+      ),
     ).resolves.toBeUndefined();
     expect(tx.chartOfAccount.findMany).toHaveBeenCalledWith({
       where: {
@@ -564,14 +589,20 @@ describe('PostingValidationService.validateAccountsBelongToCompany (G16-B-02 PH1
       tx as any,
     );
     expect(tx.chartOfAccount.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ id: { in: ['a1'] } }) }),
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: ['a1'] } }),
+      }),
     );
   });
 
   it('should throw NotFound for a foreign/missing account', async () => {
     const tx = txFor([{ id: 'a1' }]);
     await expect(
-      service.validateAccountsBelongToCompany(['a1', 'a-evil'], 'comp-1', tx as any),
+      service.validateAccountsBelongToCompany(
+        ['a1', 'a-evil'],
+        'comp-1',
+        tx as any,
+      ),
     ).rejects.toThrow(NotFoundException);
   });
 
@@ -589,5 +620,274 @@ describe('PostingValidationService.validateAccountsBelongToCompany (G16-B-02 PH1
       service.validateAccountsBelongToCompany([], 'comp-1', tx as any),
     ).resolves.toBeUndefined();
     expect(tx.chartOfAccount.findMany).not.toHaveBeenCalled();
+  });
+});
+/**
+ * G16-N-7 P2-B — manual journal validation at the DRAFT and POSTED
+ * boundaries. These tests drive the REAL PostingValidationService (only the
+ * Prisma delegates are faked) so the asserted semantics are the canonical
+ * ones, not a mock's opinion of them.
+ */
+describe('JournalEntriesService — canonical validation (G16-N-7 P2-B)', () => {
+  let service: JournalEntriesService;
+  let tx: any;
+  let repository: any;
+  let validation: PostingValidationService;
+
+  const currentUser = { userId: 'user-1', companyId: 'comp-1' } as any;
+
+  const PERIOD = {
+    id: 'fp-1',
+    companyId: 'comp-1',
+    name: '2026-08',
+    status: 'OPEN',
+    startDate: new Date('2026-08-01T00:00:00.000Z'),
+    endDate: new Date('2026-08-31T23:59:59.999Z'),
+  };
+
+  const ACCOUNTS = [
+    { id: 'a-cash', companyId: 'comp-1', isActive: true, deletedAt: null },
+    { id: 'a-rev', companyId: 'comp-1', isActive: true, deletedAt: null },
+  ];
+
+  const journalLine = (over: Record<string, unknown> = {}) => ({
+    id: 'jl-1',
+    journalEntryId: 'je-1',
+    accountId: 'a-cash',
+    debit: '100.0000',
+    credit: '0.0000',
+    description: null,
+    ...over,
+  });
+
+  const draft = (over: Record<string, unknown> = {}) => ({
+    id: 'je-1',
+    companyId: 'comp-1',
+    financialPeriodId: 'fp-1',
+    entryNumber: 5,
+    entryDate: new Date('2026-08-15T10:00:00Z'),
+    description: null,
+    status: JournalEntryStatus.DRAFT,
+    totalDebit: '100.0000',
+    totalCredit: '100.0000',
+    referenceType: null,
+    referenceId: null,
+    postedBy: null,
+    postedAt: null,
+    createdBy: 'user-1',
+    rowVersion: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lines: [
+      journalLine(),
+      journalLine({
+        id: 'jl-2',
+        accountId: 'a-rev',
+        debit: '0.0000',
+        credit: '100.0000',
+      }),
+    ],
+    ...over,
+  });
+
+  const dto = (over: Record<string, unknown> = {}) => ({
+    financialPeriodId: 'fp-1',
+    entryDate: new Date('2026-08-15T00:00:00Z'),
+    lines: [
+      { accountId: 'a-cash', debit: '100', credit: '0' },
+      { accountId: 'a-rev', debit: '0', credit: '100' },
+    ],
+    ...over,
+  });
+
+  beforeEach(() => {
+    tx = {
+      financialPeriod: {
+        findFirst: jest.fn(async () => ({ ...PERIOD })),
+      },
+      chartOfAccount: {
+        findMany: jest.fn(async ({ where }: any) =>
+          ACCOUNTS.filter((a) => where.id.in.includes(a.id)),
+        ),
+      },
+    };
+
+    repository = {
+      findById: jest.fn(async () => draft()),
+      update: jest.fn(async () => draft({ status: JournalEntryStatus.POSTED })),
+      getNextEntryNumberInTransaction: jest.fn(async () => 7),
+      createInTransaction: jest.fn(async (_t: unknown, input: any) => ({
+        id: 'je-1',
+        ...input,
+      })),
+    };
+
+    validation = new PostingValidationService();
+    service = new JournalEntriesService(
+      repository as unknown as JournalEntriesRepository,
+      {
+        findById: jest.fn(async () => ({ ...PERIOD })),
+      } as unknown as FinancialPeriodsRepository,
+      {
+        $transaction: jest.fn((cb: (t: unknown) => unknown) => cb(tx)),
+      } as unknown as PrismaService,
+      {
+        log: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AuditLogService,
+      {
+        updateAccountBalances: jest.fn().mockResolvedValue(undefined),
+      } as unknown as GlEngineService,
+      validation,
+    );
+  });
+
+  // 25. valid balanced journal still posts
+  it('creates and posts a valid balanced journal', async () => {
+    await service.create(dto() as any, currentUser);
+    expect(repository.createInTransaction).toHaveBeenCalledTimes(1);
+
+    const posted = await service.post('je-1', currentUser);
+    expect(posted.status).toBe(JournalEntryStatus.POSTED);
+  });
+
+  // 22. out-of-period entryDate rejected on CREATE
+  it('rejects an out-of-period entryDate on CREATE', async () => {
+    await expect(
+      service.create(
+        dto({ entryDate: new Date('2026-09-15T00:00:00Z') }) as any,
+        currentUser,
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(repository.createInTransaction).not.toHaveBeenCalled();
+  });
+
+  // 23. out-of-period entryDate rejected on POST
+  it('rejects an out-of-period entryDate on POST', async () => {
+    repository.findById.mockResolvedValue(
+      draft({ entryDate: new Date('2026-09-15T00:00:00Z') }),
+    );
+    await expect(service.post('je-1', currentUser)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  // 19. negative amount rejected
+  it('rejects negative amounts', async () => {
+    await expect(
+      service.create(
+        dto({
+          lines: [
+            { accountId: 'a-cash', debit: '-100', credit: '0' },
+            { accountId: 'a-rev', debit: '0', credit: '-100' },
+          ],
+        }) as any,
+        currentUser,
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(repository.createInTransaction).not.toHaveBeenCalled();
+  });
+
+  // 20. all-zero journal rejected
+  it('rejects an all-zero journal', async () => {
+    await expect(
+      service.create(
+        dto({
+          lines: [
+            { accountId: 'a-cash', debit: '0', credit: '0' },
+            { accountId: 'a-rev', debit: '0', credit: '0' },
+          ],
+        }) as any,
+        currentUser,
+      ),
+    ).rejects.toThrow(/debit or credit amount/);
+    expect(repository.createInTransaction).not.toHaveBeenCalled();
+  });
+
+  // 21. a single zero leg is rejected per canonical validator semantics
+  it('rejects a line whose debit and credit are both zero', async () => {
+    await expect(
+      service.create(
+        dto({
+          lines: [
+            { accountId: 'a-cash', debit: '0', credit: '0' },
+            { accountId: 'a-rev', debit: '0', credit: '0' },
+          ],
+        }) as any,
+        currentUser,
+      ),
+    ).rejects.toThrow(/debit or credit amount/);
+  });
+
+  // balanced invariant
+  it('rejects an unbalanced journal', async () => {
+    await expect(
+      service.create(
+        dto({
+          lines: [
+            { accountId: 'a-cash', debit: '100', credit: '0' },
+            { accountId: 'a-rev', debit: '0', credit: '90' },
+          ],
+        }) as any,
+        currentUser,
+      ),
+    ).rejects.toThrow(/unbalanced/);
+    expect(repository.createInTransaction).not.toHaveBeenCalled();
+  });
+
+  // 24. period closed between CREATE and POST -> POST rejected
+  it('rejects POST when the period closed after CREATE', async () => {
+    const periodsRepository = {
+      findById: jest.fn(async () => ({ ...PERIOD, status: 'CLOSED' })),
+    };
+    const svc = new JournalEntriesService(
+      repository as unknown as JournalEntriesRepository,
+      periodsRepository as unknown as FinancialPeriodsRepository,
+      {
+        $transaction: jest.fn((cb: (t: unknown) => unknown) => cb(tx)),
+      } as unknown as PrismaService,
+      {
+        log: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AuditLogService,
+      {
+        updateAccountBalances: jest.fn().mockResolvedValue(undefined),
+      } as unknown as GlEngineService,
+      validation,
+    );
+
+    await expect(svc.post('je-1', currentUser)).rejects.toThrow(
+      /Financial period is not open/,
+    );
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  // 26. DRAFT lifecycle remains valid: a DRAFT entry can sit and still post later
+  it('keeps the DRAFT lifecycle intact', async () => {
+    await service.create(dto() as any, currentUser);
+    const created = repository.createInTransaction.mock.calls[0][1];
+    expect(created.status).toBe('DRAFT');
+    // totals now come from the canonical validator's Decimal sum; the
+    // pre-G16-N-7 service computed the same value from the raw DTO strings,
+    // so the stored representation is unchanged
+    expect(created.totalDebit).toBe('100');
+    expect(created.totalCredit).toBe('100');
+  });
+
+  // ownership oracle stays 404 (regression guard on validation ORDER)
+  it('checks account ownership BEFORE the canonical validator', async () => {
+    await expect(
+      service.create(
+        dto({
+          lines: [
+            { accountId: 'a-cash', debit: '100', credit: '0' },
+            { accountId: 'a-evil', debit: '0', credit: '100' },
+          ],
+        }) as any,
+        currentUser,
+      ),
+    ).rejects.toThrow(NotFoundException);
+    // the canonical validator (which queries the period first and whose own
+    // account step would surface a 400 naming the ids) never ran
+    expect(tx.financialPeriod.findFirst).not.toHaveBeenCalled();
   });
 });
