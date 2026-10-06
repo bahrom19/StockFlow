@@ -90,6 +90,8 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
   let main: Tenant;
   let other: Tenant;
   let nullRef: Tenant;
+  let pnlTenant: Tenant;
+  let lifecycleTenant: Tenant;
   const tenantIds: string[] = [];
   const actorIds: string[] = [];
 
@@ -230,6 +232,8 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
     main = await seedTenant('main');
     other = await seedTenant('other');
     nullRef = await seedTenant('nullref');
+    pnlTenant = await seedTenant('pnl');
+    lifecycleTenant = await seedTenant('lifecycle');
   });
 
   afterAll(async () => {
@@ -352,9 +356,15 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
     expect(cfAfter.beginningCash).toBe('0.0000');
     expect(cfAfter.endingCash).toBe('0.0000');
 
-    // ── 12. CF movement still shows the real reversal movement ───────
-    // The reversal compensation (Dr cash 250) remains visible as a real
-    // cash movement with the category inherited from the original.
+    // ── 12. CF movement shows BOTH legs of the reversal and nets to zero ──
+    // G16-N-8-B. Previously only the compensation appeared: the reversed
+    // ORIGINAL's outflow leg was dropped by POSTED-only enumeration, leaving a
+    // phantom one-sided +250 inflow whose total could never foot against the
+    // (correct) reversal-neutral positions, leaving `reconciled` false.
+    //
+    // Movement is now the event view and enumerates POSTED ∪ REVERSED, so the
+    // pair renders as two opposite rows: the original SALE/MANUAL leg
+    // (Cr cash 250 → −250) and the REVERSAL compensation (Dr cash 250 → +250).
     const allRows = [
       ...cfAfter.operating.rows,
       ...cfAfter.unclassified.rows,
@@ -366,17 +376,33 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
       new Decimal(reversalRows[0]!.inflow).equals(new Decimal(AMOUNT)),
     ).toBe(true);
 
-    // DOCUMENTED RESIDUAL (pre-existing G15-07-C3-C enumeration semantics,
-    // out of G16-N-8-A scope): findCashJournalEntries enumerates POSTED
-    // entries only, so after a reversal the reversed original's outflow leg
-    // drops out of the movement partitions while its compensation remains.
-    // Movement totals therefore do NOT foot to (ending − beginning) for a
-    // period containing a GlEngine reversal. Positions themselves are
-    // correct (the fix under test); the movement/position footing gap is a
-    // separate residual finding, reported to the workstream owner.
+    // The original leg is back, carrying its own referenceType ('MANUAL') and
+    // the opposite sign.
+    const originalRows = allRows.filter(
+      (r) => r.referenceType === 'MANUAL' && r.accountId === t.cashAccountId,
+    );
+    expect(originalRows).toHaveLength(1);
     expect(
-      new Decimal(cfAfter.netCashMovement).equals(new Decimal(AMOUNT)),
+      new Decimal(originalRows[0]!.outflow).equals(new Decimal(AMOUNT)),
     ).toBe(true);
+
+    // Both legs are present and they cancel.
+    expect(new Decimal(cfAfter.netCashMovement).equals(new Decimal(0))).toBe(
+      true,
+    );
+    // RESIDUAL B (G15-07-C3-C enumeration semantics) is now RESOLVED for the
+    // same-window case: movement foots with positions and `reconciled` is true
+    // because the missing information was restored — NOT because the check was
+    // weakened. The formula is unchanged:
+    //   endingCash === beginningCash + netCashMovement
+    expect(
+      new Decimal(cfAfter.endingCash).equals(
+        new Decimal(cfAfter.beginningCash).add(
+          new Decimal(cfAfter.netCashMovement),
+        ),
+      ),
+    ).toBe(true);
+    expect(cfAfter.reconciled).toBe(true);
 
     // ── statement (getLedger) shows BOTH legs with net-zero running balance
     const ledger = await ledgerQuery.getLedger({
@@ -645,5 +671,279 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
     expect(cf.endingCash).toBe(
       new Decimal(-1).mul(new Decimal(NULL_TYPED_AMOUNT)).toFixed(4),
     );
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // G16-N-8-B — P&L header ⇄ daily parity on REAL PostgreSQL
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe('G16-N-8-B — P&L daily shares the canonical population', () => {
+    const dailySum = (
+      daily: Record<
+        string,
+        { revenue: Decimal; cogs: Decimal; expenses: Decimal }
+      >,
+    ) =>
+      Object.values(daily).reduce(
+        (acc, d) => ({
+          revenue: acc.revenue.add(d.revenue),
+          cogs: acc.cogs.add(d.cogs),
+          expenses: acc.expenses.add(d.expenses),
+        }),
+        { revenue: new Decimal(0), cogs: new Decimal(0), expenses: new Decimal(0) },
+      );
+
+    /** Direct journal write used only to materialise a referenceType taxonomy
+     *  that belongs to another domain module (FT / supplier payment) without
+     *  dragging that module's posting pipeline into this suite. */
+    let rawSeq = 0;
+    const postRaw = async (
+      t: Tenant,
+      referenceType: string | null,
+      referenceId: string | null,
+      lines: { accountId: string; debit: string; credit: string }[],
+    ): Promise<string> => {
+      const entry = await prisma.journalEntry.create({
+        data: {
+          companyId: t.companyId,
+          financialPeriodId: t.periodId,
+          entryNumber: 900 + rawSeq++,
+          entryDate: NOW,
+          description: `${RUN} raw ${referenceType ?? 'NULL'}`,
+          referenceType,
+          referenceId,
+          status: 'POSTED',
+          totalDebit: new Decimal(
+            lines.reduce((s, l) => s + Number(l.debit), 0).toFixed(4),
+          ),
+          totalCredit: new Decimal(
+            lines.reduce((s, l) => s + Number(l.credit), 0).toFixed(4),
+          ),
+          createdBy: t.actorId,
+          postedAt: NOW,
+          lines: { create: lines },
+        },
+        select: { id: true },
+      });
+      return entry.id;
+    };
+
+    const mkAcc = async (
+      t: Tenant,
+      code: string,
+      accountType: string,
+    ): Promise<string> =>
+      prisma.chartOfAccount
+        .create({
+          data: {
+            companyId: t.companyId,
+            code,
+            name: `${RUN}-${code}`,
+            accountType: accountType as never,
+            normalBalance: (accountType === 'REVENUE'
+              ? 'CREDIT'
+              : 'DEBIT') as never,
+            isActive: true,
+          },
+          select: { id: true },
+        })
+        .then((r) => r.id);
+
+    it('header totals equal the sum of daily buckets across every referenceType class', async () => {
+      const t = pnlTenant;
+      const revenueAcc = await mkAcc(t, '4000', 'REVENUE');
+      const cogsAcc = await mkAcc(t, '5000', 'EXPENSE');
+      const expenseAcc = await mkAcc(t, '6600', 'EXPENSE');
+
+      // 1. normal POSTED sale: Dr cash 500 / Cr revenue 500
+      await glEngine.post(
+        {
+          companyId: t.companyId,
+          financialPeriodId: t.periodId,
+          entryDate: NOW,
+          description: `${RUN} sale`,
+          referenceType: 'SALE',
+          createdBy: t.actorId,
+          lines: [
+            { accountId: t.cashAccountId, debit: '500', credit: '0', description: 'cash' },
+            { accountId: revenueAcc, debit: '0', credit: '500', description: 'rev' },
+          ],
+        },
+        undefined,
+      );
+
+      // 2. NULL referenceType expense: Dr expense 100 / Cr cash 100
+      const nullTyped = await glEngine
+        .post(
+          {
+            companyId: t.companyId,
+            financialPeriodId: t.periodId,
+            entryDate: NOW,
+            description: `${RUN} null ref`,
+            createdBy: t.actorId,
+            lines: [
+              { accountId: expenseAcc, debit: '100', credit: '0', description: 'e' },
+              { accountId: t.cashAccountId, debit: '0', credit: '100', description: 'cash' },
+            ],
+          },
+          undefined,
+        )
+        .then((r) => r.id);
+      expect(
+        (
+          await prisma.journalEntry.findUniqueOrThrow({ where: { id: nullTyped } })
+        ).referenceType,
+      ).toBeNull();
+
+      // 3. SUPPLIER_PAYMENT_REVERSAL leg pair (originals stay POSTED in that
+      //    lifecycle) — both legs must remain included.
+      await postRaw(t, 'SUPPLIER_PAYMENT', 'pay-1', [
+        { accountId: t.cashAccountId, debit: '0', credit: '40' },
+        { accountId: expenseAcc, debit: '40', credit: '0' },
+      ]);
+      await postRaw(t, 'SUPPLIER_PAYMENT_REVERSAL', 'pay-1', [
+        { accountId: t.cashAccountId, debit: '40', credit: '0' },
+        { accountId: expenseAcc, debit: '0', credit: '40' },
+      ]);
+
+      // 4. FINANCIAL_TRANSACTION_REVERSAL — must remain included.
+      await postRaw(t, 'FINANCIAL_TRANSACTION_REVERSAL', 'ft-1', [
+        { accountId: cogsAcc, debit: '0', credit: '60' },
+        { accountId: t.cashAccountId, debit: '60', credit: '0' },
+      ]);
+
+      // 5. a GlEngine reversal that must be invisible to BOTH header and daily
+      const toReverse = await glEngine
+        .post(
+          {
+            companyId: t.companyId,
+            financialPeriodId: t.periodId,
+            entryDate: NOW,
+            description: `${RUN} to reverse`,
+            referenceType: 'MANUAL',
+            createdBy: t.actorId,
+            lines: [
+              { accountId: expenseAcc, debit: '250', credit: '0', description: 'e' },
+              { accountId: t.cashAccountId, debit: '0', credit: '250', description: 'cash' },
+            ],
+          },
+          undefined,
+        )
+        .then((r) => r.id);
+      await glEngine.reverse(toReverse, t.companyId, t.actorId, 'parity');
+
+      const report = await pnl(t.companyId);
+      const summed = dailySum(report.daily);
+
+      // revenue: only the 500 sale
+      expect(report.revenue.equals(new Decimal(500))).toBe(true);
+      // COGS: the FT reversal credits 60 → net −60
+      expect(report.cogs.equals(new Decimal(-60))).toBe(true);
+      // expenses: 100 (NULL-typed) + 40 − 40 (supplier pair) + 0 (reversed pair)
+      expect(report.expenses.equals(new Decimal(100))).toBe(true);
+
+      // PARITY — the actual G16-N-8-B invariant.
+      expect(summed.revenue.equals(report.revenue)).toBe(true);
+      expect(summed.cogs.equals(report.cogs)).toBe(true);
+      expect(summed.expenses.equals(report.expenses)).toBe(true);
+
+      // The daily series is non-empty and contains real days.
+      expect(Object.keys(report.daily).length).toBeGreaterThan(0);
+    });
+
+    it('tenant isolation: daily never sees another company population', async () => {
+      const mine = await pnl(lifecycleTenant.companyId);
+      const theirs = await pnl(pnlTenant.companyId);
+
+      // The P&L tenant posted entries; the lifecycle tenant posted none yet.
+      expect(Object.keys(mine.daily)).toHaveLength(0);
+      expect(mine.revenue.equals(new Decimal(0))).toBe(true);
+      expect(mine.expenses.equals(new Decimal(0))).toBe(true);
+      // ...and the P&L tenant's own data is intact and unaffected.
+      expect(theirs.revenue.equals(new Decimal(500))).toBe(true);
+    });
+  });
+
+  describe('G16-N-8-B — account lifecycle must not gate historical amounts', () => {
+    const mkAcc = async (
+      t: Tenant,
+      code: string,
+      accountType: string,
+    ): Promise<string> =>
+      prisma.chartOfAccount
+        .create({
+          data: {
+            companyId: t.companyId,
+            code,
+            name: `${RUN}-${code}`,
+            accountType: accountType as never,
+            normalBalance: 'DEBIT' as never,
+            isActive: true,
+          },
+          select: { id: true },
+        })
+        .then((r) => r.id);
+
+    it('INACTIVE and SOFT-DELETED historical accounts stay in header AND daily; inactive 5xxx stays COGS', async () => {
+      const t = lifecycleTenant;
+      const inactiveExpense = await mkAcc(t, '6800', 'EXPENSE');
+      const softDeletedExpense = await mkAcc(t, '6900', 'EXPENSE');
+      const inactiveCogs = await mkAcc(t, '5900', 'EXPENSE');
+
+      const post = async (accountId: string, amount: string) =>
+        glEngine.post(
+          {
+            companyId: t.companyId,
+            financialPeriodId: t.periodId,
+            entryDate: NOW,
+            description: `${RUN} lifecycle`,
+            referenceType: 'MANUAL',
+            createdBy: t.actorId,
+            lines: [
+              { accountId, debit: amount, credit: '0', description: 'e' },
+              { accountId: t.cashAccountId, debit: '0', credit: amount, description: 'cash' },
+            ],
+          },
+          undefined,
+        );
+
+      await post(inactiveExpense, '30');
+      await post(softDeletedExpense, '70');
+      await post(inactiveCogs, '50');
+
+      // Deactivate / soft-delete AFTER posting — the historical lines must
+      // survive. Account lifecycle governs future posting and API visibility,
+      // never historical accounting.
+      await prisma.chartOfAccount.update({
+        where: { id: inactiveExpense },
+        data: { isActive: false },
+      });
+      await prisma.chartOfAccount.update({
+        where: { id: inactiveCogs },
+        data: { isActive: false },
+      });
+      await prisma.chartOfAccount.update({
+        where: { id: softDeletedExpense },
+        data: { deletedAt: new Date() },
+      });
+
+      const report = await pnl(t.companyId);
+      const summed = Object.values(report.daily).reduce(
+        (acc, d) => ({
+          revenue: acc.revenue.add(d.revenue),
+          cogs: acc.cogs.add(d.cogs),
+          expenses: acc.expenses.add(d.expenses),
+        }),
+        { revenue: new Decimal(0), cogs: new Decimal(0), expenses: new Decimal(0) },
+      );
+
+      // 30 (inactive) + 70 (soft-deleted) as operating expenses.
+      expect(report.expenses.equals(new Decimal(100))).toBe(true);
+      // 50 on an INACTIVE 5xxx is still COGS — never reclassified as expense.
+      expect(report.cogs.equals(new Decimal(50))).toBe(true);
+      // ...and daily agrees on both, so parity holds for historical accounts.
+      expect(summed.expenses.equals(report.expenses)).toBe(true);
+      expect(summed.cogs.equals(report.cogs)).toBe(true);
+    });
   });
 });

@@ -5,6 +5,33 @@ import { LedgerRepository } from '../../repositories/ledger.repository';
 
 const dec = (v: string | number) => new Decimal(v);
 
+/**
+ * G16-N-8-B: stand-in for the repository-owned canonical population factory.
+ * It reproduces the exact shape the real LedgerRepository emits so tests can
+ * assert that getPnlReport()'s daily series passes the clause through verbatim
+ * instead of rebuilding it. Parity with the header aggregate is proven against
+ * the REAL repository in ledger.repository.reversal.spec.ts.
+ */
+const canonicalPopulation = (
+  companyId: string,
+  opts: { asOfDate?: Date; dateFrom?: Date; dateTo?: Date } = {},
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Record<string, any> => {
+  const where: Record<string, any> = {
+    companyId,
+    status: 'POSTED',
+    OR: [{ referenceType: null }, { referenceType: { not: 'REVERSAL' } }],
+  };
+  if (opts.asOfDate) where.entryDate = { lte: opts.asOfDate };
+  if (opts.dateFrom || opts.dateTo) {
+    where.entryDate = {
+      ...(opts.dateFrom ? { gte: opts.dateFrom } : {}),
+      ...(opts.dateTo ? { lte: opts.dateTo } : {}),
+    };
+  }
+  return where;
+};
+
 describe('LedgerQueryService — G15-06b', () => {
   let service: LedgerQueryService;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,6 +47,7 @@ describe('LedgerQueryService — G15-06b', () => {
       findAccountBalancesBulk: jest.fn().mockResolvedValue([]),
       findFirstAccountBalance: jest.fn().mockResolvedValue(null),
       findFinancialPeriodByDate: jest.fn().mockResolvedValue(null),
+      positionalJournalEntryWhere: jest.fn(canonicalPopulation),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -521,6 +549,7 @@ describe('LedgerQueryService.getLedger — G16-N-8-A reversal statement semantic
       findAccountBalances: jest.fn().mockResolvedValue([]),
       findFirstAccountBalance: jest.fn().mockResolvedValue(null),
       findFinancialPeriodByDate: jest.fn().mockResolvedValue(null),
+      positionalJournalEntryWhere: jest.fn(canonicalPopulation),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -605,5 +634,326 @@ describe('LedgerQueryService.getLedger — G16-N-8-A reversal statement semantic
     // Opening = 0 (no snapshot); running: +100 then −100 → ends at 0.
     expect(result.items[0]!.runningBalance).toBe('100.0000');
     expect(result.items[1]!.runningBalance).toBe('0.0000');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// G16-N-8-B — Daily P&L shares ONE canonical population with the header
+// ═══════════════════════════════════════════════════════════════════
+
+describe('LedgerQueryService.getPnlReport — G16-N-8-B canonical population', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let repo: Record<string, any>;
+  let service: LedgerQueryService;
+
+  const account = (
+    id: string,
+    code: string,
+    accountType: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    id,
+    code,
+    name: `${code} name`,
+    accountType,
+    normalBalance: accountType === 'REVENUE' ? 'CREDIT' : 'DEBIT',
+    level: 0,
+    ...extra,
+  });
+
+  const revenue = account('r1', '4000', 'REVENUE');
+  const cogs = account('c1', '5000', 'EXPENSE');
+  const expense = account('e1', '6000', 'EXPENSE');
+  const inactiveExpense = account('e8', '6800', 'EXPENSE', { isActive: false });
+  const inactiveCogs = account('c9', '5900', 'EXPENSE', { isActive: false });
+  const softDeletedExpense = account('e9', '6900', 'EXPENSE', {
+    deletedAt: new Date('2026-01-01T00:00:00Z'),
+  });
+
+  /** Journal line shaped exactly like findJournalLinesWithEntry returns it. */
+  const line = (
+    accountId: string,
+    day: string,
+    debit: string,
+    credit: string,
+  ) => ({
+    accountId,
+    debit: dec(debit),
+    credit: dec(credit),
+    journalEntry: { entryDate: new Date(`${day}T10:00:00Z`) },
+  });
+
+  const sumDaily = (daily: Record<string, { revenue: Decimal; cogs: Decimal; expenses: Decimal }>) =>
+    Object.values(daily).reduce(
+      (acc, d) => ({
+        revenue: acc.revenue.add(d.revenue),
+        cogs: acc.cogs.add(d.cogs),
+        expenses: acc.expenses.add(d.expenses),
+      }),
+      { revenue: dec(0), cogs: dec(0), expenses: dec(0) },
+    );
+
+  beforeEach(async () => {
+    repo = {
+      findChartOfAccounts: jest.fn().mockResolvedValue([
+        revenue,
+        cogs,
+        expense,
+      ]),
+      aggregatedJournalLines: jest.fn().mockResolvedValue([]),
+      findJournalLinesWithEntry: jest.fn().mockResolvedValue([]),
+      countJournalLines: jest.fn().mockResolvedValue(0),
+      findAccountBalances: jest.fn().mockResolvedValue([]),
+      findAccountBalancesBulk: jest.fn().mockResolvedValue([]),
+      findFirstAccountBalance: jest.fn().mockResolvedValue(null),
+      findFinancialPeriodByDate: jest.fn().mockResolvedValue(null),
+      positionalJournalEntryWhere: jest.fn(canonicalPopulation),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [LedgerQueryService, { provide: LedgerRepository, useValue: repo }],
+    }).compile();
+
+    service = module.get<LedgerQueryService>(LedgerQueryService);
+  });
+
+  // ── structural parity: the daily series must not rebuild the predicate ──
+
+  it('daily journalEntry clause comes verbatim from the canonical factory', async () => {
+    const from = new Date('2026-01-01T00:00:00Z');
+    const to = new Date('2026-12-31T23:59:59Z');
+
+    await service.getPnlReport({ companyId: 'comp-1', dateFrom: from, dateTo: to });
+
+    // The factory is consulted with the report's own company + range.
+    expect(repo.positionalJournalEntryWhere).toHaveBeenCalledWith('comp-1', {
+      dateFrom: from,
+      dateTo: to,
+      onlyPosted: true,
+    });
+
+    const where = repo.findJournalLinesWithEntry.mock.calls[0][0];
+    // Deep equality against what the factory returned — proves the service adds
+    // no hand-written status / REVERSAL / company / date predicate of its own.
+    expect(where.journalEntry).toEqual(
+      repo.positionalJournalEntryWhere.mock.results[0].value,
+    );
+    // Only the line-level classification constraint is added by the service.
+    expect(where.account).toEqual({
+      accountType: { in: ['REVENUE', 'EXPENSE'] },
+    });
+    // And the canonical reversal exclusion is genuinely present in it.
+    expect(where.journalEntry.OR).toEqual([
+      { referenceType: null },
+      { referenceType: { not: 'REVERSAL' } },
+    ]);
+    expect(where.journalEntry.status).toBe('POSTED');
+    expect(where.journalEntry.companyId).toBe('comp-1');
+  });
+
+  // ── account lifecycle must not gate historical amounts ──
+
+  it('does not filter the classification lookup by isActive / deletedAt', async () => {
+    await service.getPnlReport({ companyId: 'comp-1' });
+
+    expect(repo.findChartOfAccounts).toHaveBeenCalledWith({ companyId: 'comp-1' });
+    expect(repo.findChartOfAccounts).not.toHaveBeenCalledWith(
+      expect.objectContaining({ isActive: expect.anything() }),
+    );
+  });
+
+  it('an INACTIVE historical expense account stays in header and daily', async () => {
+    repo.findChartOfAccounts.mockResolvedValue([
+      revenue,
+      cogs,
+      expense,
+      inactiveExpense,
+    ]);
+    repo.aggregatedJournalLines
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { accountId: 'c1', totalDebit: dec('0'), totalCredit: dec('0') },
+        { accountId: 'e8', totalDebit: dec('300'), totalCredit: dec('0') },
+      ]);
+    repo.findJournalLinesWithEntry.mockResolvedValue([
+      line('e8', '2026-02-01', '300', '0'),
+    ]);
+
+    const result = await service.getPnlReport({ companyId: 'comp-1' });
+
+    expect(result.expenses).toEqual(dec('300'));
+    expect(sumDaily(result.daily).expenses).toEqual(dec('300'));
+  });
+
+  it('a SOFT-DELETED historical expense account stays in header and daily', async () => {
+    repo.findChartOfAccounts.mockResolvedValue([
+      revenue,
+      cogs,
+      expense,
+      softDeletedExpense,
+    ]);
+    repo.aggregatedJournalLines.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { accountId: 'e9', totalDebit: dec('175'), totalCredit: dec('0') },
+    ]);
+    repo.findJournalLinesWithEntry.mockResolvedValue([
+      line('e9', '2026-02-01', '175', '0'),
+    ]);
+
+    const result = await service.getPnlReport({ companyId: 'comp-1' });
+
+    expect(result.expenses).toEqual(dec('175'));
+    expect(sumDaily(result.daily).expenses).toEqual(dec('175'));
+  });
+
+  it('an INACTIVE 5xxx account is classified as COGS, never as an operating expense', async () => {
+    // Regression: with an active-only lookup the inactive account was absent
+    // from the map, so `account?.code.startsWith('5')` was undefined and the
+    // historical COGS amount landed in operating expenses instead.
+    repo.findChartOfAccounts.mockResolvedValue([revenue, cogs, inactiveCogs]);
+    repo.aggregatedJournalLines.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { accountId: 'c9', totalDebit: dec('420'), totalCredit: dec('0') },
+    ]);
+    repo.findJournalLinesWithEntry.mockResolvedValue([
+      line('c9', '2026-02-01', '420', '0'),
+    ]);
+
+    const result = await service.getPnlReport({ companyId: 'comp-1' });
+
+    expect(result.cogs).toEqual(dec('420'));
+    expect(result.expenses).toEqual(dec(0));
+    expect(sumDaily(result.daily).cogs).toEqual(dec('420'));
+    expect(sumDaily(result.daily).expenses).toEqual(dec(0));
+  });
+
+  // ── header ⇄ daily parity over a full reversal-relevant dataset ──
+
+  it('header totals equal the sum of daily buckets for the whole dataset', async () => {
+    // Dataset spans every referenceType class that matters: a normal POSTED
+    // entry, a NULL referenceType entry, FT reversal, supplier-payment
+    // reversal — plus a REVERSAL compensation which must be absent from BOTH
+    // sides because the canonical population excludes it.
+    repo.findChartOfAccounts.mockResolvedValue([revenue, cogs, expense]);
+    // REVENUE aggregate
+    repo.aggregatedJournalLines
+      .mockResolvedValueOnce([
+        { accountId: 'r1', totalDebit: dec('100'), totalCredit: dec('1100') },
+      ])
+      // EXPENSE aggregate (a REVERSAL compensation contributed nothing above)
+      .mockResolvedValueOnce([
+        { accountId: 'c1', totalDebit: dec('100'), totalCredit: dec('0') },
+        { accountId: 'e1', totalDebit: dec('240'), totalCredit: dec('0') },
+      ]);
+
+    repo.findJournalLinesWithEntry.mockResolvedValue([
+      line('r1', '2026-01-10', '0', '1100'), // normal POSTED sale
+      line('e1', '2026-01-11', '240', '0'), // NULL referenceType expense
+      line('r1', '2026-01-12', '100', '0'), // FT / supplier reversal leg...
+      line('c1', '2026-01-12', '100', '0'), // ...and its offsetting COGS leg
+    ]);
+
+    const result = await service.getPnlReport({ companyId: 'comp-1' });
+
+    expect(result.revenue).toEqual(dec('1000'));
+    expect(result.cogs).toEqual(dec('100'));
+    expect(result.expenses).toEqual(dec('240'));
+
+    const daily = sumDaily(result.daily);
+    expect(daily.revenue).toEqual(result.revenue);
+    expect(daily.cogs).toEqual(result.cogs);
+    expect(daily.expenses).toEqual(result.expenses);
+  });
+
+  it('a REVERSAL compensation cannot reach the daily series', async () => {
+    // The factory's OR-disjunction is what makes this true; asserting the daily
+    // clause carries it is the direct guard against the pre-G16-N-8-B defect
+    // where daily kept only `status: POSTED` and showed the compensation.
+    await service.getPnlReport({ companyId: 'comp-1' });
+
+    const where = repo.findJournalLinesWithEntry.mock.calls[0][0];
+    const survives = where.journalEntry.OR.some(
+      (b: Record<string, unknown>) =>
+        b.referenceType === null ||
+        (b.referenceType as { not: string }).not === 'REVERSAL',
+    );
+    expect(survives).toBe(true);
+    expect(where.journalEntry.OR).toHaveLength(2);
+    // A bare `{ not }` would silently drop NULL-referenceType rows in PG.
+    expect(where.journalEntry.referenceType).toBeUndefined();
+  });
+
+  // ── complete paging: no arbitrary 100000 ceiling ──
+
+  it('pages until the final short page and combines every page', async () => {
+    // Force >1 page: return exactly PNL_DAILY_PAGE_SIZE rows for the first two
+    // calls, then a short page. Any implementation that stopped at the first
+    // page (the old `take: 100000` single read) would under-count.
+    const full = (count: number, day: string) =>
+      Array.from({ length: count }, () => line('e1', day, '1', '0'));
+
+    repo.findJournalLinesWithEntry
+      .mockResolvedValueOnce(full(1000, '2026-01-01'))
+      .mockResolvedValueOnce(full(1000, '2026-01-02'))
+      .mockResolvedValueOnce([line('e1', '2026-01-03', '7', '0')]);
+    repo.aggregatedJournalLines.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { accountId: 'e1', totalDebit: dec('2007'), totalCredit: dec('0') },
+    ]);
+
+    const result = await service.getPnlReport({ companyId: 'comp-1' });
+
+    expect(repo.findJournalLinesWithEntry).toHaveBeenCalledTimes(3);
+    expect(repo.findJournalLinesWithEntry.mock.calls[0][1]).toEqual({
+      skip: 0,
+      take: 1000,
+    });
+    expect(repo.findJournalLinesWithEntry.mock.calls[1][1]).toEqual({
+      skip: 1000,
+      take: 1000,
+    });
+    expect(repo.findJournalLinesWithEntry.mock.calls[2][1]).toEqual({
+      skip: 2000,
+      take: 1000,
+    });
+    // 1000 + 1000 + 7 rows, all combined across pages and days.
+    expect(Object.keys(result.daily)).toHaveLength(3);
+    expect(sumDaily(result.daily).expenses).toEqual(dec('2007'));
+    expect(result.expenses).toEqual(dec('2007'));
+  });
+
+  it('stops immediately when the first page is already short', async () => {
+    repo.findJournalLinesWithEntry.mockResolvedValue([
+      line('e1', '2026-01-01', '10', '0'),
+    ]);
+
+    await service.getPnlReport({ companyId: 'comp-1' });
+
+    expect(repo.findJournalLinesWithEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it('an empty population issues exactly one page request', async () => {
+    repo.findJournalLinesWithEntry.mockResolvedValue([]);
+
+    const result = await service.getPnlReport({ companyId: 'comp-1' });
+
+    expect(repo.findJournalLinesWithEntry).toHaveBeenCalledTimes(1);
+    expect(result.daily).toEqual({});
+  });
+
+  it('preserves tenant isolation on every page request', async () => {
+    repo.findChartOfAccounts.mockResolvedValue([revenue, cogs, expense]);
+    repo.aggregatedJournalLines.mockResolvedValue([]);
+    repo.findJournalLinesWithEntry
+      .mockResolvedValueOnce(
+        Array.from({ length: 1000 }, () => line('e1', '2026-01-01', '1', '0')),
+      )
+      .mockResolvedValueOnce([]);
+
+    await service.getPnlReport({ companyId: 'tenant-9' });
+
+    expect(repo.findChartOfAccounts).toHaveBeenCalledWith({
+      companyId: 'tenant-9',
+    });
+    for (const call of repo.findJournalLinesWithEntry.mock.calls) {
+      expect(call[0].journalEntry.companyId).toBe('tenant-9');
+    }
   });
 });

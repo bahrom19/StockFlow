@@ -192,20 +192,172 @@ describe('LedgerRepository — G16-N-8-A reversal predicates', () => {
     });
   });
 
-  describe('findCashJournalEntries (enumeration unchanged)', () => {
-    it('still lists POSTED entries with no referenceType restriction', async () => {
-      const findMany = jest.fn().mockResolvedValue([]);
-      prisma.journalEntry = { findMany };
+  describe('findCashJournalEntries (G16-N-8-B — reversal-aware movement opt-in)', () => {
+    const range = {
+      accountIds: ['a1'],
+      dateFrom: new Date('2026-01-01T00:00:00Z'),
+      dateTo: new Date('2026-12-31T23:59:59Z'),
+    };
+    let findMany: jest.Mock;
 
-      await repo.findCashJournalEntries('comp-1', {
-        accountIds: ['a1'],
-        dateFrom: new Date('2026-01-01T00:00:00Z'),
-        dateTo: new Date('2026-12-31T23:59:59Z'),
-      });
+    beforeEach(() => {
+      findMany = jest.fn().mockResolvedValue([]);
+      prisma.journalEntry = { findMany };
+    });
+
+    it('still lists POSTED entries with no referenceType restriction (default unchanged)', async () => {
+      await repo.findCashJournalEntries('comp-1', range);
 
       const where = findMany.mock.calls[0][0].where;
       expect(where.status).toBe('POSTED');
       expect(where.referenceType).toBeUndefined();
+    });
+
+    it('default is opt-out: omitting the flag never widens the status set', async () => {
+      await repo.findCashJournalEntries('comp-1', range);
+
+      expect(findMany.mock.calls[0][0].where.status).toBe('POSTED');
+    });
+
+    it('includeReversedOriginals=true admits POSTED and REVERSED only', async () => {
+      await repo.findCashJournalEntries('comp-1', {
+        ...range,
+        includeReversedOriginals: true,
+      });
+
+      expect(findMany.mock.calls[0][0].where.status).toEqual({
+        in: ['POSTED', 'REVERSED'],
+      });
+    });
+
+    it('includeReversedOriginals=true still never leaks another company', async () => {
+      await repo.findCashJournalEntries('comp-B', {
+        ...range,
+        includeReversedOriginals: true,
+      });
+
+      const where = findMany.mock.calls[0][0].where;
+      expect(where.companyId).toBe('comp-B');
+      expect(where.entryDate).toEqual({
+        gte: range.dateFrom,
+        lte: range.dateTo,
+      });
+      expect(where.lines).toEqual({ some: { accountId: { in: ['a1'] } } });
+    });
+
+    it('onlyPosted:false still means "no status filter" (unchanged semantics)', async () => {
+      await repo.findCashJournalEntries('comp-1', {
+        ...range,
+        onlyPosted: false,
+      });
+
+      expect(findMany.mock.calls[0][0].where.status).toBeUndefined();
+    });
+  });
+
+  describe('findJournalLinesWithEntry (G16-N-8-B R4 — deterministic paging)', () => {
+    it('orders by entryDate ASC then id ASC so skip/take paging cannot skip or duplicate rows', async () => {
+      const findMany = jest.fn().mockResolvedValue([]);
+      prisma.journalLine = { findMany };
+
+      await repo.findJournalLinesWithEntry(
+        { journalEntry: { companyId: 'comp-1' } },
+        { skip: 1000, take: 1000 },
+      );
+
+      const args = findMany.mock.calls[0][0];
+      expect(args.orderBy).toEqual([
+        { journalEntry: { entryDate: 'asc' } },
+        { id: 'asc' },
+      ]);
+      expect(args.skip).toBe(1000);
+      expect(args.take).toBe(1000);
+    });
+  });
+
+  describe('G16-N-8-B — canonical population factory parity', () => {
+    it('aggregatedJournalLines and the factory emit the SAME journalEntry clause', async () => {
+      // Structural anti-drift proof. The P&L header aggregate and the P&L daily
+      // series must describe one identical population; if either ever rebuilds
+      // the predicate by hand this deep equality breaks.
+      const from = new Date('2026-01-01T00:00:00Z');
+      const to = new Date('2026-12-31T23:59:59Z');
+
+      await repo.aggregatedJournalLines('comp-1', {
+        dateFrom: from,
+        dateTo: to,
+        onlyPosted: true,
+      });
+      const headerClause =
+        groupBy.mock.calls[0][0].where.journalEntry;
+
+      const factoryClause = repo.positionalJournalEntryWhere('comp-1', {
+        dateFrom: from,
+        dateTo: to,
+        onlyPosted: true,
+      });
+
+      expect(headerClause).toEqual(factoryClause);
+      expect(headerClause).toEqual({
+        companyId: 'comp-1',
+        status: 'POSTED',
+        OR: [{ referenceType: null }, { referenceType: { not: 'REVERSAL' } }],
+        entryDate: { gte: from, lte: to },
+      });
+    });
+
+    it('factory emits the canonical clause for every optional filter combination', async () => {
+      const asOf = new Date('2026-06-30T23:59:59Z');
+      const from = new Date('2026-01-01T00:00:00Z');
+      const to = new Date('2026-12-31T23:59:59Z');
+
+      expect(repo.positionalJournalEntryWhere('c')).toEqual({
+        companyId: 'c',
+        status: 'POSTED',
+        OR: [{ referenceType: null }, { referenceType: { not: 'REVERSAL' } }],
+      });
+
+      expect(
+        repo.positionalJournalEntryWhere('c', { onlyPosted: false }),
+      ).toEqual({ companyId: 'c' });
+
+      expect(
+        repo.positionalJournalEntryWhere('c', { asOfDate: asOf }).entryDate,
+      ).toEqual({ lte: asOf });
+
+      expect(
+        repo.positionalJournalEntryWhere('c', { dateFrom: from }).entryDate,
+      ).toEqual({ gte: from });
+
+      expect(
+        repo.positionalJournalEntryWhere('c', {
+          dateFrom: from,
+          dateTo: to,
+        }).entryDate,
+      ).toEqual({ gte: from, lte: to });
+    });
+
+    it('cash-flow POSITIONAL reads share the identical canonical clause', async () => {
+      const asOf = new Date('2026-06-30T23:59:59Z');
+
+      await repo.aggregatedCashFlowLines('comp-1', { asOfDate: asOf });
+      const positionClause = groupBy.mock.calls[0][0].where.journalEntry;
+
+      expect(positionClause).toEqual(
+        repo.positionalJournalEntryWhere('comp-1', { asOfDate: asOf }),
+      );
+    });
+
+    it('movement opt-in drops ONLY the reversal exclusion, never companyId or status', async () => {
+      await repo.aggregatedCashFlowLines('comp-1', {
+        journalEntryIds: ['je-1'],
+        includeReversalCompensations: true,
+      });
+
+      const where = groupBy.mock.calls[0][0].where.journalEntry;
+      expect(where.OR).toBeUndefined();
+      expect(where.status).toBe('POSTED');
+      expect(where.companyId).toBe('comp-1');
     });
   });
 });

@@ -592,4 +592,196 @@ describe('CashFlowService — G15-07-C3-C', () => {
     expect(result.operating.rows[0]!.amount).toBe('100.0000');
     expect(result.netCashMovement).toBe('100.0000');
   });
+
+  // ── G16-N-8-B: movement shows BOTH legs of a GL-engine reversal ────────
+
+  describe('G16-N-8-B — GL-engine reversal shows both movement legs', () => {
+    it('enumeration opts into POSTED ∪ REVERSED', async () => {
+      await call();
+
+      expect(ledger.findCashJournalEntries).toHaveBeenCalledWith(
+        companyId,
+        expect.objectContaining({ includeReversedOriginals: true }),
+      );
+    });
+
+    it('movement partition aggregates the exact enumerated ids regardless of status', async () => {
+      ledger.findCashJournalEntries.mockResolvedValue([
+        je('je-1', 'SALE', 's-1'),
+      ]);
+
+      await call();
+
+      const movementCalls = ledger.aggregatedCashFlowLines.mock.calls.filter(
+        (c: any[]) => c[1].journalEntryIds,
+      );
+      expect(movementCalls.length).toBeGreaterThan(0);
+      for (const c of movementCalls) {
+        expect(c[1].onlyPosted).toBe(false);
+        expect(c[1].includeReversalCompensations).toBe(true);
+      }
+    });
+
+    it('POSITIONS keep canonical semantics — never onlyPosted:false', async () => {
+      await call();
+
+      const positionCalls = ledger.aggregatedCashFlowLines.mock.calls.filter(
+        (c: any[]) => c[1].asOfDate,
+      );
+      expect(positionCalls.length).toBeGreaterThanOrEqual(2);
+      for (const c of positionCalls) {
+        expect(c[1].onlyPosted).toBeUndefined();
+        expect(c[1].includeReversalCompensations).toBeUndefined();
+      }
+    });
+
+    it('a reversed original (REVERSED) and its compensation both render and net to zero', async () => {
+      // Exactly the production shape: GlEngineService.reverse() flips the
+      // original to REVERSED and posts a POSTED compensation carrying
+      // referenceType='REVERSAL' + referenceId=originalId.
+      ledger.findCashJournalEntries.mockResolvedValue([
+        je('je-orig', 'SALE', 's-1'),
+        je('je-comp', 'REVERSAL', 'je-orig'),
+      ]);
+      // Status-agnostic original lookup: the original IS REVERSED now.
+      ledger.findJournalEntriesByIds.mockResolvedValue([
+        { id: 'je-orig', referenceType: 'SALE', referenceId: 's-1' },
+      ]);
+      // Original: Cr cash 250 (outflow). Compensation: Dr cash 250 (inflow).
+      partitions.set('je-orig', [aggRow('cash-1', '0', '250')]);
+      partitions.set('je-comp', [aggRow('cash-1', '250', '0')]);
+      // Positions are reversal-neutral → both zero, as G16-N-8-A mandates.
+      cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), []);
+
+      const result = await call();
+
+      // Both legs present, inherited category, opposite signs.
+      expect(result.operating.rows).toHaveLength(2);
+      expect(result.operating.rows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            referenceType: 'SALE',
+            outflow: '250.0000',
+            amount: '-250.0000',
+          }),
+          expect.objectContaining({
+            referenceType: 'REVERSAL',
+            inflow: '250.0000',
+            amount: '250.0000',
+          }),
+        ]),
+      );
+      // Section nets to zero — the pair is visible but neutral.
+      expect(result.netOperating).toBe('0.0000');
+      expect(result.netCashMovement).toBe('0.0000');
+    });
+
+    it('same-window reversal: positions unchanged and reconciled stays true', async () => {
+      ledger.findCashJournalEntries.mockResolvedValue([
+        je('je-orig', 'SALE', 's-1'),
+        je('je-comp', 'REVERSAL', 'je-orig'),
+      ]);
+      ledger.findJournalEntriesByIds.mockResolvedValue([
+        { id: 'je-orig', referenceType: 'SALE', referenceId: 's-1' },
+      ]);
+      partitions.set('je-orig', [aggRow('cash-1', '0', '250')]);
+      partitions.set('je-comp', [aggRow('cash-1', '250', '0')]);
+      // Positions: opening 400, ending 400 (the pair contributes zero).
+      cumulative.set(new Date('2026-08-31T23:59:59.999Z').getTime(), [
+        aggRow('cash-1', '0', '400'),
+      ]);
+      cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), [
+        aggRow('cash-1', '0', '400'),
+      ]);
+
+      const result = await call();
+
+      expect(result.beginningCash).toBe('-400.0000');
+      expect(result.endingCash).toBe('-400.0000');
+      expect(result.netCashMovement).toBe('0.0000');
+      // restored information, not a weakened check
+      expect(result.reconciled).toBe(true);
+    });
+
+    it('compensation pairing stays traceable via referenceId — original lookup is status-agnostic', async () => {
+      ledger.findCashJournalEntries.mockResolvedValue([
+        je('je-comp', 'REVERSAL', 'je-orig'),
+      ]);
+      ledger.findJournalEntriesByIds.mockResolvedValue([
+        { id: 'je-orig', referenceType: 'SALE', referenceId: 's-1' },
+      ]);
+      partitions.set('je-comp', [aggRow('cash-1', '250', '0')]);
+
+      await call();
+
+      // Only the compensation's referenceId is resolved — by exact id, and the
+      // repository method is deliberately status-agnostic (unit-proved in
+      // ledger.repository.reversal.spec.ts).
+      expect(ledger.findJournalEntriesByIds).toHaveBeenCalledWith(companyId, [
+        'je-orig',
+      ]);
+    });
+
+    it('an UNCLASSIFIABLE reversal original degrades safely, never mis-categorised', async () => {
+      // Original cannot be resolved (e.g. purged). classifyEntry must fall back
+      // to UNCLASSIFIED rather than inventing a category.
+      ledger.findCashJournalEntries.mockResolvedValue([
+        je('je-comp', 'REVERSAL', 'je-missing'),
+      ]);
+      ledger.findJournalEntriesByIds.mockResolvedValue([]);
+      partitions.set('je-comp', [aggRow('cash-1', '250', '0')]);
+
+      const result = await call();
+
+      expect(result.operating.rows).toEqual([]);
+      expect(result.unclassified.rows).toHaveLength(1);
+      expect(result.unclassified.rows[0]!.referenceType).toBe('REVERSAL');
+    });
+  });
+
+  // ── unchanged behaviour for non-reversal taxonomies ────────────────────
+
+  describe('G16-N-8-B — existing semantics unchanged', () => {
+    it('normal movement unchanged', async () => {
+      ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE', 's-1')]);
+      partitions.set('je-1', [aggRow('cash-1', '500', '0')]);
+      cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), [
+        aggRow('cash-1', '500', '0'),
+      ]);
+
+      const result = await call();
+
+      expect(result.netOperating).toBe('500.0000');
+      expect(result.reconciled).toBe(true);
+    });
+
+    it('FINANCIAL_TRANSACTION reversal classification unchanged', async () => {
+      ledger.findCashJournalEntries.mockResolvedValue([
+        je('je-1', 'FINANCIAL_TRANSACTION', 'ft-1'),
+      ]);
+      // 'FEE' is an FT_OPERATING_TYPE; the FT-type join is untouched by
+      // G16-N-8-B.
+      ftRepo.findTypesByIds.mockResolvedValue([{ id: 'ft-1', type: 'FEE' }]);
+      partitions.set('je-1', [aggRow('cash-1', '0', '300')]);
+      cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), [
+        aggRow('cash-1', '0', '300'),
+      ]);
+
+      const result = await call();
+
+      expect(result.netOperating).toBe('-300.0000');
+      expect(result.reconciled).toBe(true);
+    });
+
+    it('SUPPLIER_PAYMENT_REVERSAL stays an operating inflow', async () => {
+      ledger.findCashJournalEntries.mockResolvedValue([
+        je('je-1', 'SUPPLIER_PAYMENT_REVERSAL', 'p-1'),
+      ]);
+      partitions.set('je-1', [aggRow('cash-1', '150', '0')]);
+
+      const result = await call();
+
+      expect(result.netOperating).toBe('150.0000');
+    });
+  });
 });

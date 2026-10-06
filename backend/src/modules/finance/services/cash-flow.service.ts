@@ -172,9 +172,27 @@ export class CashFlowService {
     const endingCash = netOf(endingAgg);
 
     // ── movement: partition cash-touching JEs, aggregate per partition ──
+    //
+    // G16-N-8-B: movement is the EVENT view, so it enumerates POSTED ∪ REVERSED.
+    // `GlEngineService.reverse()` flips the original to REVERSED and posts a
+    // compensating POSTED entry with referenceType='REVERSAL'. Under the previous
+    // POSTED-only enumeration the original's cash leg was dropped while the
+    // compensation survived, so the section showed a phantom one-sided inflow,
+    // netCashMovement stayed non-zero and `reconciled` was permanently false for
+    // any period containing a reversal — even though the POSITIONAL balances
+    // (reversal-neutral) were correct. Both legs must be visible for the section
+    // to represent actual cash movement and to net to zero.
+    //
+    // The flag is an explicit opt-in; `findCashJournalEntries` keeps
+    // POSTED-only as its default so no other caller's behaviour changes.
     const entries = await this.ledgerRepository.findCashJournalEntries(
       companyId,
-      { accountIds: cashIds, dateFrom: fromStart, dateTo: toEnd },
+      {
+        accountIds: cashIds,
+        dateFrom: fromStart,
+        dateTo: toEnd,
+        includeReversedOriginals: true,
+      },
     );
 
     // Resolve FT types and reversal originals in two bounded bulk reads.
@@ -294,6 +312,23 @@ export class CashFlowService {
             // inherits the original's category. Positions (beginning/ending
             // cash above) keep the default reversal-neutral predicate.
             includeReversalCompensations: true,
+            // G16-N-8-B: `part.ids` is already the exact enumerated movement
+            // set (POSTED ∪ REVERSED), so the partition must aggregate exactly
+            // those ids regardless of status — otherwise the status filter
+            // silently discards the REVERSED original's cash leg and the whole
+            // change is a no-op. `onlyPosted: false` therefore relaxes ONLY the
+            // status predicate on this already-restricted id set; it cannot
+            // widen the population because companyId, accountIds,
+            // journalEntryIds and the date range are all still applied.
+            //
+            // `includeReversalCompensations: true` remains explicit: it
+            // suppresses the referenceType exclusion and documents that the
+            // movement view is not reversal-neutral by design.
+            //
+            // Positions are untouched — openingAgg/endingCash keep the
+            // canonical POSTED / non-REVERSAL semantics, and `reconciled` keeps
+            // its formula `endingCash === beginningCash + netCashMovement`.
+            onlyPosted: false,
           },
         );
         for (const s of sums) {

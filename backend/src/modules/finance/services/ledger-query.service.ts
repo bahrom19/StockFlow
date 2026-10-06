@@ -13,6 +13,22 @@ export interface LedgerLine {
   runningBalance: string;
 }
 
+/**
+ * G16-N-8-B — page size for the P&L daily journal-line page loop.
+ *
+ * The daily breakdown is the only row-hydrating query in the P&L (header
+ * totals aggregate database-side), so it must be paged. The previous
+ * implementation used a single `take: 100000` which silently truncated any
+ * larger population — a report that quietly stops being a report. A named
+ * constant plus a complete loop removes the arbitrary ceiling while keeping
+ * each query bounded.
+ *
+ * Ordering is deterministic (`entryDate ASC, id ASC`, enforced in
+ * LedgerRepository.findJournalLinesWithEntry), which is what makes
+ * skip/take paging provably complete rather than merely probably complete.
+ */
+const PNL_DAILY_PAGE_SIZE = 1000;
+
 export interface AccountBalanceResult {
   accountId: string;
   accountCode: string;
@@ -474,11 +490,24 @@ export class LedgerQueryService {
   }> {
     const { companyId, dateFrom, dateTo } = params;
 
-    // Fetch all active accounts to classify by code pattern.
+    // G16-N-8-B: account LIFECYCLE must not gate historical amounts.
+    //
+    // `isActive`/`deletedAt` control who may POST to an account and whether
+    // the account is selectable in the API — not whether money already posted
+    // to it appears in a financial statement. Deactivating or soft-deleting an
+    // account never removes its historical journal lines (JournalLine has no
+    // cascade from ChartOfAccount), and FinanceIntegrationService only ever
+    // *posts* to active, non-deleted accounts — so every line on a
+    // deactivated account is by construction historical and must stay visible.
+    //
+    // The previous `isActive: true, deletedAt: null` filter also caused a
+    // second, sharper bug: an account outside the map made
+    // `account?.code.startsWith('5')` evaluate to undefined, so a historical
+    // COGS amount on a deactivated 5xxx account was misclassified as an
+    // operating expense. Classifying the FULL company account set removes both
+    // failure modes at once and keeps COGS purely code-prefix based.
     const accounts = await this.ledgerRepository.findChartOfAccounts({
       companyId,
-      isActive: true,
-      deletedAt: null,
     });
 
     // Aggregate JournalLines for REVENUE and EXPENSE accounts in date range.
@@ -521,16 +550,23 @@ export class LedgerQueryService {
       }
     }
 
-    // Daily breakdown — re-aggregate by entry date.
+    // Daily breakdown — same canonical journal-entry population as the header
+    // above, grouped by entry date.
+    //
+    // G16-N-8-B: `journalEntry` is taken VERBATIM from the repository-owned
+    // canonical predicate (`positionalJournalEntryWhere`), so the daily series
+    // and the header totals are guaranteed to describe the same set of journal
+    // entries. Previously this clause was hand-written with only
+    // `status: 'POSTED'` and NO reversal exclusion, which meant a GlEngine
+    // reversal left the header reversal-neutral while the daily series still
+    // carried the compensation — the report's own breakdown stopped footing to
+    // its own headline. Only the line-level grouping/classification constraint
+    // (accountType) is added here.
     const lineWhere: Record<string, any> = {
-      journalEntry: {
+      journalEntry: this.ledgerRepository.positionalJournalEntryWhere(
         companyId,
-        status: 'POSTED',
-        entryDate: {
-          ...(dateFrom ? { gte: dateFrom } : {}),
-          ...(dateTo ? { lte: dateTo } : {}),
-        },
-      },
+        { dateFrom, dateTo, onlyPosted: true },
+      ),
       account: { accountType: { in: ['REVENUE', 'EXPENSE'] } },
     };
 
@@ -540,39 +576,50 @@ export class LedgerQueryService {
     > = {};
 
     // Aggregate per-line with entry date for daily buckets.
-    const lines = await this.ledgerRepository.findJournalLinesWithEntry(
-      lineWhere,
-      { skip: 0, take: 100000 },
-    );
+    //
+    // G16-N-8-B: complete paged read. The previous single `take: 100000`
+    // silently truncated any larger population. The loop runs to the final
+    // short page and the repository's deterministic `entryDate ASC, id ASC`
+    // ordering guarantees no row is skipped or double-counted across pages.
+    let skip = 0;
+    for (;;) {
+      const lines = await this.ledgerRepository.findJournalLinesWithEntry(
+        lineWhere,
+        { skip, take: PNL_DAILY_PAGE_SIZE },
+      );
 
-    for (const line of lines) {
-      const dayKey = line.journalEntry.entryDate.toISOString().slice(0, 10);
-      if (!dailyMap[dayKey]) {
-        dailyMap[dayKey] = {
-          revenue: new Decimal(0),
-          cogs: new Decimal(0),
-          expenses: new Decimal(0),
-        };
-      }
+      for (const line of lines) {
+        const dayKey = line.journalEntry.entryDate.toISOString().slice(0, 10);
+        if (!dailyMap[dayKey]) {
+          dailyMap[dayKey] = {
+            revenue: new Decimal(0),
+            cogs: new Decimal(0),
+            expenses: new Decimal(0),
+          };
+        }
 
-      const account = accountMap.get(line.accountId);
-      if (!account) continue;
+        const account = accountMap.get(line.accountId);
+        if (!account) continue;
 
-      const debit = new Decimal(line.debit.toString());
-      const credit = new Decimal(line.credit.toString());
+        const debit = new Decimal(line.debit.toString());
+        const credit = new Decimal(line.credit.toString());
 
-      if (account.accountType === 'REVENUE') {
-        dailyMap[dayKey].revenue = dailyMap[dayKey].revenue
-          .add(credit)
-          .sub(debit);
-      } else if (account.accountType === 'EXPENSE') {
-        const net = debit.sub(credit);
-        if (account.code.startsWith('5')) {
-          dailyMap[dayKey].cogs = dailyMap[dayKey].cogs.add(net);
-        } else {
-          dailyMap[dayKey].expenses = dailyMap[dayKey].expenses.add(net);
+        if (account.accountType === 'REVENUE') {
+          dailyMap[dayKey].revenue = dailyMap[dayKey].revenue
+            .add(credit)
+            .sub(debit);
+        } else if (account.accountType === 'EXPENSE') {
+          const net = debit.sub(credit);
+          if (account.code.startsWith('5')) {
+            dailyMap[dayKey].cogs = dailyMap[dayKey].cogs.add(net);
+          } else {
+            dailyMap[dayKey].expenses = dailyMap[dayKey].expenses.add(net);
+          }
         }
       }
+
+      if (lines.length < PNL_DAILY_PAGE_SIZE) break;
+      skip += PNL_DAILY_PAGE_SIZE;
     }
 
     return {
