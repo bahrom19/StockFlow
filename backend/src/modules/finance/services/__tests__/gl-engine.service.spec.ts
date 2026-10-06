@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { GlEngineService } from '../gl-engine.service';
 import { JournalEntriesRepository } from '../../repositories/journal-entries.repository';
 import { PostingValidationService } from '../posting-validation.service';
@@ -476,5 +480,25 @@ describe('GlEngineService.reverse — CAS protection (G15-03-02)', () => {
     expect(
       journalRepository.createInTransaction,
     ).not.toHaveBeenCalled();
+  });
+
+  // G16-N-8-A: a GlEngine reversal compensation (referenceType='REVERSAL')
+  // must never be reversed itself — its economics are already exactly
+  // neutralized by the positional aggregates (original excluded as REVERSED,
+  // compensation excluded as REVERSAL), so reversing it would create a new
+  // unmatched POSTED entry and break report/snapshot reconciliation.
+  it('rejects reversing a REVERSAL compensation with BadRequest before any CAS', async () => {
+    journalRepository.findById.mockResolvedValue({
+      ...postedEntry,
+      referenceType: 'REVERSAL',
+    });
+
+    await expect(service.reverse('je-1', companyId, userId)).rejects.toThrow(
+      BadRequestException,
+    );
+
+    expect(tx.journalEntry.updateMany).not.toHaveBeenCalled();
+    expect(journalRepository.createInTransaction).not.toHaveBeenCalled();
+    expect(auditLog.log).not.toHaveBeenCalled();
   });
 });

@@ -289,6 +289,11 @@ export class CashFlowService {
             journalEntryIds: part.ids,
             dateFrom: fromStart,
             dateTo: toEnd,
+            // G16-N-8-A: movement partitions must include the reversal
+            // compensation — it is a real cash movement, and classifyEntry()
+            // inherits the original's category. Positions (beginning/ending
+            // cash above) keep the default reversal-neutral predicate.
+            includeReversalCompensations: true,
           },
         );
         for (const s of sums) {

@@ -1,4 +1,11 @@
-import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { JournalEntryStatus, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
@@ -240,6 +247,15 @@ export class GlEngineService {
         throw new NotFoundException(
           `Journal entry ${originalEntryId} not found`,
         );
+      }
+
+      // G16-N-8-A: a GlEngine reversal compensation must never be reversed
+      // itself. Its economics are already exactly neutralized by the
+      // positional aggregates (original excluded as REVERSED, compensation
+      // excluded as REVERSAL), so reversing the compensation would create a
+      // new unmatched POSTED entry and break report/snapshot reconciliation.
+      if (original.referenceType === 'REVERSAL') {
+        throw new BadRequestException('Cannot reverse a reversal entry');
       }
 
       // G15-03-02: CAS-claim POSTED → REVERSED as the single linearization

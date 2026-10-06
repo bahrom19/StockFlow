@@ -127,7 +127,32 @@ export class LedgerRepository {
     }[]
   > {
     const entryWhere: Record<string, any> = { companyId };
-    if (opts.onlyPosted !== false) entryWhere.status = 'POSTED';
+    if (opts.onlyPosted !== false) {
+      entryWhere.status = 'POSTED';
+      // G16-N-8-A: positional aggregates must be economically neutral for a
+      // GlEngine reversal. The original JE is flipped POSTED -> REVERSED (so
+      // it is already excluded by the status filter) and its compensating
+      // entry is created as a POSTED entry with referenceType='REVERSAL' —
+      // excluding exactly that compensation makes the pair contribute zero,
+      // matching the AccountBalance snapshot layer. IMPORTANT: only the
+      // GlEngine reversal taxonomy is excluded. FINANCIAL_TRANSACTION_REVERSAL
+      // and SUPPLIER_PAYMENT_REVERSAL use a different lifecycle — their
+      // original JE stays POSTED, so both legs must remain included to net
+      // to zero naturally.
+      //
+      // referenceType is NULLABLE (GlEngineService writes
+      // `input.referenceType ?? null`), and PostgreSQL three-valued logic
+      // makes a bare `{ not: 'REVERSAL' }` (SQL `referenceType <> 'REVERSAL'`,
+      // or `NOT IN`, or `NOT (=)`) evaluate to NULL for a NULL column, i.e.
+      // DROP the row. Verified against real PostgreSQL: the bare `not` form
+      // silently discards NULL-referenceType entries that the pre-G16-N-8-A
+      // status-only filter did include. The explicit `IS NULL OR <> 'REVERSAL'`
+      // disjunction preserves them.
+      entryWhere.OR = [
+        { referenceType: null },
+        { referenceType: { not: 'REVERSAL' } },
+      ];
+    }
     if (opts.asOfDate) entryWhere.entryDate = { lte: opts.asOfDate };
     if (opts.dateFrom || opts.dateTo) {
       const dateFilter: Record<string, Date> = {};
@@ -173,6 +198,12 @@ export class LedgerRepository {
       referenceType?: string;
       journalEntryIds?: string[];
       onlyPosted?: boolean;
+      // G16-N-8-A: positional reads (beginning/ending cash) default to the
+      // same reversal-neutral semantics as aggregatedJournalLines. The
+      // cash-flow MOVEMENT partitions pass true so a reversal compensation
+      // stays visible as a real cash movement and classifyEntry() can
+      // inherit the original's category.
+      includeReversalCompensations?: boolean;
     },
     tx?: Prisma.TransactionClient,
   ): Promise<
@@ -183,7 +214,21 @@ export class LedgerRepository {
     }[]
   > {
     const entryWhere: Record<string, any> = { companyId };
-    if (opts.onlyPosted !== false) entryWhere.status = 'POSTED';
+    if (opts.onlyPosted !== false) {
+      entryWhere.status = 'POSTED';
+      // G16-N-8-A: same positional semantics as aggregatedJournalLines —
+      // exclude only the GlEngine reversal compensation so a reversed pair
+      // nets to zero against the AccountBalance snapshots. The movement
+      // partitions opt back in via includeReversalCompensations: true.
+      // NULL referenceType must survive (nullable column + PostgreSQL
+      // three-valued logic drops it under a bare `not`/`notIn`/`NOT`).
+      if (!opts.includeReversalCompensations) {
+        entryWhere.OR = [
+          { referenceType: null },
+          { referenceType: { not: 'REVERSAL' } },
+        ];
+      }
+    }
     if (opts.asOfDate) entryWhere.entryDate = { lte: opts.asOfDate };
     if (opts.dateFrom || opts.dateTo) {
       const dateFilter: Record<string, Date> = {};
@@ -192,6 +237,10 @@ export class LedgerRepository {
       entryWhere.entryDate = dateFilter;
     }
     if (opts.referenceType) {
+      // An explicit single-referenceType filter fully determines the taxonomy
+      // of the read, so drop the positional reversal exclusion instead of
+      // AND-ing a stale one onto it.
+      delete entryWhere.OR;
       entryWhere.referenceType = opts.referenceType;
     }
 

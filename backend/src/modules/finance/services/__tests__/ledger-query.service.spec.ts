@@ -506,3 +506,104 @@ describe('LedgerQueryService — G15-06b', () => {
     });
   });
 });
+
+describe('LedgerQueryService.getLedger — G16-N-8-A reversal statement semantics', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let repo: Record<string, any>;
+  let service: LedgerQueryService;
+
+  beforeEach(async () => {
+    repo = {
+      findChartOfAccounts: jest.fn(),
+      aggregatedJournalLines: jest.fn().mockResolvedValue([]),
+      findJournalLinesWithEntry: jest.fn().mockResolvedValue([]),
+      countJournalLines: jest.fn().mockResolvedValue(0),
+      findAccountBalances: jest.fn().mockResolvedValue([]),
+      findFirstAccountBalance: jest.fn().mockResolvedValue(null),
+      findFinancialPeriodByDate: jest.fn().mockResolvedValue(null),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        LedgerQueryService,
+        { provide: LedgerRepository, useValue: repo },
+      ],
+    }).compile();
+
+    service = module.get<LedgerQueryService>(LedgerQueryService);
+  });
+
+  it('includes BOTH reversal legs: status IN (POSTED, REVERSED), no referenceType exclusion', async () => {
+    await service.getLedger({
+      companyId: 'comp-1',
+      accountId: 'acc-1',
+    });
+
+    const where = repo.findJournalLinesWithEntry.mock.calls[0][0];
+    expect(where.journalEntry.status).toEqual({ in: ['POSTED', 'REVERSED'] });
+    expect(where.journalEntry.referenceType).toBeUndefined();
+    expect(where.journalEntry.companyId).toBe('comp-1');
+  });
+
+  it('keeps accountId/date/pagination filters intact', async () => {
+    const from = new Date('2026-01-01T00:00:00Z');
+    const to = new Date('2026-12-31T23:59:59Z');
+    await service.getLedger({
+      companyId: 'comp-1',
+      accountId: 'acc-9',
+      dateFrom: from,
+      dateTo: to,
+      page: 2,
+      limit: 50,
+    });
+
+    const where = repo.findJournalLinesWithEntry.mock.calls[0][0];
+    expect(where.accountId).toBe('acc-9');
+    expect(where.journalEntry.entryDate).toEqual({ gte: from, lte: to });
+    // The date branch spreads the existing clause — companyId and the
+    // widened status set must survive it, not be clobbered.
+    expect(where.journalEntry.companyId).toBe('comp-1');
+    expect(where.journalEntry.status).toEqual({ in: ['POSTED', 'REVERSED'] });
+    expect(repo.findJournalLinesWithEntry.mock.calls[0][1]).toEqual({
+      skip: 50,
+      take: 50,
+    });
+  });
+
+  it('running balance still accumulates over both reversal legs (detail listing)', async () => {
+    repo.findJournalLinesWithEntry.mockResolvedValue([
+      {
+        debit: '100',
+        credit: '0',
+        journalEntry: {
+          entryDate: new Date('2026-05-01T00:00:00Z'),
+          entryNumber: 7,
+          description: 'Original expense',
+          referenceType: null,
+          referenceId: null,
+        },
+      },
+      {
+        debit: '0',
+        credit: '100',
+        journalEntry: {
+          entryDate: new Date('2026-05-02T00:00:00Z'),
+          entryNumber: 8,
+          description: 'REVERSAL: reversal of entry #7',
+          referenceType: 'REVERSAL',
+          referenceId: 'je-orig',
+        },
+      },
+    ]);
+
+    const result = await service.getLedger({
+      companyId: 'comp-1',
+      accountId: 'acc-1',
+    });
+
+    expect(result.items).toHaveLength(2);
+    // Opening = 0 (no snapshot); running: +100 then −100 → ends at 0.
+    expect(result.items[0]!.runningBalance).toBe('100.0000');
+    expect(result.items[1]!.runningBalance).toBe('0.0000');
+  });
+});

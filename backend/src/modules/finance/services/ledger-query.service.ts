@@ -116,7 +116,14 @@ export class LedgerQueryService {
 
     const where: Record<string, any> = {
       accountId,
-      journalEntry: { companyId, status: 'POSTED' },
+      // G16-N-8-A: the account statement is a DETAIL listing, not a position
+      // aggregate. A GlEngine reversal leaves two real rows — the original
+      // (now REVERSED) and its POSTED compensation — and both must remain
+      // visible so the running balance reconciles with the snapshot-layer
+      // opening/closing balances even when the pair straddles `dateFrom`.
+      // FT / supplier-payment reversals keep their POSTED originals, so the
+      // widened status set changes nothing for them.
+      journalEntry: { companyId, status: { in: ['POSTED', 'REVERSED'] } },
     };
     if (dateFrom || dateTo) {
       where.journalEntry = {

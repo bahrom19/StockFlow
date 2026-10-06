@@ -533,4 +533,63 @@ describe('CashFlowService — G15-07-C3-C', () => {
       expect.arrayContaining(['ft-1', 'ft-2']),
     );
   });
+
+  // ── G16-N-8-A: reversal position/movement split ────────────────────
+
+  it('G16-N-8-A: movement partitions pass includeReversalCompensations=true', async () => {
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'REVERSAL', 'je-orig'),
+    ]);
+    ledger.findJournalEntriesByIds.mockResolvedValue([
+      {
+        id: 'je-orig',
+        referenceType: 'SUPPLIER_PAYMENT',
+        referenceId: 'pay-1',
+      },
+    ]);
+    partitions.set('je-1', [aggRow('cash-1', '100', '0')]);
+
+    await call();
+
+    const movementCalls = ledger.aggregatedCashFlowLines.mock.calls.filter(
+      (c: any[]) => c[1].journalEntryIds,
+    );
+    expect(movementCalls).toHaveLength(1);
+    expect(movementCalls[0]![1].includeReversalCompensations).toBe(true);
+  });
+
+  it('G16-N-8-A: beginning/ending position calls never opt into reversal compensations', async () => {
+    await call();
+
+    const positionCalls = ledger.aggregatedCashFlowLines.mock.calls.filter(
+      (c: any[]) => c[1].asOfDate,
+    );
+    expect(positionCalls.length).toBeGreaterThanOrEqual(2);
+    for (const c of positionCalls) {
+      expect(c[1].includeReversalCompensations).toBeUndefined();
+    }
+  });
+
+  it('G16-N-8-A: REVERSAL movement inherits the original category (SUPPLIER_PAYMENT → OPERATING, opposite net)', async () => {
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'REVERSAL', 'je-orig'),
+    ]);
+    ledger.findJournalEntriesByIds.mockResolvedValue([
+      {
+        id: 'je-orig',
+        referenceType: 'SUPPLIER_PAYMENT',
+        referenceId: 'pay-1',
+      },
+    ]);
+    // The compensation cash leg: Dr cash 100 (payment was Cr cash 100).
+    partitions.set('je-1', [aggRow('cash-1', '100', '0')]);
+
+    const result = await call();
+
+    expect(result.operating.rows).toHaveLength(1);
+    // Dr cash 100 → inflow; amount = net of the leg.
+    expect(result.operating.rows[0]!.inflow).toBe('100.0000');
+    expect(result.operating.rows[0]!.amount).toBe('100.0000');
+    expect(result.netCashMovement).toBe('100.0000');
+  });
 });
