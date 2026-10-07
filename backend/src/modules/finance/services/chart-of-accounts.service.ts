@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -22,6 +23,29 @@ export class ChartOfAccountsService {
     private readonly auditLog: AuditLogService,
   ) {}
 
+  /**
+   * G16-FU-2 — the canonical cash-classification invariant, enforced at the
+   * WRITE boundary only. `CashFlowService` deliberately stays unchanged and
+   * keeps treating `isCashOrBank` as the authoritative cash population.
+   *
+   * `isCashOrBank === true` requires an ASSET/DEBIT account, because the cash
+   * figure is computed as Σ(debit − credit) over that population. The value
+   * is never coerced: an invalid combination is rejected outright.
+   */
+  private assertCashClassification(
+    isCashOrBank: boolean,
+    accountType: string,
+    normalBalance: string,
+  ): void {
+    if (!isCashOrBank) return;
+    if (accountType !== 'ASSET' || normalBalance !== 'DEBIT') {
+      throw new BadRequestException(
+        `A cash/bank account must be an ASSET with DEBIT normal balance ` +
+          `(received accountType=${accountType}, normalBalance=${normalBalance})`,
+      );
+    }
+  }
+
   async create(
     dto: CreateChartOfAccountDto,
     currentUser: JwtPayload,
@@ -34,6 +58,14 @@ export class ChartOfAccountsService {
         'System accounts cannot be created through the API',
       );
     }
+
+    // G16-FU-2: a cash/bank account must be ASSET/DEBIT. Checked before the
+    // row is built so an invalid classification never reaches the database.
+    this.assertCashClassification(
+      dto.isCashOrBank ?? false,
+      dto.accountType as string,
+      dto.normalBalance as string,
+    );
 
     const data: Prisma.ChartOfAccountCreateInput = {
       code: dto.code,
@@ -153,6 +185,47 @@ export class ChartOfAccountsService {
       );
     }
     if (dto.isCashOrBank !== undefined) data.isCashOrBank = dto.isCashOrBank;
+
+    // ── G16-FU-2: cash-classification integrity ────────────────────────
+    //
+    // `isCashOrBank` is an independent per-account business classification —
+    // it is NOT derived from `accountType` (many ASSET accounts are legitimately
+    // cash: 1010, 1020, …), and it is NOT derived from the CashAccount /
+    // BankAccount sub-domain. What it DOES require is an account capable of
+    // representing cash, i.e. an ASSET/DEBIT account: `CashFlowService` computes
+    // cash as Σ(debit − credit) over exactly this population, so any other
+    // type/normalBalance pair produces a meaningless figure.
+    //
+    // The final state is validated, not just the supplied field: that closes
+    // the cross-direction bypass where a client leaves `isCashOrBank: true` and
+    // flips `accountType` or `normalBalance` instead. Such a PATCH is rejected
+    // unconditionally — no history involved, because it is invalid at the type
+    // level regardless of posting history.
+    const finalIsCash =
+      dto.isCashOrBank !== undefined ? dto.isCashOrBank : before.isCashOrBank;
+    const finalAccountType =
+      dto.accountType !== undefined ? dto.accountType : before.accountType;
+    const finalNormalBalance =
+      dto.normalBalance !== undefined
+        ? dto.normalBalance
+        : before.normalBalance;
+    this.assertCashClassification(
+      finalIsCash,
+      finalAccountType,
+      finalNormalBalance,
+    );
+
+    // Historical gate. Cash is an ACCOUNTING HISTORY question (G16 CR-1/CR-4):
+    // once an account carries any JournalLine, reclassifying it would silently
+    // restate historical cash — including for an account whose current balance
+    // happens to be zero, or whose every entry was later reversed. Those
+    // JournalLines are exactly the rows the cash-flow movement sections render.
+    // Balance, AccountBalance snapshots and period state are deliberately NOT
+    // consulted: none of them is a reliable proxy for "has history".
+    const cashFlagChanging =
+      dto.isCashOrBank !== undefined &&
+      dto.isCashOrBank !== before.isCashOrBank;
+
     if (dto.parentId !== undefined) {
       data.parent = dto.parentId
         ? { connect: { id: dto.parentId } }
@@ -176,13 +249,48 @@ export class ChartOfAccountsService {
         });
         if (!parent) throw new NotFoundException('Parent account not found');
       }
-      const result = await this.repository.update(
-        id,
-        data,
-        currentUser.companyId,
-        before.rowVersion,
-        tx,
-      );
+      // G16-FU-2: the historical gate is threaded into the SAME updateMany that
+      // performs the optimistic-locked write, so "no journal history" and "row
+      // still matches the CAS" are decided atomically by one statement. A
+      // SELECT-then-UPDATE would leave a window in which a concurrent posting
+      // commits a JournalLine between the check and the write.
+      //
+      // The guard is only attached when the cash flag itself is being toggled;
+      // a benign rename of a posted cash account must keep working.
+      let result;
+      try {
+        result = await this.repository.update(
+          id,
+          data,
+          currentUser.companyId,
+          before.rowVersion,
+          tx,
+          cashFlagChanging ? { journalLines: { none: {} } } : undefined,
+        );
+      } catch (e) {
+        // Distinguish "row no longer matches the CAS" from "this account has
+        // history, so its classification is frozen". This read only picks the
+        // error message; enforcement already happened atomically above.
+        if (
+          cashFlagChanging &&
+          e instanceof ConflictException &&
+          (await tx.chartOfAccount.count({
+            where: { id, companyId: currentUser.companyId },
+          })) > 0
+        ) {
+          const hasHistory = await tx.journalLine.count({
+            where: { accountId: id },
+          });
+          if (hasHistory > 0) {
+            throw new BadRequestException(
+              'Cash classification cannot be changed after the account has ' +
+                'journal history: it would retroactively restate historical ' +
+                'cash movements',
+            );
+          }
+        }
+        throw e;
+      }
       await this.auditLog.log(
         {
           companyId: currentUser.companyId,

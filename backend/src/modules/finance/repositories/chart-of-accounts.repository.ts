@@ -98,6 +98,21 @@ export class ChartOfAccountsRepository {
     companyId: string,
     rowVersion: number,
     tx?: Prisma.TransactionClient,
+    /**
+     * G16-FU-2 — optional extra predicates merged into the SAME `updateMany`
+     * that performs the optimistic-locked write.
+     *
+     * This exists so a guard can participate in the atomic write predicate
+     * instead of being evaluated by a preceding SELECT. A separate
+     * "SELECT then UPDATE" would leave a TOCTOU window in which a concurrent
+     * posting could commit a JournalLine between the check and the write.
+     * Merging the predicate means "the account has no journal lines" and "the
+     * row still matches the CAS" are decided by one statement.
+     *
+     * Callers only pass constraints they are willing to have enforced
+     * atomically; omitting it preserves the previous behaviour exactly.
+     */
+    extraWhere?: Prisma.ChartOfAccountWhereInput,
   ): Promise<ChartOfAccount> {
     const prisma = this.prisma(tx);
 
@@ -117,7 +132,19 @@ export class ChartOfAccountsRepository {
     }
 
     const result = await prisma.chartOfAccount.updateMany({
-      where: { id, companyId, rowVersion, deletedAt: null },
+      where: {
+        // G16-FU-2 defence-in-depth: `extraWhere` is spread FIRST so the
+        // authoritative tenant / optimistic-lock / not-deleted predicates below
+        // always win on key collision. `extraWhere` is typed
+        // `ChartOfAccountWhereInput`, which exposes all of these keys, so
+        // spreading it last would let a caller silently replace the tenant
+        // scope or the CAS value.
+        ...(extraWhere ?? {}),
+        id,
+        companyId,
+        rowVersion,
+        deletedAt: null,
+      },
       data: { ...scalarData, rowVersion: { increment: 1 } },
     });
 
