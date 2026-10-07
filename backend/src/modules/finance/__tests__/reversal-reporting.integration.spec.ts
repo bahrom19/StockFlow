@@ -92,6 +92,9 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
   let nullRef: Tenant;
   let pnlTenant: Tenant;
   let lifecycleTenant: Tenant;
+  let g16ModeC: Tenant;
+  let g16OneLeg: Tenant;
+  let g16Earnings: Tenant;
   const tenantIds: string[] = [];
   const actorIds: string[] = [];
 
@@ -234,6 +237,11 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
     nullRef = await seedTenant('nullref');
     pnlTenant = await seedTenant('pnl');
     lifecycleTenant = await seedTenant('lifecycle');
+    // G16 TB/BS lifecycle tests get DEDICATED tenants: they assert exact
+    // totals, so they must not share a company with any other test's postings.
+    g16ModeC = await seedTenant('g16modec');
+    g16OneLeg = await seedTenant('g16oneleg');
+    g16Earnings = await seedTenant('g16earnings');
   });
 
   afterAll(async () => {
@@ -944,6 +952,241 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
       // ...and daily agrees on both, so parity holds for historical accounts.
       expect(summed.expenses.equals(report.expenses)).toBe(true);
       expect(summed.cogs.equals(report.cogs)).toBe(true);
+    });
+  });
+  // ═══════════════════════════════════════════════════════════════════
+  // G16 — Trial Balance / Balance Sheet historical-account lifecycle
+  // CR-1: JournalLines are accounting history; isActive/deletedAt gate
+  // posting (CR-2) and API visibility (CR-3), never financial amounts.
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe('G16 — TB/BS keep historical amounts after account retirement', () => {
+    const LIFECYCLE_AMOUNT = '5000';
+
+    const mkAcc = async (
+      t: Tenant,
+      code: string,
+      accountType: string,
+    ): Promise<string> =>
+      prisma.chartOfAccount
+        .create({
+          data: {
+            companyId: t.companyId,
+            code,
+            name: `${RUN}-${code}`,
+            accountType: accountType as never,
+            normalBalance: (accountType === 'REVENUE' ||
+            accountType === 'LIABILITY' ||
+            accountType === 'EQUITY'
+              ? 'CREDIT'
+              : 'DEBIT') as never,
+            isActive: true,
+          },
+          select: { id: true },
+        })
+        .then((r) => r.id);
+
+    const accountIdsOf = async (t: Tenant): Promise<Set<string>> =>
+      new Set(
+        (
+          await prisma.chartOfAccount.findMany({
+            where: { companyId: t.companyId },
+            select: { id: true },
+          })
+        ).map((r) => r.id),
+      );
+
+    /** Retire an account exactly as ChartOfAccountsService does. */
+    const retire = async (id: string, hard = true) =>
+      prisma.chartOfAccount.update({
+        where: { id },
+        data: hard
+          ? { isActive: false, deletedAt: new Date() }
+          : { isActive: false },
+      });
+
+    const post = async (
+      t: Tenant,
+      lines: { accountId: string; debit: string; credit: string }[],
+    ) =>
+      glEngine.post(
+        {
+          companyId: t.companyId,
+          financialPeriodId: t.periodId,
+          entryDate: NOW,
+          description: `${RUN} lifecycle`,
+          referenceType: 'MANUAL',
+          createdBy: t.actorId,
+          lines: lines.map((l) => ({ ...l, description: 'leg' })),
+        },
+        undefined,
+      );
+
+    it('Mode C — retiring BOTH legs keeps 5000/5000 and the balance sheet balances with real amounts', async () => {
+      const t = g16ModeC;
+      const asset = await mkAcc(t, '1500', 'ASSET');
+      const equity = await mkAcc(t, '3000', 'EQUITY');
+
+      // Real GL posting: Dr 1500 = 5000 / Cr 3000 = 5000
+      await post(t, [
+        { accountId: asset, debit: LIFECYCLE_AMOUNT, credit: '0' },
+        { accountId: equity, debit: '0', credit: LIFECYCLE_AMOUNT },
+      ]);
+
+      // Sanity: before retirement the report is correct.
+      const beforeTb = await ledgerQuery.getTrialBalance({
+        companyId: t.companyId,
+        asOfDate: YEAR_END,
+      });
+      expect(
+        new Decimal(beforeTb.totalDebit).equals(new Decimal(LIFECYCLE_AMOUNT)),
+      ).toBe(true);
+
+      // Retire BOTH legs — inactive AND soft-deleted.
+      await retire(asset);
+      await retire(equity);
+
+      // Pre-G16 this returned 0 rows, Dr 0 / Cr 0 and still "balanced".
+      const tb = await ledgerQuery.getTrialBalance({
+        companyId: t.companyId,
+        asOfDate: YEAR_END,
+      });
+
+      // seedTenant also provisions 1010/6100 per tenant; assert OUR two
+      // accounts are present rather than pinning the whole row set.
+      expect(tb.rows.map((r) => r.accountId)).toEqual(
+        expect.arrayContaining([asset, equity]),
+      );
+      expect(
+        new Decimal(tb.totalDebit).equals(new Decimal(LIFECYCLE_AMOUNT)),
+      ).toBe(true);
+      expect(
+        new Decimal(tb.totalCredit).equals(new Decimal(LIFECYCLE_AMOUNT)),
+      ).toBe(true);
+      // The exact signature of the old defect must be unreachable.
+      expect(new Decimal(tb.totalDebit).isZero()).toBe(false);
+      expect(new Decimal(tb.totalCredit).isZero()).toBe(false);
+
+      const bs = await ledgerQuery.getBalanceSheet({
+        companyId: t.companyId,
+        asOfDate: YEAR_END,
+      });
+      const assetRow = bs.assets.rows.find((r) => r.accountId === asset);
+      const equityRow = bs.equity.rows.find((r) => r.accountId === equity);
+      expect(assetRow).toBeDefined();
+      expect(equityRow).toBeDefined();
+      expect(
+        new Decimal(assetRow!.balance).equals(new Decimal(LIFECYCLE_AMOUNT)),
+      ).toBe(true);
+      expect(
+        new Decimal(equityRow!.balance).equals(new Decimal(LIFECYCLE_AMOUNT)),
+      ).toBe(true);
+      expect(bs.balanced).toBe(true);
+      expect(new Decimal(bs.assets.total).isZero()).toBe(false);
+    });
+
+    it('retiring only ONE leg still yields a balanced, fully-valued statement', async () => {
+      const t = g16OneLeg;
+      const asset = await mkAcc(t, '1600', 'ASSET');
+      const equity = await mkAcc(t, '3100', 'EQUITY');
+
+      await post(t, [
+        { accountId: asset, debit: LIFECYCLE_AMOUNT, credit: '0' },
+        { accountId: equity, debit: '0', credit: LIFECYCLE_AMOUNT },
+      ]);
+      await retire(equity, false); // inactive only, still visible
+
+      const tb = await ledgerQuery.getTrialBalance({
+        companyId: t.companyId,
+        asOfDate: YEAR_END,
+      });
+      expect(
+        new Decimal(tb.totalDebit).equals(new Decimal(LIFECYCLE_AMOUNT)),
+      ).toBe(true);
+      expect(
+        new Decimal(tb.totalCredit).equals(new Decimal(LIFECYCLE_AMOUNT)),
+      ).toBe(true);
+
+      const bs = await ledgerQuery.getBalanceSheet({
+        companyId: t.companyId,
+        asOfDate: YEAR_END,
+      });
+      expect(bs.balanced).toBe(true);
+      expect(new Decimal(bs.assets.total).isZero()).toBe(false);
+    });
+
+    it('retiring revenue + expense leaves currentEarnings unchanged', async () => {
+      const t = g16Earnings;
+      const revenue = await mkAcc(t, '4100', 'REVENUE');
+      const expense = await mkAcc(t, '6400', 'EXPENSE');
+
+      // Balanced journal: Cr revenue 3000 / Dr expense 1000 / Dr asset 2000.
+      const asset = await mkAcc(t, '1700', 'ASSET');
+      await post(t, [
+        { accountId: revenue, debit: '0', credit: '3000' },
+        { accountId: expense, debit: '1000', credit: '0' },
+        { accountId: asset, debit: '2000', credit: '0' },
+      ]);
+
+      const earningsBefore = new Decimal(
+        (
+          await ledgerQuery.getBalanceSheet({
+            companyId: t.companyId,
+            asOfDate: YEAR_END,
+          })
+        ).currentEarnings,
+      );
+
+      await retire(revenue);
+      await retire(expense, false);
+
+      const bsAfter = await ledgerQuery.getBalanceSheet({
+        companyId: t.companyId,
+        asOfDate: YEAR_END,
+      });
+
+      // Retirement must not delete revenue/expense from the earnings figure.
+      expect(new Decimal(bsAfter.currentEarnings).equals(earningsBefore)).toBe(
+        true,
+      );
+      expect(
+        new Decimal(bsAfter.currentEarnings).equals(new Decimal(2000)),
+      ).toBe(true);
+      // ...and neither appears as a balance-sheet row.
+      expect(
+        [
+          ...bsAfter.assets.rows,
+          ...bsAfter.liabilities.rows,
+          ...bsAfter.equity.rows,
+        ].map((r) => r.accountId),
+      ).not.toContain(revenue);
+    });
+
+    it("tenant isolation: one tenant's accounts never appear in another's statement", async () => {
+      const a = g16Earnings; // retired revenue/expense + posted 1700/4100/6400
+      const b = g16ModeC; // retired 1500/3000 + posted 5000
+
+      const aIdsInA = await accountIdsOf(a);
+      const bIdsInB = await accountIdsOf(b);
+
+      const tbA = await ledgerQuery.getTrialBalance({
+        companyId: a.companyId,
+        asOfDate: YEAR_END,
+      });
+      const tbB = await ledgerQuery.getTrialBalance({
+        companyId: b.companyId,
+        asOfDate: YEAR_END,
+      });
+      const rowsA = new Set(tbA.rows.map((r) => r.accountId));
+      const rowsB = new Set(tbB.rows.map((r) => r.accountId));
+
+      // Each company sees only its own accounts — no cross-company leakage in
+      // either direction, including for accounts retired in the other tenant.
+      expect([...rowsA].filter((id) => bIdsInB.has(id))).toEqual([]);
+      expect([...rowsB].filter((id) => aIdsInA.has(id))).toEqual([]);
+      // Sanity: both statements are non-empty, so the assertion above is real.
+      expect(rowsA.size).toBeGreaterThan(0);
+      expect(rowsB.size).toBeGreaterThan(0);
     });
   });
 });

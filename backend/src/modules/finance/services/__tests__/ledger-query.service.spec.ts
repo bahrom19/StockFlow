@@ -317,6 +317,271 @@ describe('LedgerQueryService — G15-06b', () => {
   });
 
   // ═══════════════════════════════════════════════════════════════════
+  // G16 — Trial Balance historical-account lifecycle integrity
+  // CR-1: JournalLines are accounting history. isActive/deletedAt gate
+  // posting (CR-2) and API visibility (CR-3) — never financial amounts.
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe('getTrialBalance — G16 historical-account lifecycle integrity', () => {
+    const acc = (
+      id: string,
+      code: string,
+      accountType: string,
+      normalBalance: string,
+      lifecycle: Record<string, unknown> = {},
+    ) => ({
+      id,
+      code,
+      name: `${code} ${id}`,
+      accountType,
+      normalBalance,
+      level: 0,
+      ...lifecycle,
+    });
+    const RETIRED = { isActive: false, deletedAt: new Date('2026-01-01T00:00:00Z') };
+
+    /** totals must equal the sum of the rendered rows — the core invariant */
+    const sumRows = (rows: { debit: string; credit: string }[]) =>
+      rows.reduce(
+        (acc, r) => ({
+          debit: acc.debit.add(r.debit),
+          credit: acc.credit.add(r.credit),
+        }),
+        { debit: dec(0), credit: dec(0) },
+      );
+
+    it('1. active accounts still render normally', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('a1', '1000', 'ASSET', 'DEBIT'),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'a1', totalDebit: dec('1000'), totalCredit: dec('0') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'comp-1' });
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.accountId).toBe('a1');
+      expect(result.totalDebit).toBe('1000.0000');
+    });
+
+    it('2. an INACTIVE account renders with its historical balance', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('a1', '1500', 'ASSET', 'DEBIT', { isActive: false }),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'a1', totalDebit: dec('5000'), totalCredit: dec('0') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'comp-1' });
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.accountId).toBe('a1');
+      expect(result.rows[0]!.debit).toBe('5000.0000');
+      expect(result.totalDebit).toBe('5000.0000');
+    });
+
+    it('3. a SOFT-DELETED account renders with its historical balance', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('a1', '1500', 'ASSET', 'DEBIT', { deletedAt: new Date() }),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'a1', totalDebit: dec('5000'), totalCredit: dec('0') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'comp-1' });
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.totalDebit).toBe('5000.0000');
+    });
+
+    it('4. one inactive leg still foots', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('a1', '1500', 'ASSET', 'DEBIT'),
+        acc('e1', '3000', 'EQUITY', 'CREDIT', { isActive: false }),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'a1', totalDebit: dec('5000'), totalCredit: dec('0') },
+        { accountId: 'e1', totalDebit: dec('0'), totalCredit: dec('5000') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'comp-1' });
+
+      expect(result.totalDebit).toBe('5000.0000');
+      expect(result.totalCredit).toBe('5000.0000');
+    });
+
+    it('5. Mode C — BOTH legs retired => Dr 5000 / Cr 5000 and foots', async () => {
+      // THE regression. Both legs of a balanced journal retired: pre-G16 this
+      // produced 0 rows, Dr 0 / Cr 0 and still "balanced" — materially wrong
+      // with no signal. A single retired account cannot prove the fix.
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('a1', '1500', 'ASSET', 'DEBIT', RETIRED),
+        acc('e1', '3000', 'EQUITY', 'CREDIT', RETIRED),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'a1', totalDebit: dec('5000'), totalCredit: dec('0') },
+        { accountId: 'e1', totalDebit: dec('0'), totalCredit: dec('5000') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'comp-1' });
+
+      expect(result.rows).toHaveLength(2);
+      expect(result.totalDebit).toBe('5000.0000');
+      expect(result.totalCredit).toBe('5000.0000');
+      // The old defect's exact signature must be unreachable.
+      expect(result.totalDebit).not.toBe('0.0000');
+      expect(result.totalCredit).not.toBe('0.0000');
+    });
+
+    it('6. an inactive REVENUE account still reports on the credit side', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('r1', '4000', 'REVENUE', 'CREDIT', { isActive: false }),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'r1', totalDebit: dec('0'), totalCredit: dec('10000') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'comp-1' });
+
+      expect(result.rows[0]!.credit).toBe('10000.0000');
+      expect(result.totalCredit).toBe('10000.0000');
+    });
+
+    it('7. an inactive EXPENSE account still reports on the debit side', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('x1', '6100', 'EXPENSE', 'DEBIT', { isActive: false }),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'x1', totalDebit: dec('4000'), totalCredit: dec('0') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'comp-1' });
+
+      expect(result.rows[0]!.debit).toBe('4000.0000');
+      expect(result.totalDebit).toBe('4000.0000');
+    });
+
+    it('8. an inactive 5xxx EXPENSE account keeps COGS accounting (it is an EXPENSE row regardless)', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('c1', '5000', 'EXPENSE', 'DEBIT', { isActive: false }),
+        acc('x1', '6100', 'EXPENSE', 'DEBIT', { isActive: false }),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'c1', totalDebit: dec('300'), totalCredit: dec('0') },
+        { accountId: 'x1', totalDebit: dec('120'), totalCredit: dec('0') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'comp-1' });
+
+      // Trial Balance does not split COGS vs opex — it reports EXPENSE rows.
+      // Both retired accounts must appear with their own amounts.
+      expect(result.rows).toHaveLength(2);
+      const cogs = result.rows.find((r) => r.accountCode === '5000')!;
+      const opex = result.rows.find((r) => r.accountCode === '6100')!;
+      expect(cogs.debit).toBe('300.0000');
+      expect(opex.debit).toBe('120.0000');
+      expect(result.totalDebit).toBe('420.0000');
+    });
+
+    it('9. asOfDate is still forwarded to the journal aggregate, unaffected by lifecycle', async () => {
+      const asOfDate = new Date('2026-06-30T00:00:00Z');
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('a1', '1500', 'ASSET', 'DEBIT', { isActive: false }),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'a1', totalDebit: dec('5000'), totalCredit: dec('0') },
+      ]);
+
+      await service.getTrialBalance({ companyId: 'comp-1', asOfDate });
+
+      expect(repo.aggregatedJournalLines).toHaveBeenCalledWith('comp-1', {
+        asOfDate,
+        onlyPosted: true,
+      });
+    });
+
+    it('10. tenant isolation preserved: companyId first, and foreign ids ignored', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('mine', '1500', 'ASSET', 'DEBIT', { isActive: false }),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'mine', totalDebit: dec('5000'), totalCredit: dec('0') },
+        { accountId: 'theirs', totalDebit: dec('999999'), totalCredit: dec('0') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'tenant-X' });
+
+      expect(repo.findChartOfAccounts).toHaveBeenCalledWith({
+        companyId: 'tenant-X',
+      });
+      expect(result.rows.map((r) => r.accountId)).toEqual(['mine']);
+      expect(result.totalDebit).toBe('5000.0000');
+    });
+
+    it('11. totals equal the sum of the rendered rows across a mixed population', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('a1', '1010', 'ASSET', 'DEBIT'),
+        acc('a2', '1500', 'ASSET', 'DEBIT', { isActive: false }),
+        acc('l1', '2100', 'LIABILITY', 'CREDIT', { deletedAt: new Date() }),
+        acc('e1', '3000', 'EQUITY', 'CREDIT', { isActive: false }),
+        acc('r1', '4000', 'REVENUE', 'CREDIT', { isActive: false }),
+        acc('x1', '6100', 'EXPENSE', 'DEBIT', { isActive: false }),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'a1', totalDebit: dec('1900'), totalCredit: dec('0') },
+        { accountId: 'a2', totalDebit: dec('5000'), totalCredit: dec('0') },
+        { accountId: 'l1', totalDebit: dec('0'), totalCredit: dec('1500') },
+        { accountId: 'e1', totalDebit: dec('0'), totalCredit: dec('3000') },
+        { accountId: 'r1', totalDebit: dec('0'), totalCredit: dec('3000') },
+        { accountId: 'x1', totalDebit: dec('600'), totalCredit: dec('0') },
+      ]);
+
+      const result = await service.getTrialBalance({ companyId: 'comp-1' });
+
+      const summed = sumRows(result.rows);
+      expect(result.totalDebit).toBe(summed.debit.toFixed(4));
+      expect(result.totalCredit).toBe(summed.credit.toFixed(4));
+      // Balanced fixture: Dr 7500 = Cr 7500.
+      expect(result.totalDebit).toBe('7500.0000');
+      expect(result.totalCredit).toBe('7500.0000');
+      expect(result.rows).toHaveLength(6);
+    });
+
+    it('12. accountType filter is still applied alongside the lifecycle fix', async () => {
+      repo.findChartOfAccounts.mockResolvedValue([
+        acc('a1', '1500', 'ASSET', 'DEBIT', { isActive: false }),
+        acc('r1', '4000', 'REVENUE', 'CREDIT'),
+      ]);
+      repo.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'a1', totalDebit: dec('5000'), totalCredit: dec('0') },
+        { accountId: 'r1', totalDebit: dec('0'), totalCredit: dec('1000') },
+      ]);
+
+      await service.getTrialBalance({ companyId: 'comp-1', accountType: 'ASSET' });
+
+      expect(repo.findChartOfAccounts).toHaveBeenCalledWith({
+        companyId: 'comp-1',
+        accountType: 'ASSET',
+      });
+    });
+
+    it('13. STRUCTURAL — lifecycle predicates must not return to the account population', async () => {
+      // Anti-drift guard: the defect was invisible precisely because no test
+      // asserted the lookup arguments. This pins that only companyId (plus the
+      // optional accountType) is ever sent.
+      repo.findChartOfAccounts.mockResolvedValue([]);
+
+      await service.getTrialBalance({ companyId: 'comp-1' });
+
+      const arg = repo.findChartOfAccounts.mock.calls[0][0];
+      expect(arg).toEqual({ companyId: 'comp-1' });
+      expect(arg.isActive).toBeUndefined();
+      expect(arg.deletedAt).toBeUndefined();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
   // G15-06b-02 — GL-backed P&L
   // ═══════════════════════════════════════════════════════════════════
 

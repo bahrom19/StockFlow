@@ -246,11 +246,18 @@ export class LedgerQueryService {
   }> {
     const { companyId, asOfDate, accountType } = params;
 
-    const accountWhere: Record<string, any> = {
-      companyId,
-      isActive: true,
-      deletedAt: null,
-    };
+    // G16 — CR-1/CR-3/CR-4: the Trial Balance is ACCOUNTING HISTORY, not an
+    // account-lifecycle view. `isActive`/`deletedAt` gate who may POST to an
+    // account (CR-2) and API/picker visibility (CR-3); they must NEVER remove
+    // historical amounts from a financial statement. `aggregatedJournalLines`
+    // below already returns every account's POSTED balance with no lifecycle
+    // filter, so restricting this list used to place those balances in the map
+    // and then silently drop both the row and its contribution to the totals.
+    //
+    // The failure was undetectable in its worst form: when the retired accounts
+    // net to zero on each side (e.g. a historical ASSET and its EQUITY offset)
+    // the report rendered 0 rows, Dr 0 / Cr 0 and still reported as balanced.
+    const accountWhere: Record<string, any> = { companyId };
     if (accountType) accountWhere.accountType = accountType;
 
     const accounts =
@@ -353,10 +360,15 @@ export class LedgerQueryService {
     const { companyId, asOfDate } = params;
     const effectiveAsOf = asOfDate ?? new Date();
 
+    // G16 — CR-1/CR-3/CR-4: same accounting-history rule as getTrialBalance.
+    // A retired account keeps its historical balances in the statement, and
+    // `currentEarnings` below is derived from the same POSTED journal aggregate
+    // as the P&L, so it is lifecycle-independent too. Dropping the lifecycle
+    // filter also restores the balance-sheet identity as a real check: an
+    // omitted REVENUE/EXPENSE leg previously shifted `currentEarnings` without
+    // shifting the opposite side, and `balanced` could not be trusted.
     const accounts = await this.ledgerRepository.findChartOfAccounts({
       companyId,
-      isActive: true,
-      deletedAt: null,
     });
 
     const zeroSection = (): BalanceSheetSection => ({
