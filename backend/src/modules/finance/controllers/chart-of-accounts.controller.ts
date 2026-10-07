@@ -131,4 +131,30 @@ export class ChartOfAccountsController {
   ): Promise<ChartOfAccountEntity> {
     return this.chartOfAccountsService.softDelete(id, currentUser);
   }
+
+  /**
+   * G16-FU-3 — undo a soft delete.
+   *
+   * Declared as a distinct literal sub-path and NOT as `PATCH :id`, so it can
+   * never be shadowed by the parameterised route and so `deletedAt` stays out
+   * of the DTOs (exposing it would let a client soft-delete through PATCH,
+   * which the dedicated DELETE route governs).
+   *
+   * Same permission as the delete it reverses: restoring is strictly less
+   * privileged than deleting, so no new RBAC permission is introduced.
+   */
+  @Post(':id/restore')
+  @RequirePermission('finance:delete')
+  @ApiOperation({ summary: 'Restore a soft-deleted chart of account' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Chart of account restored (deletedAt cleared, isActive true)',
+    type: ChartOfAccountEntity,
+  })
+  async restore(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: JwtPayload,
+  ): Promise<ChartOfAccountEntity> {
+    return this.chartOfAccountsService.restore(id, currentUser);
+  }
 }

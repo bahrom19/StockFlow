@@ -428,16 +428,16 @@ describe('G16-N-5 guard — AuditLogService.log inside a transaction must receiv
     expect(result.nonTransactional).toHaveLength(1);
   });
 
-  it('R6 pins the production corpus shape (121 / 23 / 0 spurious)', () => {
+  it('R6 pins the production corpus shape (122 / 23 / 0 spurious)', () => {
     // Exact counts on purpose: before G16-N-6 the array-form exemption was a
     // dead regex, so all 23 array batches were counted as interactive and two
     // JSDoc occurrences produced spurious ranges. Do NOT loosen these to a
     // lower bound — that would hide a regression of the same defect.
-    expect(interactiveForms).toBe(121);
+    expect(interactiveForms).toBe(122);
     expect(arrayFormSites).toBe(23);
     expect(unboundedRanges).toBe(0);
     expect(violations).toEqual([]);
-    expect(inTransactionAuditCalls).toBe(86);
+    expect(inTransactionAuditCalls).toBe(87);
   });
 
   it('R7 documents the alias gap: aliased receivers remain undetected', () => {

@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AccountType, NormalBalance, Prisma } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 import { CreateChartOfAccountDto } from '../dto/create-chart-of-account.dto';
 import { UpdateChartOfAccountDto } from '../dto/update-chart-of-account.dto';
@@ -12,6 +13,7 @@ import { ChartOfAccountQueryDto } from '../dto/chart-of-account-query.dto';
 import { ChartOfAccountEntity } from '../entities/chart-of-account.entity';
 import { ChartOfAccountMapper } from '../mappers/chart-of-account.mapper';
 import { ChartOfAccountsRepository } from '../repositories/chart-of-accounts.repository';
+import { LedgerRepository } from '../repositories/ledger.repository';
 import { PrismaService } from '../../../common/prisma';
 import { AuditLogService } from '../../shared/services/audit-log.service';
 
@@ -21,6 +23,11 @@ export class ChartOfAccountsService {
     private readonly repository: ChartOfAccountsRepository,
     private readonly prismaService: PrismaService,
     private readonly auditLog: AuditLogService,
+    // G16-FU-3: reused ONLY to read the canonical positional balance for the
+    // retirement gate. Deliberately the same aggregate the Trial Balance,
+    // Balance Sheet and P&L use, so the gate cannot drift from the G16-N-8-A
+    // reversal semantics.
+    private readonly ledgerRepository: LedgerRepository,
   ) {}
 
   /**
@@ -44,6 +51,39 @@ export class ChartOfAccountsService {
           `(received accountType=${accountType}, normalBalance=${normalBalance})`,
       );
     }
+  }
+
+  /**
+   * G16-FU-3 — retirement gate.
+   *
+   * Retirement closes an account for future posting, so it is only permitted
+   * while the account carries NO canonical positional balance. A non-zero
+   * balance would be stranded and, because posting to a retired account is
+   * refused (CR-2), unfixable without first reactivating it.
+   *
+   * The balance is read through `LedgerRepository.aggregatedJournalLines` — the
+   * SAME primitive the financial reports use — so it inherits the canonical
+   * semantics verbatim: POSTED entries only, excluding exactly the literal
+   * referenceType='REVERSAL' compensation, with a NULL referenceType treated
+   * as included. AccountBalance snapshots are deliberately NOT used (they are
+   * per-period and may not exist), and the mere PRESENCE of history is not a
+   * bar: closing a depleted account that has a long posting history is routine.
+   */
+  private async assertRetirable(
+    accountId: string,
+    companyId: string,
+  ): Promise<void> {
+    const rows = await this.ledgerRepository.aggregatedJournalLines(
+      companyId,
+      {},
+    );
+    const row = rows.find((r) => r.accountId === accountId);
+    const balance = row ? row.totalDebit.sub(row.totalCredit) : new Decimal(0);
+    if (balance.isZero()) return;
+    throw new BadRequestException(
+      `Account carries a balance of ${balance.toFixed(4)} and cannot be ` +
+        `retired: retire it only after the balance is cleared`,
+    );
   }
 
   async create(
@@ -176,6 +216,13 @@ export class ChartOfAccountsService {
     if (dto.normalBalance !== undefined)
       data.normalBalance = dto.normalBalance as NormalBalance;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+
+    // G16-FU-3: retirement gate. Only on an ACTIVE -> INACTIVE transition, so a
+    // no-op re-PATCH of an already-inactive account is never blocked. Deactivation
+    // is reversible (PATCH isActive=true), which is why it needs no restore.
+    if (dto.isActive === false && before.isActive !== false) {
+      await this.assertRetirable(id, currentUser.companyId);
+    }
     // G15-07-C1: isSystem is server-controlled. A client may echo the current
     // value (accepted as a no-op) but must never change it, and a
     // client-supplied value is never written.
@@ -308,6 +355,61 @@ export class ChartOfAccountsService {
     return ChartOfAccountMapper.toEntity(updated);
   }
 
+  /**
+   * G16-FU-3 — restore a soft-deleted account.
+   *
+   * Transition: `deletedAt = NULL`, `isActive = true` — the same transition the
+   * provisioning migrations already perform. Restore is a FULL REACTIVATION, so
+   * an account that was already inactive when it was deleted comes back active;
+   * that consequence is deliberate and bounded by the retirement balance gate.
+   *
+   * Restoration is tenant-scoped and CAS-guarded, and it never touches
+   * accounting data: no JournalLine, AccountBalance, code, accountType,
+   * normalBalance, isCashOrBank, parentId or CashAccount/BankAccount row is
+   * read or written.
+   */
+  async restore(
+    id: string,
+    currentUser: JwtPayload,
+  ): Promise<ChartOfAccountEntity> {
+    // findById filters deletedAt:null, so a soft-deleted row is invisible here
+    // and must be read separately to obtain its rowVersion for the CAS.
+    const deleted = await this.prismaService.chartOfAccount.findFirst({
+      where: { id, companyId: currentUser.companyId, deletedAt: { not: null } },
+    });
+    if (!deleted) {
+      // Distinguish "does not exist / another tenant" from "is not soft-deleted".
+      const live = await this.repository.findById(id, currentUser.companyId);
+      if (!live) throw new NotFoundException('Chart of account not found');
+      throw new BadRequestException(
+        'Account is not soft-deleted and does not need to be restored',
+      );
+    }
+
+    const [restored] = await this.prismaService.$transaction(async (tx) => {
+      const result = await this.repository.restore(
+        id,
+        currentUser.companyId,
+        deleted.rowVersion,
+        tx,
+      );
+      await this.auditLog.log(
+        {
+          companyId: currentUser.companyId,
+          userId: currentUser.userId,
+          entityType: 'ChartOfAccount',
+          entityId: id,
+          action: 'RESTORE',
+          before: deleted,
+          after: result,
+        },
+        tx,
+      );
+      return [result];
+    });
+    return ChartOfAccountMapper.toEntity(restored);
+  }
+
   async softDelete(
     id: string,
     currentUser: JwtPayload,
@@ -316,12 +418,18 @@ export class ChartOfAccountsService {
     if (!before) throw new NotFoundException('Chart of account not found');
 
     // G15-07-C1: system accounts are protected from deletion. Soft-deleting a
-    // system account would be unrecoverable: the scoped lookups filter
-    // deletedAt, so the row becomes invisible to the API while the plain
-    // unique (companyId, code) constraint still blocks recreating the code.
+    // system account must not be routine: the scoped lookups filter deletedAt,
+    // so the row leaves the API while the plain unique (companyId, code)
+    // constraint still blocks recreating the code. Since G16-FU-3 added a
+    // restore() endpoint this is recoverable again, but it remains restricted
+    // to provisioning/repair paths rather than ordinary administration.
     if (before.isSystem) {
       throw new BadRequestException('System accounts cannot be deleted');
     }
+
+    // G16-FU-3: a balance-bearing account must not be soft-deleted — the
+    // balance would be stranded and, with posting refused (CR-2), unfixable.
+    await this.assertRetirable(id, currentUser.companyId);
 
     const [deleted] = await this.prismaService.$transaction(async (tx) => {
       const result = await this.repository.softDelete(

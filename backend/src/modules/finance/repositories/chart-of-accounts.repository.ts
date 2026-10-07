@@ -179,6 +179,47 @@ export class ChartOfAccountsRepository {
     }) as unknown as ChartOfAccount;
   }
 
+  /**
+   * G16-FU-3 — undo a soft delete.
+   *
+   * The CAS predicate requires `deletedAt IS NOT NULL`, so restore can only ever
+   * act on a row that is CURRENTLY soft-deleted; an already-live row matches
+   * nothing and is reported by the caller as an explicit failure rather than a
+   * silent no-op. companyId / id / rowVersion are authoritative and cannot be
+   * overridden — there is deliberately no extraWhere parameter on this method.
+   *
+   * Only `deletedAt` and `isActive` are written. Code, accountType,
+   * normalBalance, isCashOrBank and parentId are untouched, and no JournalLine
+   * or AccountBalance row is read or modified. The unique (companyId, code)
+   * constraint cannot be violated because the same row still holds the code.
+   */
+  async restore(
+    id: string,
+    companyId: string,
+    rowVersion: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ChartOfAccount> {
+    const prisma = this.prisma(tx);
+    const result = await prisma.chartOfAccount.updateMany({
+      where: { id, companyId, rowVersion, deletedAt: { not: null } },
+      data: { deletedAt: null, isActive: true, rowVersion: { increment: 1 } },
+    });
+
+    if (result.count === 0) {
+      const existing = await prisma.chartOfAccount.findFirst({
+        where: { id, companyId },
+      });
+      if (!existing) throw new NotFoundException('Chart of account not found');
+      throw new ConflictException(
+        'Chart of account was modified by another user',
+      );
+    }
+
+    return prisma.chartOfAccount.findFirst({
+      where: { id, companyId },
+    }) as unknown as ChartOfAccount;
+  }
+
   async softDelete(
     id: string,
     companyId: string,

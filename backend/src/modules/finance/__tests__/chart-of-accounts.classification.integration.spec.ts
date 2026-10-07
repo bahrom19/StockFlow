@@ -201,6 +201,7 @@ describeDb('G16-FU-2 — cash account classification integrity (real PostgreSQL)
       new ChartOfAccountsRepository(prismaService),
       prismaService,
       new AuditLogService(prismaService),
+      new LedgerRepository(prismaService),
     );
     const ledgerRepo = new LedgerRepository(prismaService);
     ledgerQuery = new LedgerQueryService(ledgerRepo);

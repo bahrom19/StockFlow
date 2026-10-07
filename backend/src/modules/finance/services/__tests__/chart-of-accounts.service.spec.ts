@@ -1,6 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Decimal } from '@prisma/client/runtime/library';
 import { ChartOfAccountsService } from '../chart-of-accounts.service';
 
+const dec = (v: string | number) => new Decimal(v);
 const companyId = 'comp-1';
 const currentUser = {
   userId: 'user-1',
@@ -53,6 +55,8 @@ describe('ChartOfAccountsService — system-account trust model (G15-07-C1)', ()
   let mockTx: any;
   let prisma: any;
   let auditLog: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ledgerRepository: any;
 
   beforeEach(() => {
     mockTx = {};
@@ -66,10 +70,16 @@ describe('ChartOfAccountsService — system-account trust model (G15-07-C1)', ()
       $transaction: jest.fn((cb: (tx: any) => any) => cb(mockTx)),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    // G16-FU-3: 4th dependency is LedgerRepository, used only by the
+    // retirement balance gate.
+    ledgerRepository = {
+      aggregatedJournalLines: jest.fn().mockResolvedValue([]),
+    };
     service = new ChartOfAccountsService(
       repository,
       prisma,
       auditLog,
+      ledgerRepository,
     ) as unknown as ChartOfAccountsService;
   });
 
@@ -255,11 +265,12 @@ describe('ChartOfAccountsService — system-account trust model (G15-07-C1)', ()
       expect(auditLog.log).not.toHaveBeenCalled();
     });
 
-    it('preserves the existing soft-delete behaviour for non-system accounts', async () => {
+    it('G16-FU-3. soft-deletes a zero-balance non-system account (guard, not the old permissive behaviour)', async () => {
       repository.findById.mockResolvedValue(account({ isSystem: false }));
       repository.softDelete.mockResolvedValue(
         account({ isSystem: false, deletedAt: new Date(), isActive: false }),
       );
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([]);
 
       const result = await service.softDelete('acc-1', currentUser);
 
@@ -307,6 +318,8 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
   let mockTx: any;
   let prisma: any;
   let auditLog: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ledgerRepository: any;
 
   /** journalLine.count inside the open transaction — drives the error mapping. */
   let journalLineCount: number;
@@ -339,10 +352,16 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
     };
     prisma = { $transaction: jest.fn((cb: (tx: any) => any) => cb(mockTx)) };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    // G16-FU-3: 4th dependency is LedgerRepository, used only by the
+    // retirement balance gate.
+    ledgerRepository = {
+      aggregatedJournalLines: jest.fn().mockResolvedValue([]),
+    };
     service = new ChartOfAccountsService(
       repository,
       prisma,
       auditLog,
+      ledgerRepository,
     ) as unknown as ChartOfAccountsService;
   });
 
@@ -539,6 +558,282 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
       const data = repository.update.mock.calls[0][1];
       expect(data.isCashOrBank).toBeUndefined();
       expect('isCashOrBank' in data).toBe(false);
+    });
+  });
+});
+
+/**
+ * G16-FU-3 — retirement & restore policy.
+ *
+ * Retirement closes an account for future posting, so it is permitted only while
+ * the account carries NO canonical positional balance. The balance is read via
+ * `LedgerRepository.aggregatedJournalLines` — the same primitive the reports
+ * use — so the gate inherits the G16-N-8-A reversal semantics (POSTED only,
+ * excluding exactly the literal referenceType='REVERSAL', NULL included).
+ *
+ * History alone is NOT a bar: closing a depleted account with a long posting
+ * history is routine. `AccountBalance` snapshots are not consulted either.
+ */
+describe('ChartOfAccountsService — retirement & restore policy (G16-FU-3)', () => {
+  let service: ChartOfAccountsService;
+  let repository: any;
+  let ledgerRepository: any;
+  let mockTx: any;
+  let prisma: any;
+  let auditLog: any;
+  let ConflictCtor: typeof import('@nestjs/common').ConflictException;
+
+  const bal = (v: string) => ({
+    accountId: 'acc-1',
+    totalDebit: dec(v),
+    totalCredit: dec('0'),
+  });
+
+  const acc = (over: Record<string, any> = {}) =>
+    account({
+      isSystem: false,
+      isCashOrBank: false,
+      accountType: 'ASSET',
+      normalBalance: 'DEBIT',
+      isActive: true,
+      deletedAt: null,
+      ...over,
+    });
+
+  beforeAll(async () => {
+    ConflictCtor = (await import('@nestjs/common')).ConflictException;
+  });
+
+  beforeEach(() => {
+    mockTx = {
+      chartOfAccount: {
+        count: jest.fn(async () => 1),
+        findFirst: jest.fn(async () => ({ id: 'acc-1' })),
+      },
+      journalLine: { count: jest.fn(async () => 0) },
+    };
+    repository = {
+      create: jest.fn(),
+      findById: jest.fn(),
+      update: jest.fn(async () => acc()),
+      softDelete: jest.fn(async () => acc({ deletedAt: new Date(), isActive: false })),
+      restore: jest.fn(async () => acc()),
+    };
+    ledgerRepository = { aggregatedJournalLines: jest.fn(async () => []) };
+    prisma = {
+      $transaction: jest.fn((cb: (tx: any) => any) => cb(mockTx)),
+      chartOfAccount: {
+        findFirst: jest.fn(async () => acc({ deletedAt: new Date(), isActive: false })),
+      },
+    };
+    auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    service = new ChartOfAccountsService(
+      repository,
+      prisma,
+      auditLog,
+      ledgerRepository,
+    ) as unknown as ChartOfAccountsService;
+  });
+
+  describe('balance gate — retirement doors', () => {
+    it('1. no-history, zero balance: deactivate succeeds', async () => {
+      repository.findById.mockResolvedValue(acc());
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([]);
+
+      await service.update('acc-1', { isActive: false } as any, currentUser);
+
+      expect(repository.update).toHaveBeenCalled();
+      expect(repository.update.mock.calls[0][1].isActive).toBe(false);
+    });
+
+    it('2. historical ZERO balance (debit and credit both present) retires', async () => {
+      repository.findById.mockResolvedValue(acc());
+      // net zero expressed through the real aggregate shape
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'acc-1', totalDebit: dec('400'), totalCredit: dec('400') },
+      ]);
+
+      await service.update('acc-1', { isActive: false } as any, currentUser);
+
+      expect(repository.update).toHaveBeenCalled();
+    });
+
+    it('3. non-zero balance: PATCH deactivation is refused', async () => {
+      repository.findById.mockResolvedValue(acc());
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([bal('7500')]);
+
+      await expect(
+        service.update('acc-1', { isActive: false } as any, currentUser),
+      ).rejects.toThrow(BadRequestException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('4. non-zero balance: DELETE is refused', async () => {
+      repository.findById.mockResolvedValue(acc({ isActive: false }));
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([bal('7500')]);
+
+      await expect(service.softDelete('acc-1', currentUser)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(repository.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('5. fully reversed / net-zero history retires (history is not a bar)', async () => {
+      repository.findById.mockResolvedValue(acc());
+      // the aggregate already excluded the REVERSAL pair, so it nets to zero
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'acc-1', totalDebit: dec('900'), totalCredit: dec('900') },
+      ]);
+      mockTx.journalLine.count.mockResolvedValue(2); // history exists
+
+      await service.update('acc-1', { isActive: false } as any, currentUser);
+
+      expect(repository.update).toHaveBeenCalled();
+    });
+
+    it('6. the gate reads the canonical aggregate with default reversal semantics', async () => {
+      repository.findById.mockResolvedValue(acc());
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([]);
+
+      await service.update('acc-1', { isActive: false } as any, currentUser);
+
+      // companyId scoped, and NO onlyPosted:false / reversal opt-out
+      expect(ledgerRepository.aggregatedJournalLines).toHaveBeenCalledWith(
+        companyId,
+        {},
+      );
+    });
+
+    it('7. an account with no aggregate rows is treated as zero balance', async () => {
+      repository.findById.mockResolvedValue(acc());
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([
+        { accountId: 'other-acc', totalDebit: dec('500'), totalCredit: dec('0') },
+      ]);
+
+      await service.update('acc-1', { isActive: false } as any, currentUser);
+
+      expect(repository.update).toHaveBeenCalled();
+    });
+
+    it('8. re-PATCHing isActive=false on an already-inactive account is not gated', async () => {
+      repository.findById.mockResolvedValue(acc({ isActive: false }));
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([bal('7500')]);
+
+      await service.update('acc-1', { isActive: false } as any, currentUser);
+
+      expect(ledgerRepository.aggregatedJournalLines).not.toHaveBeenCalled();
+    });
+
+    it('9. a rejected retirement writes no AuditLog row', async () => {
+      repository.findById.mockResolvedValue(acc());
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([bal('7500')]);
+
+      await expect(
+        service.update('acc-1', { isActive: false } as any, currentUser),
+      ).rejects.toThrow(BadRequestException);
+      expect(auditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('10. an accepted soft delete writes a DELETE audit row', async () => {
+      repository.findById.mockResolvedValue(acc({ isActive: false }));
+      ledgerRepository.aggregatedJournalLines.mockResolvedValue([]);
+
+      await service.softDelete('acc-1', currentUser);
+
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'DELETE' }),
+        mockTx,
+      );
+    });
+  });
+
+  describe('restore', () => {
+    it('11. inactive -> active remains the existing PATCH behaviour', async () => {
+      repository.findById.mockResolvedValue(acc({ isActive: false }));
+
+      await service.update('acc-1', { isActive: true } as any, currentUser);
+
+      expect(repository.update.mock.calls[0][1].isActive).toBe(true);
+      expect(repository.restore).not.toHaveBeenCalled();
+    });
+
+    it('12. soft-delete -> restore: transition and CAS', async () => {
+      await service.restore('acc-1', currentUser);
+
+      expect(repository.restore).toHaveBeenCalledWith(
+        'acc-1',
+        companyId,
+        1,
+        mockTx,
+      );
+    });
+
+    it('13. restore writes a RESTORE audit row with before/after', async () => {
+      await service.restore('acc-1', currentUser);
+
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'RESTORE',
+          before: expect.objectContaining({ deletedAt: expect.anything() }),
+          after: expect.anything(),
+        }),
+        mockTx,
+      );
+    });
+
+    it('14. restore requires a soft-deleted row; a live account fails explicitly', async () => {
+      repository.findById.mockResolvedValue(acc()); // live, deletedAt null
+      prisma.chartOfAccount.findFirst.mockResolvedValue(null);
+
+      await expect(service.restore('acc-1', currentUser)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(repository.restore).not.toHaveBeenCalled();
+    });
+
+    it('15. restore is never a silent no-op: a second restore fails', async () => {
+      repository.restore.mockRejectedValue(
+        new ConflictCtor('Chart of account was modified by another user'),
+      );
+
+      await expect(service.restore('acc-1', currentUser)).rejects.toThrow(
+        ConflictCtor,
+      );
+    });
+
+    it('16. restore of an unknown or foreign account is NotFound', async () => {
+      repository.findById.mockResolvedValue(null);
+      prisma.chartOfAccount.findFirst.mockResolvedValue(null);
+
+      await expect(service.restore('acc-1', currentUser)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('17. stale rowVersion on restore conflicts', async () => {
+      repository.restore.mockRejectedValue(new ConflictCtor('stale'));
+
+      await expect(service.restore('acc-1', currentUser)).rejects.toThrow(
+        ConflictCtor,
+      );
+    });
+
+    it('18. restore preserves the code (it never rewrites it)', async () => {
+      repository.restore.mockImplementation(async () => acc({ code: '1010' }));
+
+      const result = await service.restore('acc-1', currentUser);
+
+      expect(result.code).toBe('1010');
+      const data = repository.restore.mock.calls[0];
+      expect(data.length).toBe(4); // id, companyId, rowVersion, tx — no data payload
+    });
+
+    it('19. restore sets isActive=true (the entity is active afterwards)', async () => {
+      repository.restore.mockImplementation(async () => acc({ isActive: true }));
+
+      const result = await service.restore('acc-1', currentUser);
+
+      expect(result.isActive).toBe(true);
     });
   });
 });
