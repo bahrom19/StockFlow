@@ -362,12 +362,18 @@ describe('CashFlowService — G15-07-C3-C', () => {
   it('Y/Z/AB. population query is company-scoped flag filter', async () => {
     await call();
 
+    // G16-FU-1 — CR-1/CR-3/CR-4: the cash population is accounting history.
+    // `isActive`/`deletedAt` gate posting (CR-2, PostingValidationService) and
+    // API visibility (CR-3); they must never gate report amounts. The structural
+    // assertions below stop the lifecycle predicates from creeping back in.
     expect(ledger.findChartOfAccounts).toHaveBeenCalledWith({
       companyId,
       isCashOrBank: true,
-      isActive: true,
-      deletedAt: null,
     });
+    const where = ledger.findChartOfAccounts.mock.calls[0][0];
+    expect(where).not.toHaveProperty('isActive');
+    expect(where).not.toHaveProperty('deletedAt');
+    expect(Object.keys(where).sort()).toEqual(['companyId', 'isCashOrBank']);
     for (const [c] of ledger.aggregatedCashFlowLines.mock.calls) {
       expect(c).toBe(companyId);
     }
@@ -412,6 +418,162 @@ describe('CashFlowService — G15-07-C3-C', () => {
       }),
     );
     expect(ledger.findCashJournalEntries).not.toHaveBeenCalled();
+  });
+
+  // ── G16-FU-1: CR-1/CR-3/CR-4 — lifecycle-retired cash accounts ───────
+  //
+  // These unit cases lock the ARITHMETIC and the population contract; the
+  // repository mock returns a fixed population regardless of its arguments, so
+  // they cannot by themselves detect a reintroduced lifecycle filter. The
+  // end-to-end regression guard is cash-flow.lifecycle.integration.spec.ts
+  // (real PostgreSQL), which fails against the unfixed production code.
+
+  /** Cash account carrying lifecycle flags, as the repository would return it. */
+  const retiredCashAcc = (
+    id: string,
+    code: string,
+    state: 'ACTIVE' | 'INACTIVE' | 'SOFT_DELETED',
+  ) => ({
+    ...cashAcc(id, code, `Cash ${code}`),
+    isActive: state !== 'INACTIVE',
+    deletedAt: state === 'SOFT_DELETED' ? new Date() : null,
+  });
+
+  const FROM_END = new Date('2026-08-31T23:59:59.999Z').getTime();
+  const TO_END = new Date('2026-09-30T23:59:59.999Z').getTime();
+
+  it('G16-FU-1.1 inactive cash account contributes to endingCash', async () => {
+    ledger.findChartOfAccounts.mockResolvedValue([
+      retiredCashAcc('cash-1', '1010', 'INACTIVE'),
+    ]);
+    cumulative.set(TO_END, [aggRow('cash-1', '8500', '0')]);
+
+    const result = await call();
+
+    expect(result.endingCash).toBe('8500.0000');
+    expect(result.endingCash).not.toBe('0.0000');
+  });
+
+  it('G16-FU-1.2 soft-deleted cash account contributes to endingCash', async () => {
+    ledger.findChartOfAccounts.mockResolvedValue([
+      retiredCashAcc('cash-1', '1010', 'SOFT_DELETED'),
+    ]);
+    cumulative.set(TO_END, [aggRow('cash-1', '3000', '0')]);
+
+    const result = await call();
+
+    expect(result.endingCash).toBe('3000.0000');
+    expect(result.endingCash).not.toBe('0.0000');
+  });
+
+  it('G16-FU-1.3 mixed active + inactive cash accounts both contribute', async () => {
+    ledger.findChartOfAccounts.mockResolvedValue([
+      retiredCashAcc('cash-1', '1010', 'ACTIVE'),
+      retiredCashAcc('cash-2', '1020', 'INACTIVE'),
+    ]);
+    cumulative.set(TO_END, [
+      aggRow('cash-1', '5000', '0'),
+      aggRow('cash-2', '8500', '0'),
+    ]);
+
+    const result = await call();
+
+    expect(result.endingCash).toBe('13500.0000');
+  });
+
+  it('G16-FU-1.4 all cash accounts lifecycle-off still yields a real, non-zero statement', async () => {
+    ledger.findChartOfAccounts.mockResolvedValue([
+      retiredCashAcc('cash-1', '1010', 'INACTIVE'),
+      retiredCashAcc('cash-2', '1020', 'SOFT_DELETED'),
+    ]);
+    cumulative.set(FROM_END, []);
+    cumulative.set(TO_END, [
+      aggRow('cash-1', '5000', '0'),
+      aggRow('cash-2', '4000', '0'),
+    ]);
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'SALE'),
+      je('je-2', 'SALE'),
+    ]);
+    // Both entries are SALE, so they share one OPERATING::SALE partition.
+    partitions.set('je-1,je-2', [
+      aggRow('cash-1', '5000', '0'),
+      aggRow('cash-2', '4000', '0'),
+    ]);
+
+    const result = await call();
+
+    // The `population.length === 0` short-circuit must not fire while the
+    // company holds cash balances on retired accounts.
+    expect(ledger.findCashJournalEntries).toHaveBeenCalled();
+    expect(result.beginningCash).toBe('0.0000');
+    expect(result.netCashMovement).toBe('9000.0000');
+    expect(result.endingCash).toBe('9000.0000');
+    expect(result.endingCash).not.toBe('0.0000');
+    expect(result.operating.rows).toHaveLength(2);
+    expect(result.reconciled).toBe(true);
+  });
+
+  it('G16-FU-1.5 lifecycle-off cash produces visible movement rows', async () => {
+    ledger.findChartOfAccounts.mockResolvedValue([
+      retiredCashAcc('cash-1', '1010', 'INACTIVE'),
+    ]);
+    ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE')]);
+    partitions.set('je-1', [aggRow('cash-1', '1500', '0')]);
+
+    const result = await call();
+
+    const rows = result.operating.rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.accountId).toBe('cash-1');
+    expect(rows[0]!.accountCode).toBe('1010');
+    expect(rows[0]!.referenceType).toBe('SALE');
+    expect(rows[0]!.category).toBe('OPERATING');
+    expect(rows[0]!.amount).toBe('1500.0000');
+    expect(result.operating.total).toBe('1500.0000');
+    expect(result.netCashMovement).toBe('1500.0000');
+  });
+
+  it('G16-FU-1.6 endingCash equals the GL total for a mixed population', async () => {
+    ledger.findChartOfAccounts.mockResolvedValue([
+      retiredCashAcc('cash-1', '1010', 'ACTIVE'),
+      retiredCashAcc('cash-2', '1020', 'INACTIVE'),
+      retiredCashAcc('cash-3', '1030', 'SOFT_DELETED'),
+    ]);
+    // independent GL truth: 5000 + (7000 − 1500) + 3000 = 13500
+    const truth = [
+      aggRow('cash-1', '5000', '0'),
+      aggRow('cash-2', '7000', '1500'),
+      aggRow('cash-3', '3000', '0'),
+    ];
+    cumulative.set(FROM_END, truth);
+    cumulative.set(TO_END, truth);
+
+    const result = await call();
+
+    const expected = truth.reduce(
+      (acc, r) => acc.add(r.totalDebit).sub(r.totalCredit),
+      dec(0),
+    );
+    expect(expected.toFixed(4)).toBe('13500.0000');
+    expect(result.beginningCash).toBe('13500.0000');
+    expect(result.endingCash).toBe('13500.0000');
+    expect(result.reconciled).toBe(true);
+  });
+
+  it('G16-FU-1.7 zero-balance lifecycle-off cash produces no row', async () => {
+    ledger.findChartOfAccounts.mockResolvedValue([
+      retiredCashAcc('cash-1', '1010', 'INACTIVE'),
+    ]);
+    ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE')]);
+    // a movement that nets to zero must not create a row
+    partitions.set('je-1', [aggRow('cash-1', '500', '500')]);
+
+    const result = await call();
+
+    expect(result.operating.rows).toEqual([]);
+    expect(result.operating.total).toBe('0.0000');
+    expect(result.netCashMovement).toBe('0.0000');
   });
 
   // ── AD/AE: footing + reconciliation ────────────────────────────────

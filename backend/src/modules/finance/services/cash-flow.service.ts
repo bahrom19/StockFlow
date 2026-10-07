@@ -69,7 +69,8 @@ const FT_OPERATING_TYPES = new Set(['FEE', 'INTEREST']);
  * G15-07-C3-C — canonical GL-based Cash Flow statement.
  *
  * Sole source: POSTED JournalLines on the company-scoped cash population
- * (active, non-deleted `isCashOrBank` accounts). Direction comes from
+ * (every `isCashOrBank` account, including lifecycle-retired ones — see the
+ * CR-1/CR-3/CR-4 note on the population query below). Direction comes from
  * debit − credit math; classification from referenceType (+ FT-type and
  * original-JE joins where the reference alone is insufficient).
  * Transfers net to zero emergently (both legs selected); unclassified cash
@@ -139,11 +140,38 @@ export class CashFlowService {
     });
 
     // ── cash population (authoritative, flag-driven, no code list) ──
+    //
+    // G16-FU-1 — CR-1/CR-3/CR-4: the cash population is ACCOUNTING HISTORY,
+    // not an account-lifecycle view, exactly like the Trial Balance, Balance
+    // Sheet (G16) and P&L (G16-N-8-A/B).
+    //
+    // `isActive`/`deletedAt` decide who may POST to an account (CR-2, a
+    // posting-side invariant that PostingValidationService enforces centrally,
+    // with further active/non-deleted guards on the individual posting paths)
+    // and whether the account stays visible in the API (CR-3). They are
+    // administration state, never accounting erasure: a
+    // JournalLine has no cascade from ChartOfAccount and the FK is RESTRICT, so
+    // deactivating or soft-deleting an account leaves every amount it ever
+    // carried fully intact in the GL.
+    //
+    // Filtering here removed those historical amounts from `beginningCash`,
+    // `endingCash`, the movement enumeration AND every movement partition,
+    // because all four read the same `cashIds` below. The Trial Balance and
+    // Balance Sheet kept reporting the balance, so the same tenant produced two
+    // statements that disagreed about the same money — and the disagreement was
+    // silent: `reconciled` compares positions and movements that share the
+    // filtered set, so an omission in that set cancelled out and the flag read
+    // `true` while the statement was materially wrong.
+    //
+    // Worst case: retiring EVERY cash account emptied `population` and tripped
+    // the `zeroed()` short-circuit, reporting an all-zero statement as
+    // reconciled while the balance sheet still showed the full cash balance.
+    //
+    // Only the `isCashOrBank` flag and `companyId` select the population now.
+    // Tenant scoping and every downstream read are unchanged.
     const population = await this.ledgerRepository.findChartOfAccounts({
       companyId,
       isCashOrBank: true,
-      isActive: true,
-      deletedAt: null,
     });
     if (population.length === 0) return zeroed();
 
