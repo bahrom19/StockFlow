@@ -43,7 +43,7 @@ export class OverdueInvoiceRepository {
         pi."companyId",
         pi."invoiceNumber",
         pi."supplierId",
-        s."name" AS "supplierName",
+        s."companyName" AS "supplierName",
         pi."dueDate",
         pi."currency",
         (pi."grandTotal" - COALESCE(spa."allocatedAmount", 0))::text AS "outstanding",

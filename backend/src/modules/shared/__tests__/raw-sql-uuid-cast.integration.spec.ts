@@ -778,29 +778,16 @@ describeDb(
         expect(source).toContain('WHERE pi."companyId" = ${companyId}::uuid');
       });
 
-      it('real OverdueInvoiceRepository call: uuid/text defect is gone; a separate 42703 remains (KNOWN, unfixed)', async () => {
-        // The `::uuid` fix is complete. OverdueInvoiceRepository.findOverdueInvoices
-        // still fails, but for an UNRELATED pre-existing reason: it selects
-        // s."name" while model Supplier exposes "companyName" (schema.prisma:518).
-        // That is NOT the UUID/TEXT defect class and is intentionally left for a
-        // separate decision. This test pins the current boundary against the REAL
-        // repository method, so a future fix flips it deliberately rather than
-        // silently.
+      it('real OverdueInvoiceRepository call: executes against real PostgreSQL', async () => {
+        // G16 P2-a: the projection reads Supplier."companyName" (the only name
+        // column model Supplier has ever had), so the statement now resolves.
+        // ABSENT_UUID matches no company, hence the empty result. This is a
+        // positive regression: on the previous s."name" projection this threw
+        // PostgreSQL 42703 and the assertion below failed.
         const repo = new OverdueInvoiceRepository(prisma);
-        let code: string | undefined;
-        let message = '';
-        try {
-          await repo.findOverdueInvoices(ABSENT_UUID, DATE_TO);
-          throw new Error(
-            'expected the known 42703 for s."name"; the statement now succeeds — remove this pin and fix the column',
-          );
-        } catch (error) {
-          code = pgCode(error);
-          message = pgMessage(error);
-        }
-        expect(code).toBe(UNDEFINED_COLUMN);
-        expect(message).toContain('s.name');
-        expect(message).not.toContain('operator does not exist');
+        await expect(
+          repo.findOverdueInvoices(ABSENT_UUID, DATE_TO),
+        ).resolves.toEqual([]);
       });
     });
 
