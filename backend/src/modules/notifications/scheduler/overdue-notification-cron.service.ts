@@ -62,7 +62,14 @@ export class OverdueNotificationCronService {
         select: { id: true },
       });
 
+      // G16 P2-b / F-2: JobRun failure accounting. `processed` counts
+      // companies and `failed` must stay in the same dimension: it counts
+      // companies whose overdue processing failed (repository errors).
+      // Invoice-level errors are NOT counted here — `succeeded` already
+      // counts created notifications, and invoice failures remain in the
+      // warn logs only.
       let notified = 0;
+      let failedCompanies = 0;
       for (const company of companies) {
         try {
           const invoices =
@@ -86,6 +93,7 @@ export class OverdueNotificationCronService {
           }
         } catch (error) {
           // One broken company never stops the rest of the daily scan.
+          failedCompanies += 1;
           this.logger.warn(
             `Overdue scan failed for company ${company.id}: ${
               (error as Error).message
@@ -101,6 +109,7 @@ export class OverdueNotificationCronService {
       await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
         processed: companies.length,
         succeeded: notified,
+        failed: failedCompanies,
       });
     } catch (error) {
       // Scan-level failure (e.g. company listing) — never propagate to the

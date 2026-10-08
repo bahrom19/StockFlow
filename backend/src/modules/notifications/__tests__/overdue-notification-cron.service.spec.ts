@@ -199,7 +199,7 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
       expect(jobRun.finish).toHaveBeenCalledWith(
         'jobrun-test-id',
         'SUCCEEDED',
-        expect.objectContaining({ processed: 2, succeeded: 0 }),
+        expect.objectContaining({ processed: 2, succeeded: 0, failed: 0 }),
       );
     });
 
@@ -264,6 +264,99 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
       expect(prisma.company.findMany).toHaveBeenCalled();
       expect(jobRun.finish).toHaveBeenCalledWith(null, 'SUCCEEDED', expect.anything());
       expect(redis.releaseLock).toHaveBeenCalled();
+    });
+
+    // ---- G16 P2-b / F-2: JobRun failed counter (company dimension) ----
+    //
+    // `processed` counts companies, so `failed` must too: companies whose
+    // overdue processing threw. Invoice-level errors stay out of `failed`
+    // (`succeeded` counts created notifications, invoice failures stay in
+    // logs). These assertions are EXACT (toEqual, not objectContaining) on
+    // the full finish payload, so removing either `failedCompanies += 1` in
+    // the per-company catch or `failed: failedCompanies` from the finish
+    // call turns the corresponding test red — the pin is non-vacuous.
+
+    it('happy path: every company succeeds → failed = 0 (exact payload)', async () => {
+      const jobRun = (cron as any).jobRunService;
+      overdueRepo.findOverdueInvoices
+        .mockResolvedValueOnce([invoice('inv-1', 'comp-1')])
+        .mockResolvedValueOnce([invoice('inv-2', 'comp-2')]);
+
+      await cron.scanOverdueInvoices();
+
+      expect(jobRun.finish).toHaveBeenCalledWith(
+        'jobrun-test-id',
+        'SUCCEEDED',
+        { processed: 2, succeeded: 4, failed: 0 },
+      );
+    });
+
+    it('one company failure → failed = 1, remaining companies still processed', async () => {
+      const jobRun = (cron as any).jobRunService;
+      overdueRepo.findOverdueInvoices
+        .mockRejectedValueOnce(new Error('comp-1 db timeout'))
+        .mockResolvedValueOnce([invoice('inv-2', 'comp-2')]);
+
+      await cron.scanOverdueInvoices();
+
+      // comp-2 was still scanned and its notification still created.
+      expect(service.notifyOverdueInvoice).toHaveBeenCalledTimes(1);
+      expect(service.notifyOverdueInvoice).toHaveBeenCalledWith(
+        invoice('inv-2', 'comp-2'),
+        '2026-09-06',
+      );
+      expect(jobRun.finish).toHaveBeenCalledWith(
+        'jobrun-test-id',
+        'SUCCEEDED',
+        { processed: 2, succeeded: 2, failed: 1 },
+      );
+    });
+
+    it('mixed failure (A ok, B fails, C ok) → processed = 3, failed = 1', async () => {
+      const jobRun = (cron as any).jobRunService;
+      prisma.company.findMany.mockResolvedValue([
+        { id: 'comp-1' },
+        { id: 'comp-2' },
+        { id: 'comp-3' },
+      ]);
+      overdueRepo.findOverdueInvoices
+        .mockResolvedValueOnce([invoice('inv-1', 'comp-1')])
+        .mockRejectedValueOnce(new Error('comp-2 boom'))
+        .mockResolvedValueOnce([invoice('inv-3', 'comp-3')]);
+
+      await cron.scanOverdueInvoices();
+
+      // Both healthy companies completed their notifications.
+      expect(service.notifyOverdueInvoice).toHaveBeenCalledTimes(2);
+      expect(jobRun.finish).toHaveBeenCalledWith(
+        'jobrun-test-id',
+        'SUCCEEDED',
+        { processed: 3, succeeded: 4, failed: 1 },
+      );
+    });
+
+    it('all companies fail → failed = 3, succeeded = 0, status stays SUCCEEDED', async () => {
+      const jobRun = (cron as any).jobRunService;
+      prisma.company.findMany.mockResolvedValue([
+        { id: 'comp-1' },
+        { id: 'comp-2' },
+        { id: 'comp-3' },
+      ]);
+      overdueRepo.findOverdueInvoices
+        .mockRejectedValueOnce(new Error('comp-1 down'))
+        .mockRejectedValueOnce(new Error('comp-2 down'))
+        .mockRejectedValueOnce(new Error('comp-3 down'));
+
+      await cron.scanOverdueInvoices();
+
+      // Observability counter records the outage, but the STATUS semantics
+      // are deliberately unchanged: a scan that completed its sweep is not
+      // a scan-level failure, so it stays SUCCEEDED.
+      expect(jobRun.finish).toHaveBeenCalledWith(
+        'jobrun-test-id',
+        'SUCCEEDED',
+        { processed: 3, succeeded: 0, failed: 3 },
+      );
     });
   });
 });
