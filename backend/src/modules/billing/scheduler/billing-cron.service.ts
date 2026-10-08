@@ -134,6 +134,9 @@ export class BillingCronService {
     try {
       const expiredTrials =
         await this.subscriptionRepository.findExpiredTrials();
+      // G16-X: JobRun failed accounting — subscriptions whose downgrade threw
+      // (same dimension as processed).
+      let failedSubscriptions = 0;
       for (const sub of expiredTrials) {
         try {
           if (!sub.providerCustomerId) {
@@ -144,6 +147,7 @@ export class BillingCronService {
             this.logger.log(`Trial expired: company ${sub.companyId} → FREE`);
           }
         } catch (error) {
+          failedSubscriptions += 1;
           this.logger.error(
             `Trial expiry failed for ${sub.companyId}: ${error}`,
           );
@@ -154,6 +158,7 @@ export class BillingCronService {
       }
       await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
         processed: expiredTrials.length,
+        failed: failedSubscriptions,
       });
     } catch (error) {
       await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
@@ -181,6 +186,10 @@ export class BillingCronService {
       const expiringToday =
         await this.subscriptionRepository.findExpiringToday();
       let generated = 0;
+      // G16-X: JobRun failed accounting — subscriptions whose invoice
+      // generation threw (same dimension as processed; succeeded stays in
+      // invoices — existing semantics, unchanged).
+      let failedSubscriptions = 0;
 
       for (const sub of expiringToday) {
         try {
@@ -194,6 +203,7 @@ export class BillingCronService {
           );
           if (result.created) generated++;
         } catch (error) {
+          failedSubscriptions += 1;
           this.logger.error(
             `Invoice generation failed for ${sub.companyId}: ${error}`,
           );
@@ -205,6 +215,7 @@ export class BillingCronService {
       await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
         processed: expiringToday.length,
         succeeded: generated,
+        failed: failedSubscriptions,
       });
     } catch (error) {
       await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
@@ -231,6 +242,9 @@ export class BillingCronService {
     try {
       const pendingRetries =
         await this.subscriptionRepository.findPendingRetries({ maxRetries: 3 });
+      // G16-X: JobRun failed accounting — subscriptions whose retry body
+      // threw (same dimension as processed).
+      let failedSubscriptions = 0;
       for (const sub of pendingRetries) {
         try {
           // G13-03-06: atomic DB-side increment (was read-modify-write with
@@ -262,6 +276,7 @@ export class BillingCronService {
             );
           }
         } catch (error) {
+          failedSubscriptions += 1;
           this.logger.error(
             `Payment retry failed for ${sub.companyId}: ${error}`,
           );
@@ -272,6 +287,7 @@ export class BillingCronService {
       }
       await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
         processed: pendingRetries.length,
+        failed: failedSubscriptions,
       });
     } catch (error) {
       await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
@@ -298,6 +314,9 @@ export class BillingCronService {
     try {
       const overdue =
         await this.subscriptionRepository.findOverdueGracePeriod();
+      // G16-X: JobRun failed accounting — subscriptions whose transition
+      // threw (same dimension as processed).
+      let failedSubscriptions = 0;
       for (const sub of overdue) {
         try {
           await this.companySubscriptionService.transitionStatus(
@@ -307,6 +326,7 @@ export class BillingCronService {
           );
           this.logger.log(`Suspended: company ${sub.companyId} (overdue)`);
         } catch (error) {
+          failedSubscriptions += 1;
           this.logger.error(`Suspension failed for ${sub.companyId}: ${error}`);
         }
       }
@@ -315,6 +335,7 @@ export class BillingCronService {
       }
       await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
         processed: overdue.length,
+        failed: failedSubscriptions,
       });
     } catch (error) {
       await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
@@ -341,6 +362,9 @@ export class BillingCronService {
     try {
       const expired =
         await this.subscriptionRepository.findExpiredSuspensions();
+      // G16-X: JobRun failed accounting — subscriptions whose transition
+      // threw (same dimension as processed).
+      let failedSubscriptions = 0;
       for (const sub of expired) {
         try {
           await this.companySubscriptionService.transitionStatus(
@@ -353,6 +377,7 @@ export class BillingCronService {
           // publication here.
           this.logger.log(`Expired: company ${sub.companyId}`);
         } catch (error) {
+          failedSubscriptions += 1;
           this.logger.error(`Expiration failed for ${sub.companyId}: ${error}`);
         }
       }
@@ -361,6 +386,7 @@ export class BillingCronService {
       }
       await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
         processed: expired.length,
+        failed: failedSubscriptions,
       });
     } catch (error) {
       await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });
@@ -440,6 +466,10 @@ export class BillingCronService {
       }
 
       let resumed = 0;
+      // G16-X: JobRun failed accounting — candidates whose processing body
+      // threw (same dimension as processed). Candidates without an eligible
+      // payment are neither succeeded nor failed.
+      let failedSubscriptions = 0;
       for (const sub of candidates) {
         try {
           // Check if there's a recent successful payment transaction
@@ -466,6 +496,7 @@ export class BillingCronService {
             resumed++;
           }
         } catch (error) {
+          failedSubscriptions += 1;
           this.logger.error(`Resume failed for ${sub.companyId}: ${error}`);
         }
       }
@@ -475,6 +506,7 @@ export class BillingCronService {
       await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
         processed: candidates.length,
         succeeded: resumed,
+        failed: failedSubscriptions,
       });
     } catch (error) {
       await this.jobRunService.finish(runId, JobRunStatus.FAILED, { error });

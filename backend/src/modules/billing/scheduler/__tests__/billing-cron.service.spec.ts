@@ -135,7 +135,7 @@ describe('BillingCronService - TTL verification', () => {
       expect(jobRun.finish).toHaveBeenCalledWith(
         'jobrun-test-id',
         'SUCCEEDED',
-        expect.objectContaining({ processed: 0 }),
+        expect.objectContaining({ processed: 0, failed: 0 }),
       );
     });
 
@@ -630,8 +630,9 @@ describe('BillingCronService - TTL verification', () => {
   });
 
   it('should skip already-invoiced periods and continue after per-subscription failure', async () => {
+    const jobRun = jobRunStub();
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRun,
     );
 
     const fakeToken = 'test-token-recurring-partial';
@@ -656,6 +657,12 @@ describe('BillingCronService - TTL verification', () => {
 
     await expect(service.generateRecurringInvoices()).resolves.toBeUndefined();
     expect(generateRecurringInvoice).toHaveBeenCalledTimes(2);
+    // G16-X: exact payload — 1 of 2 subscriptions failed, none generated.
+    expect(jobRun.finish).toHaveBeenCalledWith('jobrun-test-id', 'SUCCEEDED', {
+      processed: 2,
+      succeeded: 0,
+      failed: 1,
+    });
     const redisService = (service as any).redisService;
     expect(redisService.releaseLock).toHaveBeenCalledWith(
       'cron:lock:recurring-invoices',
@@ -668,8 +675,9 @@ describe('BillingCronService - TTL verification', () => {
     paidCompanyIds: Set<string>,
     failingCompanyIds: Set<string> = new Set(),
   ) {
+    const jobRun = jobRunStub();
     const service = new BillingCronService(
-      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRunStub(),
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRun,
     );
 
     const fakeToken = 'test-token-resume-drain';
@@ -710,7 +718,7 @@ describe('BillingCronService - TTL verification', () => {
         return undefined;
       });
     (service as any).companySubscriptionService = { transitionStatus };
-    return { service, findAll, transitionStatus, pool, fakeToken };
+    return { service, findAll, transitionStatus, pool, fakeToken, jobRun };
   }
 
   function makeSubs(
@@ -793,7 +801,7 @@ describe('BillingCronService - TTL verification', () => {
     const subs = makeSubs(3, 'partial');
     const paid = new Set(subs.map((s) => s.companyId));
     const failing = new Set([subs[1]!.companyId]);
-    const { service, transitionStatus, pool } = setupResumeService(
+    const { service, transitionStatus, pool, jobRun } = setupResumeService(
       subs,
       paid,
       failing,
@@ -803,6 +811,12 @@ describe('BillingCronService - TTL verification', () => {
 
     expect(transitionStatus).toHaveBeenCalledTimes(3);
     expect(pool.map((s) => s.companyId)).toEqual([subs[1]!.companyId]);
+    // G16-X: exact payload — 1 of 3 candidates failed, 2 resumed.
+    expect(jobRun.finish).toHaveBeenCalledWith('jobrun-test-id', 'SUCCEEDED', {
+      processed: 3,
+      succeeded: 2,
+      failed: 1,
+    });
     const redisService = (service as any).redisService;
     expect(redisService.releaseLock).toHaveBeenCalledTimes(1);
   });
@@ -815,5 +829,120 @@ describe('BillingCronService - TTL verification', () => {
     expect(transitionStatus).not.toHaveBeenCalled();
     const redisService = (service as any).redisService;
     expect(redisService.releaseLock).toHaveBeenCalledTimes(1);
+  });
+
+  // ---- G16-X: JobRun failed counter (subscription dimension) ----
+  //
+  // Each test pins the EXACT finish payload of one billing job, so removing
+  // either `failedSubscriptions += 1` from that job's per-item catch or
+  // `failed: failedSubscriptions` from its finish payload turns it red.
+
+  function setupBillingJobService() {
+    const jobRun = jobRunStub();
+    const service = new BillingCronService(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, jobRun,
+    );
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED('token-x')),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    return { service, jobRun };
+  }
+
+  it('G16-X: expired-trials records failed = 1 when one downgrade throws', async () => {
+    const { service, jobRun } = setupBillingJobService();
+    (service as any).subscriptionRepository = {
+      findExpiredTrials: jest.fn().mockResolvedValue([
+        { id: 'sub-1', companyId: 'comp-1' },
+        { id: 'sub-2', companyId: 'comp-2' },
+      ]),
+    };
+    const downgradeToFree = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('downgrade failed'))
+      .mockResolvedValueOnce(undefined);
+    (service as any).companySubscriptionService = { downgradeToFree };
+
+    await service.processExpiredTrials();
+
+    expect(downgradeToFree).toHaveBeenCalledTimes(2);
+    expect(jobRun.finish).toHaveBeenCalledWith('jobrun-test-id', 'SUCCEEDED', {
+      processed: 2,
+      failed: 1,
+    });
+  });
+
+  it('G16-X: retry-payments records failed = 1 when one retry body throws', async () => {
+    const { service, jobRun } = setupBillingJobService();
+    (service as any).subscriptionRepository = {
+      findPendingRetries: jest.fn().mockResolvedValue([
+        { id: 'sub-1', companyId: 'comp-1' },
+        { id: 'sub-2', companyId: 'comp-2' },
+      ]),
+    };
+    const update = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('update failed'))
+      .mockResolvedValueOnce({ paymentRetryCount: 1 });
+    (service as any).prismaService = { companySubscription: { update } };
+    const transitionStatus = jest.fn();
+    (service as any).companySubscriptionService = { transitionStatus };
+
+    await service.retryFailedPayments();
+
+    expect(update).toHaveBeenCalledTimes(2);
+    // retryCount 1 < 3 → no suspension on the successful item.
+    expect(transitionStatus).not.toHaveBeenCalled();
+    expect(jobRun.finish).toHaveBeenCalledWith('jobrun-test-id', 'SUCCEEDED', {
+      processed: 2,
+      failed: 1,
+    });
+  });
+
+  it('G16-X: expire-suspended records failed = 1 when one transition throws', async () => {
+    const { service, jobRun } = setupBillingJobService();
+    (service as any).subscriptionRepository = {
+      findExpiredSuspensions: jest.fn().mockResolvedValue([
+        { id: 'sub-1', companyId: 'comp-1' },
+        { id: 'sub-2', companyId: 'comp-2' },
+      ]),
+    };
+    const transitionStatus = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('transition failed'))
+      .mockResolvedValueOnce(undefined);
+    (service as any).companySubscriptionService = { transitionStatus };
+
+    await service.expireSuspendedSubscriptions();
+
+    expect(transitionStatus).toHaveBeenCalledTimes(2);
+    expect(jobRun.finish).toHaveBeenCalledWith('jobrun-test-id', 'SUCCEEDED', {
+      processed: 2,
+      failed: 1,
+    });
+  });
+
+  it('G16-X: suspend-overdue all-fail → failed = processed, status stays SUCCEEDED', async () => {
+    const { service, jobRun } = setupBillingJobService();
+    (service as any).subscriptionRepository = {
+      findOverdueGracePeriod: jest.fn().mockResolvedValue([
+        { id: 'sub-1', companyId: 'comp-1' },
+        { id: 'sub-2', companyId: 'comp-2' },
+      ]),
+    };
+    const transitionStatus = jest
+      .fn()
+      .mockRejectedValue(new Error('transition failed'));
+    (service as any).companySubscriptionService = { transitionStatus };
+
+    await service.suspendOverdueSubscriptions();
+
+    expect(transitionStatus).toHaveBeenCalledTimes(2);
+    // Observability counter records the outage, but status semantics are
+    // deliberately unchanged: a completed sweep stays SUCCEEDED.
+    expect(jobRun.finish).toHaveBeenCalledWith('jobrun-test-id', 'SUCCEEDED', {
+      processed: 2,
+      failed: 2,
+    });
   });
 });
