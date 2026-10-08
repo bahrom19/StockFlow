@@ -7,6 +7,12 @@ export interface AppConfig {
   port: number;
   url: string;
   swaggerEnabled: boolean;
+  /**
+   * G16-Y: exact browser origin allowed in production (e.g.
+   * `https://app.example.com`). No wildcard default — production fails
+   * closed when unset (see env.validation.ts and main.ts).
+   */
+  corsOrigin?: string;
   stripeWebhookSecret: string;
   stripeWebhookSkipVerify: boolean;
 }
@@ -35,6 +41,9 @@ export const appConfig = registerAs('app', (): AppConfig => {
       swaggerEnabled === undefined
         ? false
         : swaggerEnabled === 'true' || swaggerEnabled === '1',
+    // G16-Y: raw env value, no fallback. `undefined` when unset; empty /
+    // malformed values are rejected at validation time (fail closed).
+    corsOrigin: process.env.CORS_ORIGIN,
     stripeWebhookSecret,
     stripeWebhookSkipVerify,
   };

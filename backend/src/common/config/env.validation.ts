@@ -17,6 +17,18 @@ export const envValidationSchema = Joi.object({
   JWT_REFRESH_EXPIRES_IN: Joi.string().required(),
   SWAGGER_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
 
+  // G16-Y: production requires one exact browser origin (http/https URI).
+  // Absent/empty/malformed in production -> validation error -> the app
+  // fails to boot (fail closed; never a wildcard fallback). Optional in
+  // development/test, where main.ts keeps the '*' dev policy.
+  CORS_ORIGIN: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }),
+
   // G13-03-08-01: Stripe webhook verification. Optional on startup (the
   // engine fails closed at runtime without a secret); the skip flag is an
   // explicit opt-in bypass for local development only.

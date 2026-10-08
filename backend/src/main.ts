@@ -27,9 +27,13 @@ async function bootstrap(): Promise<void> {
     configService.get<string>('app.nodeEnv') === 'production';
 
   // Security
+  // G16-Y: production uses the exact configured origin (CORS_ORIGIN via
+  // app.corsOrigin, required by env validation). If validation was ever
+  // bypassed and the value is missing, `false` disables CORS entirely —
+  // never a wildcard. Development/test keep '*' unchanged.
   app.enableCors({
     origin: isProduction
-      ? configService.get<string>('app.corsOrigin', '*')
+      ? (configService.get<string>('app.corsOrigin') ?? false)
       : '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
