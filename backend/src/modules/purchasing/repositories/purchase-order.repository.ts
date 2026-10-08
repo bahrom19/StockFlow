@@ -276,7 +276,7 @@ export class PurchaseOrderRepository {
   ): Promise<void> {
     const rows = await this.getClient(tx).$queryRaw<
       Array<{ id: string }>
-    >`SELECT id FROM "PurchaseOrder" WHERE id = ${id} AND "companyId" = ${companyId} AND "deletedAt" IS NULL FOR UPDATE`;
+    >`SELECT id FROM "PurchaseOrder" WHERE id = ${id}::uuid AND "companyId" = ${companyId}::uuid AND "deletedAt" IS NULL FOR UPDATE`;
     if (!rows || rows.length === 0) {
       throw new NotFoundException(`Purchase order with id ${id} not found`);
     }

@@ -74,7 +74,7 @@ export class CompaniesService {
 
       // Force row-level lock via raw query (Prisma findUnique doesn't support
       // FOR UPDATE directly). This ensures concurrent PATCH requests serialize.
-      await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${companyId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${companyId}::uuid FOR UPDATE`;
 
       // 2. Check: does any monetary data exist?
       //    All 13 tables checked atomically within the transaction.
@@ -134,14 +134,24 @@ export class CompaniesService {
   /**
    * Checks if ANY of the 13 lock-tables has records for this company.
    * Uses EXISTS for efficiency — stops at first match.
+   *
+   * Table names come from the static LOCK_TABLES allowlist only; values are
+   * always bound parameters (never interpolated), so no dynamic SQL is built
+   * from user input. `::uuid` is required because Prisma binds JS strings to
+   * PostgreSQL as `text`, and every scoped column below is `uuid`.
    */
   private async checkMonetaryDataExists(
     tx: Prisma.TransactionClient,
     companyId: string,
   ): Promise<boolean> {
-    const checks = LOCK_TABLES.map(
-      (table) =>
-        Prisma.sql`SELECT EXISTS(SELECT 1 FROM ${Prisma.raw(`"${table}"`)} WHERE "companyId" = ${companyId} LIMIT 1)`,
+    const checks = LOCK_TABLES.map((table) =>
+      // CreditLimit owns no "companyId" column — it is tenant-scoped through
+      // its parent Customer (FK CreditLimit.customerId → Customer.id).
+      // Joining Customer.companyId keeps the guard tenant-scoped instead of
+      // either erroring (undefined column) or scanning every tenant's rows.
+      table === 'CreditLimit'
+        ? Prisma.sql`SELECT EXISTS(SELECT 1 FROM ${Prisma.raw(`"${table}"`)} cl JOIN "Customer" c ON c."id" = cl."customerId" WHERE c."companyId" = ${companyId}::uuid LIMIT 1)`
+        : Prisma.sql`SELECT EXISTS(SELECT 1 FROM ${Prisma.raw(`"${table}"`)} WHERE "companyId" = ${companyId}::uuid LIMIT 1)`,
     );
 
     // Run all EXISTS checks — any true means data exists

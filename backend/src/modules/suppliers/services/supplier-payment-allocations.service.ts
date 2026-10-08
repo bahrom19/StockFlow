@@ -141,8 +141,8 @@ export class SupplierPaymentAllocationsService {
     // for the canonical repository-level form. Held to commit.
     const lockedInvoice = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM "PurchaseInvoice"
-      WHERE id = ${purchaseInvoiceId}
-        AND "companyId" = ${companyId}
+      WHERE id = ${purchaseInvoiceId}::uuid
+        AND "companyId" = ${companyId}::uuid
         AND "deletedAt" IS NULL
       FOR UPDATE
     `;
@@ -158,8 +158,8 @@ export class SupplierPaymentAllocationsService {
     >`
       SELECT id, amount, "deletedAt"
       FROM "SupplierPayment"
-      WHERE id = ${paymentId}
-        AND "companyId" = ${companyId}
+      WHERE id = ${paymentId}::uuid
+        AND "companyId" = ${companyId}::uuid
         AND "deletedAt" IS NULL
       FOR UPDATE
     `;

@@ -409,10 +409,17 @@ describe('SupplierPaymentAllocationsService', () => {
     it('should use SELECT ... FOR UPDATE to lock payment row', async () => {
       await service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId);
 
-      // Verify raw query is used for locking
+      // Verify raw query is used for locking.
       expect(mockPrisma.$queryRaw).toHaveBeenCalled();
-      const queryCall = mockPrisma.$queryRaw.mock.calls[0];
-      expect(queryCall[0].join('')).toContain('FOR UPDATE');
+      // G14-02-12: the invoice lock is acquired first, so calls[0] is the
+      // PurchaseInvoice lock. Select the call that actually targets
+      // "SupplierPayment" — asserting on calls[0] would silently verify the
+      // invoice lock instead of the payment lock this test is named for.
+      const paymentLockCall = mockPrisma.$queryRaw.mock.calls.find(
+        (call: unknown[]) => String(call[0]).includes('SupplierPayment'),
+      );
+      expect(paymentLockCall).toBeDefined();
+      expect(paymentLockCall![0].join('')).toContain('FOR UPDATE');
     });
 
     // G14-02-12: canonical lock order — invoice lock BEFORE payment lock.

@@ -86,15 +86,15 @@ export class SupplierExposureRepository {
           pi."companyId",
           SUM(pi."grandTotal") AS "invoicedTotal"
         FROM "PurchaseInvoice" pi
-        WHERE pi."companyId" = ${companyId}
+        WHERE pi."companyId" = ${companyId}::uuid
           AND pi."deletedAt" IS NULL
           AND pi.status IN ('APPROVED', 'PAID')
         GROUP BY pi."purchaseOrderId", pi."companyId"
       ) inv
         ON inv."purchaseOrderId" = po.id
         AND inv."companyId" = po."companyId"
-      WHERE po."supplierId" = ${supplierId}
-        AND po."companyId" = ${companyId}
+      WHERE po."supplierId" = ${supplierId}::uuid
+        AND po."companyId" = ${companyId}::uuid
         AND po."deletedAt" IS NULL
         AND po.status IN ('APPROVED', 'ORDERED', 'PARTIALLY_RECEIVED', 'RECEIVED')
       GROUP BY po."supplierId", po.currency

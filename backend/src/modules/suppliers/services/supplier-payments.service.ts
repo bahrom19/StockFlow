@@ -167,8 +167,8 @@ export class SupplierPaymentsService {
       // canonical repository-level form. Held to commit.
       const lockedInvoice = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM "PurchaseInvoice"
-        WHERE id = ${dto.purchaseInvoiceId}
-          AND "companyId" = ${companyId}
+        WHERE id = ${dto.purchaseInvoiceId}::uuid
+          AND "companyId" = ${companyId}::uuid
           AND "deletedAt" IS NULL
         FOR UPDATE
       `;

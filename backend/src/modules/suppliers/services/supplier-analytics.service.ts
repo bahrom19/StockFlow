@@ -137,8 +137,8 @@ export class SupplierAnalyticsService {
         TO_CHAR(pi."invoiceDate", 'YYYY-MM') AS month,
         SUM(pi."grandTotal") AS amount
       FROM "PurchaseInvoice" pi
-      WHERE pi."supplierId" = ${supplierId}
-        AND pi."companyId" = ${companyId}
+      WHERE pi."supplierId" = ${supplierId}::uuid
+        AND pi."companyId" = ${companyId}::uuid
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
         AND pi."currency" = ${baseCurrency}::"Currency"
@@ -299,8 +299,8 @@ export class SupplierAnalyticsService {
       FROM "PurchaseInvoiceItem" pii
       JOIN "PurchaseInvoice" pi ON pii."purchaseInvoiceId" = pi.id
       JOIN "Product" p ON pii."productId" = p.id
-      WHERE pi."supplierId" = ${supplierId}
-        AND pi."companyId" = ${companyId}
+      WHERE pi."supplierId" = ${supplierId}::uuid
+        AND pi."companyId" = ${companyId}::uuid
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
         AND pi."invoiceDate" >= ${effectiveDateFrom}
@@ -319,8 +319,8 @@ export class SupplierAnalyticsService {
       FROM "PurchaseInvoiceItem" pii
       JOIN "PurchaseInvoice" pi ON pii."purchaseInvoiceId" = pi.id
       JOIN "Product" p ON pii."productId" = p.id
-      WHERE pi."supplierId" = ${supplierId}
-        AND pi."companyId" = ${companyId}
+      WHERE pi."supplierId" = ${supplierId}::uuid
+        AND pi."companyId" = ${companyId}::uuid
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
         AND pi."invoiceDate" >= ${effectiveDateFrom}
@@ -346,8 +346,8 @@ export class SupplierAnalyticsService {
         SUM(pri."total") AS "returnedSpend"
       FROM "PurchaseReturnItem" pri
       JOIN "PurchaseReturn" pr ON pri."purchaseReturnId" = pr.id
-      WHERE pr."supplierId" = ${supplierId}
-        AND pr."companyId" = ${companyId}
+      WHERE pr."supplierId" = ${supplierId}::uuid
+        AND pr."companyId" = ${companyId}::uuid
         AND pr."deletedAt" IS NULL
         AND pr."status" IN ('APPROVED', 'COMPLETED')
         AND pr."isCancelled" = false
@@ -481,8 +481,8 @@ export class SupplierAnalyticsService {
         ORDER BY gr."receiptDate" ASC
         LIMIT 1
       ) gr ON true
-      WHERE po."supplierId" = ${supplierId}
-        AND po."companyId" = ${companyId}
+      WHERE po."supplierId" = ${supplierId}::uuid
+        AND po."companyId" = ${companyId}::uuid
         AND po."deletedAt" IS NULL
         AND po."orderDate" >= ${effectiveDateFrom}
         AND po."orderDate" <= ${effectiveDateTo}
@@ -626,13 +626,13 @@ export class SupplierAnalyticsService {
         pii."total"
       FROM "PurchaseInvoiceItem" pii
       JOIN "PurchaseInvoice" pi ON pii."purchaseInvoiceId" = pi.id
-      WHERE pi."supplierId" = ${supplierId}
-        AND pi."companyId" = ${companyId}
+      WHERE pi."supplierId" = ${supplierId}::uuid
+        AND pi."companyId" = ${companyId}::uuid
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
         AND pi."invoiceDate" >= ${effectiveDateFrom}
         AND pi."invoiceDate" <= ${effectiveDateTo}
-        AND pii."productId" = ${productId}
+        AND pii."productId" = ${productId}::uuid
       ORDER BY pi."invoiceDate" ASC
     `;
 
@@ -733,8 +733,8 @@ export class SupplierAnalyticsService {
         WHERE "deletedAt" IS NULL
         GROUP BY "purchaseInvoiceId"
       ) spa ON spa."purchaseInvoiceId" = pi.id
-      WHERE pi."supplierId" = ${supplierId}
-        AND pi."companyId" = ${companyId}
+      WHERE pi."supplierId" = ${supplierId}::uuid
+        AND pi."companyId" = ${companyId}::uuid
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
         AND pi."currency" = ${baseCurrency}::"Currency"
@@ -917,8 +917,8 @@ export class SupplierAnalyticsService {
         COUNT(DISTINCT pr."id") AS "returnCount"
       FROM "PurchaseReturnItem" pri
       JOIN "PurchaseReturn" pr ON pri."purchaseReturnId" = pr.id
-      WHERE pr."supplierId" = ${supplierId}
-        AND pr."companyId" = ${companyId}
+      WHERE pr."supplierId" = ${supplierId}::uuid
+        AND pr."companyId" = ${companyId}::uuid
         AND pr."deletedAt" IS NULL
         AND pr."status" IN ('APPROVED', 'COMPLETED')
         AND pr."isCancelled" = false
@@ -945,8 +945,8 @@ export class SupplierAnalyticsService {
         SUM(pii."quantity") AS "totalQuantity"
       FROM "PurchaseInvoiceItem" pii
       JOIN "PurchaseInvoice" pi ON pii."purchaseInvoiceId" = pi.id
-      WHERE pi."supplierId" = ${supplierId}
-        AND pi."companyId" = ${companyId}
+      WHERE pi."supplierId" = ${supplierId}::uuid
+        AND pi."companyId" = ${companyId}::uuid
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
         AND pi."invoiceDate" >= ${effectiveDateFrom}

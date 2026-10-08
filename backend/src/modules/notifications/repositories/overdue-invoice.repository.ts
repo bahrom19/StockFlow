@@ -60,7 +60,7 @@ export class OverdueInvoiceRepository {
         GROUP BY "purchaseInvoiceId"
       ) spa ON spa."purchaseInvoiceId" = pi.id
       JOIN "Supplier" s ON s."id" = pi."supplierId"
-      WHERE pi."companyId" = ${companyId}
+      WHERE pi."companyId" = ${companyId}::uuid
         AND pi."deletedAt" IS NULL
         AND pi."status" IN ('APPROVED', 'PAID')
         AND (pi."grandTotal" - COALESCE(spa."allocatedAmount", 0)) > 0
