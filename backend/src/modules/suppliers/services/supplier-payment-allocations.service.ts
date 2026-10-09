@@ -264,7 +264,11 @@ export class SupplierPaymentAllocationsService {
     supplierId: string,
     companyId: string,
   ): Promise<SupplierPaymentAllocationEntity[]> {
-    // Verify payment exists and belongs to this supplier/company
+    // Verify payment exists and belongs to this supplier/company.
+    // G16-AA-2: the payment row itself is tenant-scoped by supplierId +
+    // companyId, so no separate supplier identity lookup is needed — an
+    // archived supplier's allocation history stays readable through the
+    // existing tenant-scoped payment gate.
     const payment = await this.paymentsRepo.findById(paymentId, supplierId, companyId);
     if (!payment) {
       throw new NotFoundException(`Payment ${paymentId} not found for this supplier`);

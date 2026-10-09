@@ -117,6 +117,36 @@ export class SuppliersRepository {
     });
   }
 
+  /**
+   * G16-AA-2: archived (soft-deleted) supplier identity lookup — READ-ONLY
+   * use, explicitly named so the archived-allowed semantics are visible at
+   * every call site.
+   *
+   * Scope guarantees (do not widen without re-approval):
+   * - Tenant-scoped: id + companyId. Cross-company access is a 404.
+   * - Matches ONLY soft-deleted suppliers (deletedAt IS NOT NULL): active
+   *   suppliers keep using the canonical findById() gate. A caller that
+   *   needs "active or archived" must try findById() first and this method
+   *   second (see resolveSupplierForFinancialRead in the services), so the
+   *   active path keeps its exact existing semantics.
+   * - MUST NOT be used by supplier create/update/delete flows, duplicate
+   *   checks (findActiveBy*), purchasing write paths, or any path that can
+   *   create or mutate supplier state.
+   */
+  async findArchivedSupplierById(
+    id: string,
+    companyId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Supplier | null> {
+    return this.getClient(tx).supplier.findFirst({
+      where: {
+        id,
+        deletedAt: { not: null },
+        companyId,
+      },
+    });
+  }
+
   async update(
     id: string,
     data: Prisma.SupplierUpdateInput,

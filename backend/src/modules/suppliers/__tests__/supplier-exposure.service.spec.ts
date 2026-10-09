@@ -12,12 +12,12 @@ describe('SupplierExposureService — open-PO exposure (G9-D3)', () => {
   const supplierId = 'supplier-1';
 
   let service: SupplierExposureService;
-  let mockSuppliersRepo: { findById: jest.Mock };
+  let mockSuppliersRepo: { findById: jest.Mock; findArchivedSupplierById: jest.Mock };
   let mockExposureRepo: { getOpenPoExposureAggregates: jest.Mock };
   let mockCompaniesService: { getBaseCurrency: jest.Mock };
 
   beforeEach(() => {
-    mockSuppliersRepo = { findById: jest.fn() };
+    mockSuppliersRepo = { findById: jest.fn(), findArchivedSupplierById: jest.fn().mockResolvedValue(null) };
     mockExposureRepo = { getOpenPoExposureAggregates: jest.fn().mockResolvedValue([]) };
     mockCompaniesService = { getBaseCurrency: jest.fn().mockResolvedValue('KZT') };
     service = new SupplierExposureService(

@@ -10,6 +10,7 @@ import {
   SupplierExposureCurrencyEntity,
 } from '../entities/supplier-exposure.entity';
 import { CompaniesService } from '../../companies/services/companies.service';
+import { resolveSupplierForFinancialRead } from './supplier-statement.service';
 
 /**
  * G9-D3: Supplier Open-PO Exposure — READ-ONLY observability only.
@@ -52,9 +53,14 @@ export class SupplierExposureService {
     supplierId: string,
     companyId: string,
   ): Promise<SupplierExposureEntity> {
-    // Tenant-scoped lookup (id + companyId, soft-deleted excluded).
+    // Tenant-scoped lookup (id + companyId). G16-AA-2: archived-allowed
+    // read gate — open-PO exposure of an archived supplier stays visible.
     // Cross-company access falls into the same not-found behavior (D1).
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }

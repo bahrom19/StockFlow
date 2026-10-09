@@ -148,6 +148,7 @@ describe('SupplierPaymentsService', () => {
 
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue(baseSupplier),
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
 
     mockPaymentsRepo = {

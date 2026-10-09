@@ -34,7 +34,7 @@ function supplierFixture(creditLimit: Decimal | null) {
 
 describe('SupplierCreditSummaryService', () => {
   let service: SupplierCreditSummaryService;
-  let suppliersRepo: { findById: jest.Mock };
+  let suppliersRepo: { findById: jest.Mock; findArchivedSupplierById: jest.Mock };
   let companiesService: { getBaseCurrency: jest.Mock };
   let invoiceAggregate: jest.Mock;
   let allocationAggregate: jest.Mock;
@@ -59,6 +59,7 @@ describe('SupplierCreditSummaryService', () => {
 
     suppliersRepo = {
       findById: jest.fn().mockResolvedValue(supplierFixture(null)),
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
     companiesService = { getBaseCurrency: jest.fn().mockResolvedValue(KZT) };
 

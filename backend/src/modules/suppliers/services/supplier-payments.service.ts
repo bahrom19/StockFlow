@@ -15,6 +15,7 @@ import { DocumentSequenceService } from '../../shared/services/document-sequence
 import { AuditLogService } from '../../shared/services/audit-log.service';
 import { PrismaService } from '../../../common/prisma';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
+import { resolveSupplierForFinancialRead } from './supplier-statement.service';
 import { SupplierPaymentsRepository } from '../repositories/supplier-payments.repository';
 import { SupplierPaymentAllocationsRepository } from '../repositories/supplier-payment-allocations.repository';
 import { SupplierPaymentEntity } from '../entities/supplier-payment.entity';
@@ -60,10 +61,27 @@ export class SupplierPaymentsService {
     companyId: string,
     idempotencyKey?: string,
   ): Promise<SupplierPaymentEntity> {
-    // 1. Verify supplier belongs to company
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // 1. Verify supplier belongs to company.
+    // G16-AA-2: archived (soft-deleted) suppliers remain reachable ONLY for
+    // settling existing debt on an EXISTING invoice. The identity gate is
+    // archived-allowed, but unallocated payments (no purchaseInvoiceId) for
+    // an archived supplier are rejected — see the settlement constraint
+    // below. All downstream checks (currency, method/account, invoice
+    // tenant/status/currency/overpayment CAS, GL, idempotency, audit) are
+    // unchanged.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
+    }
+    const isArchivedSupplier = supplier.deletedAt != null;
+    if (isArchivedSupplier && !dto.purchaseInvoiceId) {
+      throw new BadRequestException(
+        `Cannot record an unallocated payment for archived supplier ${supplierId}. Payments for archived suppliers must settle an existing invoice.`,
+      );
     }
 
     // 2. Validate amount
@@ -396,7 +414,13 @@ export class SupplierPaymentsService {
     page = 1,
     limit = 20,
   ): Promise<{ items: SupplierPaymentEntity[]; total: number; page: number; limit: number }> {
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // G16-AA-2: archived-allowed read gate — payment history of archived
+    // suppliers stays visible.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
@@ -647,7 +671,13 @@ export class SupplierPaymentsService {
     supplierId: string,
     companyId: string,
   ): Promise<SupplierFinanceSummaryEntity> {
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // G16-AA-2: archived-allowed read gate — finance summary of archived
+    // suppliers stays visible.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }

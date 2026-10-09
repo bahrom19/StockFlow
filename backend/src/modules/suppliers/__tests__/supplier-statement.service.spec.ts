@@ -86,7 +86,7 @@ function one<T>(arr: T[]): T {
 
 describe('SupplierStatementService', () => {
   let service: SupplierStatementService;
-  let mockSuppliersRepo: { findById: jest.Mock };
+  let mockSuppliersRepo: { findById: jest.Mock; findArchivedSupplierById: jest.Mock };
   let mockStatementRepo: {
     findInvoices: jest.Mock;
     findPayments: jest.Mock;
@@ -138,7 +138,10 @@ describe('SupplierStatementService', () => {
   };
 
   beforeEach(() => {
-    mockSuppliersRepo = { findById: jest.fn().mockResolvedValue({ id: supplierId }) };
+    mockSuppliersRepo = {
+      findById: jest.fn().mockResolvedValue({ id: supplierId }),
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
+    };
     mockStatementRepo = {
       findInvoices: jest.fn().mockResolvedValue([]),
       findPayments: jest.fn().mockResolvedValue([]),
@@ -532,7 +535,10 @@ describe('G14-03-01 statement ↔ credit-summary consistency (shared fixtures, n
     returned: string;
   }) => {
     const creditService = new SupplierCreditSummaryService(
-      { findById: jest.fn().mockResolvedValue({ id: supplierId }) } as unknown as SuppliersRepository,
+      {
+        findById: jest.fn().mockResolvedValue({ id: supplierId }),
+        findArchivedSupplierById: jest.fn().mockResolvedValue(null),
+      } as unknown as SuppliersRepository,
       {
         getBaseCurrencyTotals: jest.fn().mockResolvedValue({
           totalInvoiced: new Decimal(totals.invoiced),
@@ -551,7 +557,10 @@ describe('G14-03-01 statement ↔ credit-summary consistency (shared fixtures, n
     allocations?: StatementAllocationRow[];
   }) => {
     const statementService = new SupplierStatementService(
-      { findById: jest.fn().mockResolvedValue({ id: supplierId }) } as unknown as SuppliersRepository,
+      {
+        findById: jest.fn().mockResolvedValue({ id: supplierId }),
+        findArchivedSupplierById: jest.fn().mockResolvedValue(null),
+      } as unknown as SuppliersRepository,
       {
         findInvoices: jest.fn().mockResolvedValue(opts.invoices ?? []),
         findPayments: jest.fn().mockResolvedValue(opts.payments ?? []),

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Currency } from '@prisma/client';
+import { Currency, Supplier } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierStatementRepository } from '../repositories/supplier-statement.repository';
@@ -50,7 +50,27 @@ const ENTRY_TYPE_RANK: Record<SupplierStatementEntryType, number> = {
  * entry.amount always keeps the full SupplierPayment.amount for display.
  * The statement never reads the legacy PurchaseInvoice.paidAmount
  * cache, and never mixes currencies in a single running balance.
+ *
+ * G16-AA-2: the supplier identity gate is archived-allowed. Historical
+ * financial data of an archived (soft-deleted) supplier remains readable;
+ * the lookup is still tenant-scoped (cross-company stays a 404).
+ *
+ * The exported helper below is the archived-allowed supplier identity gate
+ * for READ paths: active suppliers resolve via the canonical findById()
+ * (unchanged); only when that misses does the explicit archived lookup
+ * run. Shared helper — used ONLY by supplier-scoped financial read
+ * services.
  */
+export async function resolveSupplierForFinancialRead(
+  suppliersRepo: SuppliersRepository,
+  supplierId: string,
+  companyId: string,
+): Promise<Supplier | null> {
+  const active = await suppliersRepo.findById(supplierId, companyId);
+  if (active) return active;
+  return suppliersRepo.findArchivedSupplierById(supplierId, companyId);
+}
+
 @Injectable()
 export class SupplierStatementService {
   constructor(
@@ -63,7 +83,11 @@ export class SupplierStatementService {
     companyId: string,
     query: SupplierStatementQueryDto,
   ): Promise<SupplierStatementEntity> {
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }

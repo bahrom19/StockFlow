@@ -3,6 +3,7 @@ import { Currency } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierCreditSummaryRepository } from '../repositories/supplier-credit-summary.repository';
+import { resolveSupplierForFinancialRead } from './supplier-statement.service';
 import { SupplierCreditSummaryEntity } from '../entities/supplier-credit-summary.entity';
 import { CompaniesService } from '../../companies/services/companies.service';
 
@@ -41,9 +42,14 @@ export class SupplierCreditSummaryService {
     supplierId: string,
     companyId: string,
   ): Promise<SupplierCreditSummaryEntity> {
-    // Tenant-scoped lookup (id + companyId, soft-deleted excluded).
-    // Cross-company access falls into the same not-found behavior.
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // Tenant-scoped lookup (id + companyId). G16-AA-2: archived-allowed
+    // read gate — historical credit exposure of an archived supplier stays
+    // visible. Cross-company access falls into the same not-found behavior.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
