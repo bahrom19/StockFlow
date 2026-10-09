@@ -86,12 +86,41 @@ describe('inspect-job-runs CLI (read-only JobRun inspector)', () => {
     const backendRoot = join(__dirname, '..', '..', '..', '..');
     const cliPath = join(backendRoot, 'scripts', 'inspect-job-runs.mjs');
 
+    /**
+     * G16-CI-2D: when the CLI exits non-zero, print the captured child
+     * output BEFORE the status assertion so a CI failure is self-diagnosing.
+     * Prints mode/status/error/stdout/stderr only — never env or secrets.
+     */
+    const reportCliFailure = (
+      mode: string,
+      res: {
+        status: number | null;
+        error?: Error;
+        stdout: string;
+        stderr: string;
+      },
+    ): void => {
+      if (res.status === 0) return;
+      console.error(
+        [
+          `CLI smoke [${mode}] exited non-zero`,
+          `status: ${res.status}`,
+          `error: ${res.error ? String(res.error) : 'none'}`,
+          '--- stdout ---',
+          res.stdout,
+          '--- stderr ---',
+          res.stderr,
+        ].join('\n'),
+      );
+    };
+
     it('human mode exits 0 with every report section rendered (no TypeError/FATAL)', () => {
       const res = spawnSync(process.execPath, [cliPath], {
         cwd: backendRoot,
         encoding: 'utf8',
         timeout: 60_000,
       });
+      reportCliFailure('human mode', res);
       expect(res.error).toBeUndefined();
       expect(res.status).toBe(0);
       expect(`${res.stderr}${res.stdout}`).not.toMatch(/TypeError|FATAL/);
@@ -108,6 +137,7 @@ describe('inspect-job-runs CLI (read-only JobRun inspector)', () => {
         encoding: 'utf8',
         timeout: 60_000,
       });
+      reportCliFailure('--json mode', res);
       expect(res.error).toBeUndefined();
       expect(res.status).toBe(0);
       const report = JSON.parse(res.stdout) as Record<string, unknown>;

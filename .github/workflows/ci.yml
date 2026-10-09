@@ -140,6 +140,11 @@ jobs:
       - name: 🧪 Unit tests
         run: npx jest --coverage --passWithNoTests
         shell: bash
+        env:
+          DATABASE_URL: postgresql://stockflow:stockflow@localhost:5432/stockflow_test
+          JWT_SECRET: stockflow-ci-unit-test-secret-0123456789
+          JWT_EXPIRES_IN: 15m
+          JWT_REFRESH_EXPIRES_IN: 7d
 
       # ───────────────────────────────────────────────────────────
       # 6. Integration tests (with PostgreSQL from services)
