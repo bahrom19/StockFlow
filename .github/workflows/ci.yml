@@ -115,6 +115,26 @@ jobs:
         shell: bash
 
       # ───────────────────────────────────────────────────────────
+      # 4b. Provision the CI test database (G16-CI-1B)
+      #
+      # Integration specs talk to a real PostgreSQL and expect the full
+      # schema (partial unique indexes included). Without this step the
+      # stockflow_test service container is empty and every DB-backed
+      # assertion fails for reasons unrelated to the code under test.
+      #
+      # migrate deploy ONLY — never db push and never a destructive
+      # reset: the schema is built by applying the committed migration
+      # history, exactly as production does. DATABASE_URL is set at the
+      # step level to the CI test database so the repository .env can
+      # never be picked up.
+      # ───────────────────────────────────────────────────────────
+      - name: 🗄️ Migrate CI test database
+        run: npx prisma migrate deploy
+        shell: bash
+        env:
+          DATABASE_URL: postgresql://stockflow:stockflow@localhost:5432/stockflow_test
+
+      # ───────────────────────────────────────────────────────────
       # 5. Unit tests with coverage
       # ───────────────────────────────────────────────────────────
       - name: 🧪 Unit tests
@@ -126,13 +146,15 @@ jobs:
       # ───────────────────────────────────────────────────────────
       - name: 🔗 Integration tests
         run: |
-          if [ -f jest.integration.config.js ]; then
-            echo "Running integration tests..."
-            npx jest --config jest.integration.config.js --coverage --passWithNoTests
-          else
-            echo "⚠️ jest.integration.config.js not found — skipping integration tests"
+          if [ ! -f jest.integration.config.js ]; then
+            echo "::error::jest.integration.config.js is missing — refusing to report a green build without running integration tests"
+            exit 1
           fi
-        shell: bash
+          echo "Running integration tests..."
+          # --passWithNoTests is deliberately NOT used here: with the config
+          # present, zero discovered suites means the pattern broke and must
+          # fail loudly rather than pass vacuously.
+          npx jest --config jest.integration.config.js --coverage
         env:
           DATABASE_URL: postgresql://stockflow:stockflow@localhost:5432/stockflow_test
 
