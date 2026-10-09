@@ -49,7 +49,10 @@ describe('AuthService — Password Reset', () => {
         AuthService,
         { provide: AuthRepository, useValue: mockAuthRepo },
         { provide: RolesRepository, useValue: {} },
-        { provide: JwtService, useValue: { signAsync: jest.fn(), verifyAsync: jest.fn() } },
+        {
+          provide: JwtService,
+          useValue: { signAsync: jest.fn(), verifyAsync: jest.fn() },
+        },
         { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: EmailService, useValue: mockEmailService },
@@ -58,7 +61,11 @@ describe('AuthService — Password Reset', () => {
           useValue: {
             ensureCurrentCalendar: jest.fn().mockResolvedValue({
               fiscalYear: { id: 'fy-1', year: 2026 },
-              financialPeriod: { id: 'fp-1', name: '2026-09', status: FinancialPeriodStatus.OPEN },
+              financialPeriod: {
+                id: 'fp-1',
+                name: '2026-09',
+                status: FinancialPeriodStatus.OPEN,
+              },
               isPostable: true,
             }),
           },
@@ -137,7 +144,8 @@ describe('AuthService — Password Reset', () => {
 
       await service.forgotPassword('test@example.com');
 
-      const emailCallArgs = mockEmailService.sendPasswordResetEmail.mock.calls[0]!;
+      const emailCallArgs =
+        mockEmailService.sendPasswordResetEmail.mock.calls[0]!;
       expect(emailCallArgs[0]).toBe('test@example.com');
       expect(typeof emailCallArgs[1]).toBe('string');
       expect(emailCallArgs[1].length).toBe(64); // 32 bytes hex
@@ -148,11 +156,21 @@ describe('AuthService — Password Reset', () => {
     it('succeeds with valid token via bcrypt.compare', async () => {
       // findValidPasswordResetTokens returns candidates; bcrypt.compare finds match
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false); // first candidate — no match
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);  // second candidate — match
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // second candidate — match
 
       mockAuthRepo.findValidPasswordResetTokens.mockResolvedValue([
-        { id: 'token-old', userId: 'user-1', tokenHash: 'old-hash', expiresAt: new Date(Date.now() + 3600000) },
-        { id: 'token-1', userId: 'user-1', tokenHash: 'stored-hash', expiresAt: new Date(Date.now() + 3600000) },
+        {
+          id: 'token-old',
+          userId: 'user-1',
+          tokenHash: 'old-hash',
+          expiresAt: new Date(Date.now() + 3600000),
+        },
+        {
+          id: 'token-1',
+          userId: 'user-1',
+          tokenHash: 'stored-hash',
+          expiresAt: new Date(Date.now() + 3600000),
+        },
       ]);
 
       mockTransaction.mockImplementation(async (fn: Function) => fn({}));
@@ -180,7 +198,12 @@ describe('AuthService — Password Reset', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       mockAuthRepo.findValidPasswordResetTokens.mockResolvedValue([
-        { id: 'token-1', userId: 'user-1', tokenHash: 'hash', expiresAt: new Date(Date.now() + 3600000) },
+        {
+          id: 'token-1',
+          userId: 'user-1',
+          tokenHash: 'hash',
+          expiresAt: new Date(Date.now() + 3600000),
+        },
       ]);
 
       await expect(
@@ -218,7 +241,12 @@ describe('AuthService — Password Reset', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       mockAuthRepo.findValidPasswordResetTokens.mockResolvedValue([
-        { id: 'token-1', userId: 'user-1', tokenHash: 'hash', expiresAt: new Date(Date.now() + 3600000) },
+        {
+          id: 'token-1',
+          userId: 'user-1',
+          tokenHash: 'hash',
+          expiresAt: new Date(Date.now() + 3600000),
+        },
       ]);
 
       const transactionFn = jest.fn(async (fn: Function) => fn({}));
@@ -238,7 +266,12 @@ describe('AuthService — Password Reset', () => {
       (bcrypt.hash as jest.Mock).mockResolvedValueOnce('new-password-hash');
 
       mockAuthRepo.findValidPasswordResetTokens.mockResolvedValue([
-        { id: 'token-1', userId: 'user-1', tokenHash: 'hash', expiresAt: new Date(Date.now() + 3600000) },
+        {
+          id: 'token-1',
+          userId: 'user-1',
+          tokenHash: 'hash',
+          expiresAt: new Date(Date.now() + 3600000),
+        },
       ]);
 
       mockTransaction.mockImplementation(async (fn: Function) => fn({}));

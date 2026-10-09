@@ -33,7 +33,9 @@ export class RedisService implements OnModuleDestroy {
 
   constructor(private readonly configService: ConfigService) {
     const url = this.configService.get<string>('redis.url', '');
-    const lockConfig = this.configService.get<{ failOpenOnError?: boolean }>('redis.lock');
+    const lockConfig = this.configService.get<{ failOpenOnError?: boolean }>(
+      'redis.lock',
+    );
     this.failOpenOnError = lockConfig?.failOpenOnError ?? false;
 
     if (!url) {

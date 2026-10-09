@@ -9,7 +9,13 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -25,7 +31,10 @@ export class NotificationsController {
 
   @Get()
   @ApiOperation({ summary: 'List notifications for the authenticated user' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Paginated notifications' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Paginated notifications',
+  })
   async findAll(
     @Query() query: NotificationQueryDto,
     @CurrentUser() currentUser: JwtPayload,
@@ -62,8 +71,14 @@ export class NotificationsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark a notification as read' })
   @ApiParam({ name: 'id', type: 'string', description: 'Notification UUID' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Notification marked as read' })
-  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Notification not found or not owned by user' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Notification marked as read',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Notification not found or not owned by user',
+  })
   async markRead(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() currentUser: JwtPayload,

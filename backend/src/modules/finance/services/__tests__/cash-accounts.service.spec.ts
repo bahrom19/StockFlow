@@ -105,9 +105,9 @@ describe('CashAccountsService — reference ownership (G16-B-02 PH1)', () => {
     it('should reject a foreign warehouse with 404 and persist nothing', async () => {
       mockTx.warehouse.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.create(dto() as any, currentUser),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create(dto() as any, currentUser)).rejects.toThrow(
+        NotFoundException,
+      );
 
       expect(mockTx.warehouse.findFirst).toHaveBeenCalledWith({
         where: { id: 'wh-1', companyId, isActive: true, deletedAt: null },
@@ -128,9 +128,9 @@ describe('CashAccountsService — reference ownership (G16-B-02 PH1)', () => {
     it('should reject a foreign chart account with 404', async () => {
       mockTx.chartOfAccount.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.create(dto() as any, currentUser),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create(dto() as any, currentUser)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(repository.create).not.toHaveBeenCalled();
     });
 
@@ -167,7 +167,11 @@ describe('CashAccountsService — reference ownership (G16-B-02 PH1)', () => {
       mockTx.warehouse.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.update('cash-1', { warehouseId: 'wh-evil' } as any, currentUser),
+        service.update(
+          'cash-1',
+          { warehouseId: 'wh-evil' } as any,
+          currentUser,
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(repository.update).not.toHaveBeenCalled();
     });

@@ -14,7 +14,8 @@ export class CustomerCreditTransactionMapper {
       direction: prisma.direction,
       amount: prisma.amount.toString(),
       currency: prisma.currency,
-      referenceType: prisma.referenceType as CustomerCreditTransactionEntity['referenceType'],
+      referenceType:
+        prisma.referenceType as CustomerCreditTransactionEntity['referenceType'],
       referenceId: prisma.referenceId,
       createdBy: prisma.createdBy,
       reason: prisma.reason,

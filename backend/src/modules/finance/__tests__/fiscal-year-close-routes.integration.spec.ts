@@ -137,9 +137,10 @@ describe('Fiscal year close route — finance:close authorization (G15-07-C0-b)'
     const res = await close();
 
     expect(res.status).toBe(403);
-    expect(
-      rolesRepository.findPermissionCodesByRoleNames,
-    ).toHaveBeenCalledWith(['Admin'], 'comp-B');
+    expect(rolesRepository.findPermissionCodesByRoleNames).toHaveBeenCalledWith(
+      ['Admin'],
+      'comp-B',
+    );
     expect(fiscalYearClose.closeFiscalYear).not.toHaveBeenCalled();
   });
 });

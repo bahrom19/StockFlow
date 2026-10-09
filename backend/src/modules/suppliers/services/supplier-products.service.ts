@@ -21,7 +21,13 @@ import { SupplierProduct } from '@prisma/client';
 // never written to the audit trail.
 type ProductAuditFields = Pick<
   SupplierProduct,
-  'supplierId' | 'productId' | 'supplierSku' | 'purchasePrice' | 'currency' | 'isPreferred' | 'rowVersion'
+  | 'supplierId'
+  | 'productId'
+  | 'supplierSku'
+  | 'purchasePrice'
+  | 'currency'
+  | 'isPreferred'
+  | 'rowVersion'
 >;
 
 function productAuditFields(sp: SupplierProduct): ProductAuditFields {
@@ -133,7 +139,11 @@ export class SupplierProductsService {
     supplierId: string,
     companyId: string,
   ): Promise<SupplierProductEntity> {
-    const sp = await this.supplierProductsRepo.findById(id, companyId, supplierId);
+    const sp = await this.supplierProductsRepo.findById(
+      id,
+      companyId,
+      supplierId,
+    );
     if (!sp) {
       throw new NotFoundException(`Supplier product ${id} not found`);
     }
@@ -166,7 +176,8 @@ export class SupplierProductsService {
     }
 
     // 3. Validate currency == Company.currency
-    const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+    const companyCurrency =
+      await this.companiesService.getBaseCurrency(companyId);
     if (dto.currency && dto.currency !== companyCurrency) {
       throw new BadRequestException(
         `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
@@ -174,7 +185,11 @@ export class SupplierProductsService {
     }
 
     // 4. Validate purchasePrice
-    if (dto.purchasePrice !== undefined && dto.purchasePrice !== null && dto.purchasePrice <= 0) {
+    if (
+      dto.purchasePrice !== undefined &&
+      dto.purchasePrice !== null &&
+      dto.purchasePrice <= 0
+    ) {
       throw new BadRequestException('Purchase price must be greater than zero');
     }
 
@@ -217,9 +232,25 @@ export class SupplierProductsService {
       );
 
       // G1 (P3-04): audit in the SAME transaction as the business write.
-      await this.audit('supplier_product.create', sp.id, null, productAuditFields(sp), actor, companyId, tx);
+      await this.audit(
+        'supplier_product.create',
+        sp.id,
+        null,
+        productAuditFields(sp),
+        actor,
+        companyId,
+        tx,
+      );
       if (dto.isPreferred) {
-        await this.audit('supplier_product.preferred_change', sp.id, null, productAuditFields(sp), actor, companyId, tx);
+        await this.audit(
+          'supplier_product.preferred_change',
+          sp.id,
+          null,
+          productAuditFields(sp),
+          actor,
+          companyId,
+          tx,
+        );
       }
 
       this.logger.log(
@@ -252,7 +283,11 @@ export class SupplierProductsService {
     }
 
     // 2. Validate purchasePrice
-    if (dto.purchasePrice !== undefined && dto.purchasePrice !== null && dto.purchasePrice <= 0) {
+    if (
+      dto.purchasePrice !== undefined &&
+      dto.purchasePrice !== null &&
+      dto.purchasePrice <= 0
+    ) {
       throw new BadRequestException('Purchase price must be greater than zero');
     }
 
@@ -269,11 +304,13 @@ export class SupplierProductsService {
 
       // 4. Update with rowVersion CAS
       const updateData: Prisma.SupplierProductUpdateInput = {};
-      if (dto.supplierSku !== undefined) updateData.supplierSku = dto.supplierSku;
+      if (dto.supplierSku !== undefined)
+        updateData.supplierSku = dto.supplierSku;
       if (dto.purchasePrice !== undefined) {
         updateData.purchasePrice = dto.purchasePrice?.toString() ?? null;
       }
-      if (dto.isPreferred !== undefined) updateData.isPreferred = dto.isPreferred;
+      if (dto.isPreferred !== undefined)
+        updateData.isPreferred = dto.isPreferred;
       if (dto.notes !== undefined) updateData.notes = dto.notes;
 
       const sp = await this.supplierProductsRepo.update(
@@ -285,9 +322,25 @@ export class SupplierProductsService {
       );
 
       // G1 (P3-04): audit in the SAME transaction as the business write.
-      await this.audit('supplier_product.update', sp.id, productAuditFields(existing as unknown as SupplierProduct), productAuditFields(sp), actor, companyId, tx);
+      await this.audit(
+        'supplier_product.update',
+        sp.id,
+        productAuditFields(existing as unknown as SupplierProduct),
+        productAuditFields(sp),
+        actor,
+        companyId,
+        tx,
+      );
       if (dto.isPreferred === true && !existing.isPreferred) {
-        await this.audit('supplier_product.preferred_change', sp.id, productAuditFields(existing as unknown as SupplierProduct), productAuditFields(sp), actor, companyId, tx);
+        await this.audit(
+          'supplier_product.preferred_change',
+          sp.id,
+          productAuditFields(existing as unknown as SupplierProduct),
+          productAuditFields(sp),
+          actor,
+          companyId,
+          tx,
+        );
       }
 
       return toSupplierProductEntity(sp);

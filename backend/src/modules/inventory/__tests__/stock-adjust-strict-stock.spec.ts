@@ -312,7 +312,9 @@ describe('StockService.adjustStock — strict stock (Policy A)', () => {
       .fn()
       .mockResolvedValue({ unitCost: new Decimal('15'), source: 'AVERAGE' });
 
-    await expect(service.adjustStock(dto(3), 'comp-1', 'user-1')).resolves.toBeDefined();
+    await expect(
+      service.adjustStock(dto(3), 'comp-1', 'user-1'),
+    ).resolves.toBeDefined();
     expect(costing.recordInboundLayer).toHaveBeenCalledWith(
       'prod-1',
       'comp-1',
@@ -331,7 +333,9 @@ describe('StockService.adjustStock — strict stock (Policy A)', () => {
       .fn()
       .mockResolvedValue({ unitCost: new Decimal('0'), source: 'COST_PRICE' });
 
-    await expect(service.adjustStock(dto(3), 'comp-1', 'user-1')).resolves.toBeDefined();
+    await expect(
+      service.adjustStock(dto(3), 'comp-1', 'user-1'),
+    ).resolves.toBeDefined();
     expect(costing.recordInboundLayer).toHaveBeenCalledWith(
       'prod-1',
       'comp-1',

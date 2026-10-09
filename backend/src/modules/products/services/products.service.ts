@@ -89,13 +89,12 @@ export class ProductsService {
     // Application-level duplicate pre-check (DB unique index is the safety net
     // for race conditions, but this provides a user-friendly error message).
     if (sku) {
-      const conflict =
-        await this.productsRepository.findActiveBySkuAndCompany(
-          sku,
-          currentUser.companyId,
-          undefined,
-          tx,
-        );
+      const conflict = await this.productsRepository.findActiveBySkuAndCompany(
+        sku,
+        currentUser.companyId,
+        undefined,
+        tx,
+      );
       if (conflict) {
         throw new ConflictException(
           `A product with SKU "${sku}" already exists (${conflict.name}).`,

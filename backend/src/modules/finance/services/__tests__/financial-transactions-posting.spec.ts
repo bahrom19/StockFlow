@@ -138,9 +138,11 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
 
   it('BANK_DEPOSIT posts one JE: Dr bank / Cr cash with date + period', async () => {
     setupPost();
-    repo.findById.mockResolvedValueOnce(ftRow()).mockResolvedValueOnce(
-      ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
-    );
+    repo.findById
+      .mockResolvedValueOnce(ftRow())
+      .mockResolvedValueOnce(
+        ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
+      );
 
     const result = await service.post('ft-1', user);
 
@@ -148,9 +150,7 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
     const input = glPost.mock.calls[0][0];
     expect(input.companyId).toBe(companyId);
     expect(input.financialPeriodId).toBe('fp-1');
-    expect(input.entryDate).toEqual(
-      new Date('2026-09-10T00:00:00.000Z'),
-    );
+    expect(input.entryDate).toEqual(new Date('2026-09-10T00:00:00.000Z'));
     expect(input.referenceType).toBe('FINANCIAL_TRANSACTION');
     expect(input.referenceId).toBe('ft-1');
     const lines = linesOf();
@@ -171,19 +171,18 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
       expect.objectContaining({ action: 'POST', entityId: 'ft-1' }),
       tx,
     );
-    expect(calendar.ensureCurrentCalendar).toHaveBeenCalledWith(
-      companyId,
-      tx,
-    );
+    expect(calendar.ensureCurrentCalendar).toHaveBeenCalledWith(companyId, tx);
     expect(result.postingStatus).toBe('POSTED');
     expect(result.journalEntryId).toBe('je-1');
   });
 
   it('uses the register linked GL account instead of the family fallback', async () => {
     setupPost();
-    repo.findById.mockResolvedValueOnce(ftRow()).mockResolvedValueOnce(
-      ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
-    );
+    repo.findById
+      .mockResolvedValueOnce(ftRow())
+      .mockResolvedValueOnce(
+        ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
+      );
     tx.cashAccount.findFirst.mockResolvedValue({
       chartOfAccountId: 'acc-custom-cash',
     });
@@ -202,11 +201,13 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
 
   it('FEE posts Dr 6100 / Cr cash', async () => {
     setupPost({ type: 'FEE', direction: 'OUTFLOW', bankAccountId: null });
-    repo.findById.mockResolvedValueOnce(
-      ftRow({ type: 'FEE', direction: 'OUTFLOW', bankAccountId: null }),
-    ).mockResolvedValueOnce(
-      ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
-    );
+    repo.findById
+      .mockResolvedValueOnce(
+        ftRow({ type: 'FEE', direction: 'OUTFLOW', bankAccountId: null }),
+      )
+      .mockResolvedValueOnce(
+        ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
+      );
 
     await service.post('ft-1', user);
 
@@ -225,11 +226,13 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
       direction: 'INFLOW',
       cashAccountId: null,
     });
-    repo.findById.mockResolvedValueOnce(
-      ftRow({ type: 'INTEREST', direction: 'INFLOW', cashAccountId: null }),
-    ).mockResolvedValueOnce(
-      ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
-    );
+    repo.findById
+      .mockResolvedValueOnce(
+        ftRow({ type: 'INTEREST', direction: 'INFLOW', cashAccountId: null }),
+      )
+      .mockResolvedValueOnce(
+        ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
+      );
 
     await service.post('ft-1', user);
 
@@ -249,16 +252,18 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
       cashAccountId: null,
       destinationBankAccountId: 'bank-2',
     });
-    repo.findById.mockResolvedValueOnce(
-      ftRow({
-        type: 'BANK_TRANSFER',
-        direction: 'OUTFLOW',
-        cashAccountId: null,
-        destinationBankAccountId: 'bank-2',
-      }),
-    ).mockResolvedValueOnce(
-      ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
-    );
+    repo.findById
+      .mockResolvedValueOnce(
+        ftRow({
+          type: 'BANK_TRANSFER',
+          direction: 'OUTFLOW',
+          cashAccountId: null,
+          destinationBankAccountId: 'bank-2',
+        }),
+      )
+      .mockResolvedValueOnce(
+        ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
+      );
     tx.bankAccount.findFirst.mockImplementation(async ({ where }: any) =>
       where?.id === 'bank-2'
         ? { chartOfAccountId: 'acc-bank-2' }
@@ -285,11 +290,13 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
 
   it('INTERNAL_TRANSFER INFLOW posts Dr cash / Cr bank', async () => {
     setupPost({ type: 'INTERNAL_TRANSFER', direction: 'INFLOW' });
-    repo.findById.mockResolvedValueOnce(
-      ftRow({ type: 'INTERNAL_TRANSFER', direction: 'INFLOW' }),
-    ).mockResolvedValueOnce(
-      ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
-    );
+    repo.findById
+      .mockResolvedValueOnce(
+        ftRow({ type: 'INTERNAL_TRANSFER', direction: 'INFLOW' }),
+      )
+      .mockResolvedValueOnce(
+        ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
+      );
 
     await service.post('ft-1', user);
 
@@ -331,16 +338,18 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
       referenceType: 'SUPPLIER_RETURN',
       referenceId: 'ref-9',
     });
-    repo.findById.mockResolvedValueOnce(
-      ftRow({
-        type: 'CASH_IN',
-        direction: 'INFLOW',
-        referenceType: 'SUPPLIER_RETURN',
-        referenceId: 'ref-9',
-      }),
-    ).mockResolvedValueOnce(
-      ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
-    );
+    repo.findById
+      .mockResolvedValueOnce(
+        ftRow({
+          type: 'CASH_IN',
+          direction: 'INFLOW',
+          referenceType: 'SUPPLIER_RETURN',
+          referenceId: 'ref-9',
+        }),
+      )
+      .mockResolvedValueOnce(
+        ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
+      );
     service.registerCounterpartResolver('SUPPLIER_RETURN', async () => ({
       accountId: 'acc-domain',
     }));
@@ -374,16 +383,18 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
       destinationBankAccountId: 'bank-1',
     });
 
-    await expect(service.post('ft-1', user)).rejects.toThrow(
-      /must differ/,
-    );
+    await expect(service.post('ft-1', user)).rejects.toThrow(/must differ/);
     expect(glPost).not.toHaveBeenCalled();
   });
 
   // ── D6 refund guard ────────────────────────────────────────────────
 
   it('REFUND with sale-claiming referenceType is rejected (no double post)', async () => {
-    setupPost({ type: 'REFUND', direction: 'OUTFLOW', referenceType: 'REFUND' });
+    setupPost({
+      type: 'REFUND',
+      direction: 'OUTFLOW',
+      referenceType: 'REFUND',
+    });
 
     await expect(service.post('ft-1', user)).rejects.toThrow(
       /sale-linked refunds must flow through the sales refund domain/,
@@ -414,17 +425,19 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
       referenceType: 'SUPPLIER_RETURN',
       referenceId: 'ref-9',
     });
-    repo.findById.mockResolvedValueOnce(
-      ftRow({
-        type: 'REFUND',
-        direction: 'OUTFLOW',
-        bankAccountId: null,
-        referenceType: 'SUPPLIER_RETURN',
-        referenceId: 'ref-9',
-      }),
-    ).mockResolvedValueOnce(
-      ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
-    );
+    repo.findById
+      .mockResolvedValueOnce(
+        ftRow({
+          type: 'REFUND',
+          direction: 'OUTFLOW',
+          bankAccountId: null,
+          referenceType: 'SUPPLIER_RETURN',
+          referenceId: 'ref-9',
+        }),
+      )
+      .mockResolvedValueOnce(
+        ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
+      );
     service.registerCounterpartResolver('SUPPLIER_RETURN', async () => ({
       accountId: 'acc-domain',
     }));
@@ -473,9 +486,7 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
       ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
     );
 
-    await expect(service.post('ft-1', user)).rejects.toThrow(
-      ConflictException,
-    );
+    await expect(service.post('ft-1', user)).rejects.toThrow(ConflictException);
     expect(glPost).not.toHaveBeenCalled();
   });
 
@@ -483,18 +494,14 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
     setupPost();
     repo.claimPostingStatus.mockResolvedValue(0);
 
-    await expect(service.post('ft-1', user)).rejects.toThrow(
-      ConflictException,
-    );
+    await expect(service.post('ft-1', user)).rejects.toThrow(ConflictException);
     expect(glPost).not.toHaveBeenCalled();
   });
 
   it('non-base currency row is rejected at post time', async () => {
     setupPost({ currency: 'USD' });
 
-    await expect(service.post('ft-1', user)).rejects.toThrow(
-      /base currency/,
-    );
+    await expect(service.post('ft-1', user)).rejects.toThrow(/base currency/);
     expect(glPost).not.toHaveBeenCalled();
   });
 
@@ -551,9 +558,11 @@ describe('FinancialTransactionsService.post — G15-07-C3-A', () => {
 
   it('F-AUD-02: register lookup carries the live-row filter', async () => {
     setupPost();
-    repo.findById.mockResolvedValueOnce(ftRow()).mockResolvedValueOnce(
-      ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
-    );
+    repo.findById
+      .mockResolvedValueOnce(ftRow())
+      .mockResolvedValueOnce(
+        ftRow({ postingStatus: 'POSTED', journalEntryId: 'je-1' }),
+      );
 
     await service.post('ft-1', user);
 

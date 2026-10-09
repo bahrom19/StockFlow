@@ -117,7 +117,10 @@ describe('SalesService — Sale ↔ CashShift currency invariant', () => {
 
     const mod: TestingModule = await Test.createTestingModule({
       providers: [
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
         SalesService,
         { provide: SalesRepository, useValue: mockSalesRepo },
         { provide: CashShiftRepository, useValue: mockCashShiftRepo },
@@ -125,8 +128,17 @@ describe('SalesService — Sale ↔ CashShift currency invariant', () => {
         { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: EVENT_BUS, useValue: mockEventBus },
         CustomerCreditLedgerService,
-        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn() } },
-        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: CustomerCreditLedgerRepository,
+          useValue: {
+            atomicSpend: jest.fn().mockResolvedValue({}),
+            findCustomerCompany: jest.fn(),
+          },
+        },
+        {
+          provide: AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -153,7 +165,10 @@ describe('SalesService — Sale ↔ CashShift currency invariant', () => {
       mockPrisma.$transaction.mockImplementation(async (cb: any) => {
         return cb(txWithShift(shift));
       });
-      mockSalesRepo.update.mockResolvedValue({ ...sale, status: SaleStatus.COMPLETED } as any);
+      mockSalesRepo.update.mockResolvedValue({
+        ...sale,
+        status: SaleStatus.COMPLETED,
+      } as any);
 
       const result = await service.transitionStatus(
         saleId,
@@ -174,7 +189,10 @@ describe('SalesService — Sale ↔ CashShift currency invariant', () => {
       mockPrisma.$transaction.mockImplementation(async (cb: any) => {
         return cb(txWithShift(shift));
       });
-      mockSalesRepo.update.mockResolvedValue({ ...sale, status: SaleStatus.COMPLETED } as any);
+      mockSalesRepo.update.mockResolvedValue({
+        ...sale,
+        status: SaleStatus.COMPLETED,
+      } as any);
 
       const result = await service.transitionStatus(
         saleId,
@@ -197,7 +215,12 @@ describe('SalesService — Sale ↔ CashShift currency invariant', () => {
       });
 
       await expect(
-        service.transitionStatus(saleId, SaleStatus.COMPLETED, userId, companyId),
+        service.transitionStatus(
+          saleId,
+          SaleStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
       ).rejects.toThrow(BadRequestException);
 
       // No events — side effects blocked before publishing
@@ -214,7 +237,12 @@ describe('SalesService — Sale ↔ CashShift currency invariant', () => {
       });
 
       await expect(
-        service.transitionStatus(saleId, SaleStatus.COMPLETED, userId, companyId),
+        service.transitionStatus(
+          saleId,
+          SaleStatus.COMPLETED,
+          userId,
+          companyId,
+        ),
       ).rejects.toThrow(BadRequestException);
 
       // No events — side effects blocked before publishing

@@ -50,16 +50,27 @@ interface CostLayerRow {
 
 interface ReconciliationResult {
   /** Class A violations: fully-layered products where ΣStock ≠ ΣIN.remaining. */
-  violations: Array<{ companyId: string; productId: string; stock: number; layers: number }>;
+  violations: Array<{
+    companyId: string;
+    productId: string;
+    stock: number;
+    layers: number;
+  }>;
   /** Class B: stock without any IN layer — legacy/uncovered, reported not failed. */
   classB: Array<{ companyId: string; productId: string; stock: number }>;
   /** Negative-quantity anomalies (never acceptable). */
-  anomalies: Array<{ kind: 'negative_stock' | 'negative_layer'; productId: string }>;
+  anomalies: Array<{
+    kind: 'negative_stock' | 'negative_layer';
+    productId: string;
+  }>;
   /** Exact Decimal valuation per product: Σ(remainingQuantity × unitCost). */
   valuation: Map<string, Decimal>;
 }
 
-const reconcile = (stocks: StockRow[], layers: CostLayerRow[]): ReconciliationResult => {
+const reconcile = (
+  stocks: StockRow[],
+  layers: CostLayerRow[],
+): ReconciliationResult => {
   const result: ReconciliationResult = {
     violations: [],
     classB: [],
@@ -67,7 +78,10 @@ const reconcile = (stocks: StockRow[], layers: CostLayerRow[]): ReconciliationRe
     valuation: new Map(),
   };
 
-  const stockByProduct = new Map<string, { companyId: string; total: number }>();
+  const stockByProduct = new Map<
+    string,
+    { companyId: string; total: number }
+  >();
   for (const s of stocks) {
     if (s.quantity < 0) {
       result.anomalies.push({ kind: 'negative_stock', productId: s.productId });
@@ -81,7 +95,15 @@ const reconcile = (stocks: StockRow[], layers: CostLayerRow[]): ReconciliationRe
     });
   }
 
-  const layersByProduct = new Map<string, { companyId: string; remaining: number; value: Decimal; everHadLayer: boolean }>();
+  const layersByProduct = new Map<
+    string,
+    {
+      companyId: string;
+      remaining: number;
+      value: Decimal;
+      everHadLayer: boolean;
+    }
+  >();
   for (const l of layers) {
     if (l.remainingQuantity < 0) {
       result.anomalies.push({ kind: 'negative_layer', productId: l.productId });
@@ -106,11 +128,21 @@ const reconcile = (stocks: StockRow[], layers: CostLayerRow[]): ReconciliationRe
   for (const [productId, s] of stockByProduct) {
     const l = layersByProduct.get(productId);
     if (!l || !l.everHadLayer) {
-      if (s.total !== 0) result.classB.push({ companyId: s.companyId, productId, stock: s.total });
+      if (s.total !== 0)
+        result.classB.push({
+          companyId: s.companyId,
+          productId,
+          stock: s.total,
+        });
       continue;
     }
     if (s.total !== l.remaining) {
-      result.violations.push({ companyId: s.companyId, productId, stock: s.total, layers: l.remaining });
+      result.violations.push({
+        companyId: s.companyId,
+        productId,
+        stock: s.total,
+        layers: l.remaining,
+      });
     }
     result.valuation.set(productId, l.value);
   }
@@ -118,7 +150,11 @@ const reconcile = (stocks: StockRow[], layers: CostLayerRow[]): ReconciliationRe
   return result;
 };
 
-const layer = (productId: string, remaining: number, unitCost: string): CostLayerRow => ({
+const layer = (
+  productId: string,
+  remaining: number,
+  unitCost: string,
+): CostLayerRow => ({
   companyId: 'comp-1',
   productId,
   direction: 'IN',
@@ -126,7 +162,11 @@ const layer = (productId: string, remaining: number, unitCost: string): CostLaye
   unitCost: new Decimal(unitCost),
 });
 
-const stock = (productId: string, warehouseId: string, quantity: number): StockRow => ({
+const stock = (
+  productId: string,
+  warehouseId: string,
+  quantity: number,
+): StockRow => ({
   companyId: 'comp-1',
   productId,
   warehouseId,
@@ -159,7 +199,9 @@ describe('Inventory reconciliation invariant (G16-F F19, test-only)', () => {
     const result = reconcile([stock('legacy', 'wh1', 99)], []);
 
     expect(result.violations).toEqual([]);
-    expect(result.classB).toEqual([{ companyId: 'comp-1', productId: 'legacy', stock: 99 }]);
+    expect(result.classB).toEqual([
+      { companyId: 'comp-1', productId: 'legacy', stock: 99 },
+    ]);
   });
 
   it('product with stock but only fully-consumed layers → Class A (0 === 0 passes)', () => {
@@ -186,7 +228,10 @@ describe('Inventory reconciliation invariant (G16-F F19, test-only)', () => {
     // the anomalies themselves are the reportable defect.
     const result = reconcile(
       [stock('p1', 'wh1', -3), stock('p1', 'wh1', 13)],
-      [{ ...layer('p1', 0, '10'), remainingQuantity: -1 }, layer('p1', 10, '10')],
+      [
+        { ...layer('p1', 0, '10'), remainingQuantity: -1 },
+        layer('p1', 10, '10'),
+      ],
     );
 
     expect(result.anomalies).toEqual([
@@ -198,8 +243,14 @@ describe('Inventory reconciliation invariant (G16-F F19, test-only)', () => {
   });
 
   it('warehouse transfer does not affect the per-product invariant', () => {
-    const before = reconcile([stock('p1', 'wh1', 10), stock('p1', 'wh2', 0)], [layer('p1', 10, '10')]);
-    const after = reconcile([stock('p1', 'wh1', 4), stock('p1', 'wh2', 6)], [layer('p1', 10, '10')]);
+    const before = reconcile(
+      [stock('p1', 'wh1', 10), stock('p1', 'wh2', 0)],
+      [layer('p1', 10, '10')],
+    );
+    const after = reconcile(
+      [stock('p1', 'wh1', 4), stock('p1', 'wh2', 6)],
+      [layer('p1', 10, '10')],
+    );
 
     expect(before.violations).toEqual([]);
     expect(after.violations).toEqual([]);
@@ -227,7 +278,11 @@ describe('Inventory reconciliation invariant (G16-F F19, test-only)', () => {
       [stock('p1', 'wh1', 10)],
       [
         layer('p1', 10, '10'),
-        { ...layer('p1', 0, '10'), direction: 'OUT' as const, remainingQuantity: 0 },
+        {
+          ...layer('p1', 0, '10'),
+          direction: 'OUT' as const,
+          remainingQuantity: 0,
+        },
       ],
     );
 

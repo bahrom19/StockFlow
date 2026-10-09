@@ -1,4 +1,7 @@
-import { validateToolInput, sanitizeToolInput } from '../tools/tool-input.validator';
+import {
+  validateToolInput,
+  sanitizeToolInput,
+} from '../tools/tool-input.validator';
 
 const SALES_SUMMARY_SCHEMA = {
   type: 'object',
@@ -31,13 +34,21 @@ describe('ToolInputValidator', () => {
   describe('validateToolInput', () => {
     describe('object validation', () => {
       it('returns valid for undefined input (all fields optional)', () => {
-        const result = validateToolInput(undefined, SALES_SUMMARY_SCHEMA, 'test_tool');
+        const result = validateToolInput(
+          undefined,
+          SALES_SUMMARY_SCHEMA,
+          'test_tool',
+        );
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       });
 
       it('returns valid for null input', () => {
-        const result = validateToolInput(null, SALES_SUMMARY_SCHEMA, 'test_tool');
+        const result = validateToolInput(
+          null,
+          SALES_SUMMARY_SCHEMA,
+          'test_tool',
+        );
         expect(result.valid).toBe(true);
       });
 
@@ -324,10 +335,7 @@ describe('ToolInputValidator', () => {
     });
 
     it('handles non-numeric string for number field gracefully', () => {
-      const result = sanitizeToolInput(
-        { page: 'abc' },
-        SALES_SUMMARY_SCHEMA,
-      );
+      const result = sanitizeToolInput({ page: 'abc' }, SALES_SUMMARY_SCHEMA);
       // NaN is not finite, so it stays as-is
       expect(result.page).toBe('abc');
     });

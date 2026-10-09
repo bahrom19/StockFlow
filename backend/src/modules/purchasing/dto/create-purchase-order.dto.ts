@@ -96,7 +96,11 @@ export class CreatePurchaseOrderDto {
   ])
   status?: string;
 
-  @ApiPropertyOptional({ enum: Currency, default: 'KZT', description: 'Currency for this purchase order' })
+  @ApiPropertyOptional({
+    enum: Currency,
+    default: 'KZT',
+    description: 'Currency for this purchase order',
+  })
   @IsOptional()
   @IsEnum(Currency)
   currency?: Currency;

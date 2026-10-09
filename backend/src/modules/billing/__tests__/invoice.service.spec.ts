@@ -362,9 +362,9 @@ describe('InvoiceService', () => {
     it('should reject zero paidAmount', async () => {
       mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
 
-      await expect(
-        service.markPaid('inv-1', 'comp-1', '0'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.markPaid('inv-1', 'comp-1', '0')).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockInvoiceRepo.update).not.toHaveBeenCalled();
       expect(mockPaymentRepo.create).not.toHaveBeenCalled();
     });
@@ -372,9 +372,9 @@ describe('InvoiceService', () => {
     it('should reject negative paidAmount', async () => {
       mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
 
-      await expect(
-        service.markPaid('inv-1', 'comp-1', '-1'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.markPaid('inv-1', 'comp-1', '-1')).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockInvoiceRepo.update).not.toHaveBeenCalled();
       expect(mockPaymentRepo.create).not.toHaveBeenCalled();
     });
@@ -382,9 +382,9 @@ describe('InvoiceService', () => {
     it('should reject non-numeric paidAmount', async () => {
       mockInvoiceRepo.findById.mockResolvedValue(mockInvoice as any);
 
-      await expect(
-        service.markPaid('inv-1', 'comp-1', 'abc'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.markPaid('inv-1', 'comp-1', 'abc')).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockInvoiceRepo.update).not.toHaveBeenCalled();
       expect(mockPaymentRepo.create).not.toHaveBeenCalled();
     });

@@ -21,7 +21,9 @@ describe('SupplierCreditSummaryController', () => {
 
   it('delegates to the service with the supplierId and the JWT companyId (tenant from token, not body)', async () => {
     const expected = { supplierId, outstandingAP: '0', currency: 'KZT' };
-    const serviceMock = { getCreditSummary: jest.fn().mockResolvedValue(expected) };
+    const serviceMock = {
+      getCreditSummary: jest.fn().mockResolvedValue(expected),
+    };
     const controller = new SupplierCreditSummaryController(
       serviceMock as unknown as SupplierCreditSummaryService,
     );

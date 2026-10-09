@@ -12,14 +12,24 @@ describe('SupplierExposureService — open-PO exposure (G9-D3)', () => {
   const supplierId = 'supplier-1';
 
   let service: SupplierExposureService;
-  let mockSuppliersRepo: { findById: jest.Mock; findArchivedSupplierById: jest.Mock };
+  let mockSuppliersRepo: {
+    findById: jest.Mock;
+    findArchivedSupplierById: jest.Mock;
+  };
   let mockExposureRepo: { getOpenPoExposureAggregates: jest.Mock };
   let mockCompaniesService: { getBaseCurrency: jest.Mock };
 
   beforeEach(() => {
-    mockSuppliersRepo = { findById: jest.fn(), findArchivedSupplierById: jest.fn().mockResolvedValue(null) };
-    mockExposureRepo = { getOpenPoExposureAggregates: jest.fn().mockResolvedValue([]) };
-    mockCompaniesService = { getBaseCurrency: jest.fn().mockResolvedValue('KZT') };
+    mockSuppliersRepo = {
+      findById: jest.fn(),
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
+    };
+    mockExposureRepo = {
+      getOpenPoExposureAggregates: jest.fn().mockResolvedValue([]),
+    };
+    mockCompaniesService = {
+      getBaseCurrency: jest.fn().mockResolvedValue('KZT'),
+    };
     service = new SupplierExposureService(
       mockSuppliersRepo as any,
       mockExposureRepo as any,
@@ -128,8 +138,16 @@ describe('SupplierExposureService — open-PO exposure (G9-D3)', () => {
     mockSuppliersRepo.findById.mockResolvedValue({ id: supplierId });
     mockCompaniesService.getBaseCurrency.mockResolvedValue('KZT');
     mockExposureRepo.getOpenPoExposureAggregates.mockResolvedValue([
-      row({ currency: 'KZT', committedOpenPo: '1000.0000', uninvoicedOpenPo: '500.0000' }),
-      row({ currency: 'USD', committedOpenPo: '700.0000', uninvoicedOpenPo: '300.0000' }),
+      row({
+        currency: 'KZT',
+        committedOpenPo: '1000.0000',
+        uninvoicedOpenPo: '500.0000',
+      }),
+      row({
+        currency: 'USD',
+        committedOpenPo: '700.0000',
+        uninvoicedOpenPo: '300.0000',
+      }),
     ]);
 
     const result = await service.getOpenPoExposure(supplierId, companyId);
@@ -147,7 +165,10 @@ describe('SupplierExposureService — open-PO exposure (G9-D3)', () => {
 
     await service.getOpenPoExposure(supplierId, companyId);
 
-    expect(mockSuppliersRepo.findById).toHaveBeenCalledWith(supplierId, companyId);
+    expect(mockSuppliersRepo.findById).toHaveBeenCalledWith(
+      supplierId,
+      companyId,
+    );
     expect(mockExposureRepo.getOpenPoExposureAggregates).toHaveBeenCalledWith(
       supplierId,
       companyId,
@@ -170,7 +191,11 @@ describe('SupplierExposureService — open-PO exposure (G9-D3)', () => {
 
     // Only reads — findById, aggregate query, base currency lookup.
     expect(mockSuppliersRepo.findById).toHaveBeenCalledTimes(1);
-    expect(mockExposureRepo.getOpenPoExposureAggregates).toHaveBeenCalledTimes(1);
-    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(companyId);
+    expect(mockExposureRepo.getOpenPoExposureAggregates).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(
+      companyId,
+    );
   });
 });

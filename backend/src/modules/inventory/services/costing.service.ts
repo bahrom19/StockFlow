@@ -147,7 +147,11 @@ export class CostingService {
       // VALID zero-cost basis (aligned with the G16-H-1 resolver and the
       // G16-H-2 B4 manual remediation, which both accept Decimal(0)); only a
       // missing product or a null/undefined costPrice means "no basis".
-      if (!product || product.costPrice === null || product.costPrice === undefined) {
+      if (
+        !product ||
+        product.costPrice === null ||
+        product.costPrice === undefined
+      ) {
         // No cost basis at all (no layers, no costPrice): G16-F — the gap
         // must surface as a typed business validation failure instead of an
         // untyped infrastructure error. Previously a plain Error here was
@@ -202,8 +206,15 @@ export class CostingService {
     productId: string,
     companyId: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<{ unitCost: Decimal | null; source: 'AVERAGE' | 'COST_PRICE' | 'NONE' }> {
-    const averageCost = await this.calculateAverageCost(productId, companyId, tx);
+  ): Promise<{
+    unitCost: Decimal | null;
+    source: 'AVERAGE' | 'COST_PRICE' | 'NONE';
+  }> {
+    const averageCost = await this.calculateAverageCost(
+      productId,
+      companyId,
+      tx,
+    );
     if (!averageCost.isZero()) {
       return { unitCost: averageCost, source: 'AVERAGE' };
     }
@@ -216,7 +227,10 @@ export class CostingService {
     // Explicit null comparison — Decimal(0) must remain a VALID basis.
     const costPrice = product?.costPrice ?? null;
     if (costPrice !== null) {
-      return { unitCost: new Decimal(costPrice.toString()), source: 'COST_PRICE' };
+      return {
+        unitCost: new Decimal(costPrice.toString()),
+        source: 'COST_PRICE',
+      };
     }
 
     // Diagnostic trace for the no-basis case (callers enforce fail-closed).

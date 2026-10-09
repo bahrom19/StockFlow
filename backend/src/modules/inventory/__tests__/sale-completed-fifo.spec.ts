@@ -219,9 +219,7 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
   });
 
   it('G16-H-3 T6: zero-cost fallback (fifoCost = 0) persists successfully — zero is not treated as missing', async () => {
-    costing.consumeFifoLayers.mockResolvedValue(
-      fifoResult('0', [], '0'),
-    );
+    costing.consumeFifoLayers.mockResolvedValue(fifoResult('0', [], '0'));
 
     await expect(
       handler.handle(
@@ -440,7 +438,7 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
 
   // ── G16-G: runtime fifoCost persistence (T1–T8, T15, T17) ───────────
 
-  it('T1: persists result.totalCost AS-IS on the item\'s SaleItem row via the same tx', async () => {
+  it("T1: persists result.totalCost AS-IS on the item's SaleItem row via the same tx", async () => {
     costing.consumeFifoLayers.mockResolvedValue(fifoResult('500'));
 
     await handler.handle(
@@ -504,9 +502,7 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
   });
 
   it('T4: zero FIFO layers + costPrice fallback persists the full fallback total', async () => {
-    costing.consumeFifoLayers.mockResolvedValue(
-      fifoResult('960', [], '960'),
-    );
+    costing.consumeFifoLayers.mockResolvedValue(fifoResult('960', [], '960'));
 
     await handler.handle(
       {
@@ -546,11 +542,9 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
       'si-2',
       'si-3',
     ]);
-    expect(saleItemUpdateMany.mock.calls.map((c) => c[0].data.fifoCost)).toEqual([
-      '60',
-      '45',
-      '12.5',
-    ]);
+    expect(
+      saleItemUpdateMany.mock.calls.map((c) => c[0].data.fifoCost),
+    ).toEqual(['60', '45', '12.5']);
     // per-item consume → per-item OUT layers → Σ SaleItem.fifoCost ==
     // Σ OUT.totalCost(sale) holds by construction (I1); for duplicate
     // productIds each sequential consume sees updated layer remainders and
@@ -592,9 +586,7 @@ describe('SaleCompletedEventHandler — G9-F2.1 sale FIFO consumption', () => {
     // totalCost carries 4-decimal precision that unitCost × qty could never
     // reproduce (5.0001 is not divisible by 3): the persisted value must be
     // the consume total verbatim.
-    costing.consumeFifoLayers.mockResolvedValue(
-      fifoResult('10.0002'),
-    );
+    costing.consumeFifoLayers.mockResolvedValue(fifoResult('10.0002'));
 
     await handler.handle(
       {

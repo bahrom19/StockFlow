@@ -77,16 +77,16 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
     };
     mockAuditLog = { log: jest.fn().mockResolvedValue(undefined) };
     mockCosting = {
-      calculateAverageCost: jest
-        .fn()
-        .mockResolvedValue(new Decimal('20')),
+      calculateAverageCost: jest.fn().mockResolvedValue(new Decimal('20')),
       // G16-H-1: the shared positive-entry ladder — default fixture resolves
       // AVERAGE @ 20 (same effective basis the old ladder produced).
       resolvePositiveEntryUnitCost: jest
         .fn()
         .mockResolvedValue({ unitCost: new Decimal('20'), source: 'AVERAGE' }),
       recordInboundLayer: jest.fn().mockResolvedValue(undefined),
-      consumeFifoLayers: jest.fn().mockResolvedValue({ totalCost: new Decimal('100') }),
+      consumeFifoLayers: jest
+        .fn()
+        .mockResolvedValue({ totalCost: new Decimal('100') }),
     };
     mockEventBus = { publish: jest.fn().mockResolvedValue(undefined) };
 
@@ -111,10 +111,17 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
 
   // 1+4. Positive difference: stock set to actual, IN layer at average cost.
   it('should apply a positive difference with an IN cost layer', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 15)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(10, 15)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     expect(mockRepo.updateStock).toHaveBeenCalledWith(
       'stock-1',
@@ -132,10 +139,17 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
 
   // 2+6. Negative difference consumes FIFO layers.
   it('should consume FIFO layers on a negative difference', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(15, 10)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(15, 10)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(15));
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     expect(mockRepo.updateStock).toHaveBeenCalledWith(
       'stock-1',
@@ -157,9 +171,16 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
 
   // 3. Zero difference: no financial side effects.
   it('should skip stock, layers and finance events for zero differences', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 10)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(10, 10)]),
+    );
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     expect(mockRepo.updateStock).not.toHaveBeenCalled();
     expect(mockRepo.createStockMovement).not.toHaveBeenCalled();
@@ -170,10 +191,17 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
 
   // 5+7+8. Financial event carries everything the GL handler needs.
   it('should publish an adjustment event driving the 1300/5100 journal', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 15)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(10, 15)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     const adjustedCalls = mockEventBus.publish.mock.calls.filter(
       ([event]: any) => event?.eventName === 'inventory.adjusted',
@@ -202,11 +230,18 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
 
   // 10. Missing Stock row is materialized (Option A, adjust-path invariant).
   it('should create a zero stock row when none exists', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(0, 7)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(0, 7)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(null);
     mockRepo.createStock.mockResolvedValue(stockRow(0));
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     expect(mockRepo.createStock).toHaveBeenCalledTimes(1);
     expect(mockRepo.updateStock).toHaveBeenCalledWith(
@@ -221,7 +256,9 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
 
   // 11. Valuation failure rolls back the entire count.
   it('should roll back stock and movement when FIFO consumption fails', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(15, 10)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(15, 10)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(15));
     mockCosting.consumeFifoLayers.mockRejectedValueOnce(
       new Error('Insufficient cost layers and no costPrice basis'),
@@ -237,7 +274,9 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
 
   // 11b. GL-side failure (event publish) rolls back too.
   it('should roll back when the finance event publish fails', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 15)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(10, 15)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
     mockEventBus.publish.mockRejectedValueOnce(new Error('bus down'));
 
@@ -269,9 +308,16 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
 
   // 14. Tenant isolation.
   it('should scope count lookup to the company', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 10)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(10, 10)]),
+    );
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     expect(mockRepo.findInventoryCountById).toHaveBeenCalledWith(
       'count-1',
@@ -283,7 +329,9 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
   // G16-H-1: positive differences without any basis are refused (fail-closed
   // gate); the old skip-and-continue behavior is intentionally gone.
   it('G16-H-1: refuses a positive difference when no cost basis exists', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 15)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(10, 15)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
     mockCosting.resolvePositiveEntryUnitCost.mockResolvedValueOnce({
       unitCost: null,
@@ -298,14 +346,21 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
   });
 
   it('G16-H-1: zero costPrice is a valid basis for a positive difference', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 15)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(10, 15)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
     mockCosting.resolvePositiveEntryUnitCost.mockResolvedValueOnce({
       unitCost: new Decimal('0'),
       source: 'COST_PRICE',
     });
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     expect(mockCosting.recordInboundLayer).toHaveBeenCalledWith(
       productId,
@@ -330,7 +385,9 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
     );
 
   it('G16-N-4: publishes inventory.adjusted for a negative difference with authoritative FIFO totalCost', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(15, 10)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(15, 10)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(15));
     // Multi-layer consumption: 3 @ 100 + 2 @ 120 → totalCost 540 (avg 108).
     mockCosting.consumeFifoLayers.mockResolvedValueOnce({
@@ -342,7 +399,12 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
       fallbackCost: new Decimal('0'),
     });
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     const adjusted = adjustedCalls();
     expect(adjusted).toHaveLength(1);
@@ -373,7 +435,9 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
   });
 
   it('G16-N-4: includes FIFO fallback cost in the GL payload', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 4)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(10, 4)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
     // Layers cover 4 @ 100 = 400; shortfall 2 units FALLBACK-B-priced at
     // costPrice 180 = 360 → totalCost 760.
@@ -383,7 +447,12 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
       fallbackCost: new Decimal('360'),
     });
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     const adjusted = adjustedCalls();
     expect(adjusted).toHaveLength(1);
@@ -398,7 +467,9 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
   });
 
   it('G16-N-4: publishes the event even when shrinkage cost is zero (handler zero-skips)', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(5, 3)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(5, 3)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(5));
     // Valid zero-cost basis: shrinkage of genuinely zero-valued stock.
     mockCosting.consumeFifoLayers.mockResolvedValueOnce({
@@ -407,7 +478,12 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
       fallbackCost: new Decimal('0'),
     });
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     // The event IS published; the finance handler's canonical zero-amount
     // skip (GL_SKIP_ZERO_AMOUNT) decides that nothing is posted.
@@ -424,10 +500,17 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
   });
 
   it('G16-N-4: positive differences still publish the legacy unitCost payload (no totalCost)', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(10, 15)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(10, 15)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(10));
 
-    await service.complete('count-1', { rowVersion: 0 } as any, companyId, userId);
+    await service.complete(
+      'count-1',
+      { rowVersion: 0 } as any,
+      companyId,
+      userId,
+    );
 
     const adjusted = adjustedCalls();
     expect(adjusted).toHaveLength(1);
@@ -443,7 +526,9 @@ describe('InventoryCountService.complete — accounting integrity (G15-05-A)', (
   });
 
   it('G16-N-4: GL failure on a negative difference rolls back the whole count', async () => {
-    mockRepo.findInventoryCountById.mockResolvedValue(draftCount([countItem(15, 10)]));
+    mockRepo.findInventoryCountById.mockResolvedValue(
+      draftCount([countItem(15, 10)]),
+    );
     mockRepo.findStockByProductAndWarehouse.mockResolvedValue(stockRow(15));
     mockEventBus.publish.mockRejectedValueOnce(new Error('GL posting failed'));
 

@@ -46,8 +46,15 @@ function makeTx(): PrismaTx & {
     __queue: queue,
     __values: values,
     $queryRaw: jest.fn(
-      (chunks: TemplateStringsArray, ...bound: unknown[]): Promise<unknown[]> => {
-        calls.push({ tx: tx as unknown as PrismaTx, sql: chunks.join('?'), values: bound });
+      (
+        chunks: TemplateStringsArray,
+        ...bound: unknown[]
+      ): Promise<unknown[]> => {
+        calls.push({
+          tx: tx as unknown as PrismaTx,
+          sql: chunks.join('?'),
+          values: bound,
+        });
         values.push(bound);
         const next = queue.shift();
         return Promise.resolve(next === undefined ? [] : (next as unknown[]));
@@ -68,7 +75,9 @@ const saleId = '33333333-3333-3333-3333-333333333333';
 describe('CustomerCreditLedgerRepository — R2-1 two-statement guard contract', () => {
   // The guarded paths execute through the caller's tx client only — the
   // injected PrismaService is never touched by them, an empty stub suffices.
-  const repo = new CustomerCreditLedgerRepository({} as unknown as PrismaService);
+  const repo = new CustomerCreditLedgerRepository(
+    {} as unknown as PrismaService,
+  );
 
   it('atomicSpend: lock statement runs FIRST, guarded INSERT second, same tx', async () => {
     const tx = makeTx();
@@ -94,7 +103,7 @@ describe('CustomerCreditLedgerRepository — R2-1 two-statement guard contract',
 
     expect(insert.sql).toContain('INSERT INTO "CustomerCreditTransaction"');
     expect(insert.sql).toContain('RETURNING *');
-    expect(insert.sql).toContain("t.\"direction\" = 'ISSUED'");
+    expect(insert.sql).toContain('t."direction" = \'ISSUED\'');
     expect(insert.sql).not.toContain('pg_advisory_xact_lock');
     expect(insert.tx).toBe(tx);
   });

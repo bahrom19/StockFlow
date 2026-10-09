@@ -78,12 +78,16 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
     totalCost: new Decimal(totalCost),
   });
 
-  const cogsLine = (): { accountId: string; debit: string; credit: string } | undefined => {
+  const cogsLine = ():
+    | { accountId: string; debit: string; credit: string }
+    | undefined => {
     const lines = gl.post.mock.calls[0][0].lines;
     return lines.find((l: { accountId: string }) => l.accountId === 'acc-cogs');
   };
 
-  const inventoryLine = (): { accountId: string; credit: string } | undefined => {
+  const inventoryLine = ():
+    | { accountId: string; credit: string }
+    | undefined => {
     const lines = gl.post.mock.calls[0][0].lines;
     return lines.find(
       (l: { accountId: string }) => l.accountId === 'acc-inventory',
@@ -94,7 +98,11 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
     calendarService = {
       ensureCurrentCalendar: jest.fn().mockResolvedValue({
         fiscalYear: { id: 'fy-1', year: 2026 },
-        financialPeriod: { id: 'fp-1', name: '2026-09', status: FinancialPeriodStatus.OPEN },
+        financialPeriod: {
+          id: 'fp-1',
+          name: '2026-09',
+          status: FinancialPeriodStatus.OPEN,
+        },
         isPostable: true,
       }),
     };
@@ -126,7 +134,10 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
   // ── TEST 1: Full OUT — canonical SUM, legacy ignored ────────────────
 
   it('uses SUM(OUT.totalCost) as COGS (100.25 + 50.75 = 151) and ignores legacy costPrice', async () => {
-    tx.costLayer.findMany.mockResolvedValue([outLayer('100.25'), outLayer('50.75')]);
+    tx.costLayer.findMany.mockResolvedValue([
+      outLayer('100.25'),
+      outLayer('50.75'),
+    ]);
 
     await service.onSaleCompleted(
       payload([item('prod-a', 1, '999'), item('prod-b', 1, '999')]),
@@ -263,10 +274,7 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
     gl.post.mockRejectedValue(new Error('Journal entry is not balanced'));
 
     await expect(
-      service.onSaleCompleted(
-        payload([item('prod-a', 1, '999')]),
-        tx as never,
-      ),
+      service.onSaleCompleted(payload([item('prod-a', 1, '999')]), tx as never),
     ).rejects.toThrow('Journal entry is not balanced');
   });
 
@@ -306,7 +314,9 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
       expect(new Decimal(l.debit === '0' ? 0 : l.debit).gte(0)).toBe(true);
     }
     // legacy costPrice (999 × 2) must NOT leak in as COGS
-    expect(lines.find((l: { accountId: string }) => l.accountId === 'acc-cogs')).toBeUndefined();
+    expect(
+      lines.find((l: { accountId: string }) => l.accountId === 'acc-cogs'),
+    ).toBeUndefined();
     expect(warnSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
   });
@@ -314,7 +324,10 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
   // ── TEST 10: COGS journal amount == OUT totalCost ───────────────────
 
   it('makes the COGS journal amount exactly equal to the OUT totalCost sum (41.5 + 58.5 = 100)', async () => {
-    tx.costLayer.findMany.mockResolvedValue([outLayer('41.5'), outLayer('58.5')]);
+    tx.costLayer.findMany.mockResolvedValue([
+      outLayer('41.5'),
+      outLayer('58.5'),
+    ]);
 
     await service.onSaleCompleted(
       payload([item('prod-a', 1, '999'), item('prod-b', 3, '999')]),
@@ -342,7 +355,9 @@ describe('FinanceIntegrationService.onSaleCompleted — G9-F2.2.1 canonical FIFO
     expect(inventoryLine()).toBeUndefined();
     // revenue side is still posted
     const lines = gl.post.mock.calls[0][0].lines;
-    expect(lines.some((l: { accountId: string }) => l.accountId === 'acc-revenue')).toBe(true);
+    expect(
+      lines.some((l: { accountId: string }) => l.accountId === 'acc-revenue'),
+    ).toBe(true);
   });
 });
 
@@ -422,7 +437,11 @@ describe('FinanceIntegrationService.onSaleRefunded — G9-F3 FIFO COGS reversal'
     calendarService = {
       ensureCurrentCalendar: jest.fn().mockResolvedValue({
         fiscalYear: { id: 'fy-1', year: 2026 },
-        financialPeriod: { id: 'fp-1', name: '2026-09', status: FinancialPeriodStatus.OPEN },
+        financialPeriod: {
+          id: 'fp-1',
+          name: '2026-09',
+          status: FinancialPeriodStatus.OPEN,
+        },
         isPostable: true,
       }),
     };

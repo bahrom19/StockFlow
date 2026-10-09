@@ -335,7 +335,10 @@ describe('PurchaseOrderService — updateStatusAfterReceipt (Blocker B1 fix)', (
           useValue: { nextNumber: jest.fn() },
         },
         { provide: EVENT_BUS, useValue: mockEventBus },
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
       ],
     }).compile();
 

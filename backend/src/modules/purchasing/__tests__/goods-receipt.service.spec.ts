@@ -719,10 +719,20 @@ describe('GoodsReceiptService', () => {
       expect(call.companyId).toBe(companyId);
       const lines = call.lines;
       expect(lines).toHaveLength(2);
-      expect(lines[0]).toMatchObject({ accountId: 'acct-1300', debit: '122.5', credit: '0' });
-      expect(lines[1]).toMatchObject({ accountId: 'acct-2110', debit: '0', credit: '122.5' });
+      expect(lines[0]).toMatchObject({
+        accountId: 'acct-1300',
+        debit: '122.5',
+        credit: '0',
+      });
+      expect(lines[1]).toMatchObject({
+        accountId: 'acct-2110',
+        debit: '0',
+        credit: '122.5',
+      });
       // total = 10×10 + 5×4.5 = 122.5 (Decimal-exact)
-      expect(new Prisma.Decimal(lines[0].debit).equals(new Prisma.Decimal('122.5'))).toBe(true);
+      expect(
+        new Prisma.Decimal(lines[0].debit).equals(new Prisma.Decimal('122.5')),
+      ).toBe(true);
     });
 
     // G11-A: the silent skip is gone. A missing mandatory account — here the

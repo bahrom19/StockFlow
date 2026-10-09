@@ -75,9 +75,8 @@ describe('Swagger secure default (F-04)', () => {
 
   async function loadSwaggerConfig() {
     jest.resetModules();
-    const { swaggerConfig } = await import(
-      '../../../../common/config/swagger.config'
-    );
+    const { swaggerConfig } =
+      await import('../../../../common/config/swagger.config');
     return swaggerConfig();
   }
 

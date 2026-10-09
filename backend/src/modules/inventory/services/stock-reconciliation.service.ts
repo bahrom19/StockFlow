@@ -90,18 +90,36 @@ export class StockReconciliationService {
     const { stockQty, inRemaining, hasReconciliationLayer } = state;
 
     if (hasReconciliationLayer) {
-      return this.planFromState(state, 'SKIP', undefined, undefined, 'already reconciled (RECONCILIATION layer exists)');
+      return this.planFromState(
+        state,
+        'SKIP',
+        undefined,
+        undefined,
+        'already reconciled (RECONCILIATION layer exists)',
+      );
     }
 
     const delta = stockQty - inRemaining;
     if (delta <= 0) {
-      return this.planFromState(state, 'SKIP', undefined, undefined, 'delta <= 0, nothing to reconcile');
+      return this.planFromState(
+        state,
+        'SKIP',
+        undefined,
+        undefined,
+        'delta <= 0, nothing to reconcile',
+      );
     }
 
     // Explicit absence checks only — Decimal(0) is a valid zero-cost basis
     // (G16-H-2 B4 / G16-H-3 semantics; no truthiness shortcuts).
     if (state.costPrice === null || state.costPrice === undefined) {
-      return this.planFromState(state, 'MANUAL', undefined, undefined, 'costPrice is NULL — manual reconciliation required (never invent a basis)');
+      return this.planFromState(
+        state,
+        'MANUAL',
+        undefined,
+        undefined,
+        'costPrice is NULL — manual reconciliation required (never invent a basis)',
+      );
     }
 
     const unitCost = new Decimal(state.costPrice.toString());
@@ -144,7 +162,15 @@ export class StockReconciliationService {
     });
     const stockQty = stock?.quantity ?? 0;
     if (stockQty <= 0) {
-      return { status: 'SKIPPED', companyId, productId, stockQty, inRemaining: 0, delta: stockQty, reason: 'stock quantity is not positive' };
+      return {
+        status: 'SKIPPED',
+        companyId,
+        productId,
+        stockQty,
+        inRemaining: 0,
+        delta: stockQty,
+        reason: 'stock quantity is not positive',
+      };
     }
 
     const product = await tx.product.findFirst({
@@ -180,7 +206,12 @@ export class StockReconciliationService {
     const hasReconciliationLayer = existing !== null;
 
     // STEPS 3-5: shared decision logic.
-    const plan = this.decide({ stockQty, inRemaining, costPrice: product.costPrice, hasReconciliationLayer });
+    const plan = this.decide({
+      stockQty,
+      inRemaining,
+      costPrice: product.costPrice,
+      hasReconciliationLayer,
+    });
 
     if (plan.action === 'SKIP') {
       return {

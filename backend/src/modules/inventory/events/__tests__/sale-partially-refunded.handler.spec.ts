@@ -66,8 +66,11 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
   let tx: any;
   let restoreRefundLayer: jest.Mock;
 
-  const stockKey = (productId: string, warehouseId: string, companyId: string) =>
-    `${companyId}|${warehouseId}|${productId}`;
+  const stockKey = (
+    productId: string,
+    warehouseId: string,
+    companyId: string,
+  ) => `${companyId}|${warehouseId}|${productId}`;
 
   const stockOf = (productId: string, warehouseId: string, companyId: string) =>
     stocks.find(
@@ -106,7 +109,16 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
     total: '200.0000',
     currency: 'KZT',
     createdBy: 'user-1',
-    items: [{ productId: PROD_1, saleItemId: 'sale-item-1', quantity: 2, unitPrice: '100.0000', total: '200.0000', fifoCost: '120.0000' }],
+    items: [
+      {
+        productId: PROD_1,
+        saleItemId: 'sale-item-1',
+        quantity: 2,
+        unitPrice: '100.0000',
+        total: '200.0000',
+        fifoCost: '120.0000',
+      },
+    ],
     ...overrides,
   });
 
@@ -175,7 +187,9 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
           companyId: string,
           rowVersion: number,
         ) => {
-          const s = stocks.find((x) => x.id === id && x.companyId === companyId);
+          const s = stocks.find(
+            (x) => x.id === id && x.companyId === companyId,
+          );
           if (!s || s.rowVersion !== rowVersion) {
             throw new Error('Stock was modified by another user');
           }
@@ -184,22 +198,20 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
           return s;
         },
       ),
-      createStock: jest.fn(
-        async (data: any, client: any) => {
-          const created: FakeStock = {
-            id: `stock-${stocks.length + 1}`,
-            companyId: data.company.connect.id,
-            productId: data.product.connect.id,
-            warehouseId: data.warehouse.connect.id,
-            quantity: data.quantity,
-            reservedQuantity: data.reservedQuantity,
-            rowVersion: 0,
-          };
-          stocks.push(created);
-          void client;
-          return created;
-        },
-      ),
+      createStock: jest.fn(async (data: any, client: any) => {
+        const created: FakeStock = {
+          id: `stock-${stocks.length + 1}`,
+          companyId: data.company.connect.id,
+          productId: data.product.connect.id,
+          warehouseId: data.warehouse.connect.id,
+          quantity: data.quantity,
+          reservedQuantity: data.reservedQuantity,
+          rowVersion: 0,
+        };
+        stocks.push(created);
+        void client;
+        return created;
+      }),
     };
 
     handler = new SalePartiallyRefundedEventHandler(
@@ -213,7 +225,16 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
   it('A: restores exactly the refunded quantity (1 unit), not the sold quantity', async () => {
     await handleEvent(
       payload({
-        items: [{ productId: PROD_1, saleItemId: 'sale-item-1', quantity: 1, unitPrice: '100.0000', total: '100.0000', fifoCost: '60.0000' }],
+        items: [
+          {
+            productId: PROD_1,
+            saleItemId: 'sale-item-1',
+            quantity: 1,
+            unitPrice: '100.0000',
+            total: '100.0000',
+            fifoCost: '60.0000',
+          },
+        ],
       }),
     );
     expect(stockOf(PROD_1, WH_A, COMPANY_A)?.quantity).toBe(4); // 3 + 1
@@ -222,12 +243,31 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
   });
 
   it('B: restores multiple lines across products in one refund', async () => {
-    stocks.push({ ...stocks[0]!, id: 'stock-2', productId: PROD_2, quantity: 5 });
+    stocks.push({
+      ...stocks[0]!,
+      id: 'stock-2',
+      productId: PROD_2,
+      quantity: 5,
+    });
     await handleEvent(
       payload({
         items: [
-          { productId: PROD_1, saleItemId: 'sale-item-1', quantity: 2, unitPrice: '100.0000', total: '200.0000', fifoCost: '120.0000' },
-          { productId: PROD_2, saleItemId: 'sale-item-2', quantity: 4, unitPrice: '50.0000', total: '200.0000', fifoCost: '80.0000' },
+          {
+            productId: PROD_1,
+            saleItemId: 'sale-item-1',
+            quantity: 2,
+            unitPrice: '100.0000',
+            total: '200.0000',
+            fifoCost: '120.0000',
+          },
+          {
+            productId: PROD_2,
+            saleItemId: 'sale-item-2',
+            quantity: 4,
+            unitPrice: '50.0000',
+            total: '200.0000',
+            fifoCost: '80.0000',
+          },
         ],
       }),
     );
@@ -254,7 +294,16 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
     await handleEvent(
       payload({
         refundId: 'refund-final',
-        items: [{ productId: PROD_1, saleItemId: 'sale-item-1', quantity: 3, unitPrice: '100.0000', total: '300.0000', fifoCost: '99.9998' }],
+        items: [
+          {
+            productId: PROD_1,
+            saleItemId: 'sale-item-1',
+            quantity: 3,
+            unitPrice: '100.0000',
+            total: '300.0000',
+            fifoCost: '99.9998',
+          },
+        ],
       }),
     );
     expect(stockOf(PROD_1, WH_A, COMPANY_A)?.quantity).toBe(6); // 3 + 3
@@ -267,7 +316,14 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
 
   // ── E. FIFO conservation / decimal remainder ─────────────────
   it('E: conserves the total across three lines of ONE refund (100.0000 → 33.3333 + 33.3333 + 33.3334)', async () => {
-    const line = { productId: PROD_1, saleItemId: 'sale-item-1', quantity: 1, unitPrice: '100.0000', total: '100.0000', fifoCost: '0.0000' };
+    const line = {
+      productId: PROD_1,
+      saleItemId: 'sale-item-1',
+      quantity: 1,
+      unitPrice: '100.0000',
+      total: '100.0000',
+      fifoCost: '0.0000',
+    };
     await handleEvent(
       payload({
         refundId: 'refund-1',
@@ -292,11 +348,35 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
   });
 
   it('E (exact conservation): three 1-unit refunds of a 100.0000 total restore 100.0000 exactly', async () => {
-    const item = { productId: PROD_1, saleItemId: 'sale-item-1', quantity: 1, unitPrice: '100.0000', total: '100.0000', fifoCost: '0.0000' };
-    await handleEvent(payload({ refundId: 'refund-1', items: [{ ...item, fifoCost: '33.3333' }] }));
-    await handleEvent(payload({ refundId: 'refund-2', items: [{ ...item, fifoCost: '33.3333' }] }));
-    await handleEvent(payload({ refundId: 'refund-3', items: [{ ...item, fifoCost: '33.3334' }] }));
-    const refundLayers = layers.filter((l) => l.referenceId.startsWith('refund-'));
+    const item = {
+      productId: PROD_1,
+      saleItemId: 'sale-item-1',
+      quantity: 1,
+      unitPrice: '100.0000',
+      total: '100.0000',
+      fifoCost: '0.0000',
+    };
+    await handleEvent(
+      payload({
+        refundId: 'refund-1',
+        items: [{ ...item, fifoCost: '33.3333' }],
+      }),
+    );
+    await handleEvent(
+      payload({
+        refundId: 'refund-2',
+        items: [{ ...item, fifoCost: '33.3333' }],
+      }),
+    );
+    await handleEvent(
+      payload({
+        refundId: 'refund-3',
+        items: [{ ...item, fifoCost: '33.3334' }],
+      }),
+    );
+    const refundLayers = layers.filter((l) =>
+      l.referenceId.startsWith('refund-'),
+    );
     const sum = refundLayers.reduce(
       (acc, l) => acc.add(l.totalCost),
       new Decimal(0),
@@ -314,7 +394,16 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
   it('F: NULL SaleItem.fifoCost was materialized by E2 — handler restores the supplied legacy value without consulting CostLayer OUT', async () => {
     await handleEvent(
       payload({
-        items: [{ productId: PROD_1, saleItemId: 'sale-item-1', quantity: 2, unitPrice: '100.0000', total: '200.0000', fifoCost: '120.0000' }],
+        items: [
+          {
+            productId: PROD_1,
+            saleItemId: 'sale-item-1',
+            quantity: 2,
+            unitPrice: '100.0000',
+            total: '200.0000',
+            fifoCost: '120.0000',
+          },
+        ],
       }),
     );
     // restoreRefundLayer receives the caller-supplied value verbatim — no
@@ -343,16 +432,19 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
       reservedQuantity: 0,
       rowVersion: 0,
     });
-    await handleEvent(payload({ companyId: COMPANY_B, refundId: 'refund-1' }), txB);
+    await handleEvent(
+      payload({ companyId: COMPANY_B, refundId: 'refund-1' }),
+      txB,
+    );
 
     expect(stockOf(PROD_1, WH_A, COMPANY_A)?.quantity).toBe(5); // 3 + 2 (company A only)
     expect(stockOf(PROD_1, WH_A, COMPANY_B)?.quantity).toBe(12); // 10 + 2
     expect(beforeB).toBeUndefined();
     // company B's idempotency check ran against its own (empty) ledger —
     // i.e. tenant A's movements were invisible to it
-    const firstCheck = await txB.stockMovement.findFirst.mock.calls[0] && (
-      await txB.stockMovement.findFirst.mock.results[0]!.value
-    );
+    const firstCheck =
+      (await txB.stockMovement.findFirst.mock.calls[0]) &&
+      (await txB.stockMovement.findFirst.mock.results[0]!.value);
     expect(firstCheck).toBeNull();
   });
 
@@ -404,12 +496,10 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
 
   // ── K/L. Legacy exclusivity guards ───────────────────────────
   it('L: the event class carries exactly the locked event name and is exported via the barrel', async () => {
-    const { SalePartiallyRefundedEvent } = await import(
-      '../../../sales/events/sale-partially-refunded.event'
-    );
-    const { SalePartiallyRefundedEvent: BarreledEvent } = await import(
-      '../../../sales/events'
-    );
+    const { SalePartiallyRefundedEvent } =
+      await import('../../../sales/events/sale-partially-refunded.event');
+    const { SalePartiallyRefundedEvent: BarreledEvent } =
+      await import('../../../sales/events');
     const event = new SalePartiallyRefundedEvent(payload());
     expect(event.eventName).toBe('sale.partially_refunded');
     expect(event.eventId).toEqual(expect.any(String));
@@ -466,7 +556,16 @@ describe('SalePartiallyRefundedEventHandler — G11-E E3', () => {
   it('creates stock when none exists for the product/warehouse/company', async () => {
     await handleEvent(
       payload({
-        items: [{ productId: PROD_2, saleItemId: 'sale-item-9', quantity: 1, unitPrice: '10.0000', total: '10.0000', fifoCost: '5.0000' }],
+        items: [
+          {
+            productId: PROD_2,
+            saleItemId: 'sale-item-9',
+            quantity: 1,
+            unitPrice: '10.0000',
+            total: '10.0000',
+            fifoCost: '5.0000',
+          },
+        ],
       }),
     );
     const created = stockOf(PROD_2, WH_A, COMPANY_A);

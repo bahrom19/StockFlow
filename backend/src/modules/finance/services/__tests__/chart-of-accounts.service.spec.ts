@@ -176,12 +176,13 @@ describe('ChartOfAccountsService — system-account trust model (G15-07-C1)', ()
       withParentLookup(null);
 
       await expect(
-        service.create(createDto({ parentId: 'parent-evil' }) as any, currentUser),
+        service.create(
+          createDto({ parentId: 'parent-evil' }) as any,
+          currentUser,
+        ),
       ).rejects.toThrow(NotFoundException);
 
-      expect(
-        (mockTx as any).chartOfAccount.findFirst,
-      ).toHaveBeenCalledWith({
+      expect((mockTx as any).chartOfAccount.findFirst).toHaveBeenCalledWith({
         where: {
           id: 'parent-evil',
           companyId,
@@ -197,7 +198,10 @@ describe('ChartOfAccountsService — system-account trust model (G15-07-C1)', ()
       withParentLookup(null);
 
       await expect(
-        service.create(createDto({ parentId: 'parent-old' }) as any, currentUser),
+        service.create(
+          createDto({ parentId: 'parent-old' }) as any,
+          currentUser,
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(repository.create).not.toHaveBeenCalled();
     });
@@ -235,7 +239,11 @@ describe('ChartOfAccountsService — system-account trust model (G15-07-C1)', ()
       withParentLookup(null);
 
       await expect(
-        service.update('acc-1', { parentId: 'parent-evil' } as any, currentUser),
+        service.update(
+          'acc-1',
+          { parentId: 'parent-evil' } as any,
+          currentUser,
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(repository.update).not.toHaveBeenCalled();
     });
@@ -375,7 +383,12 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
 
   /** Existing account state the update is applied on top of. */
   const given = (over: Record<string, any> = {}) =>
-    account({ isCashOrBank: false, accountType: 'ASSET', normalBalance: 'DEBIT', ...over });
+    account({
+      isCashOrBank: false,
+      accountType: 'ASSET',
+      normalBalance: 'DEBIT',
+      ...over,
+    });
 
   describe('create — type invariant', () => {
     it('1. accepts ASSET + DEBIT + isCashOrBank=true', async () => {
@@ -395,7 +408,11 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
     ])('rejects %s + isCashOrBank=true', async (_n, type, normal) => {
       await expect(
         service.create(
-          cashDto({ isCashOrBank: true, accountType: type, normalBalance: normal }) as any,
+          cashDto({
+            isCashOrBank: true,
+            accountType: type,
+            normalBalance: normal,
+          }) as any,
           currentUser,
         ),
       ).rejects.toThrow(BadRequestException);
@@ -405,7 +422,10 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
     });
 
     it('8. accepts an omitted or false isCashOrBank on any type', async () => {
-      await service.create(cashDto({ accountType: 'EXPENSE' }) as any, currentUser);
+      await service.create(
+        cashDto({ accountType: 'EXPENSE' }) as any,
+        currentUser,
+      );
       expect(repository.create.mock.calls[0][0].isCashOrBank).toBe(false);
 
       await service.create(
@@ -429,7 +449,11 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
     it('10. allows true -> false while unposted', async () => {
       repository.findById.mockResolvedValue(given({ isCashOrBank: true }));
 
-      await service.update('acc-1', { isCashOrBank: false } as any, currentUser);
+      await service.update(
+        'acc-1',
+        { isCashOrBank: false } as any,
+        currentUser,
+      );
 
       expect(repository.update).toHaveBeenCalled();
       expect(repository.update.mock.calls[0][1].isCashOrBank).toBe(false);
@@ -440,7 +464,11 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
       repository.findById.mockResolvedValue(given({ isCashOrBank: true }));
 
       await expect(
-        service.update('acc-1', { accountType: 'LIABILITY' } as any, currentUser),
+        service.update(
+          'acc-1',
+          { accountType: 'LIABILITY' } as any,
+          currentUser,
+        ),
       ).rejects.toThrow(BadRequestException);
       expect(repository.update).not.toHaveBeenCalled();
     });
@@ -458,7 +486,10 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
 
   describe('update — posted accounts are frozen (historical gate)', () => {
     /** The atomic write matched 0 rows because the history predicate failed. */
-    const postedUpdate = async (before: Record<string, any>, dto: Record<string, any>) => {
+    const postedUpdate = async (
+      before: Record<string, any>,
+      dto: Record<string, any>,
+    ) => {
       repository.findById.mockResolvedValue(given(before));
       repository.update.mockRejectedValue(new ConflictCtor('stale'));
       journalLineCount = 1;
@@ -481,7 +512,11 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
     it('14. rejects flipping accountType on a posted cash account', async () => {
       repository.findById.mockResolvedValue(given({ isCashOrBank: true }));
       await expect(
-        service.update('acc-1', { accountType: 'LIABILITY' } as any, currentUser),
+        service.update(
+          'acc-1',
+          { accountType: 'LIABILITY' } as any,
+          currentUser,
+        ),
       ).rejects.toThrow(BadRequestException);
       expect(repository.update).not.toHaveBeenCalled();
     });
@@ -489,7 +524,11 @@ describe('ChartOfAccountsService — cash classification integrity (G16-FU-2)', 
     it('15. rejects flipping normalBalance on a posted cash account', async () => {
       repository.findById.mockResolvedValue(given({ isCashOrBank: true }));
       await expect(
-        service.update('acc-1', { normalBalance: 'CREDIT' } as any, currentUser),
+        service.update(
+          'acc-1',
+          { normalBalance: 'CREDIT' } as any,
+          currentUser,
+        ),
       ).rejects.toThrow(BadRequestException);
       expect(repository.update).not.toHaveBeenCalled();
     });
@@ -616,14 +655,18 @@ describe('ChartOfAccountsService — retirement & restore policy (G16-FU-3)', ()
       create: jest.fn(),
       findById: jest.fn(),
       update: jest.fn(async () => acc()),
-      softDelete: jest.fn(async () => acc({ deletedAt: new Date(), isActive: false })),
+      softDelete: jest.fn(async () =>
+        acc({ deletedAt: new Date(), isActive: false }),
+      ),
       restore: jest.fn(async () => acc()),
     };
     ledgerRepository = { aggregatedJournalLines: jest.fn(async () => []) };
     prisma = {
       $transaction: jest.fn((cb: (tx: any) => any) => cb(mockTx)),
       chartOfAccount: {
-        findFirst: jest.fn(async () => acc({ deletedAt: new Date(), isActive: false })),
+        findFirst: jest.fn(async () =>
+          acc({ deletedAt: new Date(), isActive: false }),
+        ),
       },
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
@@ -707,7 +750,11 @@ describe('ChartOfAccountsService — retirement & restore policy (G16-FU-3)', ()
     it('7. an account with no aggregate rows is treated as zero balance', async () => {
       repository.findById.mockResolvedValue(acc());
       ledgerRepository.aggregatedJournalLines.mockResolvedValue([
-        { accountId: 'other-acc', totalDebit: dec('500'), totalCredit: dec('0') },
+        {
+          accountId: 'other-acc',
+          totalDebit: dec('500'),
+          totalCredit: dec('0'),
+        },
       ]);
 
       await service.update('acc-1', { isActive: false } as any, currentUser);
@@ -829,7 +876,9 @@ describe('ChartOfAccountsService — retirement & restore policy (G16-FU-3)', ()
     });
 
     it('19. restore sets isActive=true (the entity is active afterwards)', async () => {
-      repository.restore.mockImplementation(async () => acc({ isActive: true }));
+      repository.restore.mockImplementation(async () =>
+        acc({ isActive: true }),
+      );
 
       const result = await service.restore('acc-1', currentUser);
 

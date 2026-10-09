@@ -6,13 +6,18 @@ import {
 import { Prisma, Supplier } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
-function isP2002(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+function isP2002(
+  error: unknown,
+): error is Prisma.PrismaClientKnownRequestError {
   return (
-    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
   );
 }
 
-function getP2002Field(error: Prisma.PrismaClientKnownRequestError): string | undefined {
+function getP2002Field(
+  error: Prisma.PrismaClientKnownRequestError,
+): string | undefined {
   const target = (error.meta?.target as string[]) ?? [];
   if (target.includes('email')) return 'email';
   if (target.includes('phone')) return 'phone';
@@ -20,7 +25,9 @@ function getP2002Field(error: Prisma.PrismaClientKnownRequestError): string | un
   return undefined;
 }
 
-function mapP2002ToConflict(error: Prisma.PrismaClientKnownRequestError): ConflictException {
+function mapP2002ToConflict(
+  error: Prisma.PrismaClientKnownRequestError,
+): ConflictException {
   const field = getP2002Field(error);
   switch (field) {
     case 'email':
@@ -30,7 +37,9 @@ function mapP2002ToConflict(error: Prisma.PrismaClientKnownRequestError): Confli
     case 'bin':
       return new ConflictException('A supplier with this BIN already exists');
     default:
-      return new ConflictException('A supplier with these details already exists');
+      return new ConflictException(
+        'A supplier with these details already exists',
+      );
   }
 }
 

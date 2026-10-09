@@ -37,11 +37,7 @@ export class SalesRefundRepository {
     });
   }
 
-  async findById(
-    id: string,
-    companyId: string,
-    tx?: Prisma.TransactionClient,
-  ) {
+  async findById(id: string, companyId: string, tx?: Prisma.TransactionClient) {
     return this.getClient(tx).salesRefund.findFirst({
       where: { id, companyId, deletedAt: null },
       include: refundInclude,

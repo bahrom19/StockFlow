@@ -13,7 +13,14 @@ import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 // never written to the audit trail.
 type ContactAuditFields = Pick<
   SupplierContact,
-  'supplierId' | 'firstName' | 'lastName' | 'phone' | 'email' | 'position' | 'isPrimary' | 'rowVersion'
+  | 'supplierId'
+  | 'firstName'
+  | 'lastName'
+  | 'phone'
+  | 'email'
+  | 'position'
+  | 'isPrimary'
+  | 'rowVersion'
 >;
 
 function contactAuditFields(c: SupplierContact): ContactAuditFields {
@@ -88,9 +95,23 @@ export class SupplierContactsService {
         tx,
       );
       // G1 (P3-04): audit in the SAME transaction as the business write.
-      await this.audit('supplier_contact.create', created.id, null, contactAuditFields(created), currentUser, tx);
+      await this.audit(
+        'supplier_contact.create',
+        created.id,
+        null,
+        contactAuditFields(created),
+        currentUser,
+        tx,
+      );
       if (dto.isPrimary) {
-        await this.audit('supplier_contact.primary_change', created.id, null, contactAuditFields(created), currentUser, tx);
+        await this.audit(
+          'supplier_contact.primary_change',
+          created.id,
+          null,
+          contactAuditFields(created),
+          currentUser,
+          tx,
+        );
       }
       return created;
     });
@@ -105,9 +126,8 @@ export class SupplierContactsService {
     // Verify supplier belongs to company
     await this.suppliersService.findById(supplierId, currentUser);
 
-    const contacts = await this.contactsRepository.findAllBySupplier(
-      supplierId,
-    );
+    const contacts =
+      await this.contactsRepository.findAllBySupplier(supplierId);
     return contacts.map((c) => this.toEntity(c));
   }
 
@@ -155,11 +175,7 @@ export class SupplierContactsService {
 
       // G2: If isPrimary, clear existing primary contacts
       if (dto.isPrimary) {
-        await this.contactsRepository.clearPrimary(
-          supplierId,
-          contactId,
-          tx,
-        );
+        await this.contactsRepository.clearPrimary(supplierId, contactId, tx);
       }
 
       const updated = await this.contactsRepository.update(
@@ -178,9 +194,23 @@ export class SupplierContactsService {
         tx,
       );
       // G1 (P3-04): audit in the SAME transaction as the business write.
-      await this.audit('supplier_contact.update', updated.id, contactAuditFields(current), contactAuditFields(updated), currentUser, tx);
+      await this.audit(
+        'supplier_contact.update',
+        updated.id,
+        contactAuditFields(current),
+        contactAuditFields(updated),
+        currentUser,
+        tx,
+      );
       if (dto.isPrimary) {
-        await this.audit('supplier_contact.primary_change', updated.id, contactAuditFields(current), contactAuditFields(updated), currentUser, tx);
+        await this.audit(
+          'supplier_contact.primary_change',
+          updated.id,
+          contactAuditFields(current),
+          contactAuditFields(updated),
+          currentUser,
+          tx,
+        );
       }
       return updated;
     });
@@ -215,7 +245,14 @@ export class SupplierContactsService {
         tx,
       );
       // G1 (P3-04): audit in the SAME transaction as the tombstone write.
-      await this.audit('supplier_contact.delete', contactId, contactAuditFields(current), null, currentUser, tx);
+      await this.audit(
+        'supplier_contact.delete',
+        contactId,
+        contactAuditFields(current),
+        null,
+        currentUser,
+        tx,
+      );
     });
   }
 

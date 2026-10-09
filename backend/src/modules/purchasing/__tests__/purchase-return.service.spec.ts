@@ -79,9 +79,17 @@ describe('PurchaseReturnService', () => {
   let mockEventBus: { publish: jest.Mock };
   let mockFinance: { createPurchaseReturnJournal: jest.Mock };
   let mockAuditLog: jest.Mocked<AuditLogService>;
-  let mockCosting: { consumeFifoLayers: jest.Mock; restoreLayer: jest.Mock; findOutLayersByReferenceAndProduct: jest.Mock };
+  let mockCosting: {
+    consumeFifoLayers: jest.Mock;
+    restoreLayer: jest.Mock;
+    findOutLayersByReferenceAndProduct: jest.Mock;
+  };
   let mockGlEngine: { post: jest.Mock };
-  let mockIdempotency: { reserve: jest.Mock; complete: jest.Mock; hashRequest: jest.Mock };
+  let mockIdempotency: {
+    reserve: jest.Mock;
+    complete: jest.Mock;
+    hashRequest: jest.Mock;
+  };
   const mockTransaction = jest.fn();
 
   beforeEach(async () => {
@@ -96,18 +104,18 @@ describe('PurchaseReturnService', () => {
       cancelIfCompleted: jest.fn().mockResolvedValue(1),
     } as any;
     mockEventBus = { publish: jest.fn().mockResolvedValue(undefined) };
-    mockFinance = { createPurchaseReturnJournal: jest.fn().mockResolvedValue(undefined) };
+    mockFinance = {
+      createPurchaseReturnJournal: jest.fn().mockResolvedValue(undefined),
+    };
     mockAuditLog = { log: jest.fn().mockResolvedValue(undefined) } as any;
     mockCosting = {
       // G9-F4: default FIFO basis covers the fixture item exactly
       // (5 × 20 = 100), so legacy journal expectations stay unchanged.
-      consumeFifoLayers: jest
-        .fn()
-        .mockResolvedValue({
-          totalCost: new Decimal('100'),
-          layers: [],
-          fallbackCost: new Decimal('0'),
-        }),
+      consumeFifoLayers: jest.fn().mockResolvedValue({
+        totalCost: new Decimal('100'),
+        layers: [],
+        fallbackCost: new Decimal('0'),
+      }),
       restoreLayer: jest.fn().mockResolvedValue(undefined),
       findOutLayersByReferenceAndProduct: jest.fn().mockResolvedValue([]),
     };
@@ -121,7 +129,9 @@ describe('PurchaseReturnService', () => {
       }),
     };
     mockIdempotency = {
-      reserve: jest.fn().mockResolvedValue({ type: 'created', requestHash: 'hash' }),
+      reserve: jest
+        .fn()
+        .mockResolvedValue({ type: 'created', requestHash: 'hash' }),
       complete: jest.fn().mockResolvedValue(undefined),
       hashRequest: jest.fn().mockReturnValue('hash'),
     };
@@ -129,7 +139,10 @@ describe('PurchaseReturnService', () => {
 
     const mod = await Test.createTestingModule({
       providers: [
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
         PurchaseReturnService,
         { provide: PurchaseReturnRepository, useValue: mockRepo },
         { provide: PrismaService, useValue: mockPrisma },
@@ -155,21 +168,24 @@ describe('PurchaseReturnService', () => {
 
     // G9-E2: tenant-scoped supplier + batched product lookups are part of
     // every successful create; fixtures provide tenant-resolved rows.
-    const tenantTx = (over: Record<string, unknown> = {}) => ({
-      warehouse: {
-        findFirst: jest.fn().mockResolvedValue({
-          id: warehouseId,
-          companyId,
-          deletedAt: null,
-          isActive: true,
-        }),
-      },
-      supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
-      product: {
-        findMany: jest.fn().mockResolvedValue([{ id: productId }]),
-      },
-      ...over,
-    } as any);
+    const tenantTx = (over: Record<string, unknown> = {}) =>
+      ({
+        warehouse: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: warehouseId,
+            companyId,
+            deletedAt: null,
+            isActive: true,
+          }),
+        },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ id: supplierId }),
+        },
+        product: {
+          findMany: jest.fn().mockResolvedValue([{ id: productId }]),
+        },
+        ...over,
+      }) as any;
 
     it('should create a purchase return', async () => {
       const mockTx = tenantTx();
@@ -256,9 +272,9 @@ describe('PurchaseReturnService', () => {
       });
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
 
-      await expect(
-        service.create(validDto, userId, companyId),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockRepo.create).not.toHaveBeenCalled();
     });
 
@@ -270,9 +286,9 @@ describe('PurchaseReturnService', () => {
       });
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
 
-      await expect(
-        service.create(validDto, userId, companyId),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
       // Tenant boundary is enforced in the query shape itself
       expect(mockTx.supplier.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -289,9 +305,9 @@ describe('PurchaseReturnService', () => {
       });
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
 
-      await expect(
-        service.create(validDto, userId, companyId),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockTx.supplier.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ deletedAt: null }),
@@ -310,9 +326,9 @@ describe('PurchaseReturnService', () => {
       });
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
 
-      await expect(
-        service.create(validDto, userId, companyId),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockTx.product.findMany).toHaveBeenCalledWith({
         where: {
           id: { in: [productId] },
@@ -332,9 +348,9 @@ describe('PurchaseReturnService', () => {
       });
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
 
-      await expect(
-        service.create(validDto, userId, companyId),
-      ).rejects.toThrow(/Product with id/);
+      await expect(service.create(validDto, userId, companyId)).rejects.toThrow(
+        /Product with id/,
+      );
       expect(mockRepo.create).not.toHaveBeenCalled();
     });
 
@@ -380,7 +396,12 @@ describe('PurchaseReturnService', () => {
 
       await expect(
         service.create(
-          { ...validDto, items: [{ productId: 'inactive-product', quantity: 1, unitCost: 1 }] },
+          {
+            ...validDto,
+            items: [
+              { productId: 'inactive-product', quantity: 1, unitCost: 1 },
+            ],
+          },
           userId,
           companyId,
         ),
@@ -392,7 +413,9 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(baseReturn as any);
       const mockTx = {
         purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ id: supplierId }),
+        },
         product: { findMany: jest.fn().mockResolvedValue([]) },
         purchaseReturn: { update: jest.fn() },
       };
@@ -402,7 +425,9 @@ describe('PurchaseReturnService', () => {
         service.update(
           'pr-1',
           {
-            items: [{ productId: 'inactive-product', quantity: 1, unitCost: 1 }],
+            items: [
+              { productId: 'inactive-product', quantity: 1, unitCost: 1 },
+            ],
           } as any,
           userId,
           companyId,
@@ -453,7 +478,9 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(baseReturn as any);
       mockRepo.update.mockResolvedValue({ ...baseReturn, notes: 'U' } as any);
-      expect(await service.update('pr-1', upd, companyId, userId)).toBeDefined();
+      expect(
+        await service.update('pr-1', upd, companyId, userId),
+      ).toBeDefined();
     });
 
     it('should throw when not found', async () => {
@@ -468,9 +495,9 @@ describe('PurchaseReturnService', () => {
         ...baseReturn,
         status: PurchaseReturnStatus.APPROVED,
       } as any);
-      await expect(service.update('pr-1', upd, companyId, userId)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.update('pr-1', upd, companyId, userId),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -488,20 +515,22 @@ describe('PurchaseReturnService', () => {
     ) => ({
       purchaseReturnItem: {
         findMany: jest.fn().mockResolvedValue(baseReturn.items),
-        groupBy: jest
-          .fn()
-          .mockResolvedValue(
-            consumed.map((r) => ({ productId: r.productId, _sum: { quantity: r.qty } })),
-          ),
+        groupBy: jest.fn().mockResolvedValue(
+          consumed.map((r) => ({
+            productId: r.productId,
+            _sum: { quantity: r.qty },
+          })),
+        ),
         deleteMany: jest.fn(),
         createMany: jest.fn(),
       },
       goodsReceiptItem: {
-        groupBy: jest
-          .fn()
-          .mockResolvedValue(
-            received.map((r) => ({ productId: r.productId, _sum: { quantity: r.qty } })),
-          ),
+        groupBy: jest.fn().mockResolvedValue(
+          received.map((r) => ({
+            productId: r.productId,
+            _sum: { quantity: r.qty },
+          })),
+        ),
       },
       ...extra,
     });
@@ -610,10 +639,7 @@ describe('PurchaseReturnService', () => {
     it('should reject when prior committed returns consume the received quantity', async () => {
       const items = [{ ...baseReturn.items[0], quantity: 71 }];
       const mockTx = {
-        ...procTx(
-          [{ productId, qty: 100 }],
-          [{ productId, qty: 30 }],
-        ),
+        ...procTx([{ productId, qty: 100 }], [{ productId, qty: 30 }]),
         purchaseReturnItem: {
           findMany: jest.fn().mockResolvedValue(items),
           groupBy: jest
@@ -888,9 +914,9 @@ describe('PurchaseReturnService', () => {
           groupBy: jest.fn().mockResolvedValue([]),
         },
         goodsReceiptItem: {
-          groupBy: jest.fn().mockResolvedValue([
-            { productId, _sum: { quantity: 5 } },
-          ]),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 5 } }]),
         },
         purchaseReturn: { updateMany: jest.fn(), findFirst: jest.fn() },
       };
@@ -923,7 +949,12 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(baseReturn as any);
 
       await expect(
-        service.update('pr-1', { notes: 'U', rowVersion: 5 }, companyId, userId),
+        service.update(
+          'pr-1',
+          { notes: 'U', rowVersion: 5 },
+          companyId,
+          userId,
+        ),
       ).rejects.toThrow(ConflictException);
       expect(mockTx.purchaseReturnItem.deleteMany).not.toHaveBeenCalled();
       expect(mockTx.purchaseReturnItem.createMany).not.toHaveBeenCalled();
@@ -995,9 +1026,9 @@ describe('PurchaseReturnService', () => {
         },
         // G14-03-05: received covers baseReturn.items (prod-1 x 5).
         goodsReceiptItem: {
-          groupBy: jest.fn().mockResolvedValue([
-            { productId, _sum: { quantity: 5 } },
-          ]),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 5 } }]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -1111,9 +1142,9 @@ describe('PurchaseReturnService', () => {
         },
         // G14-03-05: received covers baseReturn.items (prod-1 x 5).
         goodsReceiptItem: {
-          groupBy: jest.fn().mockResolvedValue([
-            { productId, _sum: { quantity: 5 } },
-          ]),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 5 } }]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -1152,9 +1183,9 @@ describe('PurchaseReturnService', () => {
         },
         // G14-03-05: received covers baseReturn.items (prod-1 x 5).
         goodsReceiptItem: {
-          groupBy: jest.fn().mockResolvedValue([
-            { productId, _sum: { quantity: 5 } },
-          ]),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 5 } }]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -1254,7 +1285,9 @@ describe('PurchaseReturnService', () => {
             isActive: true,
           }),
         },
-        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ id: supplierId }),
+        },
         product: { findMany: jest.fn().mockResolvedValue([{ id: productId }]) },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
@@ -1278,7 +1311,9 @@ describe('PurchaseReturnService', () => {
             isActive: true,
           }),
         },
-        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ id: supplierId }),
+        },
         product: { findMany: jest.fn() },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
@@ -1299,17 +1334,15 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(baseReturn as any);
 
       await expect(
-        service.update(
-          'pr-1',
-          { currency: 'USD' as any },
-          companyId,
-          userId,
-        ),
+        service.update('pr-1', { currency: 'USD' as any }, companyId, userId),
       ).rejects.toThrow('does not match company currency');
     });
 
     it('should reject currency change when not DRAFT', async () => {
-      const approvedReturn = { ...baseReturn, status: PurchaseReturnStatus.APPROVED };
+      const approvedReturn = {
+        ...baseReturn,
+        status: PurchaseReturnStatus.APPROVED,
+      };
       const mockTx = {
         purchaseReturnItem: { deleteMany: jest.fn(), createMany: jest.fn() },
       };
@@ -1317,12 +1350,7 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(approvedReturn as any);
 
       await expect(
-        service.update(
-          'pr-1',
-          { currency: 'USD' as any },
-          companyId,
-          userId,
-        ),
+        service.update('pr-1', { currency: 'USD' as any }, companyId, userId),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -1341,9 +1369,9 @@ describe('PurchaseReturnService', () => {
         },
         // G14-03-05: received quantities cover baseReturn.items (prod-1 × 5).
         goodsReceiptItem: {
-          groupBy: jest.fn().mockResolvedValue([
-            { productId, _sum: { quantity: 5 } },
-          ]),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 5 } }]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -1595,9 +1623,9 @@ describe('PurchaseReturnService', () => {
         },
         // G14-03-05: received quantities cover baseReturn.items (prod-1 × 5).
         goodsReceiptItem: {
-          groupBy: jest.fn().mockResolvedValue([
-            { productId, _sum: { quantity: 5 } },
-          ]),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 5 } }]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -1659,10 +1687,10 @@ describe('PurchaseReturnService', () => {
 
       expect(mockFinance.createPurchaseReturnJournal).toHaveBeenCalledWith(
         expect.objectContaining({
-          items: [expect.objectContaining({ productId, quantity: 5, unitCost: '20' })],
-          fifoCostItems: [
-            { productId, quantity: 5, totalCost: '85' },
+          items: [
+            expect.objectContaining({ productId, quantity: 5, unitCost: '20' }),
           ],
+          fifoCostItems: [{ productId, quantity: 5, totalCost: '85' }],
         }),
         mockTx,
       );
@@ -1700,10 +1728,20 @@ describe('PurchaseReturnService', () => {
 
       expect(mockCosting.consumeFifoLayers).toHaveBeenCalledTimes(2);
       expect(mockCosting.consumeFifoLayers).toHaveBeenCalledWith(
-        'prod-1', companyId, 5, 'PURCHASE_RETURN', 'pr-1', mockTx,
+        'prod-1',
+        companyId,
+        5,
+        'PURCHASE_RETURN',
+        'pr-1',
+        mockTx,
       );
       expect(mockCosting.consumeFifoLayers).toHaveBeenCalledWith(
-        'prod-2', companyId, 3, 'PURCHASE_RETURN', 'pr-1', mockTx,
+        'prod-2',
+        companyId,
+        3,
+        'PURCHASE_RETURN',
+        'pr-1',
+        mockTx,
       );
       expect(mockFinance.createPurchaseReturnJournal).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1825,9 +1863,9 @@ describe('PurchaseReturnService', () => {
         },
         // G14-03-05: received covers baseReturn.items (prod-1 x 5).
         goodsReceiptItem: {
-          groupBy: jest.fn().mockResolvedValue([
-            { productId, _sum: { quantity: 5 } },
-          ]),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ productId, _sum: { quantity: 5 } }]),
         },
         stock: {
           findFirst: jest.fn().mockResolvedValue({
@@ -2022,7 +2060,13 @@ describe('PurchaseReturnService', () => {
     const mockTx = () => ({
       purchaseReturnItem: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'pri-1', purchaseReturnId: 'pr-1', productId, quantity: 5, unitCost: new Prisma.Decimal('20') },
+          {
+            id: 'pri-1',
+            purchaseReturnId: 'pr-1',
+            productId,
+            quantity: 5,
+            unitCost: new Prisma.Decimal('20'),
+          },
         ]),
       },
       stock: {
@@ -2048,8 +2092,18 @@ describe('PurchaseReturnService', () => {
           entryNumber: 42,
           financialPeriodId: 'fp-1',
           lines: [
-            { accountId: 'acc-2100', debit: new Prisma.Decimal('100'), credit: new Prisma.Decimal('0'), description: 'AP debit' },
-            { accountId: 'acc-1300', debit: new Prisma.Decimal('0'), credit: new Prisma.Decimal('100'), description: 'Inventory credit' },
+            {
+              accountId: 'acc-2100',
+              debit: new Prisma.Decimal('100'),
+              credit: new Prisma.Decimal('0'),
+              description: 'AP debit',
+            },
+            {
+              accountId: 'acc-1300',
+              debit: new Prisma.Decimal('0'),
+              credit: new Prisma.Decimal('100'),
+              description: 'Inventory credit',
+            },
           ],
         }),
         update: jest.fn().mockResolvedValue({}),
@@ -2064,15 +2118,27 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       const result = await service.cancelCompleted('pr-1', userId, companyId);
       expect(result).toBeDefined();
-      expect(mockRepo.cancelIfCompleted).toHaveBeenCalledWith('pr-1', companyId, userId, tx);
+      expect(mockRepo.cancelIfCompleted).toHaveBeenCalledWith(
+        'pr-1',
+        companyId,
+        userId,
+        tx,
+      );
     });
 
     it('should restore stock (quantity +availableQuantity) for each item', async () => {
@@ -2080,10 +2146,17 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await service.cancelCompleted('pr-1', userId, companyId);
@@ -2103,10 +2176,17 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await service.cancelCompleted('pr-1', userId, companyId);
@@ -2133,10 +2213,17 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await service.cancelCompleted('pr-1', userId, companyId);
@@ -2157,10 +2244,17 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await service.cancelCompleted('pr-1', userId, companyId);
@@ -2172,8 +2266,16 @@ describe('PurchaseReturnService', () => {
           referenceType: 'PURCHASE_RETURN_REVERSAL',
           referenceId: 'je-1',
           lines: expect.arrayContaining([
-            expect.objectContaining({ accountId: 'acc-2100', debit: '0', credit: '100' }),
-            expect.objectContaining({ accountId: 'acc-1300', debit: '100', credit: '0' }),
+            expect.objectContaining({
+              accountId: 'acc-2100',
+              debit: '0',
+              credit: '100',
+            }),
+            expect.objectContaining({
+              accountId: 'acc-1300',
+              debit: '100',
+              credit: '0',
+            }),
           ]),
         }),
         tx,
@@ -2185,10 +2287,17 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await service.cancelCompleted('pr-1', userId, companyId);
@@ -2204,10 +2313,17 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await service.cancelCompleted('pr-1', userId, companyId);
@@ -2283,7 +2399,11 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(completedReturn as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await expect(
@@ -2298,7 +2418,11 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(completedReturn as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await expect(
@@ -2311,10 +2435,17 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await service.cancelCompleted('pr-1', userId, companyId);
@@ -2326,7 +2457,10 @@ describe('PurchaseReturnService', () => {
           entityType: 'PurchaseReturn',
           entityId: 'pr-1',
           action: 'CANCELLED',
-          before: { status: PurchaseReturnStatus.COMPLETED, isCancelled: false },
+          before: {
+            status: PurchaseReturnStatus.COMPLETED,
+            isCancelled: false,
+          },
           after: { status: PurchaseReturnStatus.COMPLETED, isCancelled: true },
         }),
         tx,
@@ -2338,10 +2472,17 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await service.cancelCompleted('pr-1', userId, companyId);
@@ -2395,7 +2536,11 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(completedReturn as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
       mockGlEngine.post.mockRejectedValueOnce(new Error('GL failure'));
 
@@ -2426,7 +2571,11 @@ describe('PurchaseReturnService', () => {
       mockRepo.findById.mockResolvedValue(completedReturn as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await expect(
@@ -2461,15 +2610,24 @@ describe('PurchaseReturnService', () => {
       mockTransaction.mockImplementation((cb: any) => cb(tx));
       mockRepo.findById
         .mockResolvedValueOnce(completedReturn as any)
-        .mockResolvedValueOnce({ ...completedReturn, isCancelled: true } as any);
+        .mockResolvedValueOnce({
+          ...completedReturn,
+          isCancelled: true,
+        } as any);
       mockRepo.cancelIfCompleted.mockResolvedValue(1);
       mockCosting.findOutLayersByReferenceAndProduct.mockResolvedValue([
-        { quantity: 5, totalCost: new Prisma.Decimal('100'), unitCost: new Prisma.Decimal('20') },
+        {
+          quantity: 5,
+          totalCost: new Prisma.Decimal('100'),
+          unitCost: new Prisma.Decimal('20'),
+        },
       ]);
 
       await service.cancelCompleted('pr-1', userId, companyId);
 
-      expect(mockCosting.findOutLayersByReferenceAndProduct).toHaveBeenCalledWith(
+      expect(
+        mockCosting.findOutLayersByReferenceAndProduct,
+      ).toHaveBeenCalledWith(
         companyId,
         'PURCHASE_RETURN',
         'pr-1',

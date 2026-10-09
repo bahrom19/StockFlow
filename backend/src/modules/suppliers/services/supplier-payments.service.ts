@@ -91,7 +91,8 @@ export class SupplierPaymentsService {
     }
 
     // 3. Validate currency == Company.currency
-    const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+    const companyCurrency =
+      await this.companiesService.getBaseCurrency(companyId);
     if (dto.currency && dto.currency !== companyCurrency) {
       throw new BadRequestException(
         `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
@@ -144,7 +145,15 @@ export class SupplierPaymentsService {
     supplierName: string;
     tx: Prisma.TransactionClient;
   }): Promise<SupplierPaymentEntity> {
-    const { supplierId, dto, userId, companyId, companyCurrency, supplierName, tx } = params;
+    const {
+      supplierId,
+      dto,
+      userId,
+      companyId,
+      companyCurrency,
+      supplierName,
+      tx,
+    } = params;
     const amount = new Decimal(dto.amount);
 
     // 6. Get invoice and validate (tenant-scoped: id + companyId + supplierId)
@@ -196,7 +205,11 @@ export class SupplierPaymentsService {
         );
       }
 
-      if (!ALLOWED_INVOICE_STATUSES.includes(invoice.status as PurchaseInvoiceStatus)) {
+      if (
+        !ALLOWED_INVOICE_STATUSES.includes(
+          invoice.status as PurchaseInvoiceStatus,
+        )
+      ) {
         throw new BadRequestException(
           `Cannot record payment for invoice with status ${invoice.status}. Only APPROVED or PAID invoices are accepted.`,
         );
@@ -251,10 +264,16 @@ export class SupplierPaymentsService {
     // 9. Resolve GL accounts
     const apAccountId = await this.getAccountsPayableAccountId(companyId, tx);
     if (!apAccountId) {
-      throw new BadRequestException('Chart of Accounts not configured — Accounts Payable account (2100) not found');
+      throw new BadRequestException(
+        'Chart of Accounts not configured — Accounts Payable account (2100) not found',
+      );
     }
 
-    const creditAccountId = await this.resolveCreditAccountId(dto, companyId, tx);
+    const creditAccountId = await this.resolveCreditAccountId(
+      dto,
+      companyId,
+      tx,
+    );
 
     // 10. Determine new invoice status (only if invoice provided)
     let newStatus: PurchaseInvoiceStatus | undefined;
@@ -264,7 +283,7 @@ export class SupplierPaymentsService {
       const newPaid = currentPaid.add(amount);
       newStatus = newPaid.gte(grandTotal)
         ? PurchaseInvoiceStatus.PAID
-        : invoice.status as PurchaseInvoiceStatus;
+        : (invoice.status as PurchaseInvoiceStatus);
     }
 
     // 11. Generate payment number
@@ -330,7 +349,9 @@ export class SupplierPaymentsService {
         data: {
           paidAmount: newPaid.toString(),
           rowVersion: { increment: 1 },
-          ...(newPaid.gte(grandTotal) ? { status: PurchaseInvoiceStatus.PAID } : {}),
+          ...(newPaid.gte(grandTotal)
+            ? { status: PurchaseInvoiceStatus.PAID }
+            : {}),
         },
       });
 
@@ -413,7 +434,12 @@ export class SupplierPaymentsService {
     companyId: string,
     page = 1,
     limit = 20,
-  ): Promise<{ items: SupplierPaymentEntity[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    items: SupplierPaymentEntity[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     // G16-AA-2: archived-allowed read gate — payment history of archived
     // suppliers stays visible.
     const supplier = await resolveSupplierForFinancialRead(
@@ -517,9 +543,14 @@ export class SupplierPaymentsService {
       throw new BadRequestException('Chart of Accounts not configured');
     }
 
-    const creditAccountId = await this.resolveCreditAccountIdFromPayment(payment, companyId);
+    const creditAccountId = await this.resolveCreditAccountIdFromPayment(
+      payment,
+      companyId,
+    );
     if (!creditAccountId) {
-      throw new BadRequestException('Cannot resolve account from original payment');
+      throw new BadRequestException(
+        'Cannot resolve account from original payment',
+      );
     }
 
     await this.prismaService.$transaction(async (tx) => {
@@ -536,7 +567,9 @@ export class SupplierPaymentsService {
         const restoredPaid = currentPaid.sub(paymentAmount);
 
         if (restoredPaid.lt(0)) {
-          throw new BadRequestException('Cannot void: paidAmount would become negative');
+          throw new BadRequestException(
+            'Cannot void: paidAmount would become negative',
+          );
         }
 
         const newStatus = restoredPaid.lt(new Decimal(invoice.grandTotal))
@@ -616,7 +649,11 @@ export class SupplierPaymentsService {
             status: 'VOIDED',
             reversalReferenceType: 'SUPPLIER_PAYMENT_REVERSAL',
             reversalReferenceId: payment.id,
-            paidAmountAfter: invoice ? new Decimal(invoice.paidAmount).sub(new Decimal(payment.amount)).toString() : null,
+            paidAmountAfter: invoice
+              ? new Decimal(invoice.paidAmount)
+                  .sub(new Decimal(payment.amount))
+                  .toString()
+              : null,
           },
         },
         tx,
@@ -691,7 +728,9 @@ export class SupplierPaymentsService {
         supplierId,
         companyId,
         deletedAt: null,
-        status: { in: [PurchaseInvoiceStatus.APPROVED, PurchaseInvoiceStatus.PAID] },
+        status: {
+          in: [PurchaseInvoiceStatus.APPROVED, PurchaseInvoiceStatus.PAID],
+        },
       },
       _sum: { grandTotal: true },
       _count: { id: true },
@@ -699,14 +738,15 @@ export class SupplierPaymentsService {
 
     // G9-B1: Use allocations as canonical payment coverage
     // Allocations represent the actual distribution of payments to invoices
-    const allocationAgg = await this.prismaService.supplierPaymentAllocation.aggregate({
-      where: {
-        supplierId,
-        companyId,
-        deletedAt: null,
-      },
-      _sum: { amount: true },
-    });
+    const allocationAgg =
+      await this.prismaService.supplierPaymentAllocation.aggregate({
+        where: {
+          supplierId,
+          companyId,
+          deletedAt: null,
+        },
+        _sum: { amount: true },
+      });
 
     // Count payments for display purposes
     const paymentCount = await this.prismaService.supplierPayment.count({
@@ -768,18 +808,26 @@ export class SupplierPaymentsService {
   private validateMethodAccount(dto: CreateSupplierPaymentDto): void {
     if (dto.method === 'CASH') {
       if (!dto.cashAccountId) {
-        throw new BadRequestException('cashAccountId is required for CASH payments');
+        throw new BadRequestException(
+          'cashAccountId is required for CASH payments',
+        );
       }
       if (dto.bankAccountId) {
-        throw new BadRequestException('bankAccountId must be null for CASH payments');
+        throw new BadRequestException(
+          'bankAccountId must be null for CASH payments',
+        );
       }
     } else {
       // BANK_TRANSFER or CARD
       if (!dto.bankAccountId) {
-        throw new BadRequestException('bankAccountId is required for BANK_TRANSFER/CARD payments');
+        throw new BadRequestException(
+          'bankAccountId is required for BANK_TRANSFER/CARD payments',
+        );
       }
       if (dto.cashAccountId) {
-        throw new BadRequestException('cashAccountId must be null for BANK_TRANSFER/CARD payments');
+        throw new BadRequestException(
+          'cashAccountId must be null for BANK_TRANSFER/CARD payments',
+        );
       }
     }
   }
@@ -795,7 +843,9 @@ export class SupplierPaymentsService {
         select: { chartOfAccountId: true },
       });
       if (!cashAccount?.chartOfAccountId) {
-        throw new BadRequestException('Cash account not found or not linked to a Chart of Account');
+        throw new BadRequestException(
+          'Cash account not found or not linked to a Chart of Account',
+        );
       }
       return cashAccount.chartOfAccountId;
     }
@@ -806,7 +856,9 @@ export class SupplierPaymentsService {
         select: { chartOfAccountId: true },
       });
       if (!bankAccount?.chartOfAccountId) {
-        throw new BadRequestException('Bank account not found or not linked to a Chart of Account');
+        throw new BadRequestException(
+          'Bank account not found or not linked to a Chart of Account',
+        );
       }
       return bankAccount.chartOfAccountId;
     }
@@ -815,7 +867,11 @@ export class SupplierPaymentsService {
   }
 
   private async resolveCreditAccountIdFromPayment(
-    payment: { method: string; cashAccountId: string | null; bankAccountId: string | null },
+    payment: {
+      method: string;
+      cashAccountId: string | null;
+      bankAccountId: string | null;
+    },
     companyId: string,
   ): Promise<string | null> {
     if (payment.method === 'CASH' && payment.cashAccountId) {

@@ -104,12 +104,7 @@ export class SupplierContactsController {
     @Body() dto: UpdateSupplierContactDto,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<SupplierContactEntity> {
-    return this.contactsService.update(
-      supplierId,
-      contactId,
-      dto,
-      currentUser,
-    );
+    return this.contactsService.update(supplierId, contactId, dto, currentUser);
   }
 
   @Delete(':contactId')

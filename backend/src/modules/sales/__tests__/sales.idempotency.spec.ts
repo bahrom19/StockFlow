@@ -88,7 +88,9 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
     store = new MockIdempotencyStore();
     saleRows = [];
     saleItemFindManyArgs = [];
-    prisma = createMockPrisma(store, (tx) => Object.assign(tx, buildTx())).prisma;
+    prisma = createMockPrisma(store, (tx) =>
+      Object.assign(tx, buildTx()),
+    ).prisma;
     eventBus = { publish: jest.fn() };
     salesRepository = {
       getNextSaleNumber: jest.fn().mockResolvedValue('SALE-COMP-0001'),
@@ -124,8 +126,18 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
   // ── SALE CREATE ───────────────────────────────────────────────
 
   it('S1: same key + same payload replays the original sale (no second sale)', async () => {
-    const first = await service.create(dto('S-0001'), userId, companyId, 'key-s1');
-    const second = await service.create(dto('S-0001'), userId, companyId, 'key-s1');
+    const first = await service.create(
+      dto('S-0001'),
+      userId,
+      companyId,
+      'key-s1',
+    );
+    const second = await service.create(
+      dto('S-0001'),
+      userId,
+      companyId,
+      'key-s1',
+    );
 
     expect(salesRepository.create).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
@@ -176,13 +188,15 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
         status: SaleStatus.DRAFT,
       })
       .mockRejectedValueOnce(
-        new ConflictException('Sale number already exists. Please refresh and retry.'),
+        new ConflictException(
+          'Sale number already exists. Please refresh and retry.',
+        ),
       );
 
     await service.create(dto('S-0001'), userId, companyId);
-    await expect(service.create(dto('S-0001'), userId, companyId)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.create(dto('S-0001'), userId, companyId),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(store.size()).toBe(0);
   });
 
@@ -208,10 +222,20 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
   });
 
   it('S8: response lost after commit → retry same key returns the original response', async () => {
-    const original = await service.create(dto('S-0001'), userId, companyId, 'key-s8');
+    const original = await service.create(
+      dto('S-0001'),
+      userId,
+      companyId,
+      'key-s8',
+    );
 
     // Client never saw the first response; it retries the identical request.
-    const replay = await service.create(dto('S-0001'), userId, companyId, 'key-s8');
+    const replay = await service.create(
+      dto('S-0001'),
+      userId,
+      companyId,
+      'key-s8',
+    );
 
     expect(salesRepository.create).toHaveBeenCalledTimes(1);
     expect(replay).toEqual(original);
@@ -274,7 +298,13 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
     );
 
     await expect(
-      service.transitionStatus('sale-1', SaleStatus.COMPLETED, userId, companyId, 'key-c2b'),
+      service.transitionStatus(
+        'sale-1',
+        SaleStatus.COMPLETED,
+        userId,
+        companyId,
+        'key-c2b',
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(eventBus.publish).toHaveBeenCalledTimes(1);
   });
@@ -290,7 +320,13 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
     );
     // The second racing request observed COMPLETED (CAS won by the first).
     await expect(
-      service.transitionStatus('sale-1', SaleStatus.COMPLETED, userId, companyId, 'key-c3b'),
+      service.transitionStatus(
+        'sale-1',
+        SaleStatus.COMPLETED,
+        userId,
+        companyId,
+        'key-c3b',
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -347,7 +383,13 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
     );
 
     await expect(
-      service.transitionStatus('sale-1', SaleStatus.CANCELLED, userId, companyId, 'key-x2b'),
+      service.transitionStatus(
+        'sale-1',
+        SaleStatus.CANCELLED,
+        userId,
+        companyId,
+        'key-x2b',
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -362,13 +404,24 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
     );
 
     await expect(
-      service.transitionStatus('sale-1', SaleStatus.COMPLETED, userId, companyId, 'key-x3b'),
+      service.transitionStatus(
+        'sale-1',
+        SaleStatus.COMPLETED,
+        userId,
+        companyId,
+        'key-x3b',
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('no key on complete/cancel keeps legacy behaviour (no record)', async () => {
     completedSale();
-    await service.transitionStatus('sale-1', SaleStatus.COMPLETED, userId, companyId);
+    await service.transitionStatus(
+      'sale-1',
+      SaleStatus.COMPLETED,
+      userId,
+      companyId,
+    );
 
     expect(store.size()).toBe(0);
     expect(eventBus.publish).toHaveBeenCalledTimes(1);
@@ -376,7 +429,13 @@ describe('SalesService — G16-C-01 keyed idempotency', () => {
 
   it('missing sale with a key → NotFound rolls the reservation back', async () => {
     await expect(
-      service.transitionStatus('ghost', SaleStatus.COMPLETED, userId, companyId, 'key-ghost'),
+      service.transitionStatus(
+        'ghost',
+        SaleStatus.COMPLETED,
+        userId,
+        companyId,
+        'key-ghost',
+      ),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(store.size()).toBe(0);
   });

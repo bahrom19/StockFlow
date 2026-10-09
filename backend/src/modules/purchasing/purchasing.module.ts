@@ -29,7 +29,14 @@ import { AuditLogService } from '../shared/services/audit-log.service';
 import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [PrismaModule, SharedModule, FinanceModule, IdempotencyModule, CompaniesModule, InventoryModule],
+  imports: [
+    PrismaModule,
+    SharedModule,
+    FinanceModule,
+    IdempotencyModule,
+    CompaniesModule,
+    InventoryModule,
+  ],
   controllers: [
     PurchaseOrderController,
     GoodsReceiptController,

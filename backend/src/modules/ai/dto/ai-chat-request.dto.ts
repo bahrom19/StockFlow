@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
 export class AIChatRequestDto {
   @ApiPropertyOptional({
@@ -21,7 +27,8 @@ export class AIChatRequestDto {
   message!: string;
 
   @ApiPropertyOptional({
-    description: 'Client-provided idempotency key for duplicate request prevention. If omitted, no idempotency tracking is performed.',
+    description:
+      'Client-provided idempotency key for duplicate request prevention. If omitted, no idempotency tracking is performed.',
     example: 'client-uuid-123',
     maxLength: 255,
   })

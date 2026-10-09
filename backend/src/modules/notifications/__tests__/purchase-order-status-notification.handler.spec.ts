@@ -20,7 +20,9 @@ describe('PurchaseOrderStatusNotificationHandler — targeting & never-throw', (
     });
 
   beforeEach(() => {
-    service = { notifyPurchaseOrderStatusChanged: jest.fn().mockResolvedValue(2) };
+    service = {
+      notifyPurchaseOrderStatusChanged: jest.fn().mockResolvedValue(2),
+    };
     handler = new PurchaseOrderStatusNotificationHandler(
       service as unknown as NotificationsService,
     );

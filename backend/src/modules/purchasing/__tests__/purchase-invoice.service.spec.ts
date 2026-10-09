@@ -112,13 +112,24 @@ describe('PurchaseInvoiceService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: PurchasingFinanceService, useValue: mockFinanceService },
-        { provide: GlEngineService, useValue: { post: jest.fn().mockResolvedValue({ id: 'je-reversal-1', entryNumber: 2, status: 'POSTED' }) } },
+        {
+          provide: GlEngineService,
+          useValue: {
+            post: jest.fn().mockResolvedValue({
+              id: 'je-reversal-1',
+              entryNumber: 2,
+              status: 'POSTED',
+            }),
+          },
+        },
         { provide: EVENT_BUS, useValue: mockEventBus },
       ],
     }).compile();
     service = mod.get(PurchaseInvoiceService);
     mockRepo.findByInvoiceNumber.mockResolvedValue(null);
-    mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(new Prisma.Decimal('0'));
+    mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(
+      new Prisma.Decimal('0'),
+    );
     mockPoRepo.lockById.mockResolvedValue(undefined);
   });
 
@@ -285,7 +296,10 @@ describe('PurchaseInvoiceService', () => {
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
-      mockRepo.create.mockResolvedValue({ ...baseInvoice, currency: 'USD' } as any);
+      mockRepo.create.mockResolvedValue({
+        ...baseInvoice,
+        currency: 'USD',
+      } as any);
 
       const result = await service.create(validDto, userId, companyId);
 
@@ -305,7 +319,10 @@ describe('PurchaseInvoiceService', () => {
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockPoRepo.findById.mockResolvedValue(poWithUsd as any);
-      mockRepo.create.mockResolvedValue({ ...baseInvoice, currency: 'USD' } as any);
+      mockRepo.create.mockResolvedValue({
+        ...baseInvoice,
+        currency: 'USD',
+      } as any);
 
       await service.create(
         { ...validDto, currency: 'USD' as any },
@@ -418,9 +435,7 @@ describe('PurchaseInvoiceService', () => {
         userId,
         mockTx,
       );
-      expect(
-        mockFinanceService.createInvoiceJournal,
-      ).toHaveBeenCalledWith(
+      expect(mockFinanceService.createInvoiceJournal).toHaveBeenCalledWith(
         {
           companyId,
           invoiceNumber: 'INV-001',
@@ -694,7 +709,10 @@ describe('PurchaseInvoiceService', () => {
     it('keeps rejecting a currency mismatch before any overrun guard', async () => {
       const mockTx = {};
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
-      mockPoRepo.findById.mockResolvedValue({ ...basePo, currency: 'USD' } as any);
+      mockPoRepo.findById.mockResolvedValue({
+        ...basePo,
+        currency: 'USD',
+      } as any);
       await expect(
         service.create(
           { ...dtoWithTotal(100), currency: 'EUR' as any },
@@ -881,7 +899,10 @@ describe('PurchaseInvoiceService', () => {
           { provide: PurchaseOrderRepository, useValue: mockPoRepo },
           { provide: PrismaService, useValue: mockPrisma },
           { provide: AuditLogService, useValue: mockAuditLog },
-          { provide: PurchasingFinanceService, useValue: new PurchasingFinanceService(glEngine as any) },
+          {
+            provide: PurchasingFinanceService,
+            useValue: new PurchasingFinanceService(glEngine as any),
+          },
           { provide: GlEngineService, useValue: glEngine },
           { provide: EVENT_BUS, useValue: mockEventBus },
         ],
@@ -897,14 +918,20 @@ describe('PurchaseInvoiceService', () => {
       ];
       const financeTx: any = {
         chartOfAccount: {
-          findMany: jest.fn().mockImplementation(async ({ where }: any) =>
-            coa.filter((a) => where.code.in.includes(a.code)),
-          ),
+          findMany: jest
+            .fn()
+            .mockImplementation(async ({ where }: any) =>
+              coa.filter((a) => where.code.in.includes(a.code)),
+            ),
         },
-        financialPeriod: { findFirst: jest.fn().mockResolvedValue({ id: 'period-1' }) },
+        financialPeriod: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'period-1' }),
+        },
       };
       const mockTx = {
-        purchaseInvoiceItem: { findMany: jest.fn().mockResolvedValue(baseInvoice.items) },
+        purchaseInvoiceItem: {
+          findMany: jest.fn().mockResolvedValue(baseInvoice.items),
+        },
         ...financeTx,
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
@@ -912,7 +939,9 @@ describe('PurchaseInvoiceService', () => {
       mockRepo.findById.mockResolvedValue(baseInvoice as any);
       mockPoRepo.findById.mockResolvedValue(basePo as any);
       mockPoRepo.lockById.mockResolvedValue(undefined);
-      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(new Prisma.Decimal('0'));
+      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(
+        new Prisma.Decimal('0'),
+      );
       mockRepo.approveWithCas.mockResolvedValue({
         ...baseInvoice,
         status: PurchaseInvoiceStatus.APPROVED,
@@ -959,15 +988,41 @@ describe('PurchaseInvoiceService', () => {
       const lines = postedLines();
       expect(lines).toEqual(
         expect.arrayContaining([
-          { accountId: 'acct-2110', debit: '500', credit: '0', description: expect.stringContaining('GRNI settlement') },
-          { accountId: 'acct-5200', debit: '60', credit: '0', description: expect.stringContaining('Purchase tax') },
-          { accountId: 'acct-5200', debit: '0', credit: '40', description: expect.stringContaining('Purchase discount') },
-          { accountId: 'acct-2100', debit: '0', credit: '520', description: expect.stringContaining('Supplier invoice') },
+          {
+            accountId: 'acct-2110',
+            debit: '500',
+            credit: '0',
+            description: expect.stringContaining('GRNI settlement'),
+          },
+          {
+            accountId: 'acct-5200',
+            debit: '60',
+            credit: '0',
+            description: expect.stringContaining('Purchase tax'),
+          },
+          {
+            accountId: 'acct-5200',
+            debit: '0',
+            credit: '40',
+            description: expect.stringContaining('Purchase discount'),
+          },
+          {
+            accountId: 'acct-2100',
+            debit: '0',
+            credit: '520',
+            description: expect.stringContaining('Supplier invoice'),
+          },
         ]),
       );
       // Balanced: subtotal + tax = grandTotal + discount
-      const totalDebit = lines.reduce((s, l) => s.add(new Prisma.Decimal(l.debit)), new Prisma.Decimal(0));
-      const totalCredit = lines.reduce((s, l) => s.add(new Prisma.Decimal(l.credit)), new Prisma.Decimal(0));
+      const totalDebit = lines.reduce(
+        (s, l) => s.add(new Prisma.Decimal(l.debit)),
+        new Prisma.Decimal(0),
+      );
+      const totalCredit = lines.reduce(
+        (s, l) => s.add(new Prisma.Decimal(l.credit)),
+        new Prisma.Decimal(0),
+      );
       expect(totalDebit.equals(totalCredit)).toBe(true);
     });
 
@@ -988,9 +1043,18 @@ describe('PurchaseInvoiceService', () => {
 
       const lines = postedLines();
       expect(lines).toHaveLength(2);
-      expect(lines.map((l) => l.accountId).sort()).toEqual(['acct-2100', 'acct-2110']);
-      expect(lines.find((l) => l.accountId === 'acct-2110')).toMatchObject({ debit: '500', credit: '0' });
-      expect(lines.find((l) => l.accountId === 'acct-2100')).toMatchObject({ debit: '0', credit: '500' });
+      expect(lines.map((l) => l.accountId).sort()).toEqual([
+        'acct-2100',
+        'acct-2110',
+      ]);
+      expect(lines.find((l) => l.accountId === 'acct-2110')).toMatchObject({
+        debit: '500',
+        credit: '0',
+      });
+      expect(lines.find((l) => l.accountId === 'acct-2100')).toMatchObject({
+        debit: '0',
+        credit: '500',
+      });
     });
 
     it('uses the same transaction for CAS, journal and event', async () => {
@@ -1086,7 +1150,11 @@ describe('PurchaseInvoiceService', () => {
     });
 
     it('returns 409 and posts no journal/event when the CAS loses', async () => {
-      mockRepo.approveWithCas.mockRejectedValue(new ConflictException('Invoice was modified or approved by another user. Please refresh and retry.'));
+      mockRepo.approveWithCas.mockRejectedValue(
+        new ConflictException(
+          'Invoice was modified or approved by another user. Please refresh and retry.',
+        ),
+      );
       await expect(approve()).rejects.toThrow(ConflictException);
       expect(glEngine.post).not.toHaveBeenCalled();
       expect(mockEventBus.publish).not.toHaveBeenCalled();
@@ -1094,7 +1162,9 @@ describe('PurchaseInvoiceService', () => {
     });
 
     it('rolls back the whole approval when journal posting fails (no event, no audit)', async () => {
-      glEngine.post.mockRejectedValueOnce(new Error('no open financial period'));
+      glEngine.post.mockRejectedValueOnce(
+        new Error('no open financial period'),
+      );
       await expect(approve()).rejects.toThrow('no open financial period');
       expect(mockRepo.approveWithCas).toHaveBeenCalled();
       expect(mockEventBus.publish).not.toHaveBeenCalled();
@@ -1115,7 +1185,12 @@ describe('PurchaseInvoiceService', () => {
       };
       mockRepo.findById.mockResolvedValue(baseInvoice as any);
       mockRepo.update.mockResolvedValue(cancelled as any);
-      await g10Service.transitionStatus('inv-1', PurchaseInvoiceStatus.CANCELLED, userId, companyId);
+      await g10Service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.CANCELLED,
+        userId,
+        companyId,
+      );
       expect(mockRepo.approveWithCas).not.toHaveBeenCalled();
       expect(glEngine.post).not.toHaveBeenCalled();
       expect(mockEventBus.publish).not.toHaveBeenCalled();
@@ -1140,7 +1215,10 @@ describe('PurchaseInvoiceService', () => {
           { provide: PurchaseOrderRepository, useValue: mockPoRepo },
           { provide: PrismaService, useValue: mockPrisma },
           { provide: AuditLogService, useValue: mockAuditLog },
-          { provide: PurchasingFinanceService, useValue: new PurchasingFinanceService(glEngine as any) },
+          {
+            provide: PurchasingFinanceService,
+            useValue: new PurchasingFinanceService(glEngine as any),
+          },
           { provide: GlEngineService, useValue: glEngine },
           { provide: EVENT_BUS, useValue: mockEventBus },
         ],
@@ -1165,20 +1243,29 @@ describe('PurchaseInvoiceService', () => {
             { id: 'acct-5200', code: '5200' },
           ]),
         },
-        financialPeriod: { findFirst: jest.fn().mockResolvedValue({ id: 'period-1' }) },
+        financialPeriod: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'period-1' }),
+        },
       };
       mockTransaction.mockImplementation((cb: any) => cb(mockTx));
       mockRepo.findById.mockResolvedValue(baseInvoice as any);
       mockPoRepo.findById.mockResolvedValue(basePo as any);
       mockPoRepo.lockById.mockResolvedValue(undefined);
-      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(new Prisma.Decimal('0'));
+      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(
+        new Prisma.Decimal('0'),
+      );
       mockRepo.approveWithCas.mockResolvedValue({
         ...baseInvoice,
         ...invoice,
         status: PurchaseInvoiceStatus.APPROVED,
       } as any);
 
-      await g10Service.transitionStatus('inv-1', PurchaseInvoiceStatus.APPROVED, userId, companyId);
+      await g10Service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.APPROVED,
+        userId,
+        companyId,
+      );
 
       const lines = glEngine.post.mock.calls[0]![0].lines as Array<{
         accountId: string;
@@ -1190,24 +1277,51 @@ describe('PurchaseInvoiceService', () => {
 
     it('scenario 1: received 700 / invoiced 700 → GRNI settles to 0', async () => {
       // GR posts Cr GRNI 700 (goods-receipt journal); this approval posts Dr GRNI 700 → settled
-      const { lines } = await postApproval({ subtotal: '700', discountAmount: '0', taxAmount: '0', grandTotal: '700' });
-      expect(lines.find((l) => l.accountId === 'acct-2110')).toMatchObject({ debit: '700' });
+      const { lines } = await postApproval({
+        subtotal: '700',
+        discountAmount: '0',
+        taxAmount: '0',
+        grandTotal: '700',
+      });
+      expect(lines.find((l) => l.accountId === 'acct-2110')).toMatchObject({
+        debit: '700',
+      });
       // GRNI balance after full cycle: 700 credit − 700 debit = 0
-      expect(new Prisma.Decimal('700').sub(new Prisma.Decimal('700')).isZero()).toBe(true);
+      expect(
+        new Prisma.Decimal('700').sub(new Prisma.Decimal('700')).isZero(),
+      ).toBe(true);
     });
 
     it('scenario 2: received 1000 / invoiced 700 → GRNI residue 300 (Credit)', async () => {
-      const { lines } = await postApproval({ subtotal: '700', discountAmount: '0', taxAmount: '0', grandTotal: '700' });
-      expect(lines.find((l) => l.accountId === 'acct-2110')).toMatchObject({ debit: '700' });
+      const { lines } = await postApproval({
+        subtotal: '700',
+        discountAmount: '0',
+        taxAmount: '0',
+        grandTotal: '700',
+      });
+      expect(lines.find((l) => l.accountId === 'acct-2110')).toMatchObject({
+        debit: '700',
+      });
       // GRNI balance: 1000 credit (receipt) − 700 debit (invoice) = 300 credit residue
-      expect(new Prisma.Decimal('1000').sub(new Prisma.Decimal('700')).toString()).toBe('300');
+      expect(
+        new Prisma.Decimal('1000').sub(new Prisma.Decimal('700')).toString(),
+      ).toBe('300');
     });
 
     it('scenario 3: received 700 / invoiced 1000 → GRNI overbilled −300 (Debit)', async () => {
-      const { lines } = await postApproval({ subtotal: '1000', discountAmount: '0', taxAmount: '0', grandTotal: '1000' });
-      expect(lines.find((l) => l.accountId === 'acct-2110')).toMatchObject({ debit: '1000' });
+      const { lines } = await postApproval({
+        subtotal: '1000',
+        discountAmount: '0',
+        taxAmount: '0',
+        grandTotal: '1000',
+      });
+      expect(lines.find((l) => l.accountId === 'acct-2110')).toMatchObject({
+        debit: '1000',
+      });
       // GRNI balance: 700 credit (receipt) − 1000 debit (invoice) = 300 debit (negative accrual)
-      expect(new Prisma.Decimal('1000').sub(new Prisma.Decimal('700')).toString()).toBe('300');
+      expect(
+        new Prisma.Decimal('1000').sub(new Prisma.Decimal('700')).toString(),
+      ).toBe('300');
     });
 
     it('scenario 4+5: multiple receipts / multiple invoices accumulate within the G9-D2 PO cap (cumulative guard active)', async () => {
@@ -1222,7 +1336,9 @@ describe('PurchaseInvoiceService', () => {
               { id: 'acct-5200', code: '5200' },
             ]),
           },
-          financialPeriod: { findFirst: jest.fn().mockResolvedValue({ id: 'period-1' }) },
+          financialPeriod: {
+            findFirst: jest.fn().mockResolvedValue({ id: 'period-1' }),
+          },
         }),
       );
       // First approve: proposed 500 + siblings 500 = PO 1000 → passes
@@ -1231,34 +1347,59 @@ describe('PurchaseInvoiceService', () => {
         grandTotal: new Prisma.Decimal('500'),
       } as any);
       mockPoRepo.findById.mockResolvedValue(basePo as any);
-      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(new Prisma.Decimal('500'));
+      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(
+        new Prisma.Decimal('500'),
+      );
       mockRepo.approveWithCas.mockResolvedValue({
         ...baseInvoice,
         grandTotal: new Prisma.Decimal('500'),
         status: PurchaseInvoiceStatus.APPROVED,
       } as any);
-      await g10Service.transitionStatus('inv-1', PurchaseInvoiceStatus.APPROVED, userId, companyId);
+      await g10Service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.APPROVED,
+        userId,
+        companyId,
+      );
       expect(mockRepo.approveWithCas).toHaveBeenCalled();
 
       // Second attempt: siblings 501 + proposed 560 (base invoice) > 1000 → rejected
       mockRepo.findById.mockResolvedValue(baseInvoice as any);
-      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(new Prisma.Decimal('501'));
+      mockRepo.sumActiveApprovedPaidByPo.mockResolvedValue(
+        new Prisma.Decimal('501'),
+      );
       await expect(
-        g10Service.transitionStatus('inv-1', PurchaseInvoiceStatus.APPROVED, userId, companyId),
+        g10Service.transitionStatus(
+          'inv-1',
+          PurchaseInvoiceStatus.APPROVED,
+          userId,
+          companyId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('scenario 6: full cycle settles — GRNI 0, AP 0 (invoice liability removed by payment)', async () => {
       // GR: Cr GRNI 560; invoice: Dr GRNI 500 + Dr 5200 60 / Cr AP 560; payment: Dr AP 560
-      const { lines } = await postApproval({ subtotal: '500', discountAmount: '0', taxAmount: '60', grandTotal: '560' });
+      const { lines } = await postApproval({
+        subtotal: '500',
+        discountAmount: '0',
+        taxAmount: '60',
+        grandTotal: '560',
+      });
       expect(lines.find((l) => l.accountId === 'acct-2110')!.debit).toBe('500');
       expect(lines.find((l) => l.accountId === 'acct-5200')!.debit).toBe('60');
-      expect(lines.find((l) => l.accountId === 'acct-2100')!.credit).toBe('560');
+      expect(lines.find((l) => l.accountId === 'acct-2100')!.credit).toBe(
+        '560',
+      );
       // GRNI residue = receipt 560 credit − invoice (500+60) debit = 0 → settled
-      const grniNet = new Prisma.Decimal('560').sub(new Prisma.Decimal('500').add(new Prisma.Decimal('60')));
+      const grniNet = new Prisma.Decimal('560').sub(
+        new Prisma.Decimal('500').add(new Prisma.Decimal('60')),
+      );
       expect(grniNet.isZero()).toBe(true);
       // AP after payment: 560 − 560 = 0
-      expect(new Prisma.Decimal('560').sub(new Prisma.Decimal('560')).isZero()).toBe(true);
+      expect(
+        new Prisma.Decimal('560').sub(new Prisma.Decimal('560')).isZero(),
+      ).toBe(true);
     });
   });
 
@@ -1266,7 +1407,13 @@ describe('PurchaseInvoiceService', () => {
   // G15-02-A: Purchase Invoice Cancellation GL Reversal
   // ─────────────────────────────────────────────────────────────
   describe('G15-02-A: APPROVED → CANCELLED GL reversal', () => {
-    const mockGlEngine = { post: jest.fn().mockResolvedValue({ id: 'je-rev-1', entryNumber: 10, status: 'POSTED' }) };
+    const mockGlEngine = {
+      post: jest.fn().mockResolvedValue({
+        id: 'je-rev-1',
+        entryNumber: 10,
+        status: 'POSTED',
+      }),
+    };
     let g15Service: PurchaseInvoiceService;
 
     const approvedInvoice = {
@@ -1296,15 +1443,40 @@ describe('PurchaseInvoiceService', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       lines: [
-        { id: 'jl-1', journalEntryId: 'je-orig-1', accountId: 'acct-2110', debit: '500', credit: '0', description: 'GRNI settlement' },
-        { id: 'jl-2', journalEntryId: 'je-orig-1', accountId: 'acct-5200', debit: '60', credit: '0', description: 'Purchase tax' },
-        { id: 'jl-3', journalEntryId: 'je-orig-1', accountId: 'acct-2100', debit: '0', credit: '560', description: 'Supplier invoice' },
+        {
+          id: 'jl-1',
+          journalEntryId: 'je-orig-1',
+          accountId: 'acct-2110',
+          debit: '500',
+          credit: '0',
+          description: 'GRNI settlement',
+        },
+        {
+          id: 'jl-2',
+          journalEntryId: 'je-orig-1',
+          accountId: 'acct-5200',
+          debit: '60',
+          credit: '0',
+          description: 'Purchase tax',
+        },
+        {
+          id: 'jl-3',
+          journalEntryId: 'je-orig-1',
+          accountId: 'acct-2100',
+          debit: '0',
+          credit: '560',
+          description: 'Supplier invoice',
+        },
       ],
     };
 
     beforeEach(async () => {
       mockGlEngine.post.mockClear();
-      mockGlEngine.post.mockResolvedValue({ id: 'je-rev-1', entryNumber: 10, status: 'POSTED' });
+      mockGlEngine.post.mockResolvedValue({
+        id: 'je-rev-1',
+        entryNumber: 10,
+        status: 'POSTED',
+      });
 
       const mod = await Test.createTestingModule({
         providers: [
@@ -1323,7 +1495,10 @@ describe('PurchaseInvoiceService', () => {
 
     it('should reverse the posted invoice journal on APPROVED → CANCELLED', async () => {
       mockRepo.findById.mockResolvedValue(approvedInvoice as any);
-      mockRepo.cancelWithCas.mockResolvedValue({ ...approvedInvoice, status: PurchaseInvoiceStatus.CANCELLED } as any);
+      mockRepo.cancelWithCas.mockResolvedValue({
+        ...approvedInvoice,
+        status: PurchaseInvoiceStatus.CANCELLED,
+      } as any);
 
       // Mock tx.journalEntry.findFirst to return the original journal
       const mockTx = {
@@ -1332,12 +1507,19 @@ describe('PurchaseInvoiceService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
         financialPeriod: {
-          findFirst: jest.fn().mockResolvedValue({ id: 'period-jan', status: 'OPEN' }),
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: 'period-jan', status: 'OPEN' }),
         },
       };
       mockTransaction.mockImplementation(async (cb: any) => cb(mockTx));
 
-      await g15Service.transitionStatus('inv-1', PurchaseInvoiceStatus.CANCELLED, userId, companyId);
+      await g15Service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.CANCELLED,
+        userId,
+        companyId,
+      );
 
       // GL reversal was posted
       expect(mockGlEngine.post).toHaveBeenCalledTimes(1);
@@ -1371,7 +1553,10 @@ describe('PurchaseInvoiceService', () => {
 
     it('should use current OPEN period for the reversal, not the original period', async () => {
       mockRepo.findById.mockResolvedValue(approvedInvoice as any);
-      mockRepo.cancelWithCas.mockResolvedValue({ ...approvedInvoice, status: PurchaseInvoiceStatus.CANCELLED } as any);
+      mockRepo.cancelWithCas.mockResolvedValue({
+        ...approvedInvoice,
+        status: PurchaseInvoiceStatus.CANCELLED,
+      } as any);
 
       const mockTx = {
         journalEntry: {
@@ -1379,12 +1564,19 @@ describe('PurchaseInvoiceService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
         financialPeriod: {
-          findFirst: jest.fn().mockResolvedValue({ id: 'period-jan-current', status: 'OPEN' }),
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: 'period-jan-current', status: 'OPEN' }),
         },
       };
       mockTransaction.mockImplementation(async (cb: any) => cb(mockTx));
 
-      await g15Service.transitionStatus('inv-1', PurchaseInvoiceStatus.CANCELLED, userId, companyId);
+      await g15Service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.CANCELLED,
+        userId,
+        companyId,
+      );
 
       const reversalCall = mockGlEngine.post.mock.calls[0][0];
       expect(reversalCall.financialPeriodId).toBe('period-jan-current');
@@ -1394,20 +1586,33 @@ describe('PurchaseInvoiceService', () => {
     it('should succeed when original period is CLOSED but current period is OPEN', async () => {
       // Original journal in December (CLOSED), cancellation in January (OPEN)
       mockRepo.findById.mockResolvedValue(approvedInvoice as any);
-      mockRepo.cancelWithCas.mockResolvedValue({ ...approvedInvoice, status: PurchaseInvoiceStatus.CANCELLED } as any);
+      mockRepo.cancelWithCas.mockResolvedValue({
+        ...approvedInvoice,
+        status: PurchaseInvoiceStatus.CANCELLED,
+      } as any);
 
       const mockTx = {
         journalEntry: {
-          findFirst: jest.fn().mockResolvedValue({ ...originalJournal, financialPeriodId: 'period-dec-closed' }),
+          findFirst: jest.fn().mockResolvedValue({
+            ...originalJournal,
+            financialPeriodId: 'period-dec-closed',
+          }),
           update: jest.fn().mockResolvedValue({}),
         },
         financialPeriod: {
-          findFirst: jest.fn().mockResolvedValue({ id: 'period-jan-open', status: 'OPEN' }),
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: 'period-jan-open', status: 'OPEN' }),
         },
       };
       mockTransaction.mockImplementation(async (cb: any) => cb(mockTx));
 
-      await g15Service.transitionStatus('inv-1', PurchaseInvoiceStatus.CANCELLED, userId, companyId);
+      await g15Service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.CANCELLED,
+        userId,
+        companyId,
+      );
 
       const reversalCall = mockGlEngine.post.mock.calls[0][0];
       expect(reversalCall.financialPeriodId).toBe('period-jan-open');
@@ -1415,7 +1620,10 @@ describe('PurchaseInvoiceService', () => {
 
     it('should fail when no posted journal is found', async () => {
       mockRepo.findById.mockResolvedValue(approvedInvoice as any);
-      mockRepo.cancelWithCas.mockResolvedValue({ ...approvedInvoice, status: PurchaseInvoiceStatus.CANCELLED } as any);
+      mockRepo.cancelWithCas.mockResolvedValue({
+        ...approvedInvoice,
+        status: PurchaseInvoiceStatus.CANCELLED,
+      } as any);
 
       const mockTx = {
         journalEntry: {
@@ -1423,13 +1631,20 @@ describe('PurchaseInvoiceService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
         financialPeriod: {
-          findFirst: jest.fn().mockResolvedValue({ id: 'period-jan', status: 'OPEN' }),
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: 'period-jan', status: 'OPEN' }),
         },
       };
       mockTransaction.mockImplementation(async (cb: any) => cb(mockTx));
 
       await expect(
-        g15Service.transitionStatus('inv-1', PurchaseInvoiceStatus.CANCELLED, userId, companyId),
+        g15Service.transitionStatus(
+          'inv-1',
+          PurchaseInvoiceStatus.CANCELLED,
+          userId,
+          companyId,
+        ),
       ).rejects.toThrow(ConflictException);
       // No GL posting attempted
       expect(mockGlEngine.post).not.toHaveBeenCalled();
@@ -1437,7 +1652,10 @@ describe('PurchaseInvoiceService', () => {
 
     it('should fail when no OPEN period exists', async () => {
       mockRepo.findById.mockResolvedValue(approvedInvoice as any);
-      mockRepo.cancelWithCas.mockResolvedValue({ ...approvedInvoice, status: PurchaseInvoiceStatus.CANCELLED } as any);
+      mockRepo.cancelWithCas.mockResolvedValue({
+        ...approvedInvoice,
+        status: PurchaseInvoiceStatus.CANCELLED,
+      } as any);
 
       const mockTx = {
         journalEntry: {
@@ -1451,14 +1669,22 @@ describe('PurchaseInvoiceService', () => {
       mockTransaction.mockImplementation(async (cb: any) => cb(mockTx));
 
       await expect(
-        g15Service.transitionStatus('inv-1', PurchaseInvoiceStatus.CANCELLED, userId, companyId),
+        g15Service.transitionStatus(
+          'inv-1',
+          PurchaseInvoiceStatus.CANCELLED,
+          userId,
+          companyId,
+        ),
       ).rejects.toThrow(BadRequestException);
       expect(mockGlEngine.post).not.toHaveBeenCalled();
     });
 
     it('should rollback everything when GL reversal fails', async () => {
       mockRepo.findById.mockResolvedValue(approvedInvoice as any);
-      mockRepo.cancelWithCas.mockResolvedValue({ ...approvedInvoice, status: PurchaseInvoiceStatus.CANCELLED } as any);
+      mockRepo.cancelWithCas.mockResolvedValue({
+        ...approvedInvoice,
+        status: PurchaseInvoiceStatus.CANCELLED,
+      } as any);
       mockGlEngine.post.mockRejectedValue(new Error('posting failed'));
 
       const mockTx = {
@@ -1467,13 +1693,20 @@ describe('PurchaseInvoiceService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
         financialPeriod: {
-          findFirst: jest.fn().mockResolvedValue({ id: 'period-jan', status: 'OPEN' }),
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: 'period-jan', status: 'OPEN' }),
         },
       };
       mockTransaction.mockImplementation(async (cb: any) => cb(mockTx));
 
       await expect(
-        g15Service.transitionStatus('inv-1', PurchaseInvoiceStatus.CANCELLED, userId, companyId),
+        g15Service.transitionStatus(
+          'inv-1',
+          PurchaseInvoiceStatus.CANCELLED,
+          userId,
+          companyId,
+        ),
       ).rejects.toThrow('posting failed');
       // Original journal NOT marked REVERSED
       expect(mockTx.journalEntry.update).not.toHaveBeenCalled();
@@ -1481,9 +1714,17 @@ describe('PurchaseInvoiceService', () => {
 
     it('should not call GL reversal for DRAFT → CANCELLED', async () => {
       mockRepo.findById.mockResolvedValue(baseInvoice as any); // DRAFT status
-      mockRepo.update.mockResolvedValue({ ...baseInvoice, status: PurchaseInvoiceStatus.CANCELLED } as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseInvoice,
+        status: PurchaseInvoiceStatus.CANCELLED,
+      } as any);
 
-      await g15Service.transitionStatus('inv-1', PurchaseInvoiceStatus.CANCELLED, userId, companyId);
+      await g15Service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.CANCELLED,
+        userId,
+        companyId,
+      );
 
       expect(mockGlEngine.post).not.toHaveBeenCalled();
       expect(mockRepo.cancelWithCas).not.toHaveBeenCalled();
@@ -1491,7 +1732,10 @@ describe('PurchaseInvoiceService', () => {
 
     it('should scope journal lookup to the correct companyId', async () => {
       mockRepo.findById.mockResolvedValue(approvedInvoice as any);
-      mockRepo.cancelWithCas.mockResolvedValue({ ...approvedInvoice, status: PurchaseInvoiceStatus.CANCELLED } as any);
+      mockRepo.cancelWithCas.mockResolvedValue({
+        ...approvedInvoice,
+        status: PurchaseInvoiceStatus.CANCELLED,
+      } as any);
 
       const mockTx = {
         journalEntry: {
@@ -1499,12 +1743,19 @@ describe('PurchaseInvoiceService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
         financialPeriod: {
-          findFirst: jest.fn().mockResolvedValue({ id: 'period-jan', status: 'OPEN' }),
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: 'period-jan', status: 'OPEN' }),
         },
       };
       mockTransaction.mockImplementation(async (cb: any) => cb(mockTx));
 
-      await g15Service.transitionStatus('inv-1', PurchaseInvoiceStatus.CANCELLED, userId, companyId);
+      await g15Service.transitionStatus(
+        'inv-1',
+        PurchaseInvoiceStatus.CANCELLED,
+        userId,
+        companyId,
+      );
 
       expect(mockTx.journalEntry.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({

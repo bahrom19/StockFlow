@@ -82,7 +82,10 @@ export class OpenAIProvider implements AIProvider {
     // ── F2: Total timeout budget ──────────────────────────────
     const budgetDeadline = Date.now() + totalBudgetMs;
     const budgetController = new AbortController();
-    const budgetTimer = setTimeout(() => budgetController.abort(), totalBudgetMs);
+    const budgetTimer = setTimeout(
+      () => budgetController.abort(),
+      totalBudgetMs,
+    );
 
     let lastError: Error | null = null;
 
@@ -101,7 +104,9 @@ export class OpenAIProvider implements AIProvider {
 
         // ── F2: Check budget before each attempt ─────────────
         if (Date.now() >= budgetDeadline) {
-          this.logger.warn('Provider total timeout budget exceeded — aborting retries');
+          this.logger.warn(
+            'Provider total timeout budget exceeded — aborting retries',
+          );
           throw new AIProviderError(
             this.name,
             'TIMEOUT',
@@ -127,11 +132,16 @@ export class OpenAIProvider implements AIProvider {
               controller.abort();
             } else {
               requestAbort = () => controller.abort();
-              request.signal.addEventListener('abort', requestAbort, { once: true });
+              request.signal.addEventListener('abort', requestAbort, {
+                once: true,
+              });
             }
           }
 
-          const timeoutId = setTimeout(() => controller.abort(), perRequestTimeoutMs);
+          const timeoutId = setTimeout(
+            () => controller.abort(),
+            perRequestTimeoutMs,
+          );
 
           let response: Response;
           try {
@@ -373,7 +383,10 @@ export class OpenAIProvider implements AIProvider {
    *
    * Always clamped to [0, MAX_RETRY_AFTER_MS].
    */
-  private computeRetryDelay(attempt: number, retryAfterMs: number | null): number {
+  private computeRetryDelay(
+    attempt: number,
+    retryAfterMs: number | null,
+  ): number {
     if (retryAfterMs !== null && retryAfterMs >= 0) {
       return Math.min(retryAfterMs, MAX_RETRY_AFTER_MS);
     }

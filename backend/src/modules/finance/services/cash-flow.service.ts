@@ -90,7 +90,12 @@ export class CashFlowService {
   }): Promise<CashFlowResult> {
     const { companyId, dateFrom, dateTo } = params;
 
-    if (!dateFrom || !dateTo || isNaN(dateFrom.getTime()) || isNaN(dateTo.getTime())) {
+    if (
+      !dateFrom ||
+      !dateTo ||
+      isNaN(dateFrom.getTime()) ||
+      isNaN(dateTo.getTime())
+    ) {
       throw new BadRequestException(
         'Cash Flow requires valid dateFrom and dateTo calendar dates (YYYY-MM-DD)',
       );
@@ -106,7 +111,10 @@ export class CashFlowService {
         dateFrom.getUTCFullYear(),
         dateFrom.getUTCMonth(),
         dateFrom.getUTCDate(),
-        0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0,
       ),
     );
     const toEnd = new Date(
@@ -114,7 +122,10 @@ export class CashFlowService {
         dateTo.getUTCFullYear(),
         dateTo.getUTCMonth(),
         dateTo.getUTCDate(),
-        23, 59, 59, 999,
+        23,
+        59,
+        59,
+        999,
       ),
     );
 
@@ -227,7 +238,9 @@ export class CashFlowService {
     const ftRefIds = [
       ...new Set(
         entries
-          .filter((e) => e.referenceType === 'FINANCIAL_TRANSACTION' && e.referenceId)
+          .filter(
+            (e) => e.referenceType === 'FINANCIAL_TRANSACTION' && e.referenceId,
+          )
           .map((e) => e.referenceId as string),
       ),
     ];
@@ -252,8 +265,7 @@ export class CashFlowService {
       ...new Set(
         originals
           .filter(
-            (o) =>
-              o.referenceType === 'FINANCIAL_TRANSACTION' && o.referenceId,
+            (o) => o.referenceType === 'FINANCIAL_TRANSACTION' && o.referenceId,
           )
           .map((o) => o.referenceId as string)
           .filter((id) => !ftTypeById.has(id)),
@@ -269,9 +281,11 @@ export class CashFlowService {
     for (const f of extraFtTypes) ftTypeById.set(f.id, f.type);
     const originalById = new Map(originals.map((o) => [o.id, o]));
 
-    const classifyEntry = (
-      e: { id: string; referenceType: string | null; referenceId: string | null },
-    ): CashFlowCategory => {
+    const classifyEntry = (e: {
+      id: string;
+      referenceType: string | null;
+      referenceId: string | null;
+    }): CashFlowCategory => {
       const ref = e.referenceType;
       if (!ref) return 'UNCLASSIFIED';
       if (DIRECT_OPERATING_REFS.has(ref)) return 'OPERATING';
@@ -304,7 +318,11 @@ export class CashFlowService {
     // aggregation. Investing/Financing stay empty: no posting domain exists.
     const partitions = new Map<
       string,
-      { category: CashFlowCategory; referenceType: string | null; ids: string[] }
+      {
+        category: CashFlowCategory;
+        referenceType: string | null;
+        ids: string[];
+      }
     >();
     for (const e of entries) {
       const category = classifyEntry(e);
@@ -319,7 +337,11 @@ export class CashFlowService {
 
     const rowsByCategory = new Map<CashFlowCategory, CashFlowRow[]>();
     const totals = new Map<CashFlowCategory, Decimal>();
-    const bump = (category: CashFlowCategory, row: CashFlowRow, net: Decimal) => {
+    const bump = (
+      category: CashFlowCategory,
+      row: CashFlowRow,
+      net: Decimal,
+    ) => {
       const list = rowsByCategory.get(category) ?? [];
       list.push(row);
       rowsByCategory.set(category, list);
@@ -404,9 +426,8 @@ export class CashFlowService {
     const transfers = sectionOf('TRANSFERS');
     const unclassified = sectionOf('UNCLASSIFIED');
 
-    const sumParts = (
-      parts: Decimal[],
-    ): Decimal => parts.reduce((acc, p) => acc.add(p), new Decimal(0));
+    const sumParts = (parts: Decimal[]): Decimal =>
+      parts.reduce((acc, p) => acc.add(p), new Decimal(0));
     const netCashMovement = sumParts([
       new Decimal(operating.total),
       new Decimal(investing.total),

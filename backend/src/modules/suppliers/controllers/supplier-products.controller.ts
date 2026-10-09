@@ -66,7 +66,8 @@ export class SupplierProductsController {
       page: page ?? 1,
       limit: limit ?? 20,
       search,
-      isPreferred: isPreferred !== undefined ? isPreferred === 'true' : undefined,
+      isPreferred:
+        isPreferred !== undefined ? isPreferred === 'true' : undefined,
       sortBy,
       sortOrder: sortOrder === 'asc' ? 'asc' : 'desc',
     });

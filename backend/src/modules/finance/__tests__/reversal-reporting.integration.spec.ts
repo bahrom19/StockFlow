@@ -698,7 +698,11 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
           cogs: acc.cogs.add(d.cogs),
           expenses: acc.expenses.add(d.expenses),
         }),
-        { revenue: new Decimal(0), cogs: new Decimal(0), expenses: new Decimal(0) },
+        {
+          revenue: new Decimal(0),
+          cogs: new Decimal(0),
+          expenses: new Decimal(0),
+        },
       );
 
     /** Direct journal write used only to materialise a referenceType taxonomy
@@ -773,8 +777,18 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
           referenceType: 'SALE',
           createdBy: t.actorId,
           lines: [
-            { accountId: t.cashAccountId, debit: '500', credit: '0', description: 'cash' },
-            { accountId: revenueAcc, debit: '0', credit: '500', description: 'rev' },
+            {
+              accountId: t.cashAccountId,
+              debit: '500',
+              credit: '0',
+              description: 'cash',
+            },
+            {
+              accountId: revenueAcc,
+              debit: '0',
+              credit: '500',
+              description: 'rev',
+            },
           ],
         },
         undefined,
@@ -790,8 +804,18 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
             description: `${RUN} null ref`,
             createdBy: t.actorId,
             lines: [
-              { accountId: expenseAcc, debit: '100', credit: '0', description: 'e' },
-              { accountId: t.cashAccountId, debit: '0', credit: '100', description: 'cash' },
+              {
+                accountId: expenseAcc,
+                debit: '100',
+                credit: '0',
+                description: 'e',
+              },
+              {
+                accountId: t.cashAccountId,
+                debit: '0',
+                credit: '100',
+                description: 'cash',
+              },
             ],
           },
           undefined,
@@ -799,7 +823,9 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
         .then((r) => r.id);
       expect(
         (
-          await prisma.journalEntry.findUniqueOrThrow({ where: { id: nullTyped } })
+          await prisma.journalEntry.findUniqueOrThrow({
+            where: { id: nullTyped },
+          })
         ).referenceType,
       ).toBeNull();
 
@@ -831,8 +857,18 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
             referenceType: 'MANUAL',
             createdBy: t.actorId,
             lines: [
-              { accountId: expenseAcc, debit: '250', credit: '0', description: 'e' },
-              { accountId: t.cashAccountId, debit: '0', credit: '250', description: 'cash' },
+              {
+                accountId: expenseAcc,
+                debit: '250',
+                credit: '0',
+                description: 'e',
+              },
+              {
+                accountId: t.cashAccountId,
+                debit: '0',
+                credit: '250',
+                description: 'cash',
+              },
             ],
           },
           undefined,
@@ -909,7 +945,12 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
             createdBy: t.actorId,
             lines: [
               { accountId, debit: amount, credit: '0', description: 'e' },
-              { accountId: t.cashAccountId, debit: '0', credit: amount, description: 'cash' },
+              {
+                accountId: t.cashAccountId,
+                debit: '0',
+                credit: amount,
+                description: 'cash',
+              },
             ],
           },
           undefined,
@@ -942,7 +983,11 @@ describeDb('G16-N-8-A — reversal reporting integrity (real PostgreSQL)', () =>
           cogs: acc.cogs.add(d.cogs),
           expenses: acc.expenses.add(d.expenses),
         }),
-        { revenue: new Decimal(0), cogs: new Decimal(0), expenses: new Decimal(0) },
+        {
+          revenue: new Decimal(0),
+          cogs: new Decimal(0),
+          expenses: new Decimal(0),
+        },
       );
 
       // 30 (inactive) + 70 (soft-deleted) as operating expenses.

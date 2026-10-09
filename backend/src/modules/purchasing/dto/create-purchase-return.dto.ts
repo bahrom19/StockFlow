@@ -80,7 +80,11 @@ export class CreatePurchaseReturnDto {
   @IsEnum(['DRAFT', 'APPROVED', 'COMPLETED', 'CANCELLED'])
   status?: string;
 
-  @ApiPropertyOptional({ enum: Currency, default: 'KZT', description: 'Currency for this return' })
+  @ApiPropertyOptional({
+    enum: Currency,
+    default: 'KZT',
+    description: 'Currency for this return',
+  })
   @IsOptional()
   @IsEnum(Currency)
   currency?: Currency;

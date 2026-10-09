@@ -65,7 +65,10 @@ describe('MaintenanceCronService', () => {
 
       await service.cleanupIdempotencyRecords();
 
-      expect(mockRedis.acquireLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', 7200);
+      expect(mockRedis.acquireLock).toHaveBeenCalledWith(
+        'cron:lock:idempotency-cleanup',
+        7200,
+      );
     });
 
     it('should return 0 and skip cleanup if lock not acquired', async () => {
@@ -92,7 +95,9 @@ describe('MaintenanceCronService', () => {
     it('does not break the cron when recording the SKIPPED row fails', async () => {
       // Real JobRunService over a failing Prisma: skip() must swallow, the cron
       // must return 0 and never execute the batch deletes.
-      const failingJobRun = new JobRunService(mockPrisma as unknown as PrismaService);
+      const failingJobRun = new JobRunService(
+        mockPrisma as unknown as PrismaService,
+      );
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           MaintenanceCronService,
@@ -105,7 +110,9 @@ describe('MaintenanceCronService', () => {
       const svc = module.get<MaintenanceCronService>(MaintenanceCronService);
 
       mockRedis.acquireLock.mockResolvedValue(NOT_ACQUIRED);
-      mockPrisma.$executeRawUnsafe.mockRejectedValue(new Error('JobRun table missing'));
+      mockPrisma.$executeRawUnsafe.mockRejectedValue(
+        new Error('JobRun table missing'),
+      );
 
       const result = await svc.cleanupIdempotencyRecords();
 
@@ -121,7 +128,10 @@ describe('MaintenanceCronService', () => {
 
       await service.cleanupIdempotencyRecords();
 
-      expect(mockRedis.releaseLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', fakeToken);
+      expect(mockRedis.releaseLock).toHaveBeenCalledWith(
+        'cron:lock:idempotency-cleanup',
+        fakeToken,
+      );
     });
 
     it('should not release lock if acquisition failed', async () => {
@@ -139,7 +149,10 @@ describe('MaintenanceCronService', () => {
 
       await service.cleanupIdempotencyRecords();
 
-      expect(mockRedis.releaseLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', fakeToken);
+      expect(mockRedis.releaseLock).toHaveBeenCalledWith(
+        'cron:lock:idempotency-cleanup',
+        fakeToken,
+      );
     });
 
     it('should execute multiple batches until no more records', async () => {
@@ -161,7 +174,10 @@ describe('MaintenanceCronService', () => {
 
       await service.cleanupIdempotencyRecords();
 
-      expect(mockRedis.acquireLock).toHaveBeenCalledWith('cron:lock:idempotency-cleanup', 7200);
+      expect(mockRedis.acquireLock).toHaveBeenCalledWith(
+        'cron:lock:idempotency-cleanup',
+        7200,
+      );
     });
 
     it('should record error metric on failure', async () => {
@@ -223,15 +239,19 @@ describe('MaintenanceCronService', () => {
     `;
 
     it('detects RUNNING rows started before the stale cutoff', () => {
-      expect(STALE_RUNNING_SQL).toContain("\"status\" = 'RUNNING'");
+      expect(STALE_RUNNING_SQL).toContain('"status" = \'RUNNING\'');
       expect(STALE_RUNNING_SQL).toContain(
-        "\"startedAt\" < NOW() - ($1 || ' minutes')::interval",
+        '"startedAt" < NOW() - ($1 || \' minutes\')::interval',
       );
     });
 
     it('is read-only — stale RUNNING rows are never updated or deleted', () => {
-      expect(STALE_RUNNING_SQL).not.toMatch(/\b(UPDATE|DELETE|INSERT|UPSERT)\b/i);
-      expect(LATEST_RUNNING_SQL).not.toMatch(/\b(UPDATE|DELETE|INSERT|UPSERT)\b/i);
+      expect(STALE_RUNNING_SQL).not.toMatch(
+        /\b(UPDATE|DELETE|INSERT|UPSERT)\b/i,
+      );
+      expect(LATEST_RUNNING_SQL).not.toMatch(
+        /\b(UPDATE|DELETE|INSERT|UPSERT)\b/i,
+      );
     });
 
     it('staleAfter = max(2 × cron interval, 2 × lock TTL)', () => {

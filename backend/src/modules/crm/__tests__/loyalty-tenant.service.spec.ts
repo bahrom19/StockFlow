@@ -120,7 +120,11 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
       repo.findByCustomerIdOrThrow.mockRejectedValue(new NotFoundException());
 
       await expect(
-        service.earnPoints({ customerId, points: 50 } as any, companyId, userId),
+        service.earnPoints(
+          { customerId, points: 50 } as any,
+          companyId,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expect(repo.update).not.toHaveBeenCalled();
@@ -154,7 +158,11 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
       repo.findByCustomerIdOrThrow.mockRejectedValue(new NotFoundException());
 
       await expect(
-        service.redeemPoints({ customerId, points: 10 } as any, companyId, userId),
+        service.redeemPoints(
+          { customerId, points: 10 } as any,
+          companyId,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expect(repo.update).not.toHaveBeenCalled();
@@ -176,7 +184,11 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
     it('same tenant, existing account → no create', async () => {
       repo.findByCustomerId.mockResolvedValue(account);
 
-      const result = await service.getOrCreateAccount(customerId, companyId, userId);
+      const result = await service.getOrCreateAccount(
+        customerId,
+        companyId,
+        userId,
+      );
 
       expect(result).toBeDefined();
       expect(repo.create).not.toHaveBeenCalled();
@@ -190,10 +202,17 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
         lifetimePoints: 0,
       });
 
-      const result = await service.getOrCreateAccount(customerId, companyId, userId);
+      const result = await service.getOrCreateAccount(
+        customerId,
+        companyId,
+        userId,
+      );
 
       expect(result).toBeDefined();
-      expect(repo.findCustomerCompany).toHaveBeenCalledWith(customerId, companyId);
+      expect(repo.findCustomerCompany).toHaveBeenCalledWith(
+        customerId,
+        companyId,
+      );
       expect(repo.create).toHaveBeenCalled();
     });
   });
@@ -204,14 +223,24 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
     it('earn CAS conflict (count===0) → 409, no audit, no event', async () => {
       repo.findByCustomerIdOrThrow.mockResolvedValue(account);
       repo.update.mockRejectedValue(
-        new ConflictException(`Loyalty account ${account.id} was modified by another user. Please refresh and retry.`),
+        new ConflictException(
+          `Loyalty account ${account.id} was modified by another user. Please refresh and retry.`,
+        ),
       );
 
       await expect(
-        service.earnPoints({ customerId, points: 50 } as any, companyId, userId),
+        service.earnPoints(
+          { customerId, points: 50 } as any,
+          companyId,
+          userId,
+        ),
       ).rejects.toThrow(ConflictException);
       await expect(
-        service.earnPoints({ customerId, points: 50 } as any, companyId, userId),
+        service.earnPoints(
+          { customerId, points: 50 } as any,
+          companyId,
+          userId,
+        ),
       ).rejects.toThrow(conflictMessage);
 
       // Conflict aborts the transaction: audit/event must not fire.
@@ -221,10 +250,16 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
 
     it('redeem CAS conflict (count===0) → 409, no audit, no event', async () => {
       repo.findByCustomerIdOrThrow.mockResolvedValue(account);
-      repo.update.mockRejectedValue(new ConflictException('modified by another user'));
+      repo.update.mockRejectedValue(
+        new ConflictException('modified by another user'),
+      );
 
       await expect(
-        service.redeemPoints({ customerId, points: 10 } as any, companyId, userId),
+        service.redeemPoints(
+          { customerId, points: 10 } as any,
+          companyId,
+          userId,
+        ),
       ).rejects.toThrow(ConflictException);
 
       expect(auditLog.log).not.toHaveBeenCalled();
@@ -235,7 +270,11 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
       repo.findByCustomerIdOrThrow.mockResolvedValue(account);
       repo.update.mockResolvedValue({ ...account, points: 150, rowVersion: 8 });
 
-      await service.earnPoints({ customerId, points: 50 } as any, companyId, userId);
+      await service.earnPoints(
+        { customerId, points: 50 } as any,
+        companyId,
+        userId,
+      );
 
       // CAS predicate: id + rowVersion exactly as read (7), not a stale guess.
       expect(repo.update).toHaveBeenCalledWith(
@@ -247,7 +286,11 @@ describe('G12-R1 — LoyaltyService tenant isolation', () => {
       repo.findByCustomerIdOrThrow.mockResolvedValue(account);
       repo.update.mockResolvedValue({ ...account, points: 40, rowVersion: 8 });
 
-      await service.redeemPoints({ customerId, points: 60 } as any, companyId, userId);
+      await service.redeemPoints(
+        { customerId, points: 60 } as any,
+        companyId,
+        userId,
+      );
 
       expect(repo.update).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'loy-1', rowVersion: 7 }),

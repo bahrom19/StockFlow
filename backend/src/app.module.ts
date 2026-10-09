@@ -83,13 +83,13 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
       // AI-specific rate limits (per-user, applied via @AIThrottle decorator)
       {
         name: 'ai-minute',
-        ttl: 60000,   // 1 minute
-        limit: 10,    // 10 requests per minute per user
+        ttl: 60000, // 1 minute
+        limit: 10, // 10 requests per minute per user
       },
       {
         name: 'ai-hour',
         ttl: 3600000, // 1 hour
-        limit: 50,    // 50 requests per hour per user
+        limit: 50, // 50 requests per hour per user
       },
     ]),
   ],

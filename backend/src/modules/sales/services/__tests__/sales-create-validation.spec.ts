@@ -61,7 +61,10 @@ describe('SalesService — create payment validation (change/overpayment Phase 1
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
         SalesService,
         { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: SalesRepository, useValue: mockSalesRepo },
@@ -69,8 +72,20 @@ describe('SalesService — create payment validation (change/overpayment Phase 1
         { provide: PrismaService, useValue: mockPrisma },
         { provide: EVENT_BUS, useValue: { publish: jest.fn() } },
         CustomerCreditLedgerService,
-        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },
-        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: CustomerCreditLedgerRepository,
+          useValue: {
+            atomicSpend: jest.fn().mockResolvedValue({}),
+            findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }),
+            getBalances: jest.fn().mockResolvedValue(new Map()),
+            issueRefundCredit: jest.fn().mockResolvedValue({}),
+            createManualAdjustment: jest.fn(),
+          },
+        },
+        {
+          provide: AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

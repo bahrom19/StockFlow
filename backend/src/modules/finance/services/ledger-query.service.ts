@@ -270,11 +270,13 @@ export class LedgerQueryService {
     // G15-06b-01: Cumulative balance from POSTED JournalLines up to asOfDate.
     // Replaces AccountBalance snapshot lookup — historical journals without
     // snapshots now correctly affect the Trial Balance.
-    const aggregated =
-      await this.ledgerRepository.aggregatedJournalLines(companyId, {
+    const aggregated = await this.ledgerRepository.aggregatedJournalLines(
+      companyId,
+      {
         asOfDate,
         onlyPosted: true,
-      });
+      },
+    );
 
     const balanceMap = new Map<string, { debit: Decimal; credit: Decimal }>();
     for (const agg of aggregated) {

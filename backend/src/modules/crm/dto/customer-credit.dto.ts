@@ -29,7 +29,9 @@ export class CreateCreditAdjustmentDto {
   @IsNotEmpty()
   amount!: string;
 
-  @ApiProperty({ enum: ['KZT', 'USD', 'EUR', 'RUB', 'CNY', 'AED', 'AUD', 'VND'] })
+  @ApiProperty({
+    enum: ['KZT', 'USD', 'EUR', 'RUB', 'CNY', 'AED', 'AUD', 'VND'],
+  })
   @IsString()
   currency!: string;
 

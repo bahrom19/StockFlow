@@ -1,6 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AIService, ConversationNotFoundError, PersistenceError, ToolExecutionTimeoutError, IdempotencyKeyMismatchError, IdempotencyConflictError, RequestBudgetExceededError, ContextBudgetExceededError } from '../ai.service';
-import { AIProvider, AIRequest, AIResponse } from '../providers/ai-provider.interface';
+import {
+  AIService,
+  ConversationNotFoundError,
+  PersistenceError,
+  ToolExecutionTimeoutError,
+  IdempotencyKeyMismatchError,
+  IdempotencyConflictError,
+  RequestBudgetExceededError,
+  ContextBudgetExceededError,
+} from '../ai.service';
+import {
+  AIProvider,
+  AIRequest,
+  AIResponse,
+} from '../providers/ai-provider.interface';
 import { ToolRegistry } from '../tools/tool.registry';
 import { AIAuditLogger } from '../logging/ai-audit.logger';
 import { RolesRepository } from '../../rbac/repositories/roles.repository';
@@ -56,13 +69,19 @@ describe('AIService', () => {
     } as any;
 
     mockRolesRepository = {
-      findPermissionCodesByRoleNames: jest.fn().mockResolvedValue(['reports:read']),
+      findPermissionCodesByRoleNames: jest
+        .fn()
+        .mockResolvedValue(['reports:read']),
     } as any;
 
     mockConversationRepository = {
-      createConversation: jest.fn().mockResolvedValue({ id: 'conv-1', createdAt: new Date() }),
+      createConversation: jest
+        .fn()
+        .mockResolvedValue({ id: 'conv-1', createdAt: new Date() }),
       findConversationByIdForUser: jest.fn(),
-      createMessage: jest.fn().mockResolvedValue({ id: 'msg-1', createdAt: new Date() }),
+      createMessage: jest
+        .fn()
+        .mockResolvedValue({ id: 'msg-1', createdAt: new Date() }),
       listMessages: jest.fn().mockResolvedValue([]),
       updateConversation: jest.fn(),
     } as any;
@@ -88,9 +107,15 @@ describe('AIService', () => {
         { provide: ToolRegistry, useValue: toolRegistry },
         { provide: AIAuditLogger, useValue: mockAuditLogger },
         { provide: RolesRepository, useValue: mockRolesRepository },
-        { provide: ConversationRepository, useValue: mockConversationRepository },
+        {
+          provide: ConversationRepository,
+          useValue: mockConversationRepository,
+        },
         { provide: IdempotencyRepository, useValue: mockIdempotencyRepository },
-        { provide: PrismaService, useValue: { $transaction: jest.fn((cb: any) => cb({})) } },
+        {
+          provide: PrismaService,
+          useValue: { $transaction: jest.fn((cb: any) => cb({})) },
+        },
       ],
     }).compile();
 
@@ -109,7 +134,17 @@ describe('AIService', () => {
     it('should create conversation and return response', async () => {
       // Mock listMessages to return the user message (as DB would after persistence)
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-1',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -125,11 +160,9 @@ describe('AIService', () => {
       expect(result.conversationId).toBe('conv-1');
       expect(result.content).toBe('Hello! How can I help you?');
       expect(result.toolCallsUsed).toEqual([]);
-      expect(mockConversationRepository.createConversation).toHaveBeenCalledWith(
-        'company-1',
-        'user-1',
-        'Hello',
-      );
+      expect(
+        mockConversationRepository.createConversation,
+      ).toHaveBeenCalledWith('company-1', 'user-1', 'Hello');
       expect(mockConversationRepository.createMessage).toHaveBeenCalledWith(
         'conv-1',
         'company-1',
@@ -153,7 +186,17 @@ describe('AIService', () => {
 
     it('should create conversation with truncated title', async () => {
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'A'.repeat(100), createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'A'.repeat(100),
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-1',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -167,19 +210,17 @@ describe('AIService', () => {
       const longMessage = 'A'.repeat(100);
       await service.chat(longMessage, testSecurityContext);
 
-      expect(mockConversationRepository.createConversation).toHaveBeenCalledWith(
-        'company-1',
-        'user-1',
-        'A'.repeat(50) + '...',
-      );
+      expect(
+        mockConversationRepository.createConversation,
+      ).toHaveBeenCalledWith('company-1', 'user-1', 'A'.repeat(50) + '...');
     });
 
     it('should throw PersistenceError when user message fails to persist', async () => {
       mockConversationRepository.createMessage.mockResolvedValueOnce(null);
 
-      await expect(
-        service.chat('Hello', testSecurityContext),
-      ).rejects.toThrow(PersistenceError);
+      await expect(service.chat('Hello', testSecurityContext)).rejects.toThrow(
+        PersistenceError,
+      );
 
       // Provider should NOT be called
       expect(mockProvider.chat).not.toHaveBeenCalled();
@@ -188,7 +229,17 @@ describe('AIService', () => {
     it('P0 REGRESSION: single user message must be in provider input', async () => {
       // Simulate exactly what DB returns after persisting first user message
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-1',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -224,8 +275,28 @@ describe('AIService', () => {
       });
 
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Previous question', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
-        { id: 'msg-2', role: 'assistant', content: 'Previous answer', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Previous question',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-existing',
+        },
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: 'Previous answer',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-existing',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -236,14 +307,16 @@ describe('AIService', () => {
         finishReason: 'stop',
       });
 
-      const result = await service.chat('Follow-up question', testSecurityContext, 'conv-existing');
+      const result = await service.chat(
+        'Follow-up question',
+        testSecurityContext,
+        'conv-existing',
+      );
 
       expect(result.conversationId).toBe('conv-existing');
-      expect(mockConversationRepository.findConversationByIdForUser).toHaveBeenCalledWith(
-        'conv-existing',
-        'company-1',
-        'user-1',
-      );
+      expect(
+        mockConversationRepository.findConversationByIdForUser,
+      ).toHaveBeenCalledWith('conv-existing', 'company-1', 'user-1');
       expect(mockConversationRepository.listMessages).toHaveBeenCalledWith(
         'conv-existing',
         'company-1',
@@ -253,7 +326,9 @@ describe('AIService', () => {
     });
 
     it('should throw ConversationNotFoundError for wrong owner', async () => {
-      mockConversationRepository.findConversationByIdForUser.mockResolvedValue(null);
+      mockConversationRepository.findConversationByIdForUser.mockResolvedValue(
+        null,
+      );
 
       await expect(
         service.chat('Hello', testSecurityContext, 'conv-other'),
@@ -275,9 +350,39 @@ describe('AIService', () => {
 
       // DB returns: DESC order (newest first) as per AI-7 repository change
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-3', role: 'user', content: 'New question', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
-        { id: 'msg-2', role: 'assistant', content: 'Previous answer', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
-        { id: 'msg-1', role: 'user', content: 'Previous question', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-existing' },
+        {
+          id: 'msg-3',
+          role: 'user',
+          content: 'New question',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-existing',
+        },
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: 'Previous answer',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-existing',
+        },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Previous question',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-existing',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -337,13 +442,14 @@ describe('AIService', () => {
       expect(result.content).toBe('Today you earned 125,000 KZT');
 
       // Should have persisted: user + assistant(toolCalls) + tool + assistant(final)
-      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
+      const createMessageCalls =
+        mockConversationRepository.createMessage.mock.calls;
       expect(createMessageCalls.length).toBe(4); // user, assistant+tools, tool, assistant final
 
       // Verify tool-call persistence sequence
       // createMessage(conversationId, companyId, userId, role, content, options)
       expect(createMessageCalls[1]![3]).toBe('assistant'); // assistant with toolCalls
-      expect(createMessageCalls[2]![3]).toBe('tool');     // tool result
+      expect(createMessageCalls[2]![3]).toBe('tool'); // tool result
       expect(createMessageCalls[3]![3]).toBe('assistant'); // final assistant
     });
 
@@ -357,7 +463,10 @@ describe('AIService', () => {
         finishReason: 'tool_calls',
       });
 
-      const result = await service.chat('Complex question', testSecurityContext);
+      const result = await service.chat(
+        'Complex question',
+        testSecurityContext,
+      );
 
       expect(result.content).toContain('unable to complete');
       expect(mockProvider.chat).toHaveBeenCalledTimes(5); // MAX_TOOL_ITERATIONS
@@ -387,10 +496,13 @@ describe('AIService', () => {
 
       // Check the tool message was truncated
       // createMessage(conversationId, companyId, userId, role, content, options)
-      const toolMessageCall = mockConversationRepository.createMessage.mock.calls.find(
-        (call) => call[3] === 'tool',
+      const toolMessageCall =
+        mockConversationRepository.createMessage.mock.calls.find(
+          (call) => call[3] === 'tool',
+        );
+      expect(toolMessageCall![4].length).toBeLessThanOrEqual(
+        4000 + '... (truncated)'.length,
       );
-      expect(toolMessageCall![4].length).toBeLessThanOrEqual(4000 + '... (truncated)'.length);
     });
   });
 
@@ -406,12 +518,17 @@ describe('AIService', () => {
 
       // First call (user message) succeeds, second call (assistant) fails
       mockConversationRepository.createMessage
-        .mockResolvedValueOnce({ id: 'msg-user', role: 'user', content: 'Hello', createdAt: new Date() } as any)
+        .mockResolvedValueOnce({
+          id: 'msg-user',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date(),
+        } as any)
         .mockResolvedValueOnce(null); // assistant message fails
 
-      await expect(
-        service.chat('Hello', testSecurityContext),
-      ).rejects.toThrow(PersistenceError);
+      await expect(service.chat('Hello', testSecurityContext)).rejects.toThrow(
+        PersistenceError,
+      );
     });
   });
 
@@ -444,8 +561,11 @@ describe('AIService', () => {
       expect(result.content).toContain('error');
 
       // Check that error assistant message was persisted
-      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
-      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      const createMessageCalls =
+        mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter(
+        (call) => call[3] === 'assistant',
+      );
 
       // Should have: 1) assistant(toolCalls) + 2) error assistant
       expect(assistantMessages.length).toBe(2);
@@ -466,8 +586,11 @@ describe('AIService', () => {
       expect(result.content).toContain('error');
 
       // Check error assistant persisted
-      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
-      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      const createMessageCalls =
+        mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter(
+        (call) => call[3] === 'assistant',
+      );
       expect(assistantMessages.length).toBe(1);
       expect(assistantMessages[0]![4]).toContain('error');
     });
@@ -484,8 +607,11 @@ describe('AIService', () => {
 
       await service.chat('Hello', testSecurityContext);
 
-      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
-      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      const createMessageCalls =
+        mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter(
+        (call) => call[3] === 'assistant',
+      );
       expect(assistantMessages.length).toBe(1);
       expect(assistantMessages[0]![4]).toContain('error');
     });
@@ -501,8 +627,11 @@ describe('AIService', () => {
 
       await service.chat('Hello', testSecurityContext);
 
-      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
-      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      const createMessageCalls =
+        mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter(
+        (call) => call[3] === 'assistant',
+      );
       expect(assistantMessages.length).toBe(1);
       expect(assistantMessages[0]![4]).toContain('error');
     });
@@ -518,7 +647,11 @@ describe('AIService', () => {
 
       // Make error assistant persistence fail
       mockConversationRepository.createMessage
-        .mockResolvedValueOnce({ id: 'msg-user', role: 'user', createdAt: new Date() } as any) // user msg OK
+        .mockResolvedValueOnce({
+          id: 'msg-user',
+          role: 'user',
+          createdAt: new Date(),
+        } as any) // user msg OK
         .mockResolvedValueOnce(null); // error assistant fails
 
       const result = await service.chat('Hello', testSecurityContext);
@@ -543,8 +676,11 @@ describe('AIService', () => {
       expect(result.content).toContain('unable to complete');
 
       // Check error assistant persisted on max iterations
-      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
-      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      const createMessageCalls =
+        mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter(
+        (call) => call[3] === 'assistant',
+      );
 
       // assistant(toolCalls) × 5 + error assistant = 6
       expect(assistantMessages.length).toBe(6);
@@ -562,8 +698,11 @@ describe('AIService', () => {
 
       await service.chat('Hello', testSecurityContext);
 
-      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
-      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      const createMessageCalls =
+        mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter(
+        (call) => call[3] === 'assistant',
+      );
 
       // Exactly one assistant message (the error assistant)
       expect(assistantMessages.length).toBe(1);
@@ -590,8 +729,11 @@ describe('AIService', () => {
 
       expect(result.content).toBe('You earned 125K today');
 
-      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
-      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      const createMessageCalls =
+        mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter(
+        (call) => call[3] === 'assistant',
+      );
 
       // assistant(toolCalls) + assistant(final) = 2 (no error assistant)
       expect(assistantMessages.length).toBe(2);
@@ -627,7 +769,9 @@ describe('AIService', () => {
 
     it('should handle tool execution error', async () => {
       // Tool throws an error
-      (mockTool.execute as jest.Mock).mockRejectedValue(new Error('DB connection failed'));
+      (mockTool.execute as jest.Mock).mockRejectedValue(
+        new Error('DB connection failed'),
+      );
 
       mockProvider.chat
         .mockResolvedValueOnce({
@@ -651,9 +795,10 @@ describe('AIService', () => {
       expect(result.content).toBe('Error occurred');
 
       // Check tool error was persisted
-      const toolMessages = mockConversationRepository.createMessage.mock.calls.filter(
-        (call) => call[3] === 'tool',
-      );
+      const toolMessages =
+        mockConversationRepository.createMessage.mock.calls.filter(
+          (call) => call[3] === 'tool',
+        );
       expect(toolMessages.length).toBe(1);
       expect(toolMessages[0]![4]).toContain('Tool execution failed');
     });
@@ -673,7 +818,10 @@ describe('AIService', () => {
 
       // Tool that takes longer than timeout
       (mockTool.execute as jest.Mock).mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ data: 'slow' }), 200)),
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ data: 'slow' }), 200),
+          ),
       );
 
       mockProvider.chat
@@ -692,15 +840,19 @@ describe('AIService', () => {
           finishReason: 'stop',
         });
 
-      const result = await shortTimeoutService.chat('Show sales', testSecurityContext);
+      const result = await shortTimeoutService.chat(
+        'Show sales',
+        testSecurityContext,
+      );
 
       // Should complete quickly (not hang for 200ms)
       expect(result.content).toBe('Timeout handled');
 
       // Check tool timeout error was persisted
-      const toolMessages = mockConversationRepository.createMessage.mock.calls.filter(
-        (call) => call[3] === 'tool',
-      );
+      const toolMessages =
+        mockConversationRepository.createMessage.mock.calls.filter(
+          (call) => call[3] === 'tool',
+        );
       expect(toolMessages.length).toBe(1);
       expect(toolMessages[0]![4]).toContain('timed out');
     });
@@ -740,7 +892,10 @@ describe('AIService', () => {
         });
 
       const startTime = Date.now();
-      const result = await shortTimeoutService.chat('Show sales', testSecurityContext);
+      const result = await shortTimeoutService.chat(
+        'Show sales',
+        testSecurityContext,
+      );
       const elapsed = Date.now() - startTime;
 
       // Should complete within reasonable time (not hang)
@@ -748,9 +903,10 @@ describe('AIService', () => {
       expect(result.content).toBe('Handled');
 
       // Check tool timeout error was persisted
-      const toolMessages = mockConversationRepository.createMessage.mock.calls.filter(
-        (call) => call[3] === 'tool',
-      );
+      const toolMessages =
+        mockConversationRepository.createMessage.mock.calls.filter(
+          (call) => call[3] === 'tool',
+        );
       expect(toolMessages.length).toBe(1);
       expect(toolMessages[0]![4]).toContain('timed out');
     });
@@ -770,7 +926,10 @@ describe('AIService', () => {
 
       // Tool that takes longer than timeout
       (mockTool.execute as jest.Mock).mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ data: 'slow' }), 200)),
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ data: 'slow' }), 200),
+          ),
       );
 
       mockProvider.chat
@@ -792,9 +951,10 @@ describe('AIService', () => {
       await shortTimeoutService.chat('Show sales', testSecurityContext);
 
       // Verify tool error message format
-      const toolMessages = mockConversationRepository.createMessage.mock.calls.filter(
-        (call) => call[3] === 'tool',
-      );
+      const toolMessages =
+        mockConversationRepository.createMessage.mock.calls.filter(
+          (call) => call[3] === 'tool',
+        );
       expect(toolMessages.length).toBe(1);
       const errorContent = JSON.parse(toolMessages[0]![4]);
       expect(errorContent.error).toContain('timed out');
@@ -825,14 +985,19 @@ describe('AIService', () => {
 
       expect(result.content).toBe('You earned 125K today');
 
-      const createMessageCalls = mockConversationRepository.createMessage.mock.calls;
-      const assistantMessages = createMessageCalls.filter((call) => call[3] === 'assistant');
+      const createMessageCalls =
+        mockConversationRepository.createMessage.mock.calls;
+      const assistantMessages = createMessageCalls.filter(
+        (call) => call[3] === 'assistant',
+      );
 
       // assistant(toolCalls) + assistant(final) = 2 (no error assistant)
       expect(assistantMessages.length).toBe(2);
 
       // Tool result should not contain timeout error
-      const toolMessages = createMessageCalls.filter((call) => call[3] === 'tool');
+      const toolMessages = createMessageCalls.filter(
+        (call) => call[3] === 'tool',
+      );
       expect(toolMessages.length).toBe(1);
       expect(toolMessages[0]![4]).not.toContain('timed out');
     });
@@ -867,7 +1032,17 @@ describe('AIService', () => {
   describe('chat — idempotency (AI-5)', () => {
     it('should work without idempotencyKey (backward compatibility)', async () => {
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-1',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -886,9 +1061,21 @@ describe('AIService', () => {
     });
 
     it('should acquire lock on first request with idempotencyKey', async () => {
-      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({
+        acquired: true,
+      });
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-1',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -899,7 +1086,12 @@ describe('AIService', () => {
         finishReason: 'stop',
       });
 
-      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+      const result = await service.chat(
+        'Hello',
+        testSecurityContext,
+        undefined,
+        'key-123',
+      );
 
       expect(result.content).toBe('Response');
       expect(mockIdempotencyRepository.acquireLock).toHaveBeenCalled();
@@ -953,7 +1145,12 @@ describe('AIService', () => {
         expiresAt: new Date(Date.now() + 86400000),
       });
 
-      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+      const result = await service.chat(
+        'Hello',
+        testSecurityContext,
+        undefined,
+        'key-123',
+      );
 
       expect(result).toEqual(storedResponse);
       // Provider should NOT be called
@@ -963,7 +1160,8 @@ describe('AIService', () => {
     it('should return stored response for duplicate FAILED request', async () => {
       const storedResponse = {
         conversationId: 'conv-1',
-        content: 'I encountered an error while processing your request. Please try again later.',
+        content:
+          'I encountered an error while processing your request. Please try again later.',
         toolCallsUsed: [],
         createdAt: '2026-09-07T12:00:00.000Z',
       };
@@ -983,7 +1181,12 @@ describe('AIService', () => {
         expiresAt: new Date(Date.now() + 86400000),
       });
 
-      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+      const result = await service.chat(
+        'Hello',
+        testSecurityContext,
+        undefined,
+        'key-123',
+      );
 
       expect(result).toEqual(storedResponse);
       // Provider should NOT be called
@@ -991,9 +1194,21 @@ describe('AIService', () => {
     });
 
     it('should update idempotency record on provider failure', async () => {
-      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({
+        acquired: true,
+      });
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-1',
+        },
       ]);
 
       mockProvider.chat.mockRejectedValueOnce(
@@ -1012,9 +1227,21 @@ describe('AIService', () => {
     // F1: Test idempotencyKey without conversationId
     it('should work with idempotencyKey without conversationId', async () => {
       mockIdempotencyRepository.findByKey.mockResolvedValue(null);
-      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({
+        acquired: true,
+      });
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-1',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -1025,7 +1252,12 @@ describe('AIService', () => {
         finishReason: 'stop',
       });
 
-      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+      const result = await service.chat(
+        'Hello',
+        testSecurityContext,
+        undefined,
+        'key-123',
+      );
 
       expect(result.content).toBe('Response');
       // Should create conversation and then acquire lock
@@ -1035,7 +1267,10 @@ describe('AIService', () => {
 
     // F2: Test fingerprint validation
     it('should return 400 for same key with different message', async () => {
-      const existingFingerprint = computeFingerprint('Different message', undefined);
+      const existingFingerprint = computeFingerprint(
+        'Different message',
+        undefined,
+      );
       mockIdempotencyRepository.findByKey.mockResolvedValue({
         id: 'id-1',
         companyId: 'company-1',
@@ -1044,7 +1279,12 @@ describe('AIService', () => {
         idempotencyKey: 'key-123',
         requestFingerprint: existingFingerprint,
         status: 'COMPLETED',
-        responsePayload: { conversationId: 'conv-1', content: 'Response', toolCallsUsed: [], createdAt: new Date().toISOString() },
+        responsePayload: {
+          conversationId: 'conv-1',
+          content: 'Response',
+          toolCallsUsed: [],
+          createdAt: new Date().toISOString(),
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
         expiresAt: new Date(Date.now() + 86400000),
@@ -1065,7 +1305,12 @@ describe('AIService', () => {
         idempotencyKey: 'key-123',
         requestFingerprint: existingFingerprint,
         status: 'COMPLETED',
-        responsePayload: { conversationId: 'conv-999', content: 'Response', toolCallsUsed: [], createdAt: new Date().toISOString() },
+        responsePayload: {
+          conversationId: 'conv-999',
+          content: 'Response',
+          toolCallsUsed: [],
+          createdAt: new Date().toISOString(),
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
         expiresAt: new Date(Date.now() + 86400000),
@@ -1099,7 +1344,12 @@ describe('AIService', () => {
         expiresAt: new Date(Date.now() + 86400000),
       });
 
-      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+      const result = await service.chat(
+        'Hello',
+        testSecurityContext,
+        undefined,
+        'key-123',
+      );
 
       expect(result).toEqual(storedResponse);
       expect(mockProvider.chat).not.toHaveBeenCalled();
@@ -1126,9 +1376,21 @@ describe('AIService', () => {
       // After reclaim, record is deleted, so findByKey returns null
       mockIdempotencyRepository.findByKey.mockResolvedValueOnce(null);
       // Then acquireLock succeeds
-      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({
+        acquired: true,
+      });
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-1',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -1139,7 +1401,12 @@ describe('AIService', () => {
         finishReason: 'stop',
       });
 
-      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+      const result = await service.chat(
+        'Hello',
+        testSecurityContext,
+        undefined,
+        'key-123',
+      );
 
       expect(result.content).toBe('Response');
       expect(mockIdempotencyRepository.reclaimExpired).toHaveBeenCalled();
@@ -1167,9 +1434,21 @@ describe('AIService', () => {
       // After failed reclaim, record is deleted by winner, so findByKey returns null
       mockIdempotencyRepository.findByKey.mockResolvedValueOnce(null);
       // Then acquireLock succeeds
-      mockIdempotencyRepository.acquireLock.mockResolvedValue({ acquired: true });
+      mockIdempotencyRepository.acquireLock.mockResolvedValue({
+        acquired: true,
+      });
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date(), toolCallsJson: null, toolCallId: null, toolName: null, tokenCount: null, conversationId: 'conv-1' },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date(),
+          toolCallsJson: null,
+          toolCallId: null,
+          toolName: null,
+          tokenCount: null,
+          conversationId: 'conv-1',
+        },
       ]);
 
       mockProvider.chat.mockResolvedValue({
@@ -1180,7 +1459,12 @@ describe('AIService', () => {
         finishReason: 'stop',
       });
 
-      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+      const result = await service.chat(
+        'Hello',
+        testSecurityContext,
+        undefined,
+        'key-123',
+      );
 
       expect(result.content).toBe('Response');
       expect(mockIdempotencyRepository.reclaimExpired).toHaveBeenCalled();
@@ -1212,7 +1496,12 @@ describe('AIService', () => {
         expiresAt: new Date(Date.now() + 86400000),
       });
 
-      const result = await service.chat('Hello', testSecurityContext, undefined, 'key-123');
+      const result = await service.chat(
+        'Hello',
+        testSecurityContext,
+        undefined,
+        'key-123',
+      );
 
       expect(result).toEqual(storedResponse);
       expect(mockProvider.chat).not.toHaveBeenCalled();
@@ -1270,14 +1559,25 @@ describe('AIService', () => {
 
     it('should throw RequestBudgetExceededError when budget expires during provider call', async () => {
       // Provider takes longer than budget
-      mockProvider.chat.mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({
-          content: 'Late response',
-          toolCalls: [],
-          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-          model: 'gpt-4o-mini',
-          finishReason: 'stop',
-        }), 200)),
+      mockProvider.chat.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  content: 'Late response',
+                  toolCalls: [],
+                  usage: {
+                    promptTokens: 10,
+                    completionTokens: 5,
+                    totalTokens: 15,
+                  },
+                  model: 'gpt-4o-mini',
+                  finishReason: 'stop',
+                }),
+              200,
+            ),
+          ),
       );
 
       await expect(
@@ -1304,8 +1604,11 @@ describe('AIService', () => {
         });
 
       // Tool takes longer than budget
-      (mockTool.execute as jest.Mock).mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({ data: 'slow' }), 200)),
+      (mockTool.execute as jest.Mock).mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ data: 'slow' }), 200),
+          ),
       );
 
       await expect(
@@ -1332,8 +1635,11 @@ describe('AIService', () => {
         });
 
       // Tool takes longer than budget
-      (mockTool.execute as jest.Mock).mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({ data: 'slow' }), 200)),
+      (mockTool.execute as jest.Mock).mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ data: 'slow' }), 200),
+          ),
       );
 
       await expect(
@@ -1381,14 +1687,25 @@ describe('AIService', () => {
     });
 
     it('should clean up timer after budget error', async () => {
-      mockProvider.chat.mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({
-          content: 'Late',
-          toolCalls: [],
-          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-          model: 'gpt-4o-mini',
-          finishReason: 'stop',
-        }), 200)),
+      mockProvider.chat.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  content: 'Late',
+                  toolCalls: [],
+                  usage: {
+                    promptTokens: 10,
+                    completionTokens: 5,
+                    totalTokens: 15,
+                  },
+                  model: 'gpt-4o-mini',
+                  finishReason: 'stop',
+                }),
+              200,
+            ),
+          ),
       );
 
       const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
@@ -1402,14 +1719,25 @@ describe('AIService', () => {
     });
 
     it('should persist error assistant for budget exceeded (AI-4B best-effort)', async () => {
-      mockProvider.chat.mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({
-          content: 'Late',
-          toolCalls: [],
-          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-          model: 'gpt-4o-mini',
-          finishReason: 'stop',
-        }), 200)),
+      mockProvider.chat.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  content: 'Late',
+                  toolCalls: [],
+                  usage: {
+                    promptTokens: 10,
+                    completionTokens: 5,
+                    totalTokens: 15,
+                  },
+                  model: 'gpt-4o-mini',
+                  finishReason: 'stop',
+                }),
+              200,
+            ),
+          ),
       );
 
       await expect(
@@ -1417,21 +1745,33 @@ describe('AIService', () => {
       ).rejects.toThrow(RequestBudgetExceededError);
 
       // AI-4B: error assistant SHOULD be persisted (best-effort)
-      const assistantMessages = mockConversationRepository.createMessage.mock.calls.filter(
-        (call) => call[3] === 'assistant',
-      );
+      const assistantMessages =
+        mockConversationRepository.createMessage.mock.calls.filter(
+          (call) => call[3] === 'assistant',
+        );
       expect(assistantMessages.length).toBeGreaterThanOrEqual(1);
     });
 
     it('should call updateFailed for budget exceeded with idempotencyKey', async () => {
-      mockProvider.chat.mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({
-          content: 'Late',
-          toolCalls: [],
-          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-          model: 'gpt-4o-mini',
-          finishReason: 'stop',
-        }), 200)),
+      mockProvider.chat.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  content: 'Late',
+                  toolCalls: [],
+                  usage: {
+                    promptTokens: 10,
+                    completionTokens: 5,
+                    totalTokens: 15,
+                  },
+                  model: 'gpt-4o-mini',
+                  finishReason: 'stop',
+                }),
+              200,
+            ),
+          ),
       );
 
       await expect(
@@ -1452,17 +1792,30 @@ describe('AIService', () => {
     });
 
     it('should rethrow RequestBudgetExceededError even if persistence fails', async () => {
-      mockProvider.chat.mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({
-          content: 'Late',
-          toolCalls: [],
-          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-          model: 'gpt-4o-mini',
-          finishReason: 'stop',
-        }), 200)),
+      mockProvider.chat.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  content: 'Late',
+                  toolCalls: [],
+                  usage: {
+                    promptTokens: 10,
+                    completionTokens: 5,
+                    totalTokens: 15,
+                  },
+                  model: 'gpt-4o-mini',
+                  finishReason: 'stop',
+                }),
+              200,
+            ),
+          ),
       );
       // Make persistence fail only for assistant messages (not user message)
-      mockConversationRepository.createMessage.mockImplementation(((...args: any[]) => {
+      mockConversationRepository.createMessage.mockImplementation(((
+        ...args: any[]
+      ) => {
         if (args[3] === 'assistant') {
           return Promise.reject(new Error('DB down'));
         }
@@ -1475,44 +1828,82 @@ describe('AIService', () => {
     });
 
     it('should rethrow RequestBudgetExceededError even if updateFailed fails', async () => {
-      mockProvider.chat.mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({
-          content: 'Late',
-          toolCalls: [],
-          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-          model: 'gpt-4o-mini',
-          finishReason: 'stop',
-        }), 200)),
+      mockProvider.chat.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  content: 'Late',
+                  toolCalls: [],
+                  usage: {
+                    promptTokens: 10,
+                    completionTokens: 5,
+                    totalTokens: 15,
+                  },
+                  model: 'gpt-4o-mini',
+                  finishReason: 'stop',
+                }),
+              200,
+            ),
+          ),
       );
       // Make updateFailed fail
-      mockIdempotencyRepository.updateFailed.mockRejectedValue(new Error('DB down'));
+      mockIdempotencyRepository.updateFailed.mockRejectedValue(
+        new Error('DB down'),
+      );
 
       await expect(
-        budgetService.chat('Fail update', testSecurityContext, undefined, 'key-xyz'),
+        budgetService.chat(
+          'Fail update',
+          testSecurityContext,
+          undefined,
+          'key-xyz',
+        ),
       ).rejects.toThrow(RequestBudgetExceededError);
     });
 
     it('should rethrow RequestBudgetExceededError when both persistence and updateFailed fail', async () => {
-      mockProvider.chat.mockImplementation(() =>
-        new Promise((resolve) => setTimeout(() => resolve({
-          content: 'Late',
-          toolCalls: [],
-          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-          model: 'gpt-4o-mini',
-          finishReason: 'stop',
-        }), 200)),
+      mockProvider.chat.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  content: 'Late',
+                  toolCalls: [],
+                  usage: {
+                    promptTokens: 10,
+                    completionTokens: 5,
+                    totalTokens: 15,
+                  },
+                  model: 'gpt-4o-mini',
+                  finishReason: 'stop',
+                }),
+              200,
+            ),
+          ),
       );
       // Make persistence fail only for assistant messages
-      mockConversationRepository.createMessage.mockImplementation(((...args: any[]) => {
+      mockConversationRepository.createMessage.mockImplementation(((
+        ...args: any[]
+      ) => {
         if (args[3] === 'assistant') {
           return Promise.reject(new Error('DB down'));
         }
         return Promise.resolve({ id: 'msg-1', createdAt: new Date() });
       }) as any);
-      mockIdempotencyRepository.updateFailed.mockRejectedValue(new Error('DB down'));
+      mockIdempotencyRepository.updateFailed.mockRejectedValue(
+        new Error('DB down'),
+      );
 
       await expect(
-        budgetService.chat('Both fail', testSecurityContext, undefined, 'key-all'),
+        budgetService.chat(
+          'Both fail',
+          testSecurityContext,
+          undefined,
+          'key-all',
+        ),
       ).rejects.toThrow(RequestBudgetExceededError);
     });
   });
@@ -1533,8 +1924,8 @@ describe('AIService', () => {
         { $transaction: jest.fn((cb: any) => cb({})) } as any,
         undefined, // toolExecutionTimeoutMs
         undefined, // requestBudgetMs (AI-6)
-        10000,     // contextMaxTokens = 10K for testing
-        2048,      // maxTokens (output reservation)
+        10000, // contextMaxTokens = 10K for testing
+        2048, // maxTokens (output reservation)
       );
     });
 
@@ -1560,7 +1951,10 @@ describe('AIService', () => {
         finishReason: 'stop',
       });
 
-      const result = await contextService.chat('Short message', testSecurityContext);
+      const result = await contextService.chat(
+        'Short message',
+        testSecurityContext,
+      );
       expect(result.content).toBe('Success');
       expect(mockProvider.chat).toHaveBeenCalledTimes(1);
     });
@@ -1575,7 +1969,8 @@ describe('AIService', () => {
         mockConversationRepository,
         mockIdempotencyRepository,
         { $transaction: jest.fn((cb: any) => cb({})) } as any,
-        undefined, undefined,
+        undefined,
+        undefined,
         100, // 100 tokens — too small for system + tools + user + output
         2048,
       );
@@ -1606,7 +2001,8 @@ describe('AIService', () => {
         mockConversationRepository,
         mockIdempotencyRepository,
         { $transaction: jest.fn((cb: any) => cb({})) } as any,
-        undefined, undefined,
+        undefined,
+        undefined,
         3500, // tight budget
         2048,
       );
@@ -1628,8 +2024,10 @@ describe('AIService', () => {
         mockConversationRepository,
         mockIdempotencyRepository,
         { $transaction: jest.fn((cb: any) => cb({})) } as any,
-        undefined, undefined,
-        100, 2048,
+        undefined,
+        undefined,
+        100,
+        2048,
       );
 
       await expect(
@@ -1637,9 +2035,10 @@ describe('AIService', () => {
       ).rejects.toThrow(ContextBudgetExceededError);
 
       // AI-4B: error assistant should be persisted
-      const assistantCalls = mockConversationRepository.createMessage.mock.calls.filter(
-        (call) => call[3] === 'assistant',
-      );
+      const assistantCalls =
+        mockConversationRepository.createMessage.mock.calls.filter(
+          (call) => call[3] === 'assistant',
+        );
       expect(assistantCalls.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -1652,8 +2051,10 @@ describe('AIService', () => {
         mockConversationRepository,
         mockIdempotencyRepository,
         { $transaction: jest.fn((cb: any) => cb({})) } as any,
-        undefined, undefined,
-        100, 2048,
+        undefined,
+        undefined,
+        100,
+        2048,
       );
 
       await expect(
@@ -1661,7 +2062,10 @@ describe('AIService', () => {
       ).rejects.toThrow(ContextBudgetExceededError);
 
       expect(mockIdempotencyRepository.updateFailed).toHaveBeenCalledWith(
-        'company-1', 'user-1', 'ctx-key', expect.any(Object),
+        'company-1',
+        'user-1',
+        'ctx-key',
+        expect.any(Object),
       );
     });
 
@@ -1674,11 +2078,15 @@ describe('AIService', () => {
         mockConversationRepository,
         mockIdempotencyRepository,
         { $transaction: jest.fn((cb: any) => cb({})) } as any,
-        undefined, undefined,
-        100, 2048,
+        undefined,
+        undefined,
+        100,
+        2048,
       );
 
-      mockConversationRepository.createMessage.mockImplementation(((...args: any[]) => {
+      mockConversationRepository.createMessage.mockImplementation(((
+        ...args: any[]
+      ) => {
         if (args[3] === 'assistant') {
           return Promise.reject(new Error('DB down'));
         }
@@ -1699,11 +2107,15 @@ describe('AIService', () => {
         mockConversationRepository,
         mockIdempotencyRepository,
         { $transaction: jest.fn((cb: any) => cb({})) } as any,
-        undefined, undefined,
-        100, 2048,
+        undefined,
+        undefined,
+        100,
+        2048,
       );
 
-      mockIdempotencyRepository.updateFailed.mockRejectedValue(new Error('DB down'));
+      mockIdempotencyRepository.updateFailed.mockRejectedValue(
+        new Error('DB down'),
+      );
 
       await expect(
         tinyService.chat('Hello', testSecurityContext, undefined, 'ctx-key'),
@@ -1721,19 +2133,41 @@ describe('AIService', () => {
 
       // Mock history with some messages
       mockConversationRepository.listMessages.mockResolvedValue([
-        { id: 'm1', role: 'user', content: 'Old question', createdAt: new Date('2026-01-01') },
-        { id: 'm2', role: 'assistant', content: 'Old answer', createdAt: new Date('2026-01-02') },
-        { id: 'm3', role: 'user', content: 'Test message', createdAt: new Date('2026-01-03') },
+        {
+          id: 'm1',
+          role: 'user',
+          content: 'Old question',
+          createdAt: new Date('2026-01-01'),
+        },
+        {
+          id: 'm2',
+          role: 'assistant',
+          content: 'Old answer',
+          createdAt: new Date('2026-01-02'),
+        },
+        {
+          id: 'm3',
+          role: 'user',
+          content: 'Test message',
+          createdAt: new Date('2026-01-03'),
+        },
       ] as any);
 
-      const result = await contextService.chat('Test message', testSecurityContext);
+      const result = await contextService.chat(
+        'Test message',
+        testSecurityContext,
+      );
       expect(result.content).toBe('Response');
 
       // Check that provider received messages with the current user message
       const providerCall = mockProvider.chat.mock.calls[0]?.[0];
       expect(providerCall).toBeDefined();
-      const userMessages = providerCall!.messages.filter((m: any) => m.role === 'user');
-      expect(userMessages.some((m: any) => m.content === 'Test message')).toBe(true);
+      const userMessages = providerCall!.messages.filter(
+        (m: any) => m.role === 'user',
+      );
+      expect(userMessages.some((m: any) => m.content === 'Test message')).toBe(
+        true,
+      );
     });
 
     it('should select newest turns when history exceeds budget', async () => {
@@ -1752,9 +2186,14 @@ describe('AIService', () => {
         content: `Message ${i} with some content to fill tokens`,
         createdAt: new Date(Date.now() + i * 1000),
       }));
-      mockConversationRepository.listMessages.mockResolvedValue(manyMessages as any);
+      mockConversationRepository.listMessages.mockResolvedValue(
+        manyMessages as any,
+      );
 
-      const result = await contextService.chat('Final message', testSecurityContext);
+      const result = await contextService.chat(
+        'Final message',
+        testSecurityContext,
+      );
       expect(result.content).toBe('OK');
 
       // Provider should have been called
@@ -1779,7 +2218,8 @@ describe('AIService', () => {
         mockConversationRepository,
         mockIdempotencyRepository,
         { $transaction: jest.fn((cb: any) => cb({})) } as any,
-        undefined, undefined,
+        undefined,
+        undefined,
         4000, // minimal budget
         2048,
       );
@@ -1815,7 +2255,8 @@ describe('AIService', () => {
         mockConversationRepository,
         mockIdempotencyRepository,
         { $transaction: jest.fn((cb: any) => cb({})) } as any,
-        undefined, undefined,
+        undefined,
+        undefined,
         4500, // fits messages but tool results push over
         2048,
       );

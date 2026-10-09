@@ -1,13 +1,28 @@
-import { BadRequestException, ConflictException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { randomBytes, createHash } from 'crypto';
-import { AIProvider, AIRequest, AIMessage, AIProviderError } from './providers/ai-provider.interface';
+import {
+  AIProvider,
+  AIRequest,
+  AIMessage,
+  AIProviderError,
+} from './providers/ai-provider.interface';
 import { ToolRegistry } from './tools/tool.registry';
 import { SecurityContext } from './security/security-context';
 import { AIAuditLogger } from './logging/ai-audit.logger';
 import { RolesRepository } from '../rbac/repositories/roles.repository';
 import { ConversationRepository } from './repositories/conversation.repository';
 import { IdempotencyRepository } from './repositories/idempotency.repository';
-import { validateToolInput, sanitizeToolInput } from './tools/tool-input.validator';
+import {
+  validateToolInput,
+  sanitizeToolInput,
+} from './tools/tool-input.validator';
 import { PrismaService } from '../../common/prisma';
 import { Prisma } from '@prisma/client';
 
@@ -29,7 +44,7 @@ const SAFETY_OVERHEAD = 500;
  * NOT a mathematical guarantee — V1 heuristic safety mechanism.
  */
 function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4 * 1.2);
+  return Math.ceil((text.length / 4) * 1.2);
 }
 
 /**
@@ -38,14 +53,18 @@ function estimateTokens(text: string): number {
  */
 function fullProviderRequestEstimate(
   messages: AIMessage[],
-  tools: { name: string; description: string; inputSchema: Record<string, unknown> }[],
+  tools: {
+    name: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+  }[],
   outputReservation: number = AI_MAX_TOKENS_DEFAULT,
 ): number {
   return (
-    estimateMessagesTokens(messages)
-    + estimateToolsTokens(tools)
-    + outputReservation
-    + SAFETY_OVERHEAD
+    estimateMessagesTokens(messages) +
+    estimateToolsTokens(tools) +
+    outputReservation +
+    SAFETY_OVERHEAD
   );
 }
 
@@ -60,7 +79,11 @@ function estimateMessagesTokens(messages: AIMessage[]): number {
 }
 
 function estimateToolsTokens(
-  tools: { name: string; description: string; inputSchema: Record<string, unknown> }[],
+  tools: {
+    name: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+  }[],
 ): number {
   if (tools.length === 0) return 0;
   return estimateTokens(JSON.stringify(tools));
@@ -95,10 +118,7 @@ function groupIntoTurns(messages: AIMessage[]): AIMessage[][] {
  * Select turns from newest to oldest within token budget.
  * Returns selected turns in chronological ASC order.
  */
-function selectTurns(
-  turns: AIMessage[][],
-  budget: number,
-): AIMessage[][] {
+function selectTurns(turns: AIMessage[][], budget: number): AIMessage[][] {
   const selected: AIMessage[][] = [];
   let remaining = budget;
 
@@ -106,7 +126,8 @@ function selectTurns(
     const turn = turns[i];
     if (!turn) continue;
     const turnTokens = turn.reduce(
-      (sum, m) => sum + estimateTokens(m.content + JSON.stringify(m.toolCalls ?? [])),
+      (sum, m) =>
+        sum + estimateTokens(m.content + JSON.stringify(m.toolCalls ?? [])),
       0,
     );
 
@@ -180,7 +201,8 @@ export class AIService {
     @Optional() @Inject('AI_CONTEXT_MAX_TOKENS') contextMaxTokens?: number,
     @Optional() @Inject('AI_MAX_TOKENS') maxTokens?: number,
   ) {
-    this.toolExecutionTimeoutMs = toolExecutionTimeoutMs ?? DEFAULT_TOOL_EXECUTION_TIMEOUT_MS;
+    this.toolExecutionTimeoutMs =
+      toolExecutionTimeoutMs ?? DEFAULT_TOOL_EXECUTION_TIMEOUT_MS;
     this.requestBudgetMs = requestBudgetMs ?? DEFAULT_REQUEST_BUDGET_MS;
     this.contextMaxTokens = contextMaxTokens ?? DEFAULT_CONTEXT_MAX_TOKENS;
     this.maxTokens = maxTokens ?? AI_MAX_TOKENS_DEFAULT;
@@ -191,13 +213,21 @@ export class AIService {
     securityContext: SecurityContext,
     conversationId?: string,
     idempotencyKey?: string,
-  ): Promise<{ conversationId: string; content: string; toolCallsUsed: string[]; createdAt: string }> {
+  ): Promise<{
+    conversationId: string;
+    content: string;
+    toolCallsUsed: string[];
+    createdAt: string;
+  }> {
     const requestId = randomBytes(8).toString('hex');
     const startTime = Date.now();
 
     // ── AI-6: Request budget ───────────────────────────────────
     const requestController = new AbortController();
-    const requestTimer = setTimeout(() => requestController.abort(), this.requestBudgetMs);
+    const requestTimer = setTimeout(
+      () => requestController.abort(),
+      this.requestBudgetMs,
+    );
 
     const { companyId, userId } = securityContext;
 
@@ -208,7 +238,7 @@ export class AIService {
 
     if (idempotencyKey) {
       const fingerprint = this.computeFingerprint(userMessage, conversationId);
-      
+
       // First, check if there's an existing record (without creating)
       const existingRecord = await this.idempotencyRepository.findByKey(
         companyId,
@@ -240,13 +270,19 @@ export class AIService {
                 userId,
                 idempotencyKey,
               );
-              
+
               if (!refreshed) {
                 // Record was deleted and new one not yet created by winner
                 // Retry acquisition after conversation creation
-              } else if (refreshed.status === 'PENDING' && refreshed.expiresAt >= new Date()) {
+              } else if (
+                refreshed.status === 'PENDING' &&
+                refreshed.expiresAt >= new Date()
+              ) {
                 throw new ConflictException('Request already in progress');
-              } else if (refreshed.status === 'COMPLETED' || refreshed.status === 'FAILED') {
+              } else if (
+                refreshed.status === 'COMPLETED' ||
+                refreshed.status === 'FAILED'
+              ) {
                 return refreshed.responsePayload as any;
               }
             }
@@ -255,7 +291,10 @@ export class AIService {
             // Active PENDING - cannot reclaim
             throw new ConflictException('Request already in progress');
           }
-        } else if (existingRecord.status === 'COMPLETED' || existingRecord.status === 'FAILED') {
+        } else if (
+          existingRecord.status === 'COMPLETED' ||
+          existingRecord.status === 'FAILED'
+        ) {
           // Return stored response
           return existingRecord.responsePayload as any;
         }
@@ -269,11 +308,12 @@ export class AIService {
     if (!idempotencyKey) {
       if (conversationId) {
         // Verify ownership
-        const conversation = await this.conversationRepository.findConversationByIdForUser(
-          conversationId,
-          companyId,
-          userId,
-        );
+        const conversation =
+          await this.conversationRepository.findConversationByIdForUser(
+            conversationId,
+            companyId,
+            userId,
+          );
 
         if (!conversation) {
           // Return structured error — caller (controller) throws NotFoundException
@@ -283,15 +323,17 @@ export class AIService {
         convId = conversation.id;
       } else {
         // Create new conversation
-        const title = userMessage.length > TITLE_MAX_CHARS
-          ? userMessage.substring(0, TITLE_MAX_CHARS).trimEnd() + '...'
-          : userMessage;
+        const title =
+          userMessage.length > TITLE_MAX_CHARS
+            ? userMessage.substring(0, TITLE_MAX_CHARS).trimEnd() + '...'
+            : userMessage;
 
-        const conversation = await this.conversationRepository.createConversation(
-          companyId,
-          userId,
-          title,
-        );
+        const conversation =
+          await this.conversationRepository.createConversation(
+            companyId,
+            userId,
+            title,
+          );
         convId = conversation.id;
         isNewConversation = true;
       }
@@ -300,7 +342,7 @@ export class AIService {
     // ── Acquire idempotency lock with transaction ──────────────
     if (idempotencyKey && !idempotencyAcquired) {
       const fingerprint = this.computeFingerprint(userMessage, conversationId);
-      
+
       // Use transaction to ensure atomicity of idempotency acquisition and conversation creation/linking
       try {
         await this.prismaService.$transaction(async (tx) => {
@@ -318,37 +360,41 @@ export class AIService {
             );
           } catch (insertError: any) {
             // If P2002, transaction is aborted - we must rollback
-            if (insertError instanceof Prisma.PrismaClientKnownRequestError && 
-                insertError.code === 'P2002') {
+            if (
+              insertError instanceof Prisma.PrismaClientKnownRequestError &&
+              insertError.code === 'P2002'
+            ) {
               // Throw to trigger rollback - will be caught outside transaction
               throw new IdempotencyConflictError();
             }
             throw insertError;
           }
-          
+
           // If we get here, INSERT succeeded - now create conversation and link
           let conversationConvId: string;
-          
+
           if (conversationId) {
             // Use provided conversationId
             conversationConvId = conversationId;
           } else {
             // Create new conversation within transaction
-            const title = userMessage.length > TITLE_MAX_CHARS
-              ? userMessage.substring(0, TITLE_MAX_CHARS).trimEnd() + '...'
-              : userMessage;
-            
-            const conversation = await this.conversationRepository.createConversation(
-              companyId,
-              userId,
-              title,
-              tx,
-            );
+            const title =
+              userMessage.length > TITLE_MAX_CHARS
+                ? userMessage.substring(0, TITLE_MAX_CHARS).trimEnd() + '...'
+                : userMessage;
+
+            const conversation =
+              await this.conversationRepository.createConversation(
+                companyId,
+                userId,
+                title,
+                tx,
+              );
             conversationConvId = conversation.id;
             convId = conversation.id;
             isNewConversation = true;
           }
-          
+
           // Link conversation to idempotency record
           await this.idempotencyRepository.updateConversationId(
             companyId,
@@ -357,7 +403,7 @@ export class AIService {
             conversationConvId,
             tx,
           );
-          
+
           idempotencyAcquired = true;
         });
       } catch (error: any) {
@@ -370,16 +416,22 @@ export class AIService {
             userId,
             idempotencyKey,
           );
-          
+
           if (existing) {
             // Validate fingerprint
             if (existing.requestFingerprint !== fingerprint) {
               throw new IdempotencyKeyMismatchError();
             }
-            
-            if (existing.status === 'PENDING' && existing.expiresAt >= new Date()) {
+
+            if (
+              existing.status === 'PENDING' &&
+              existing.expiresAt >= new Date()
+            ) {
               throw new ConflictException('Request already in progress');
-            } else if (existing.status === 'COMPLETED' || existing.status === 'FAILED') {
+            } else if (
+              existing.status === 'COMPLETED' ||
+              existing.status === 'FAILED'
+            ) {
               return existing.responsePayload as any;
             }
           }
@@ -387,8 +439,10 @@ export class AIService {
           throw new Error('Idempotency record disappeared after conflict');
         }
         // Handle other errors that should be propagated
-        if (error instanceof IdempotencyKeyMismatchError || 
-            error instanceof ConflictException) {
+        if (
+          error instanceof IdempotencyKeyMismatchError ||
+          error instanceof ConflictException
+        ) {
           throw error;
         }
         // For other errors, log and continue
@@ -413,7 +467,9 @@ export class AIService {
 
     if (!userMsgResult) {
       // Ownership check failed or DB error — do NOT call provider
-      this.logger.error(`Failed to persist user message for conversation ${convId}`);
+      this.logger.error(
+        `Failed to persist user message for conversation ${convId}`,
+      );
       throw new PersistenceError('Failed to save your message');
     }
 
@@ -425,13 +481,16 @@ export class AIService {
       userId,
       HISTORY_LIMIT,
     );
-    const chronologicalHistory = historyMessages ? [...historyMessages].reverse() : [];
+    const chronologicalHistory = historyMessages
+      ? [...historyMessages].reverse()
+      : [];
 
     // ── Step 4: Build messages array for provider ───────────────
-    const permissionCodes = await this.rolesRepository.findPermissionCodesByRoleNames(
-      securityContext.roles,
-      companyId,
-    );
+    const permissionCodes =
+      await this.rolesRepository.findPermissionCodesByRoleNames(
+        securityContext.roles,
+        companyId,
+      );
 
     const availableTools = this.toolRegistry.getAvailable(permissionCodes);
     const toolDefinitions = availableTools.map((t) => ({
@@ -451,7 +510,9 @@ export class AIService {
         };
         if (msg.toolCallsJson) {
           try {
-            assistantMsg.toolCalls = JSON.parse(JSON.stringify(msg.toolCallsJson));
+            assistantMsg.toolCalls = JSON.parse(
+              JSON.stringify(msg.toolCallsJson),
+            );
           } catch {
             // Ignore malformed toolCallsJson
           }
@@ -468,7 +529,11 @@ export class AIService {
 
     // AI-7: Handle incomplete historical turns (strip orphan toolCalls)
     const safeHistory = historyAsMessages.map((msg, idx) => {
-      if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+      if (
+        msg.role === 'assistant' &&
+        msg.toolCalls &&
+        msg.toolCalls.length > 0
+      ) {
         // Check if following messages in the same turn have tool results
         const hasFollowingTool = historyAsMessages
           .slice(idx + 1)
@@ -489,19 +554,25 @@ export class AIService {
     const currentUserTokens = estimateTokens(userMessage);
 
     // AI-7: Calculate available budget for history
-    const effectiveInputBudget = this.contextMaxTokens - this.maxTokens - SAFETY_OVERHEAD;
+    const effectiveInputBudget =
+      this.contextMaxTokens - this.maxTokens - SAFETY_OVERHEAD;
     const historyBudget =
-      effectiveInputBudget - systemTokens - toolsTokensEstimate - currentUserTokens;
+      effectiveInputBudget -
+      systemTokens -
+      toolsTokensEstimate -
+      currentUserTokens;
 
     // AI-7: Select turns from newest to oldest within budget
-    const selectedTurns = historyBudget > 0 ? selectTurns(turns, historyBudget) : [];
+    const selectedTurns =
+      historyBudget > 0 ? selectTurns(turns, historyBudget) : [];
     const selectedHistory = selectedTurns.flat();
 
     // AI-7: Ensure current user message is always present
     const lastHistoryMsg = selectedHistory[selectedHistory.length - 1];
-    const currentUserIncluded = lastHistoryMsg != null
-      && lastHistoryMsg.role === 'user'
-      && lastHistoryMsg.content === userMessage;
+    const currentUserIncluded =
+      lastHistoryMsg != null &&
+      lastHistoryMsg.role === 'user' &&
+      lastHistoryMsg.content === userMessage;
     if (!currentUserIncluded) {
       selectedHistory.push({ role: 'user', content: userMessage });
     }
@@ -519,7 +590,11 @@ export class AIService {
     try {
       // AI-7: Dynamic minimum context check (inside try for AI-4B persistence)
       const minimumRequest =
-        systemTokens + currentUserTokens + toolsTokensEstimate + this.maxTokens + SAFETY_OVERHEAD;
+        systemTokens +
+        currentUserTokens +
+        toolsTokensEstimate +
+        this.maxTokens +
+        SAFETY_OVERHEAD;
       if (minimumRequest > this.contextMaxTokens) {
         throw new ContextBudgetExceededError();
       }
@@ -528,7 +603,13 @@ export class AIService {
         iterations++;
 
         // ── AI-7 Checkpoint 1: Before provider call ────────────
-        if (fullProviderRequestEstimate(messages, toolDefinitions, this.maxTokens) > this.contextMaxTokens) {
+        if (
+          fullProviderRequestEstimate(
+            messages,
+            toolDefinitions,
+            this.maxTokens,
+          ) > this.contextMaxTokens
+        ) {
           throw new ContextBudgetExceededError();
         }
 
@@ -544,22 +625,31 @@ export class AIService {
         }
 
         // If no tool calls, we have a final response
-        if (response.finishReason !== 'tool_calls' || response.toolCalls.length === 0) {
+        if (
+          response.finishReason !== 'tool_calls' ||
+          response.toolCalls.length === 0
+        ) {
           // Persist final assistant message
-          const assistantMsgResult = await this.conversationRepository.createMessage(
-            convId,
-            companyId,
-            userId,
-            'assistant',
-            response.content ?? 'I could not generate a response.',
-            {
-              toolCallsJson: response.toolCalls.length > 0 ? response.toolCalls as any : undefined,
-              tokenCount: response.usage.totalTokens,
-            },
-          );
+          const assistantMsgResult =
+            await this.conversationRepository.createMessage(
+              convId,
+              companyId,
+              userId,
+              'assistant',
+              response.content ?? 'I could not generate a response.',
+              {
+                toolCallsJson:
+                  response.toolCalls.length > 0
+                    ? (response.toolCalls as any)
+                    : undefined,
+                tokenCount: response.usage.totalTokens,
+              },
+            );
 
           if (!assistantMsgResult) {
-            this.logger.error(`CRITICAL: Failed to persist final assistant message for conversation ${convId}`);
+            this.logger.error(
+              `CRITICAL: Failed to persist final assistant message for conversation ${convId}`,
+            );
             throw new PersistenceError('Failed to save assistant response');
           }
 
@@ -606,7 +696,9 @@ export class AIService {
                 result,
               );
             } catch (persistErr: any) {
-              this.logger.error(`Failed to update idempotency record: ${persistErr.message}`);
+              this.logger.error(
+                `Failed to update idempotency record: ${persistErr.message}`,
+              );
               // Don't mask the successful response
             }
           }
@@ -615,36 +707,41 @@ export class AIService {
         }
 
         // ── AI-7 Checkpoint 2: Pre-tool conservative reservation ──
-        const MAX_TOOL_RESULT_TOKENS = estimateTokens('x'.repeat(TOOL_RESULT_MAX_CHARS));
+        const MAX_TOOL_RESULT_TOKENS = estimateTokens(
+          'x'.repeat(TOOL_RESULT_MAX_CHARS),
+        );
         const preToolEstimate =
-          estimateMessagesTokens(messages)
-          + estimateTokens(JSON.stringify(response.toolCalls))
-          + response.toolCalls.length * MAX_TOOL_RESULT_TOKENS;
+          estimateMessagesTokens(messages) +
+          estimateTokens(JSON.stringify(response.toolCalls)) +
+          response.toolCalls.length * MAX_TOOL_RESULT_TOKENS;
         const preToolFullRequest =
-          preToolEstimate
-          + toolsTokensEstimate
-          + this.maxTokens
-          + SAFETY_OVERHEAD;
+          preToolEstimate +
+          toolsTokensEstimate +
+          this.maxTokens +
+          SAFETY_OVERHEAD;
         if (preToolFullRequest > this.contextMaxTokens) {
           // Tool results won't fit — do NOT execute tools, no orphan messages
           throw new ContextBudgetExceededError();
         }
 
         // ── Step 5a: Persist assistant message WITH tool calls ─────
-        const assistantWithToolsResult = await this.conversationRepository.createMessage(
-          convId,
-          companyId,
-          userId,
-          'assistant',
-          response.content ?? '',
-          {
-            toolCallsJson: response.toolCalls as any,
-            tokenCount: response.usage.totalTokens,
-          },
-        );
+        const assistantWithToolsResult =
+          await this.conversationRepository.createMessage(
+            convId,
+            companyId,
+            userId,
+            'assistant',
+            response.content ?? '',
+            {
+              toolCallsJson: response.toolCalls as any,
+              tokenCount: response.usage.totalTokens,
+            },
+          );
 
         if (!assistantWithToolsResult) {
-          this.logger.error(`CRITICAL: Failed to persist assistant tool-call message for conversation ${convId}`);
+          this.logger.error(
+            `CRITICAL: Failed to persist assistant tool-call message for conversation ${convId}`,
+          );
           throw new PersistenceError('Failed to save assistant response');
         }
 
@@ -661,12 +758,22 @@ export class AIService {
 
           if (!tool) {
             this.logger.warn(`Unknown tool requested: ${toolCall.name}`);
-            const errorContent = JSON.stringify({ error: `Tool "${toolCall.name}" is not available.` });
+            const errorContent = JSON.stringify({
+              error: `Tool "${toolCall.name}" is not available.`,
+            });
             await this.conversationRepository.createMessage(
-              convId, companyId, userId, 'tool', errorContent,
+              convId,
+              companyId,
+              userId,
+              'tool',
+              errorContent,
               { toolCallId: toolCall.id, toolName: toolCall.name },
             );
-            messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
+            messages.push({
+              role: 'tool',
+              content: errorContent,
+              toolCallId: toolCall.id,
+            });
             continue;
           }
 
@@ -674,31 +781,58 @@ export class AIService {
             this.logger.warn(
               `Tool "${toolCall.name}" requires permission "${tool.requiredPermission}" which user lacks`,
             );
-            const errorContent = JSON.stringify({ error: `Access denied for tool "${toolCall.name}".` });
+            const errorContent = JSON.stringify({
+              error: `Access denied for tool "${toolCall.name}".`,
+            });
             await this.conversationRepository.createMessage(
-              convId, companyId, userId, 'tool', errorContent,
+              convId,
+              companyId,
+              userId,
+              'tool',
+              errorContent,
               { toolCallId: toolCall.id, toolName: toolCall.name },
             );
-            messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
+            messages.push({
+              role: 'tool',
+              content: errorContent,
+              toolCallId: toolCall.id,
+            });
             continue;
           }
 
           allToolCallsUsed.push(toolCall.name);
 
           // ── Runtime input validation ─────────────────────────
-          const sanitizedInput = sanitizeToolInput(toolCall.arguments, tool.inputSchema);
-          const validation = validateToolInput(sanitizedInput, tool.inputSchema, tool.name);
+          const sanitizedInput = sanitizeToolInput(
+            toolCall.arguments,
+            tool.inputSchema,
+          );
+          const validation = validateToolInput(
+            sanitizedInput,
+            tool.inputSchema,
+            tool.name,
+          );
 
           if (!validation.valid) {
-            this.logger.warn(`Tool "${tool.name}" input validation failed: ${validation.errors.join(', ')}`);
+            this.logger.warn(
+              `Tool "${tool.name}" input validation failed: ${validation.errors.join(', ')}`,
+            );
             const errorContent = JSON.stringify({
               error: `Invalid tool arguments: ${validation.errors.join('; ')}`,
             });
             await this.conversationRepository.createMessage(
-              convId, companyId, userId, 'tool', errorContent,
+              convId,
+              companyId,
+              userId,
+              'tool',
+              errorContent,
               { toolCallId: toolCall.id, toolName: toolCall.name },
             );
-            messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
+            messages.push({
+              role: 'tool',
+              content: errorContent,
+              toolCallId: toolCall.id,
+            });
             continue;
           }
 
@@ -711,24 +845,46 @@ export class AIService {
 
             // Truncate if exceeds max
             if (toolContent.length > TOOL_RESULT_MAX_CHARS) {
-              toolContent = toolContent.substring(0, TOOL_RESULT_MAX_CHARS) + '... (truncated)';
+              toolContent =
+                toolContent.substring(0, TOOL_RESULT_MAX_CHARS) +
+                '... (truncated)';
             }
 
             // Persist tool result
             await this.conversationRepository.createMessage(
-              convId, companyId, userId, 'tool', toolContent,
+              convId,
+              companyId,
+              userId,
+              'tool',
+              toolContent,
               { toolCallId: toolCall.id, toolName: toolCall.name },
             );
 
-            messages.push({ role: 'tool', content: toolContent, toolCallId: toolCall.id });
+            messages.push({
+              role: 'tool',
+              content: toolContent,
+              toolCallId: toolCall.id,
+            });
           } catch (error: any) {
-            this.logger.error(`Tool "${toolCall.name}" execution failed: ${error.message}`);
-            const errorContent = JSON.stringify({ error: `Tool execution failed: ${error.message}` });
+            this.logger.error(
+              `Tool "${toolCall.name}" execution failed: ${error.message}`,
+            );
+            const errorContent = JSON.stringify({
+              error: `Tool execution failed: ${error.message}`,
+            });
             await this.conversationRepository.createMessage(
-              convId, companyId, userId, 'tool', errorContent,
+              convId,
+              companyId,
+              userId,
+              'tool',
+              errorContent,
               { toolCallId: toolCall.id, toolName: toolCall.name },
             );
-            messages.push({ role: 'tool', content: errorContent, toolCallId: toolCall.id });
+            messages.push({
+              role: 'tool',
+              content: errorContent,
+              toolCallId: toolCall.id,
+            });
           }
 
           // ── AI-7 Checkpoint 3: After each tool result ────────────
@@ -738,20 +894,23 @@ export class AIService {
           }
 
           // AI-7: Check if next provider call fits
-          const postToolFullRequest =
-            fullProviderRequestEstimate(messages, toolDefinitions, this.maxTokens);
+          const postToolFullRequest = fullProviderRequestEstimate(
+            messages,
+            toolDefinitions,
+            this.maxTokens,
+          );
           if (postToolFullRequest > this.contextMaxTokens) {
             // Next normal call doesn't fit — try NO_MORE_TOOLS
             const noMoreToolsMsg: AIMessage = {
               role: 'system',
-              content: 'Context limit reached. Provide your final answer now without tools.',
+              content:
+                'Context limit reached. Provide your final answer now without tools.',
             };
-            const noMoreToolsFullRequest =
-              fullProviderRequestEstimate(
-                [...messages, noMoreToolsMsg],
-                [],
-                this.maxTokens,
-              );
+            const noMoreToolsFullRequest = fullProviderRequestEstimate(
+              [...messages, noMoreToolsMsg],
+              [],
+              this.maxTokens,
+            );
 
             if (noMoreToolsFullRequest <= this.contextMaxTokens) {
               // Final no-tools call is safe
@@ -763,28 +922,49 @@ export class AIService {
                   signal: requestController.signal,
                 });
                 // Persist final assistant message
-                const finalMsgResult = await this.conversationRepository.createMessage(
-                  convId, companyId, userId, 'assistant',
-                  finalResponse.content ?? 'I could not generate a response.',
-                  {
-                    toolCallsJson: finalResponse.toolCalls.length > 0 ? finalResponse.toolCalls as any : undefined,
-                    tokenCount: finalResponse.usage.totalTokens,
-                  },
-                );
+                const finalMsgResult =
+                  await this.conversationRepository.createMessage(
+                    convId,
+                    companyId,
+                    userId,
+                    'assistant',
+                    finalResponse.content ?? 'I could not generate a response.',
+                    {
+                      toolCallsJson:
+                        finalResponse.toolCalls.length > 0
+                          ? (finalResponse.toolCalls as any)
+                          : undefined,
+                      tokenCount: finalResponse.usage.totalTokens,
+                    },
+                  );
                 if (finalMsgResult) {
-                  conversationCreatedAt = finalMsgResult.createdAt.toISOString();
+                  conversationCreatedAt =
+                    finalMsgResult.createdAt.toISOString();
                 }
-                await this.conversationRepository.updateConversation(convId, companyId, userId, {});
+                await this.conversationRepository.updateConversation(
+                  convId,
+                  companyId,
+                  userId,
+                  {},
+                );
                 const finalResult = {
                   conversationId: convId,
-                  content: finalResponse.content ?? 'I could not generate a response.',
+                  content:
+                    finalResponse.content ?? 'I could not generate a response.',
                   toolCallsUsed: allToolCallsUsed,
                   createdAt: conversationCreatedAt ?? new Date().toISOString(),
                 };
                 if (idempotencyKey) {
                   try {
-                    await this.idempotencyRepository.updateCompleted(companyId, userId, idempotencyKey, finalResult);
-                  } catch { /* don't mask */ }
+                    await this.idempotencyRepository.updateCompleted(
+                      companyId,
+                      userId,
+                      idempotencyKey,
+                      finalResult,
+                    );
+                  } catch {
+                    /* don't mask */
+                  }
                 }
                 return finalResult;
               } catch {
@@ -799,16 +979,23 @@ export class AIService {
       }
 
       // Max iterations reached
-      const maxIterContent = 'I was unable to complete the analysis within the allowed number of steps. Please try a simpler question.';
+      const maxIterContent =
+        'I was unable to complete the analysis within the allowed number of steps. Please try a simpler question.';
 
       // AI-4B: Close conversation with error assistant message
       try {
         await this.conversationRepository.createMessage(
-          convId, companyId, userId, 'assistant', maxIterContent,
+          convId,
+          companyId,
+          userId,
+          'assistant',
+          maxIterContent,
           { tokenCount: 0 },
         );
       } catch (persistErr: any) {
-        this.logger.error(`Failed to persist max-iterations assistant message: ${persistErr.message}`);
+        this.logger.error(
+          `Failed to persist max-iterations assistant message: ${persistErr.message}`,
+        );
       }
 
       this.auditLogger.log({
@@ -833,24 +1020,36 @@ export class AIService {
       };
     } catch (error: any) {
       // Re-throw persistence and conversation errors
-      if (error instanceof PersistenceError || error instanceof ConversationNotFoundError) {
+      if (
+        error instanceof PersistenceError ||
+        error instanceof ConversationNotFoundError
+      ) {
         throw error;
       }
 
-      const errorCode = error instanceof AIProviderError ? error.code : 'UNKNOWN';
-      const errorMessage = error instanceof AIProviderError ? error.message : 'Unknown error';
+      const errorCode =
+        error instanceof AIProviderError ? error.code : 'UNKNOWN';
+      const errorMessage =
+        error instanceof AIProviderError ? error.message : 'Unknown error';
 
       // AI-4B: Close conversation with error assistant message (best-effort)
       // This runs for ALL errors including AI-6 RequestBudgetExceededError
-      const errorAssistantContent = 'I encountered an error while processing your request. Please try again later.';
+      const errorAssistantContent =
+        'I encountered an error while processing your request. Please try again later.';
       try {
         await this.conversationRepository.createMessage(
-          convId, companyId, userId, 'assistant', errorAssistantContent,
+          convId,
+          companyId,
+          userId,
+          'assistant',
+          errorAssistantContent,
           { tokenCount: 0 },
         );
       } catch (persistErr: any) {
         // Do not mask the original error
-        this.logger.error(`Failed to persist error assistant message: ${persistErr.message}`);
+        this.logger.error(
+          `Failed to persist error assistant message: ${persistErr.message}`,
+        );
       }
 
       this.auditLogger.log({
@@ -886,7 +1085,9 @@ export class AIService {
             errorResult,
           );
         } catch (persistErr: any) {
-          this.logger.error(`Failed to update idempotency record: ${persistErr.message}`);
+          this.logger.error(
+            `Failed to update idempotency record: ${persistErr.message}`,
+          );
           // Don't mask the error response
         }
       }
@@ -924,12 +1125,12 @@ export class AIService {
 
   /**
    * Execute a tool promise with a timeout.
-   * 
+   *
    * Uses Promise.race to ensure /ai/chat never hangs indefinitely
    * waiting for a slow/hanging tool. If the tool doesn't resolve
    * within the timeout, returns a structured error that fits
    * the existing tool error flow.
-   * 
+   *
    * Note: The underlying tool Promise may still be running in the
    * background after timeout. This is acceptable because:
    * 1. All tools are READ-ONLY — no side effects
@@ -942,7 +1143,9 @@ export class AIService {
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new ToolExecutionTimeoutError(toolName, this.toolExecutionTimeoutMs));
+        reject(
+          new ToolExecutionTimeoutError(toolName, this.toolExecutionTimeoutMs),
+        );
       }, this.toolExecutionTimeoutMs);
 
       toolPromise

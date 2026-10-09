@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, SupplierPaymentAllocation } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
@@ -70,14 +74,16 @@ export class SupplierPaymentAllocationsRepository {
     companyId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const result = await this.getClient(tx).supplierPaymentAllocation.aggregate({
-      where: {
-        paymentId,
-        companyId,
-        deletedAt: null,
+    const result = await this.getClient(tx).supplierPaymentAllocation.aggregate(
+      {
+        where: {
+          paymentId,
+          companyId,
+          deletedAt: null,
+        },
+        _sum: { amount: true },
       },
-      _sum: { amount: true },
-    });
+    );
     return Number(result._sum.amount ?? 0);
   }
 
@@ -90,14 +96,16 @@ export class SupplierPaymentAllocationsRepository {
     companyId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const result = await this.getClient(tx).supplierPaymentAllocation.aggregate({
-      where: {
-        purchaseInvoiceId,
-        companyId,
-        deletedAt: null,
+    const result = await this.getClient(tx).supplierPaymentAllocation.aggregate(
+      {
+        where: {
+          purchaseInvoiceId,
+          companyId,
+          deletedAt: null,
+        },
+        _sum: { amount: true },
       },
-      _sum: { amount: true },
-    });
+    );
     return Number(result._sum.amount ?? 0);
   }
 
@@ -110,7 +118,9 @@ export class SupplierPaymentAllocationsRepository {
     companyId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const result = await this.getClient(tx).supplierPaymentAllocation.updateMany({
+    const result = await this.getClient(
+      tx,
+    ).supplierPaymentAllocation.updateMany({
       where: {
         paymentId,
         companyId,

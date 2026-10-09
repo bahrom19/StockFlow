@@ -195,7 +195,9 @@ describe('SupplierExposureRepository — open-PO exposure (G9-D3)', () => {
     const sql = getLastSql();
     // Defence-in-depth floor for corrupt/legacy rows where the invoiced sum
     // exceeds the PO total (pre-G9-D2 data).
-    expect(sql).toMatch(/GREATEST\(\s*po\."grandTotal" - COALESCE\(inv\."invoicedTotal", 0\),\s*0\s*\)/);
+    expect(sql).toMatch(
+      /GREATEST\(\s*po\."grandTotal" - COALESCE\(inv\."invoicedTotal", 0\),\s*0\s*\)/,
+    );
   });
 
   it('scenario 5: only active (deletedAt IS NULL) invoices count toward invoicedTotal', () => {

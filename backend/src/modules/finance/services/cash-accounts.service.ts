@@ -28,7 +28,9 @@ export class CashAccountsService {
     dto: CreateCashAccountDto,
     currentUser: JwtPayload,
   ): Promise<CashAccountEntity> {
-    const companyCurrency = await this.companiesService.getBaseCurrency(currentUser.companyId);
+    const companyCurrency = await this.companiesService.getBaseCurrency(
+      currentUser.companyId,
+    );
     if (dto.currency && dto.currency !== companyCurrency) {
       throw new BadRequestException(
         `Currency ${dto.currency} does not match company currency ${companyCurrency}`,

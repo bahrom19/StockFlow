@@ -1,8 +1,14 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, SupplierProduct } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
-type SupplierProductWithProduct = SupplierProduct & { product: { id: string; name: string; sku: string | null } };
+type SupplierProductWithProduct = SupplierProduct & {
+  product: { id: string; name: string; sku: string | null };
+};
 
 @Injectable()
 export class SupplierProductsRepository {
@@ -36,7 +42,14 @@ export class SupplierProductsRepository {
     tx?: Prisma.TransactionClient,
   ): Promise<{ items: SupplierProductWithProduct[]; total: number }> {
     const client = this.getClient(tx);
-    const { page = 1, limit = 20, search, isPreferred, sortBy = 'createdAt', sortOrder = 'desc' } = options;
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      isPreferred,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = options;
 
     const where: Prisma.SupplierProductWhereInput = {
       companyId,
@@ -150,7 +163,9 @@ export class SupplierProductsRepository {
           where: { id, companyId },
         });
         if (!existing) {
-          throw new NotFoundException(`Supplier product with id ${id} not found`);
+          throw new NotFoundException(
+            `Supplier product with id ${id} not found`,
+          );
         }
         throw new ConflictException(
           `Supplier product ${id} was modified by another user. Please refresh and retry.`,
@@ -189,7 +204,9 @@ export class SupplierProductsRepository {
           where: { id, companyId },
         });
         if (!existing) {
-          throw new NotFoundException(`Supplier product with id ${id} not found`);
+          throw new NotFoundException(
+            `Supplier product with id ${id} not found`,
+          );
         }
         throw new ConflictException(
           `Supplier product ${id} was modified by another user. Please refresh and retry.`,

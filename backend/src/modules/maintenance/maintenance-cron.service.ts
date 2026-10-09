@@ -40,7 +40,9 @@ export class MaintenanceCronService {
         'maintenance.cleanup-idempotency',
         lock.reason,
       );
-      this.logger.debug('Idempotency cleanup lock not acquired, skipping this run');
+      this.logger.debug(
+        'Idempotency cleanup lock not acquired, skipping this run',
+      );
       return 0;
     }
     const ownerToken = lock.token;
@@ -50,7 +52,9 @@ export class MaintenanceCronService {
     let hasErrors = false;
     // Cleanup is best-effort: the existing catch below logs and swallows, so the
     // job is recorded as FAILED without changing that behaviour.
-    const runId = await this.jobRunService.start('maintenance.cleanup-idempotency');
+    const runId = await this.jobRunService.start(
+      'maintenance.cleanup-idempotency',
+    );
 
     try {
       this.logger.log('Starting idempotency cleanup');
@@ -63,10 +67,14 @@ export class MaintenanceCronService {
           break;
         }
 
-        this.logger.debug(`Idempotency cleanup batch: deleted ${deleted} records`);
+        this.logger.debug(
+          `Idempotency cleanup batch: deleted ${deleted} records`,
+        );
       }
 
-      this.logger.log(`Idempotency cleanup completed: ${totalDeleted} records deleted`);
+      this.logger.log(
+        `Idempotency cleanup completed: ${totalDeleted} records deleted`,
+      );
       await this.jobRunService.finish(runId, JobRunStatus.SUCCEEDED, {
         processed: totalDeleted,
       });
@@ -76,11 +84,16 @@ export class MaintenanceCronService {
         error,
         processed: totalDeleted,
       });
-      this.logger.error(`Idempotency cleanup failed: ${(error as Error).message}`);
+      this.logger.error(
+        `Idempotency cleanup failed: ${(error as Error).message}`,
+      );
       this.metrics.errorTotal.inc({ type: 'cleanup', module: 'maintenance' });
     } finally {
       const durationMs = Date.now() - startTime;
-      this.metrics.eventDuration.observe({ event_name: 'idempotency_cleanup', handler: 'batch' }, durationMs);
+      this.metrics.eventDuration.observe(
+        { event_name: 'idempotency_cleanup', handler: 'batch' },
+        durationMs,
+      );
 
       await this.redis.releaseLock(lockKey, ownerToken);
       this.logger.debug(`Idempotency cleanup lock released`);

@@ -15,12 +15,8 @@ import {
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
-import {
-  IdempotencyService,
-} from '../../../infrastructure/idempotency/idempotency.service';
-import {
-  runWithIdempotency,
-} from '../../../infrastructure/idempotency/idempotency.helper';
+import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
+import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
 import { CashShiftRepository } from '../repositories/cash-shift.repository';
 import { SalesRepository } from '../repositories/sales.repository';
 import { allocateShiftSales } from './payment-allocation';
@@ -85,133 +81,134 @@ export class SalesService {
       status: 201,
       work: async (tx) => {
         const saleNumber =
-        dto.saleNumber ??
-        (await this.salesRepository.getNextSaleNumber(companyId));
+          dto.saleNumber ??
+          (await this.salesRepository.getNextSaleNumber(companyId));
 
-      // Validate warehouse
-      const warehouse = await tx.warehouse.findFirst({
-        where: {
-          id: dto.warehouseId,
-          companyId,
-          deletedAt: null,
-          isActive: true,
-        },
-      });
-      if (!warehouse)
-        throw new NotFoundException(`Warehouse ${dto.warehouseId} not found`);
-
-      // Validate customer if provided
-      if (dto.customerId) {
-        const customer = await tx.customer.findFirst({
-          where: { id: dto.customerId, companyId, deletedAt: null },
-        });
-        if (!customer)
-          throw new NotFoundException(`Customer ${dto.customerId} not found`);
-      }
-
-      // Calculate items
-      let subtotal = new Decimal(0);
-      let totalDiscount = new Decimal(0);
-      const itemsData: Prisma.SaleItemCreateWithoutSaleInput[] = [];
-
-      for (const item of dto.items) {
-        // G16-B-03 (F-1): inactive products fail closed like foreign/missing/
-        // deleted ones — a sale must not move stock for a deactivated product
-        // (same state semantics as B02-08/B02-12).
-        const product = await tx.product.findFirst({
+        // Validate warehouse
+        const warehouse = await tx.warehouse.findFirst({
           where: {
-            id: item.productId,
+            id: dto.warehouseId,
             companyId,
             deletedAt: null,
             isActive: true,
           },
         });
-        if (!product)
-          throw new NotFoundException(`Product ${item.productId} not found`);
+        if (!warehouse)
+          throw new NotFoundException(`Warehouse ${dto.warehouseId} not found`);
 
-        const qty = new Decimal(item.quantity);
-        const unitPrice = toDecimal(item.unitPrice);
-        const costPrice = toDecimal(item.costPrice ?? product.costPrice);
-        const itemDiscount = toDecimal(item.discount);
-        const itemSubtotal = unitPrice.mul(qty);
-        const itemTotal = itemSubtotal.sub(itemDiscount);
-        const margin = itemTotal.sub(costPrice.mul(qty));
+        // Validate customer if provided
+        if (dto.customerId) {
+          const customer = await tx.customer.findFirst({
+            where: { id: dto.customerId, companyId, deletedAt: null },
+          });
+          if (!customer)
+            throw new NotFoundException(`Customer ${dto.customerId} not found`);
+        }
 
-        subtotal = subtotal.add(itemSubtotal);
-        totalDiscount = totalDiscount.add(itemDiscount);
+        // Calculate items
+        let subtotal = new Decimal(0);
+        let totalDiscount = new Decimal(0);
+        const itemsData: Prisma.SaleItemCreateWithoutSaleInput[] = [];
 
-        itemsData.push({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice,
-          costPrice,
-          discount: itemDiscount,
-          subtotal: itemSubtotal,
-          total: itemTotal,
-          margin,
-        });
-      }
+        for (const item of dto.items) {
+          // G16-B-03 (F-1): inactive products fail closed like foreign/missing/
+          // deleted ones — a sale must not move stock for a deactivated product
+          // (same state semantics as B02-08/B02-12).
+          const product = await tx.product.findFirst({
+            where: {
+              id: item.productId,
+              companyId,
+              deletedAt: null,
+              isActive: true,
+            },
+          });
+          if (!product)
+            throw new NotFoundException(`Product ${item.productId} not found`);
 
-      const total = subtotal.sub(totalDiscount);
-      const paymentsData: Prisma.PaymentCreateWithoutSaleInput[] =
-        dto.payments.map((p) => ({
-          method: p.method as PaymentMethod,
-          amount: toDecimal(p.amount),
-          reference: p.reference,
-        }));
+          const qty = new Decimal(item.quantity);
+          const unitPrice = toDecimal(item.unitPrice);
+          const costPrice = toDecimal(item.costPrice ?? product.costPrice);
+          const itemDiscount = toDecimal(item.discount);
+          const itemSubtotal = unitPrice.mul(qty);
+          const itemTotal = itemSubtotal.sub(itemDiscount);
+          const margin = itemTotal.sub(costPrice.mul(qty));
 
-      // Calculate paid amount from all payments
-      let paidAmount = new Decimal(0);
-      for (const p of paymentsData) {
-        paidAmount = paidAmount.add(p.amount as Decimal);
-      }
+          subtotal = subtotal.add(itemSubtotal);
+          totalDiscount = totalDiscount.add(itemDiscount);
 
-      // Business validation: a sale cannot be paid for less than its total.
-      // Reject at creation (before any journal entry exists) with a clear 400,
-      // instead of failing later with an opaque "journal entry is unbalanced".
-      if (paidAmount.lt(total)) {
-        throw new BadRequestException(
-          `Insufficient payment: paid ${paidAmount.toString()} is less than sale total ${total.toString()}`,
+          itemsData.push({
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPrice,
+            costPrice,
+            discount: itemDiscount,
+            subtotal: itemSubtotal,
+            total: itemTotal,
+            margin,
+          });
+        }
+
+        const total = subtotal.sub(totalDiscount);
+        const paymentsData: Prisma.PaymentCreateWithoutSaleInput[] =
+          dto.payments.map((p) => ({
+            method: p.method as PaymentMethod,
+            amount: toDecimal(p.amount),
+            reference: p.reference,
+          }));
+
+        // Calculate paid amount from all payments
+        let paidAmount = new Decimal(0);
+        for (const p of paymentsData) {
+          paidAmount = paidAmount.add(p.amount as Decimal);
+        }
+
+        // Business validation: a sale cannot be paid for less than its total.
+        // Reject at creation (before any journal entry exists) with a clear 400,
+        // instead of failing later with an opaque "journal entry is unbalanced".
+        if (paidAmount.lt(total)) {
+          throw new BadRequestException(
+            `Insufficient payment: paid ${paidAmount.toString()} is less than sale total ${total.toString()}`,
+          );
+        }
+
+        const changeAmount = paidAmount.gt(total)
+          ? paidAmount.sub(total)
+          : new Decimal(0);
+
+        // Enforce document currency == Company.currency
+        const companyCurrency =
+          await this.companiesService.getBaseCurrency(companyId);
+        if (dto.currency && dto.currency !== companyCurrency) {
+          throw new BadRequestException(
+            `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
+          );
+        }
+
+        const sale = await this.salesRepository.create(
+          {
+            saleNumber,
+            status: SaleStatus.DRAFT,
+            currency: companyCurrency as Currency,
+            notes: dto.notes,
+            subtotal,
+            discount: totalDiscount,
+            tax: new Decimal(0),
+            total,
+            paidAmount,
+            changeAmount,
+            company: { connect: { id: companyId } },
+            warehouse: { connect: { id: dto.warehouseId } },
+            cashier: { connect: { id: userId } },
+            ...(dto.customerId
+              ? { customer: { connect: { id: dto.customerId } } }
+              : {}),
+            items: { create: itemsData },
+            payments: { create: paymentsData },
+          },
+          tx,
         );
-      }
 
-      const changeAmount = paidAmount.gt(total)
-        ? paidAmount.sub(total)
-        : new Decimal(0);
-
-      // Enforce document currency == Company.currency
-      const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
-      if (dto.currency && dto.currency !== companyCurrency) {
-        throw new BadRequestException(
-          `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
-        );
-      }
-
-      const sale = await this.salesRepository.create(
-        {
-          saleNumber,
-          status: SaleStatus.DRAFT,
-          currency: companyCurrency as Currency,
-          notes: dto.notes,
-          subtotal,
-          discount: totalDiscount,
-          tax: new Decimal(0),
-          total,
-          paidAmount,
-          changeAmount,
-          company: { connect: { id: companyId } },
-          warehouse: { connect: { id: dto.warehouseId } },
-          cashier: { connect: { id: userId } },
-          ...(dto.customerId
-            ? { customer: { connect: { id: dto.customerId } } }
-            : {}),
-          items: { create: itemsData },
-          payments: { create: paymentsData },
-        },
-        tx,
-      );
-
-      return SaleMapper.toEntity(sale);
+        return SaleMapper.toEntity(sale);
       },
     });
     return result.body as SaleEntity;
@@ -306,47 +303,47 @@ export class SalesService {
         const sale = await this.salesRepository.findById(id, companyId, tx);
         if (!sale) throw new NotFoundException(`Sale ${id} not found`);
 
-      // G11-E E2: refund statuses are derived from the refund workflow only.
-      // Enforced at the SERVICE level so the SalesRefund aggregate is the sole
-      // writer of REFUNDED / PARTIALLY_REFUNDED — a client cannot fabricate a
-      // refund state through PATCH /sales/:id/status.
-      if (
-        newStatus === SaleStatus.REFUNDED ||
-        newStatus === SaleStatus.PARTIALLY_REFUNDED
-      ) {
-        throw new BadRequestException(
-          'Refund status is derived from the refund workflow; use POST /sales/:id/refund or the refund workflow.',
+        // G11-E E2: refund statuses are derived from the refund workflow only.
+        // Enforced at the SERVICE level so the SalesRefund aggregate is the sole
+        // writer of REFUNDED / PARTIALLY_REFUNDED — a client cannot fabricate a
+        // refund state through PATCH /sales/:id/status.
+        if (
+          newStatus === SaleStatus.REFUNDED ||
+          newStatus === SaleStatus.PARTIALLY_REFUNDED
+        ) {
+          throw new BadRequestException(
+            'Refund status is derived from the refund workflow; use POST /sales/:id/refund or the refund workflow.',
+          );
+        }
+
+        const current = sale.status as SaleStatus;
+        const allowed = VALID_TRANSITIONS[current];
+        if (!allowed || !allowed.includes(newStatus)) {
+          throw new BadRequestException(
+            `Cannot transition from ${current} to ${newStatus}. Allowed: ${(allowed ?? []).join(', ') || 'none'}`,
+          );
+        }
+
+        // COMPLETED: decrease inventory, stock movements, receipt, cash shift, audit log
+        let cashShiftId: string | null = null;
+        if (newStatus === SaleStatus.COMPLETED) {
+          const result = await this.completeSale(sale, userId, tx, companyId);
+          cashShiftId = result.cashShiftId;
+        }
+
+        const updateData: Prisma.SaleUpdateInput = { status: newStatus };
+        if (cashShiftId) {
+          updateData.cashShift = { connect: { id: cashShiftId } };
+        }
+        const rowVer = sale.rowVersion ?? 0;
+        const updated = await this.salesRepository.update(
+          id,
+          updateData,
+          companyId,
+          rowVer,
+          tx,
         );
-      }
-
-      const current = sale.status as SaleStatus;
-      const allowed = VALID_TRANSITIONS[current];
-      if (!allowed || !allowed.includes(newStatus)) {
-        throw new BadRequestException(
-          `Cannot transition from ${current} to ${newStatus}. Allowed: ${(allowed ?? []).join(', ') || 'none'}`,
-        );
-      }
-
-      // COMPLETED: decrease inventory, stock movements, receipt, cash shift, audit log
-      let cashShiftId: string | null = null;
-      if (newStatus === SaleStatus.COMPLETED) {
-        const result = await this.completeSale(sale, userId, tx, companyId);
-        cashShiftId = result.cashShiftId;
-      }
-
-      const updateData: Prisma.SaleUpdateInput = { status: newStatus };
-      if (cashShiftId) {
-        updateData.cashShift = { connect: { id: cashShiftId } };
-      }
-      const rowVer = sale.rowVersion ?? 0;
-      const updated = await this.salesRepository.update(
-        id,
-        updateData,
-        companyId,
-        rowVer,
-        tx,
-      );
-      return SaleMapper.toEntity(updated);
+        return SaleMapper.toEntity(updated);
       },
     });
     return result.body as SaleEntity;
@@ -549,7 +546,8 @@ export class SalesService {
       const updateData: Prisma.SaleUpdateInput = {};
       if (dto.notes !== undefined) updateData.notes = dto.notes;
       if (dto.currency !== undefined) {
-        const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+        const companyCurrency =
+          await this.companiesService.getBaseCurrency(companyId);
         if (dto.currency !== companyCurrency) {
           throw new BadRequestException(
             `Currency ${dto.currency} does not match company currency ${companyCurrency}`,

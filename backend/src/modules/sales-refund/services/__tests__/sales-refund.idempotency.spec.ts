@@ -38,23 +38,27 @@ describe('SalesRefundService — G16-C-02 keyed idempotency (R1–R5)', () => {
   let service: SalesRefundService;
   let aggregate: jest.Mock;
 
-  const refundBody = (qty = 1) => ({ items: [{ saleItemId: 'item-1', quantity: qty }] });
+  const refundBody = (qty = 1) => ({
+    items: [{ saleItemId: 'item-1', quantity: qty }],
+  });
 
   beforeEach(() => {
     store = new MockIdempotencyStore();
     refundRows = [];
     prisma = createMockPrisma(store).prisma;
 
-    aggregate = jest.fn().mockImplementation(async (saleId: string, dto: any) => {
-      const row = {
-        id: `refund-${refundRows.length + 1}`,
-        saleId,
-        refundNumber: `REF-000${refundRows.length + 1}`,
-        total: dto.items?.[0]?.quantity ?? 1,
-      };
-      refundRows.push(row);
-      return row;
-    });
+    aggregate = jest
+      .fn()
+      .mockImplementation(async (saleId: string, dto: any) => {
+        const row = {
+          id: `refund-${refundRows.length + 1}`,
+          saleId,
+          refundNumber: `REF-000${refundRows.length + 1}`,
+          total: dto.items?.[0]?.quantity ?? 1,
+        };
+        refundRows.push(row);
+        return row;
+      });
 
     service = new SalesRefundService(
       prisma as unknown as PrismaService,
@@ -77,8 +81,20 @@ describe('SalesRefundService — G16-C-02 keyed idempotency (R1–R5)', () => {
   });
 
   it('R1: same key + same payload → replay the original refund', async () => {
-    const first = await service.createRefund('sale-1', refundBody(2), USER, COMPANY, 'key-r1');
-    const second = await service.createRefund('sale-1', refundBody(2), USER, COMPANY, 'key-r1');
+    const first = await service.createRefund(
+      'sale-1',
+      refundBody(2),
+      USER,
+      COMPANY,
+      'key-r1',
+    );
+    const second = await service.createRefund(
+      'sale-1',
+      refundBody(2),
+      USER,
+      COMPANY,
+      'key-r1',
+    );
 
     expect(aggregate).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
@@ -86,7 +102,13 @@ describe('SalesRefundService — G16-C-02 keyed idempotency (R1–R5)', () => {
   });
 
   it('R2: same key + different payload → 422 payload mismatch', async () => {
-    await service.createRefund('sale-1', refundBody(1), USER, COMPANY, 'key-r2');
+    await service.createRefund(
+      'sale-1',
+      refundBody(1),
+      USER,
+      COMPANY,
+      'key-r2',
+    );
 
     await expect(
       service.createRefund('sale-1', refundBody(2), USER, COMPANY, 'key-r2'),
@@ -127,8 +149,20 @@ describe('SalesRefundService — G16-C-02 keyed idempotency (R1–R5)', () => {
   });
 
   it('R4: response lost after commit → retry same key returns the original refund', async () => {
-    const original = await service.createRefund('sale-1', refundBody(3), USER, COMPANY, 'key-r4');
-    const replay = await service.createRefund('sale-1', refundBody(3), USER, COMPANY, 'key-r4');
+    const original = await service.createRefund(
+      'sale-1',
+      refundBody(3),
+      USER,
+      COMPANY,
+      'key-r4',
+    );
+    const replay = await service.createRefund(
+      'sale-1',
+      refundBody(3),
+      USER,
+      COMPANY,
+      'key-r4',
+    );
 
     expect(replay).toEqual(original);
     expect(refundRows).toHaveLength(1);
@@ -142,7 +176,13 @@ describe('SalesRefundService — G16-C-02 keyed idempotency (R1–R5)', () => {
       'comp-2',
       'key-r5',
     );
-    const companyA = await service.createRefund('sale-1', refundBody(1), USER, COMPANY, 'key-r5');
+    const companyA = await service.createRefund(
+      'sale-1',
+      refundBody(1),
+      USER,
+      COMPANY,
+      'key-r5',
+    );
 
     expect(aggregate).toHaveBeenCalledTimes(2);
     expect(companyB).not.toBe(companyA);

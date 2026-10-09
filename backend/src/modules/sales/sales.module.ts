@@ -15,7 +15,13 @@ import { SalesService } from './services/sales.service';
   // G15-07-C3-B: FinanceModule exposes GlEngineService/FiscalCalendarService
   // for cash-shift GL posting. One-directional: nothing in FinanceModule's
   // subtree imports SalesModule, so there is no cycle.
-  imports: [SharedModule, IdempotencyModule, CompaniesModule, CrmModule, FinanceModule],
+  imports: [
+    SharedModule,
+    IdempotencyModule,
+    CompaniesModule,
+    CrmModule,
+    FinanceModule,
+  ],
   // CashShiftController must be registered BEFORE SalesController so that the
   // literal route `sales/cash-shifts` wins over the parameterized `sales/:id`.
   // Otherwise `GET /sales/cash-shifts` binds id="cash-shifts" and sale.findFirst()

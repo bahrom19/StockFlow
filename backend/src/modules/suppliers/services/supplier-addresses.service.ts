@@ -12,7 +12,13 @@ import { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
 // G1 (P3-04): bounded audit diff; no free-form user text is written.
 type AddressAuditFields = Pick<
   SupplierAddress,
-  'supplierId' | 'city' | 'country' | 'street' | 'postalCode' | 'isDefault' | 'rowVersion'
+  | 'supplierId'
+  | 'city'
+  | 'country'
+  | 'street'
+  | 'postalCode'
+  | 'isDefault'
+  | 'rowVersion'
 >;
 
 function addressAuditFields(a: SupplierAddress): AddressAuditFields {
@@ -84,9 +90,23 @@ export class SupplierAddressesService {
         tx,
       );
       // G1 (P3-04): audit in the SAME transaction as the business write.
-      await this.audit('supplier_address.create', created.id, null, addressAuditFields(created), currentUser, tx);
+      await this.audit(
+        'supplier_address.create',
+        created.id,
+        null,
+        addressAuditFields(created),
+        currentUser,
+        tx,
+      );
       if (dto.isDefault) {
-        await this.audit('supplier_address.default_change', created.id, null, addressAuditFields(created), currentUser, tx);
+        await this.audit(
+          'supplier_address.default_change',
+          created.id,
+          null,
+          addressAuditFields(created),
+          currentUser,
+          tx,
+        );
       }
       return created;
     });
@@ -101,9 +121,8 @@ export class SupplierAddressesService {
     // Verify supplier belongs to company
     await this.suppliersService.findById(supplierId, currentUser);
 
-    const addresses = await this.addressesRepository.findAllBySupplier(
-      supplierId,
-    );
+    const addresses =
+      await this.addressesRepository.findAllBySupplier(supplierId);
     return addresses.map((a) => this.toEntity(a));
   }
 
@@ -151,11 +170,7 @@ export class SupplierAddressesService {
 
       // G2: If isDefault, clear existing default addresses
       if (dto.isDefault) {
-        await this.addressesRepository.clearDefault(
-          supplierId,
-          addressId,
-          tx,
-        );
+        await this.addressesRepository.clearDefault(supplierId, addressId, tx);
       }
 
       const updated = await this.addressesRepository.update(
@@ -172,9 +187,23 @@ export class SupplierAddressesService {
         tx,
       );
       // G1 (P3-04): audit in the SAME transaction as the business write.
-      await this.audit('supplier_address.update', updated.id, addressAuditFields(current), addressAuditFields(updated), currentUser, tx);
+      await this.audit(
+        'supplier_address.update',
+        updated.id,
+        addressAuditFields(current),
+        addressAuditFields(updated),
+        currentUser,
+        tx,
+      );
       if (dto.isDefault) {
-        await this.audit('supplier_address.default_change', updated.id, addressAuditFields(current), addressAuditFields(updated), currentUser, tx);
+        await this.audit(
+          'supplier_address.default_change',
+          updated.id,
+          addressAuditFields(current),
+          addressAuditFields(updated),
+          currentUser,
+          tx,
+        );
       }
       return updated;
     });
@@ -209,7 +238,14 @@ export class SupplierAddressesService {
         tx,
       );
       // G1 (P3-04): audit in the SAME transaction as the tombstone write.
-      await this.audit('supplier_address.delete', addressId, addressAuditFields(current), null, currentUser, tx);
+      await this.audit(
+        'supplier_address.delete',
+        addressId,
+        addressAuditFields(current),
+        null,
+        currentUser,
+        tx,
+      );
     });
   }
 

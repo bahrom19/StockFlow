@@ -54,7 +54,10 @@ describe('ToolRegistry', () => {
     });
 
     it('should return multiple tools when user has multiple permissions', () => {
-      const available = registry.getAvailable(['reports:read', 'admin:billing']);
+      const available = registry.getAvailable([
+        'reports:read',
+        'admin:billing',
+      ]);
       expect(available).toHaveLength(2);
     });
 

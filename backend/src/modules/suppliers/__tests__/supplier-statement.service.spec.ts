@@ -1,4 +1,8 @@
-import { Currency, PurchaseInvoiceStatus, PurchaseReturnStatus } from '@prisma/client';
+import {
+  Currency,
+  PurchaseInvoiceStatus,
+  PurchaseReturnStatus,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { SupplierStatementService } from '../services/supplier-statement.service';
 import { SupplierStatementRepository } from '../repositories/supplier-statement.repository';
@@ -86,7 +90,10 @@ function one<T>(arr: T[]): T {
 
 describe('SupplierStatementService', () => {
   let service: SupplierStatementService;
-  let mockSuppliersRepo: { findById: jest.Mock; findArchivedSupplierById: jest.Mock };
+  let mockSuppliersRepo: {
+    findById: jest.Mock;
+    findArchivedSupplierById: jest.Mock;
+  };
   let mockStatementRepo: {
     findInvoices: jest.Mock;
     findPayments: jest.Mock;
@@ -106,18 +113,11 @@ describe('SupplierStatementService', () => {
     // Date-aware mock: mirrors the repo dateRange (gte/lte) so opening-leg
     // tests can distinguish pre-date from in-period payments.
     mockStatementRepo.findPayments.mockImplementation(
-      (
-        _sid: string,
-        _cid: string,
-        from?: Date,
-        to?: Date,
-        _cur?: Currency,
-      ) =>
+      (_sid: string, _cid: string, from?: Date, to?: Date, _cur?: Currency) =>
         Promise.resolve(
           (opts.payments ?? []).filter(
             (p) =>
-              (!from || p.paymentDate >= from) &&
-              (!to || p.paymentDate <= to),
+              (!from || p.paymentDate >= from) && (!to || p.paymentDate <= to),
           ),
         ),
     );
@@ -166,7 +166,9 @@ describe('SupplierStatementService', () => {
   };
 
   it('1. invoice only → single INVOICE entry, closing = grandTotal', async () => {
-    setData({ invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '100000')] });
+    setData({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '100000')],
+    });
     const g = await group({ currency: KZT });
     const e = g.entries[0]!;
     expect(e).toMatchObject({
@@ -281,31 +283,53 @@ describe('SupplierStatementService', () => {
   });
 
   it('10. deleted invoice excluded (only repo-supplied rows appear)', async () => {
-    setData({ invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '100000')] });
+    setData({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '100000')],
+    });
     const g = await group({ currency: KZT });
     expect(g.entries).toHaveLength(1);
     expect(g.entries[0]!.sourceEntityId).toBe('inv-1');
   });
 
   it('11. supplier isolation → repo reads scoped to supplierId', async () => {
-    setData({ invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '100000')] });
+    setData({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '100000')],
+    });
     await run({});
     expect(mockStatementRepo.findInvoices).toHaveBeenCalledWith(
-      supplierId, companyId, undefined, undefined, undefined,
+      supplierId,
+      companyId,
+      undefined,
+      undefined,
+      undefined,
     );
     expect(mockStatementRepo.findPayments).toHaveBeenCalledWith(
-      supplierId, companyId, undefined, undefined, undefined,
+      supplierId,
+      companyId,
+      undefined,
+      undefined,
+      undefined,
     );
   });
 
   it('12. company isolation → repo reads receive companyId from auth context', async () => {
-    setData({ invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '100000')] });
+    setData({
+      invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '100000')],
+    });
     await run({});
     expect(mockStatementRepo.findInvoices).toHaveBeenCalledWith(
-      supplierId, companyId, undefined, undefined, undefined,
+      supplierId,
+      companyId,
+      undefined,
+      undefined,
+      undefined,
     );
     expect(mockStatementRepo.findReturns).toHaveBeenCalledWith(
-      supplierId, companyId, undefined, undefined, undefined,
+      supplierId,
+      companyId,
+      undefined,
+      undefined,
+      undefined,
     );
   });
 
@@ -335,10 +359,17 @@ describe('SupplierStatementService', () => {
     });
     await run({ dateFrom: '2026-09-01', dateTo: '2026-09-30', currency: KZT });
     expect(mockStatementRepo.findInvoices).toHaveBeenCalledWith(
-      supplierId, companyId, new Date('2026-09-01'), new Date('2026-09-30'), KZT,
+      supplierId,
+      companyId,
+      new Date('2026-09-01'),
+      new Date('2026-09-30'),
+      KZT,
     );
     expect(mockStatementRepo.getOpeningBalance).toHaveBeenCalledWith(
-      supplierId, companyId, new Date('2026-09-01'), KZT,
+      supplierId,
+      companyId,
+      new Date('2026-09-01'),
+      KZT,
     );
   });
 
@@ -429,7 +460,9 @@ describe('SupplierStatementService', () => {
 
   it('21. paidAmount cannot affect the statement (canonical source is grandTotal)', async () => {
     const inv = invoice('inv-1', 'INV-001', '2026-09-01', '100000');
-    (inv as unknown as { paidAmount: Decimal }).paidAmount = new Decimal('100000');
+    (inv as unknown as { paidAmount: Decimal }).paidAmount = new Decimal(
+      '100000',
+    );
     setData({ invoices: [inv] });
     const g = await group({ currency: KZT });
     expect(g.entries[0]!.amount).toBe('100000');
@@ -440,7 +473,14 @@ describe('SupplierStatementService', () => {
   it('22. PAID invoice status included as a statement entry', async () => {
     setData({
       invoices: [
-        invoice('inv-1', 'INV-001', '2026-09-01', '100000', KZT, PurchaseInvoiceStatus.PAID),
+        invoice(
+          'inv-1',
+          'INV-001',
+          '2026-09-01',
+          '100000',
+          KZT,
+          PurchaseInvoiceStatus.PAID,
+        ),
       ],
     });
     const g = await group({ currency: KZT });
@@ -461,12 +501,30 @@ describe('SupplierStatementService', () => {
     setData({
       invoices: [invoice('inv-1', 'INV-001', '2026-09-01', '100000')],
       returns: [
-        ret('ret-1', 'RET-001', '2026-09-10', '10000', KZT, PurchaseReturnStatus.APPROVED),
-        ret('ret-2', 'RET-002', '2026-09-11', '15000', KZT, PurchaseReturnStatus.COMPLETED),
+        ret(
+          'ret-1',
+          'RET-001',
+          '2026-09-10',
+          '10000',
+          KZT,
+          PurchaseReturnStatus.APPROVED,
+        ),
+        ret(
+          'ret-2',
+          'RET-002',
+          '2026-09-11',
+          '15000',
+          KZT,
+          PurchaseReturnStatus.COMPLETED,
+        ),
       ],
     });
     const g = await group({ currency: KZT });
-    expect(g.entries.map((e) => e.status)).toEqual(['APPROVED', 'APPROVED', 'COMPLETED']);
+    expect(g.entries.map((e) => e.status)).toEqual([
+      'APPROVED',
+      'APPROVED',
+      'COMPLETED',
+    ]);
     expect(g.closingBalance).toBe('75000');
   });
 
@@ -525,9 +583,6 @@ describe('SupplierStatementService', () => {
   });
 });
 
-
-
-
 describe('G14-03-01 statement ↔ credit-summary consistency (shared fixtures, no prod dependency)', () => {
   const buildCreditService = (totals: {
     invoiced: string;
@@ -546,7 +601,9 @@ describe('G14-03-01 statement ↔ credit-summary consistency (shared fixtures, n
           totalReturned: new Decimal(totals.returned),
         }),
       } as unknown as SupplierCreditSummaryRepository,
-      { getBaseCurrency: jest.fn().mockResolvedValue(KZT) } as unknown as CompaniesService,
+      {
+        getBaseCurrency: jest.fn().mockResolvedValue(KZT),
+      } as unknown as CompaniesService,
     );
     return creditService;
   };
@@ -565,11 +622,10 @@ describe('G14-03-01 statement ↔ credit-summary consistency (shared fixtures, n
         findInvoices: jest.fn().mockResolvedValue(opts.invoices ?? []),
         findPayments: jest.fn().mockResolvedValue(opts.payments ?? []),
         findReturns: jest.fn().mockResolvedValue([]),
-        findActiveAllocationsForPayments: jest.fn(
-          (ids: string[]) =>
-            Promise.resolve(
-              (opts.allocations ?? []).filter((a) => ids.includes(a.paymentId)),
-            ),
+        findActiveAllocationsForPayments: jest.fn((ids: string[]) =>
+          Promise.resolve(
+            (opts.allocations ?? []).filter((a) => ids.includes(a.paymentId)),
+          ),
         ),
         getOpeningBalance: jest.fn(),
       } as unknown as SupplierStatementRepository,
@@ -583,9 +639,17 @@ describe('G14-03-01 statement ↔ credit-summary consistency (shared fixtures, n
       payments: [payment('pay-1', 'PAY-000001', '2026-09-05', '100')],
       allocations: [],
     });
-    const credit = buildCreditService({ invoiced: '1000', allocated: '0', returned: '0' });
+    const credit = buildCreditService({
+      invoiced: '1000',
+      allocated: '0',
+      returned: '0',
+    });
     const g = one(
-      (await statement.getStatement(supplierId, companyId, { currency: KZT } as never)).currencies,
+      (
+        await statement.getStatement(supplierId, companyId, {
+          currency: KZT,
+        } as never)
+      ).currencies,
     );
     const summary = await credit.getCreditSummary(supplierId, companyId);
     expect(g.closingBalance).toBe('1000');
@@ -598,9 +662,17 @@ describe('G14-03-01 statement ↔ credit-summary consistency (shared fixtures, n
       payments: [payment('pay-1', 'PAY-000001', '2026-09-05', '100')],
       allocations: [alloc('pay-1', 'inv-1', '50')],
     });
-    const credit = buildCreditService({ invoiced: '1000', allocated: '50', returned: '0' });
+    const credit = buildCreditService({
+      invoiced: '1000',
+      allocated: '50',
+      returned: '0',
+    });
     const g = one(
-      (await statement.getStatement(supplierId, companyId, { currency: KZT } as never)).currencies,
+      (
+        await statement.getStatement(supplierId, companyId, {
+          currency: KZT,
+        } as never)
+      ).currencies,
     );
     const summary = await credit.getCreditSummary(supplierId, companyId);
     expect(g.closingBalance).toBe('950');
@@ -613,9 +685,17 @@ describe('G14-03-01 statement ↔ credit-summary consistency (shared fixtures, n
       payments: [payment('pay-1', 'PAY-000001', '2026-09-05', '100')],
       allocations: [alloc('pay-1', 'inv-1', '100')],
     });
-    const credit = buildCreditService({ invoiced: '1000', allocated: '100', returned: '0' });
+    const credit = buildCreditService({
+      invoiced: '1000',
+      allocated: '100',
+      returned: '0',
+    });
     const g = one(
-      (await statement.getStatement(supplierId, companyId, { currency: KZT } as never)).currencies,
+      (
+        await statement.getStatement(supplierId, companyId, {
+          currency: KZT,
+        } as never)
+      ).currencies,
     );
     const summary = await credit.getCreditSummary(supplierId, companyId);
     expect(g.closingBalance).toBe('900');

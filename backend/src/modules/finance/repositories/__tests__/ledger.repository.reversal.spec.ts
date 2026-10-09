@@ -288,8 +288,7 @@ describe('LedgerRepository — G16-N-8-A reversal predicates', () => {
         dateTo: to,
         onlyPosted: true,
       });
-      const headerClause =
-        groupBy.mock.calls[0][0].where.journalEntry;
+      const headerClause = groupBy.mock.calls[0][0].where.journalEntry;
 
       const factoryClause = repo.positionalJournalEntryWhere('comp-1', {
         dateFrom: from,

@@ -33,7 +33,9 @@ import { SupplierPaymentAllocationEntity } from '../entities/supplier-payment-al
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('suppliers/:supplierId/payment-allocations')
 export class SupplierPaymentAllocationsController {
-  constructor(private readonly allocationsService: SupplierPaymentAllocationsService) {}
+  constructor(
+    private readonly allocationsService: SupplierPaymentAllocationsService,
+  ) {}
 
   // ─────────────────────────────────────────────
   // CREATE ALLOCATION

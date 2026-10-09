@@ -393,16 +393,20 @@ export class StockService {
       companyId,
       tx,
     );
-    if (!fromWarehouse) throw new NotFoundException('Source warehouse not found');
-    if (!fromWarehouse.isActive) throw new NotFoundException('Source warehouse is inactive');
+    if (!fromWarehouse)
+      throw new NotFoundException('Source warehouse not found');
+    if (!fromWarehouse.isActive)
+      throw new NotFoundException('Source warehouse is inactive');
 
     const toWarehouse = await this.inventoryRepository.findWarehouseById(
       dto.toWarehouseId,
       companyId,
       tx,
     );
-    if (!toWarehouse) throw new NotFoundException('Destination warehouse not found');
-    if (!toWarehouse.isActive) throw new NotFoundException('Destination warehouse is inactive');
+    if (!toWarehouse)
+      throw new NotFoundException('Destination warehouse not found');
+    if (!toWarehouse.isActive)
+      throw new NotFoundException('Destination warehouse is inactive');
 
     const sourceStock =
       await this.inventoryRepository.findStockByProductAndWarehouse(

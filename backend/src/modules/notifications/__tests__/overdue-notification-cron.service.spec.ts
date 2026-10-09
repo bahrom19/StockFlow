@@ -77,7 +77,9 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
   });
 
   it('scans active companies and notifies overdue invoices with the day bucket', async () => {
-    overdueRepo.findOverdueInvoices.mockResolvedValueOnce([invoice('inv-1', 'comp-1')]);
+    overdueRepo.findOverdueInvoices.mockResolvedValueOnce([
+      invoice('inv-1', 'comp-1'),
+    ]);
 
     await cron.scanOverdueInvoices();
 
@@ -170,7 +172,10 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
 
     await cron.scanOverdueInvoices();
 
-    expect(redis.releaseLock).toHaveBeenCalledWith('cron:lock:overdue-notifications', fakeToken);
+    expect(redis.releaseLock).toHaveBeenCalledWith(
+      'cron:lock:overdue-notifications',
+      fakeToken,
+    );
   });
 
   // G16-L-2A-R3: the scan iterates every active company, so its TTL must be
@@ -262,7 +267,11 @@ describe('OverdueNotificationCronService — daily scan, dedupe bucket, error is
       await cron.scanOverdueInvoices();
 
       expect(prisma.company.findMany).toHaveBeenCalled();
-      expect(jobRun.finish).toHaveBeenCalledWith(null, 'SUCCEEDED', expect.anything());
+      expect(jobRun.finish).toHaveBeenCalledWith(
+        null,
+        'SUCCEEDED',
+        expect.anything(),
+      );
       expect(redis.releaseLock).toHaveBeenCalled();
     });
 

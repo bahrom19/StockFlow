@@ -82,15 +82,17 @@ describe('ProductsService', () => {
       },
       stockMovement: { create: jest.fn().mockResolvedValue({}) },
       chartOfAccount: {
-        findFirst: jest.fn().mockImplementation(({ where }: any) =>
-          Promise.resolve(
-            where.code === '3000'
-              ? { id: 'acc-3000' }
-              : where.code === '1300'
-                ? { id: 'acc-1300' }
-                : null,
+        findFirst: jest
+          .fn()
+          .mockImplementation(({ where }: any) =>
+            Promise.resolve(
+              where.code === '3000'
+                ? { id: 'acc-3000' }
+                : where.code === '1300'
+                  ? { id: 'acc-1300' }
+                  : null,
+            ),
           ),
-        ),
       },
       financialPeriod: {
         findFirst: jest.fn().mockResolvedValue({ id: 'fp-open-1' }),
@@ -109,7 +111,9 @@ describe('ProductsService', () => {
     mockGlEngine = {
       post: jest.fn().mockResolvedValue({ id: 'je-open-1' }),
     };
-    mockCosting = { recordInboundLayer: jest.fn().mockResolvedValue(undefined) };
+    mockCosting = {
+      recordInboundLayer: jest.fn().mockResolvedValue(undefined),
+    };
     // G16-H-2 (B4): AuditLogService mock — records entries for assertions.
     mockAuditLog = { log: jest.fn().mockResolvedValue(undefined) };
 
@@ -420,11 +424,7 @@ describe('ProductsService', () => {
     it('does not adjust when the sent quantity equals the current total (10 -> 10)', async () => {
       mockRepo.findById.mockResolvedValue(productWithStock(10) as any);
 
-      await service.update(
-        'prod-1',
-        { stockQuantity: 10 } as any,
-        currentUser,
-      );
+      await service.update('prod-1', { stockQuantity: 10 } as any, currentUser);
 
       expect(mockStockService.adjustStock).not.toHaveBeenCalled();
       expect(mockRepo.findById).toHaveBeenCalledTimes(1);
@@ -449,11 +449,7 @@ describe('ProductsService', () => {
       mockRepo.findDefaultWarehouse.mockResolvedValue(null);
 
       await expect(
-        service.update(
-          'prod-1',
-          { stockQuantity: 25 } as any,
-          currentUser,
-        ),
+        service.update('prod-1', { stockQuantity: 25 } as any, currentUser),
       ).rejects.toThrow(UnprocessableEntityException);
       // Fail-fast: nothing written before the warehouse check.
       expect(mockStockService.adjustStock).not.toHaveBeenCalled();
@@ -467,11 +463,7 @@ describe('ProductsService', () => {
       );
 
       await expect(
-        service.update(
-          'prod-1',
-          { stockQuantity: 0 } as any,
-          currentUser,
-        ),
+        service.update('prod-1', { stockQuantity: 0 } as any, currentUser),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -480,11 +472,7 @@ describe('ProductsService', () => {
         .mockResolvedValueOnce(baseProduct as any) // no `stocks` key at all
         .mockResolvedValueOnce(productWithStock(5) as any);
 
-      await service.update(
-        'prod-1',
-        { stockQuantity: 5 } as any,
-        currentUser,
-      );
+      await service.update('prod-1', { stockQuantity: 5 } as any, currentUser);
 
       expect(mockStockService.adjustStock).toHaveBeenCalledWith(
         expect.objectContaining({ quantity: 5 }),
@@ -574,10 +562,7 @@ describe('ProductsService', () => {
     it('allows NULL SKU on create', async () => {
       mockRepo.create.mockResolvedValue({ ...baseProduct, sku: null } as any);
 
-      await service.create(
-        { name: 'No SKU', price: 100 } as any,
-        currentUser,
-      );
+      await service.create({ name: 'No SKU', price: 100 } as any, currentUser);
       expect(mockRepo.findActiveBySkuAndCompany).not.toHaveBeenCalled();
       expect(mockRepo.create).toHaveBeenCalled();
     });
@@ -595,7 +580,10 @@ describe('ProductsService', () => {
     });
 
     it('normalizes whitespace SKU on create', async () => {
-      mockRepo.create.mockResolvedValue({ ...baseProduct, sku: 'TRIMMED' } as any);
+      mockRepo.create.mockResolvedValue({
+        ...baseProduct,
+        sku: 'TRIMMED',
+      } as any);
 
       await service.create(
         { name: 'Whitespace SKU', sku: '  TRIMMED  ', price: 100 } as any,
@@ -636,7 +624,10 @@ describe('ProductsService', () => {
     });
 
     it('allows NULL barcode on create', async () => {
-      mockRepo.create.mockResolvedValue({ ...baseProduct, barcode: null } as any);
+      mockRepo.create.mockResolvedValue({
+        ...baseProduct,
+        barcode: null,
+      } as any);
 
       await service.create(
         { name: 'No Barcode', price: 100 } as any,
@@ -646,7 +637,10 @@ describe('ProductsService', () => {
     });
 
     it('normalizes empty barcode to NULL on create', async () => {
-      mockRepo.create.mockResolvedValue({ ...baseProduct, barcode: null } as any);
+      mockRepo.create.mockResolvedValue({
+        ...baseProduct,
+        barcode: null,
+      } as any);
 
       await service.create(
         { name: 'Empty Barcode', barcode: '   ', price: 100 } as any,
@@ -663,7 +657,10 @@ describe('ProductsService', () => {
         sku: 'SKU-001',
         barcode: null,
       } as any);
-      mockRepo.update.mockResolvedValue({ ...baseProduct, name: 'Updated' } as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseProduct,
+        name: 'Updated',
+      } as any);
 
       const result = await service.update(
         'prod-1',
@@ -702,11 +699,7 @@ describe('ProductsService', () => {
       });
 
       await expect(
-        service.update(
-          'prod-1',
-          { barcode: '123456789' } as any,
-          currentUser,
-        ),
+        service.update('prod-1', { barcode: '123456789' } as any, currentUser),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -718,7 +711,10 @@ describe('ProductsService', () => {
       } as any);
       // findActiveBySkuAndCompany returns null because the conflicting product is deleted
       mockRepo.findActiveBySkuAndCompany.mockResolvedValue(null);
-      mockRepo.update.mockResolvedValue({ ...baseProduct, sku: 'DELETED-SKU' } as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseProduct,
+        sku: 'DELETED-SKU',
+      } as any);
 
       const result = await service.update(
         'prod-1',
@@ -734,7 +730,10 @@ describe('ProductsService', () => {
         sku: null,
         barcode: null,
       } as any);
-      mockRepo.update.mockResolvedValue({ ...baseProduct, sku: 'TRIMMED' } as any);
+      mockRepo.update.mockResolvedValue({
+        ...baseProduct,
+        sku: 'TRIMMED',
+      } as any);
 
       await service.update(
         'prod-1',
@@ -776,11 +775,7 @@ describe('ProductsService', () => {
         name: 'Updated',
       } as any);
 
-      await service.update(
-        'prod-1',
-        { name: 'Updated' } as any,
-        currentUser,
-      );
+      await service.update('prod-1', { name: 'Updated' } as any, currentUser);
       expect(mockRepo.findActiveBySkuAndCompany).not.toHaveBeenCalled();
       expect(mockRepo.findActiveByBarcodeAndCompany).not.toHaveBeenCalled();
     });
@@ -861,7 +856,10 @@ describe('ProductsService', () => {
     });
 
     it('G16-H-1: rejects opening stock when costPrice is NULL (no basis)', async () => {
-      mockRepo.create.mockResolvedValue({ ...baseProduct, id: 'prod-1' } as any);
+      mockRepo.create.mockResolvedValue({
+        ...baseProduct,
+        id: 'prod-1',
+      } as any);
       mockRepo.findDefaultWarehouse.mockResolvedValue({ id: 'wh-1' });
       await expect(
         service.create(
@@ -878,9 +876,7 @@ describe('ProductsService', () => {
 
     it('fails closed when OBE 3000 is missing (never falls back to 5100)', async () => {
       mockTx.chartOfAccount.findFirst.mockImplementation(({ where }: any) =>
-        Promise.resolve(
-          where.code === '1300' ? { id: 'acc-1300' } : null,
-        ),
+        Promise.resolve(where.code === '1300' ? { id: 'acc-1300' } : null),
       );
 
       await expect(

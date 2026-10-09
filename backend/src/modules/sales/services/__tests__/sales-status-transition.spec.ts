@@ -101,7 +101,10 @@ describe('SalesService — transitionStatus (D1 regression)', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
         SalesService,
         { provide: SalesRepository, useValue: mockSalesRepo },
         { provide: CashShiftRepository, useValue: mockCashShiftRepo },
@@ -109,8 +112,20 @@ describe('SalesService — transitionStatus (D1 regression)', () => {
         { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: EVENT_BUS, useValue: mockEventBus },
         CustomerCreditLedgerService,
-        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },
-        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: CustomerCreditLedgerRepository,
+          useValue: {
+            atomicSpend: jest.fn().mockResolvedValue({}),
+            findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }),
+            getBalances: jest.fn().mockResolvedValue(new Map()),
+            issueRefundCredit: jest.fn().mockResolvedValue({}),
+            createManualAdjustment: jest.fn(),
+          },
+        },
+        {
+          provide: AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

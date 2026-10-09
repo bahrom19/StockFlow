@@ -1,4 +1,8 @@
-import { ExecutionContext, INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  ExecutionContext,
+  INestApplication,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../rbac/guards/roles.guard';
@@ -33,7 +37,12 @@ describe('NotificationsController (HTTP)', () => {
       type: NotificationType.LOW_STOCK,
       titleKey: 'notificationTypeLowStockTitle',
       bodyKey: 'notificationTypeLowStockBody',
-      params: { productName: 'Widget', sku: 'W-001', warehouseName: 'Main', quantity: 3 },
+      params: {
+        productName: 'Widget',
+        sku: 'W-001',
+        warehouseName: 'Main',
+        quantity: 3,
+      },
       entityType: 'Product',
       entityId: 'prod-1',
       readAt: null,
@@ -44,7 +53,11 @@ describe('NotificationsController (HTTP)', () => {
       type: NotificationType.PURCHASE_ORDER_STATUS_CHANGED,
       titleKey: 'notificationTypePurchaseOrderStatusTitle',
       bodyKey: 'notificationTypePurchaseOrderStatusBody',
-      params: { orderNumber: 'PO-001', oldStatus: 'ORDERED', newStatus: 'RECEIVED' },
+      params: {
+        orderNumber: 'PO-001',
+        oldStatus: 'ORDERED',
+        newStatus: 'RECEIVED',
+      },
       entityType: 'PurchaseOrder',
       entityId: 'po-1',
       readAt: new Date('2026-09-06T09:00:00Z'),
@@ -53,7 +66,12 @@ describe('NotificationsController (HTTP)', () => {
   ];
 
   const mockService = {
-    listForUser: jest.fn().mockResolvedValue({ items: mockNotifications, total: 2, page: 1, limit: 20 }),
+    listForUser: jest.fn().mockResolvedValue({
+      items: mockNotifications,
+      total: 2,
+      page: 1,
+      limit: 20,
+    }),
     unreadCountForUser: jest.fn().mockResolvedValue(1),
     markRead: jest.fn().mockResolvedValue(true),
   };
@@ -70,7 +88,13 @@ describe('NotificationsController (HTTP)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
     server = app.getHttpServer();
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -86,7 +110,12 @@ describe('NotificationsController (HTTP)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockService.listForUser.mockResolvedValue({ items: mockNotifications, total: 2, page: 1, limit: 20 });
+    mockService.listForUser.mockResolvedValue({
+      items: mockNotifications,
+      total: 2,
+      page: 1,
+      limit: 20,
+    });
     mockService.unreadCountForUser.mockResolvedValue(1);
     mockService.markRead.mockResolvedValue(true);
   });
@@ -142,7 +171,11 @@ describe('NotificationsController (HTTP)', () => {
 
     it('companyId comes from JWT, not query params', async () => {
       await fetch(`${baseUrl}/notifications`);
-      expect(mockService.listForUser).toHaveBeenCalledWith('comp-1', 'user-1', expect.any(Object));
+      expect(mockService.listForUser).toHaveBeenCalledWith(
+        'comp-1',
+        'user-1',
+        expect.any(Object),
+      );
     });
 
     it('rejects page < 1 with 400', async () => {
@@ -169,12 +202,18 @@ describe('NotificationsController (HTTP)', () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toEqual({ count: 1 });
-      expect(mockService.unreadCountForUser).toHaveBeenCalledWith('comp-1', 'user-1');
+      expect(mockService.unreadCountForUser).toHaveBeenCalledWith(
+        'comp-1',
+        'user-1',
+      );
     });
 
     it('uses JWT companyId and userId, not query params', async () => {
       await fetch(`${baseUrl}/notifications/unread-count`);
-      expect(mockService.unreadCountForUser).toHaveBeenCalledWith('comp-1', 'user-1');
+      expect(mockService.unreadCountForUser).toHaveBeenCalledWith(
+        'comp-1',
+        'user-1',
+      );
     });
   });
 
@@ -182,28 +221,47 @@ describe('NotificationsController (HTTP)', () => {
 
   describe('PATCH /notifications/:id/read', () => {
     it('marks notification as read and returns success', async () => {
-      const res = await fetch(`${baseUrl}/notifications/a1b2c3d4-e5f6-7890-abcd-ef1234567890/read`, { method: 'PATCH' });
+      const res = await fetch(
+        `${baseUrl}/notifications/a1b2c3d4-e5f6-7890-abcd-ef1234567890/read`,
+        { method: 'PATCH' },
+      );
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toEqual({ success: true });
-      expect(mockService.markRead).toHaveBeenCalledWith('comp-1', 'user-1', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+      expect(mockService.markRead).toHaveBeenCalledWith(
+        'comp-1',
+        'user-1',
+        'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      );
     });
 
     it('returns success: false when notification not found or not owned', async () => {
       mockService.markRead.mockResolvedValue(false);
-      const res = await fetch(`${baseUrl}/notifications/c3d4e5f6-a7b8-9012-cdef-123456789012/read`, { method: 'PATCH' });
+      const res = await fetch(
+        `${baseUrl}/notifications/c3d4e5f6-a7b8-9012-cdef-123456789012/read`,
+        { method: 'PATCH' },
+      );
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toEqual({ success: false });
     });
 
     it('user can only mark their own notifications (JWT userId used)', async () => {
-      await fetch(`${baseUrl}/notifications/a1b2c3d4-e5f6-7890-abcd-ef1234567890/read`, { method: 'PATCH' });
-      expect(mockService.markRead).toHaveBeenCalledWith('comp-1', 'user-1', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+      await fetch(
+        `${baseUrl}/notifications/a1b2c3d4-e5f6-7890-abcd-ef1234567890/read`,
+        { method: 'PATCH' },
+      );
+      expect(mockService.markRead).toHaveBeenCalledWith(
+        'comp-1',
+        'user-1',
+        'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      );
     });
 
     it('rejects invalid UUID with 400', async () => {
-      const res = await fetch(`${baseUrl}/notifications/not-a-uuid/read`, { method: 'PATCH' });
+      const res = await fetch(`${baseUrl}/notifications/not-a-uuid/read`, {
+        method: 'PATCH',
+      });
       expect(res.status).toBe(400);
     });
   });
@@ -214,7 +272,11 @@ describe('NotificationsController (HTTP)', () => {
     it('different users get separate notification lists', async () => {
       // User 1
       await fetch(`${baseUrl}/notifications`);
-      expect(mockService.listForUser).toHaveBeenCalledWith('comp-1', 'user-1', expect.any(Object));
+      expect(mockService.listForUser).toHaveBeenCalledWith(
+        'comp-1',
+        'user-1',
+        expect.any(Object),
+      );
 
       // Create a second app instance with different user
       const moduleRef2 = await Test.createTestingModule({
@@ -235,7 +297,11 @@ describe('NotificationsController (HTTP)', () => {
       const port2 = typeof addr2 === 'object' && addr2 ? addr2.port : 0;
 
       await fetch(`http://127.0.0.1:${port2}/notifications`);
-      expect(mockService.listForUser).toHaveBeenCalledWith('comp-1', 'user-2', expect.any(Object));
+      expect(mockService.listForUser).toHaveBeenCalledWith(
+        'comp-1',
+        'user-2',
+        expect.any(Object),
+      );
 
       await new Promise<void>((resolve) => server2.close(() => resolve()));
       await app2.close();
@@ -255,7 +321,13 @@ describe('NotificationsController (HTTP)', () => {
         providers: [{ provide: NotificationsService, useValue: mockService }],
       })
         .overrideGuard(JwtAuthGuard)
-        .useValue({ canActivate: () => { throw new (require('@nestjs/common').UnauthorizedException)('Invalid token'); } })
+        .useValue({
+          canActivate: () => {
+            throw new (require('@nestjs/common').UnauthorizedException)(
+              'Invalid token',
+            );
+          },
+        })
         .overrideGuard(RolesGuard)
         .useValue({ canActivate: () => true })
         .compile();
@@ -285,7 +357,10 @@ describe('NotificationsController (HTTP)', () => {
     });
 
     it('returns 401 for unauthenticated PATCH /notifications/:id/read', async () => {
-      const res = await fetch(`${unauthBaseUrl}/notifications/a1b2c3d4-e5f6-7890-abcd-ef1234567890/read`, { method: 'PATCH' });
+      const res = await fetch(
+        `${unauthBaseUrl}/notifications/a1b2c3d4-e5f6-7890-abcd-ef1234567890/read`,
+        { method: 'PATCH' },
+      );
       expect(res.status).toBe(401);
     });
   });

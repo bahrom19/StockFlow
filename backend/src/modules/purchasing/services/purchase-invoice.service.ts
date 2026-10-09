@@ -124,7 +124,9 @@ export class PurchaseInvoiceService {
       //      landing in the G9-B2.1 `undated` aging bucket.
       // supplier.defaultDueDays is a write-time default only: changing it
       // never mutates already-created invoices (no retroactive recalc).
-      const invoiceDate = dto.invoiceDate ? new Date(dto.invoiceDate) : new Date();
+      const invoiceDate = dto.invoiceDate
+        ? new Date(dto.invoiceDate)
+        : new Date();
       // G14-02-02: mandatory tenant-scoped supplier validation. The lookup
       // previously served only due-date resolution (optional result), which
       // let foreign-tenant or soft-deleted supplierIds reach `connect`.
@@ -191,12 +193,13 @@ export class PurchaseInvoiceService {
       // The PO row was locked (FOR UPDATE) above, so concurrent creates for
       // the same PO serialize — the second one sees the committed state of
       // the first and cannot both pass this check.
-      const existingApprovedPaid = await this.repository.sumActiveApprovedPaidByPo(
-        dto.purchaseOrderId,
-        companyId,
-        invoiceCurrency,
-        tx,
-      );
+      const existingApprovedPaid =
+        await this.repository.sumActiveApprovedPaidByPo(
+          dto.purchaseOrderId,
+          companyId,
+          invoiceCurrency,
+          tx,
+        );
       if (
         existingApprovedPaid
           .add(proposedGrandTotal)
@@ -353,12 +356,13 @@ export class PurchaseInvoiceService {
           );
         }
 
-        const existingApprovedPaid = await this.repository.sumActiveApprovedPaidByPo(
-          invoice.purchaseOrderId,
-          companyId,
-          invoice.currency,
-          tx,
-        );
+        const existingApprovedPaid =
+          await this.repository.sumActiveApprovedPaidByPo(
+            invoice.purchaseOrderId,
+            companyId,
+            invoice.currency,
+            tx,
+          );
         const currentGrandTotal = new Decimal(invoice.grandTotal);
         if (
           existingApprovedPaid
@@ -528,12 +532,7 @@ export class PurchaseInvoiceService {
           status: newStatus,
         };
 
-        updated = await this.repository.update(
-          id,
-          updateData,
-          companyId,
-          tx,
-        );
+        updated = await this.repository.update(id, updateData, companyId, tx);
       }
 
       await this.auditLog.log(

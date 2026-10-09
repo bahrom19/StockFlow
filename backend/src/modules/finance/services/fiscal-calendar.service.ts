@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { FinancialPeriodStatus, FiscalYear, FinancialPeriod, Prisma } from '@prisma/client';
+import {
+  FinancialPeriodStatus,
+  FiscalYear,
+  FinancialPeriod,
+  Prisma,
+} from '@prisma/client';
 
 export interface CalendarResult {
   fiscalYear: FiscalYear;

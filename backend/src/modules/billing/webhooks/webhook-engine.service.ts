@@ -253,8 +253,7 @@ export class WebhookEngineService {
     companyId: string,
   ): Promise<string | null> {
     try {
-      const sub =
-        await this.subscriptionRepository.findByCompany(companyId);
+      const sub = await this.subscriptionRepository.findByCompany(companyId);
       return sub?.status ?? null;
     } catch {
       return null;
@@ -356,10 +355,8 @@ export class WebhookEngineService {
         if (
           (error instanceof BadRequestException ||
             error instanceof ConflictException) &&
-          ((await this.readInvoiceStatus(
-            invoice.id,
-            invoice.companyId,
-          )) === 'PAID')
+          (await this.readInvoiceStatus(invoice.id, invoice.companyId)) ===
+            'PAID'
         ) {
           this.logger.warn(
             `Stripe webhook ${ctx.eventType} ${ctx.eventId} already applied ` +

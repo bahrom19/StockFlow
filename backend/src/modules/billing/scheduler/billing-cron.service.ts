@@ -54,7 +54,7 @@ const LOCK_TTL_BY_JOB = {
   'expire-suspended': 1800,
   'reset-usage': 300,
   'resume-paid': 240,
-  'cleanup': 1800,
+  cleanup: 1800,
 } as const;
 
 type LockKey = keyof typeof LOCK_TTL_BY_JOB;
@@ -86,7 +86,10 @@ export class BillingCronService {
    * explicit fail-open) is an ACQUISITION and always runs.
    */
   private async acquireLock(lockKey: LockKey): Promise<LockAcquisitionResult> {
-    return this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_BY_JOB[lockKey]);
+    return this.redisService.acquireLock(
+      LOCK_PREFIX + lockKey,
+      LOCK_TTL_BY_JOB[lockKey],
+    );
   }
 
   /**
@@ -112,7 +115,10 @@ export class BillingCronService {
    * Release a distributed lock using atomic compare-and-delete.
    * Only releases if the stored token matches the owner token.
    */
-  private async releaseLock(lockKey: LockKey, ownerToken: string): Promise<boolean> {
+  private async releaseLock(
+    lockKey: LockKey,
+    ownerToken: string,
+  ): Promise<boolean> {
     return this.redisService.releaseLock(LOCK_PREFIX + lockKey, ownerToken);
   }
 
@@ -251,15 +257,13 @@ export class BillingCronService {
           // a JS-computed absolute value, which lost updates on overlap).
           // The threshold below uses the persisted value returned by Prisma,
           // never the potentially stale `sub.paymentRetryCount`.
-          const updated = await this.prismaService.companySubscription.update(
-            {
-              where: { companyId: sub.companyId },
-              data: {
-                paymentRetryCount: { increment: 1 },
-                lastPaymentAttempt: new Date(),
-              },
+          const updated = await this.prismaService.companySubscription.update({
+            where: { companyId: sub.companyId },
+            data: {
+              paymentRetryCount: { increment: 1 },
+              lastPaymentAttempt: new Date(),
             },
-          );
+          });
           const retryCount = updated.paymentRetryCount;
           this.logger.log(
             `Retry ${retryCount}/3: payment for company ${sub.companyId}`,

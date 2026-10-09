@@ -30,9 +30,7 @@ import { PrismaService } from '../../../common/prisma';
  * atomically.
  */
 @Injectable()
-export class SalePartiallyRefundedEventHandler
-  implements EventHandler<SalePartiallyRefundedEvent>
-{
+export class SalePartiallyRefundedEventHandler implements EventHandler<SalePartiallyRefundedEvent> {
   private readonly logger = new Logger(SalePartiallyRefundedEventHandler.name);
 
   constructor(
@@ -101,12 +99,13 @@ export class SalePartiallyRefundedEventHandler
         );
       }
 
-      const stock = await this.inventoryRepository.findStockByProductAndWarehouse(
-        item.productId,
-        event.payload.warehouseId,
-        event.payload.companyId,
-        tx,
-      );
+      const stock =
+        await this.inventoryRepository.findStockByProductAndWarehouse(
+          item.productId,
+          event.payload.warehouseId,
+          event.payload.companyId,
+          tx,
+        );
 
       const beforeQty = stock?.quantity ?? 0;
       const afterQty = beforeQty + item.quantity;

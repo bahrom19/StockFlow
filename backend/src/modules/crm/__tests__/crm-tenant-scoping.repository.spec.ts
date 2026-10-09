@@ -84,57 +84,60 @@ describe('G12-R1 — CRM repository tenant scoping (Prisma where contract)', () 
     },
   ];
 
-  describe.each(cases)('$name', ({ repoPath, repoClass, model, expectedTenantWhere }) => {
-    it('findMany scopes list by customer.companyId', async () => {
-      const { repo, prisma } = await loadRepo(repoPath, repoClass, model);
+  describe.each(cases)(
+    '$name',
+    ({ repoPath, repoClass, model, expectedTenantWhere }) => {
+      it('findMany scopes list by customer.companyId', async () => {
+        const { repo, prisma } = await loadRepo(repoPath, repoClass, model);
 
-      await repo.findMany({ companyId, skip: 0, take: 20 });
+        await repo.findMany({ companyId, skip: 0, take: 20 });
 
-      expect(prisma[model].findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expectedTenantWhere }),
-      );
-      expect(prisma[model].count).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expectedTenantWhere }),
-      );
-    });
-
-    it('findMany preserves caller filters and merges tenant predicate BEFORE pagination', async () => {
-      const { repo, prisma } = await loadRepo(repoPath, repoClass, model);
-      const callerWhere: Record<string, unknown> = {
-        customerId: 'cust-9',
-      };
-
-      await repo.findMany({
-        companyId,
-        skip: 40,
-        take: 20,
-        where: callerWhere as Prisma.CustomerAddressWhereInput,
-        orderBy: { createdAt: 'asc' },
+        expect(prisma[model].findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expectedTenantWhere }),
+        );
+        expect(prisma[model].count).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expectedTenantWhere }),
+        );
       });
 
-      const where = prisma[model].findMany.mock.calls[0][0].where;
-      // Caller filters preserved, tenant predicate merged, nothing dropped.
-      expect(where).toEqual({
-        ...callerWhere,
-        ...expectedTenantWhere,
+      it('findMany preserves caller filters and merges tenant predicate BEFORE pagination', async () => {
+        const { repo, prisma } = await loadRepo(repoPath, repoClass, model);
+        const callerWhere: Record<string, unknown> = {
+          customerId: 'cust-9',
+        };
+
+        await repo.findMany({
+          companyId,
+          skip: 40,
+          take: 20,
+          where: callerWhere as Prisma.CustomerAddressWhereInput,
+          orderBy: { createdAt: 'asc' },
+        });
+
+        const where = prisma[model].findMany.mock.calls[0][0].where;
+        // Caller filters preserved, tenant predicate merged, nothing dropped.
+        expect(where).toEqual({
+          ...callerWhere,
+          ...expectedTenantWhere,
+        });
+        // Pagination must not dilute the tenant predicate.
+        expect(prisma[model].findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ skip: 40, take: 20 }),
+        );
       });
-      // Pagination must not dilute the tenant predicate.
-      expect(prisma[model].findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ skip: 40, take: 20 }),
-      );
-    });
 
-    it('findCustomerCompany checks customer.id + companyId + deletedAt', async () => {
-      const { repo, prisma } = await loadRepo(repoPath, repoClass, model);
+      it('findCustomerCompany checks customer.id + companyId + deletedAt', async () => {
+        const { repo, prisma } = await loadRepo(repoPath, repoClass, model);
 
-      await repo.findCustomerCompany('cust-1', companyId);
+        await repo.findCustomerCompany('cust-1', companyId);
 
-      expect(prisma.customer.findFirst).toHaveBeenCalledWith({
-        where: { id: 'cust-1', companyId, deletedAt: null },
-        select: { id: true },
+        expect(prisma.customer.findFirst).toHaveBeenCalledWith({
+          where: { id: 'cust-1', companyId, deletedAt: null },
+          select: { id: true },
+        });
       });
-    });
-  });
+    },
+  );
 
   describe('CreditLimitRepository.findByCustomerId', () => {
     it('scopes by customerId + customer.companyId', async () => {

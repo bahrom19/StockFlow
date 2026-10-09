@@ -28,13 +28,34 @@ describe('CreditLimitService — currency enforcement', () => {
     const mod: TestingModule = await Test.createTestingModule({
       providers: [
         CreditLimitService,
-        { provide: CreditLimitRepository, useValue: {
-          create: jest.fn().mockResolvedValue({ id: 'cl-1', currency, amount: new Prisma.Decimal('50000'), customerId }),
-          findCustomerCompany: jest.fn().mockResolvedValue({ id: customerId }),
-        } },
-        { provide: CreditLimitMapper, useValue: { toEntity: jest.fn().mockReturnValue({ id: 'cl-1', currency }) } },
-        { provide: PrismaService, useValue: { $transaction: jest.fn(async (fn: any) => fn({})) } },
-        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: CreditLimitRepository,
+          useValue: {
+            create: jest.fn().mockResolvedValue({
+              id: 'cl-1',
+              currency,
+              amount: new Prisma.Decimal('50000'),
+              customerId,
+            }),
+            findCustomerCompany: jest
+              .fn()
+              .mockResolvedValue({ id: customerId }),
+          },
+        },
+        {
+          provide: CreditLimitMapper,
+          useValue: {
+            toEntity: jest.fn().mockReturnValue({ id: 'cl-1', currency }),
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: { $transaction: jest.fn(async (fn: any) => fn({})) },
+        },
+        {
+          provide: AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
         { provide: EVENT_BUS, useValue: { publish: jest.fn() } },
         { provide: CompaniesService, useValue: makeCompaniesService(currency) },
       ],
@@ -44,41 +65,65 @@ describe('CreditLimitService — currency enforcement', () => {
 
   it('should default to KZT when currency omitted', async () => {
     await setup('KZT');
-    const result = await service.create({ customerId, amount: 50000 } as any, companyId, userId);
+    const result = await service.create(
+      { customerId, amount: 50000 } as any,
+      companyId,
+      userId,
+    );
     expect(result).toBeDefined();
   });
 
   it('should reject USD when company currency is KZT', async () => {
     await setup('KZT');
     await expect(
-      service.create({ customerId, amount: 50000, currency: 'USD' } as any, companyId, userId),
+      service.create(
+        { customerId, amount: 50000, currency: 'USD' } as any,
+        companyId,
+        userId,
+      ),
     ).rejects.toThrow(BadRequestException);
   });
 
   it('should allow KZT when company currency is KZT', async () => {
     await setup('KZT');
     await expect(
-      service.create({ customerId, amount: 50000, currency: 'KZT' } as any, companyId, userId),
+      service.create(
+        { customerId, amount: 50000, currency: 'KZT' } as any,
+        companyId,
+        userId,
+      ),
     ).resolves.toBeDefined();
   });
 
   it('should default to USD when company currency is USD', async () => {
     await setup('USD');
-    const result = await service.create({ customerId, amount: 5000 } as any, companyId, userId);
+    const result = await service.create(
+      { customerId, amount: 5000 } as any,
+      companyId,
+      userId,
+    );
     expect(result).toBeDefined();
   });
 
   it('should allow explicit USD when company currency is USD', async () => {
     await setup('USD');
     await expect(
-      service.create({ customerId, amount: 5000, currency: 'USD' } as any, companyId, userId),
+      service.create(
+        { customerId, amount: 5000, currency: 'USD' } as any,
+        companyId,
+        userId,
+      ),
     ).resolves.toBeDefined();
   });
 
   it('should reject KZT when company currency is USD', async () => {
     await setup('USD');
     await expect(
-      service.create({ customerId, amount: 5000, currency: 'KZT' } as any, companyId, userId),
+      service.create(
+        { customerId, amount: 5000, currency: 'KZT' } as any,
+        companyId,
+        userId,
+      ),
     ).rejects.toThrow(BadRequestException);
   });
 });

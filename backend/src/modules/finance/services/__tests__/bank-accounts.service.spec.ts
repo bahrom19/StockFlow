@@ -108,9 +108,9 @@ describe('BankAccountsService — reference ownership (G16-B-02 PH1)', () => {
     it('should reject a foreign chart account with 404 and persist nothing', async () => {
       mockTx.chartOfAccount.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.create(dto() as any, currentUser),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create(dto() as any, currentUser)).rejects.toThrow(
+        NotFoundException,
+      );
 
       expect(mockTx.chartOfAccount.findFirst).toHaveBeenCalledWith({
         where: { id: 'acc-1020', companyId, isActive: true, deletedAt: null },
@@ -123,7 +123,10 @@ describe('BankAccountsService — reference ownership (G16-B-02 PH1)', () => {
       mockTx.chartOfAccount.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.create(dto({ chartOfAccountId: 'acc-old' }) as any, currentUser),
+        service.create(
+          dto({ chartOfAccountId: 'acc-old' }) as any,
+          currentUser,
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(repository.create).not.toHaveBeenCalled();
     });

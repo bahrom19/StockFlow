@@ -1,5 +1,10 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../rbac/guards/roles.guard';
 import { RequirePermission } from '../rbac/decorators/require-permission.decorator';
@@ -35,7 +40,9 @@ export class CompaniesController {
   @UseGuards(RolesGuard)
   @RequirePermission('settings:update')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update company currency (one-time, before monetary data)' })
+  @ApiOperation({
+    summary: 'Update company currency (one-time, before monetary data)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Currency updated',

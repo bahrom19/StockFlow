@@ -12,7 +12,11 @@ export class OpenShiftDto {
   @Min(0)
   openingBalance!: number;
 
-  @ApiPropertyOptional({ enum: Currency, default: 'KZT', description: 'Currency for this shift' })
+  @ApiPropertyOptional({
+    enum: Currency,
+    default: 'KZT',
+    description: 'Currency for this shift',
+  })
   @IsOptional()
   @IsEnum(Currency)
   currency?: Currency;

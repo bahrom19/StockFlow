@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, RefundStatus, Sale, SaleItem, SaleStatus } from '@prisma/client';
+import {
+  Prisma,
+  RefundStatus,
+  Sale,
+  SaleItem,
+  SaleStatus,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
@@ -70,7 +76,7 @@ function toDecimal(
  */
 @Injectable()
 export class SalesRefundService {
-    constructor(
+  constructor(
     private readonly prismaService: PrismaService,
     private readonly idempotencyService: IdempotencyService,
     private readonly salesRepository: SalesRepository,
@@ -88,7 +94,8 @@ export class SalesRefundService {
    * client), so it is instantiated directly; this keeps the module provider
    * list and the DI graph unchanged.
    */
-  private readonly refundPaymentAllocation = new RefundPaymentAllocationService();
+  private readonly refundPaymentAllocation =
+    new RefundPaymentAllocationService();
 
   /**
    * Refund the given quantities (or ALL remaining quantities when `items` is
@@ -138,10 +145,7 @@ export class SalesRefundService {
     );
   }
 
-  async findById(
-    id: string,
-    companyId: string,
-  ): Promise<SalesRefundEntity> {
+  async findById(id: string, companyId: string): Promise<SalesRefundEntity> {
     const refund = await this.salesRefundRepository.findById(id, companyId);
     if (!refund) throw new NotFoundException(`SalesRefund ${id} not found`);
     return SalesRefundMapper.toEntity(refund);
@@ -201,11 +205,12 @@ export class SalesRefundService {
     for (const item of saleItems) itemById.set(item.id, item);
 
     // 5. Aggregate the durable COMPLETED refund facts (source of truth).
-    const previous = await this.salesRefundRepository.aggregateCompletedBySaleItem(
-      sale.id,
-      companyId,
-      tx,
-    );
+    const previous =
+      await this.salesRefundRepository.aggregateCompletedBySaleItem(
+        sale.id,
+        companyId,
+        tx,
+      );
 
     // 6. Resolve the requested quantities (deduplicated per SaleItem).
     const requested = this.resolveRequestedQuantities(dto, saleItems, previous);
@@ -301,8 +306,7 @@ export class SalesRefundService {
       ? SaleStatus.REFUNDED
       : SaleStatus.PARTIALLY_REFUNDED;
     const isLegacySingleShotFullRefund =
-      sale.status === SaleStatus.COMPLETED &&
-      newStatus === SaleStatus.REFUNDED;
+      sale.status === SaleStatus.COMPLETED && newStatus === SaleStatus.REFUNDED;
 
     // 10b. G11-E5 — persist the bucket-level refund payment allocation
     // (insert-only facts) inside the SAME transaction, so the refund and its
@@ -314,15 +318,13 @@ export class SalesRefundService {
     // event's transaction client (E4 handler, same tx).
     let paymentAllocationFacts: RefundAllocationFact[] = [];
     if (!isLegacySingleShotFullRefund) {
-      paymentAllocationFacts = await this.refundPaymentAllocation.createForRefund(
-        tx,
-        {
+      paymentAllocationFacts =
+        await this.refundPaymentAllocation.createForRefund(tx, {
           sale,
           salesRefundId: refund.id,
           refundTotal,
           userId,
-        },
-      );
+        });
 
       // G11-F2 — customer credit ledger issuance: every persisted
       // STORE_CREDIT/GIFT_CARD allocation returns spendable credit to the

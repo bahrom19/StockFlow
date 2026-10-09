@@ -1,18 +1,45 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Currency, PurchaseInvoiceStatus, PurchaseReturnStatus } from '@prisma/client';
+import {
+  Currency,
+  PurchaseInvoiceStatus,
+  PurchaseReturnStatus,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { CompaniesService } from '../../companies/services/companies.service';
 import { resolveSupplierForFinancialRead } from './supplier-statement.service';
-import { SupplierPurchaseSummaryEntity, MonthlySpendEntity } from '../entities/supplier-purchase-summary.entity';
-import { SupplierProductPurchaseEntity, SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
-import { SupplierReliabilityEntity, RecentDeliveryEntity } from '../entities/supplier-reliability.entity';
-import { SupplierPriceHistoryEntity, PricePointEntity } from '../entities/supplier-price-history.entity';
-import { SupplierPaymentAgingEntity, PaymentAgingBucketsEntity, OverdueInvoiceEntity } from '../entities/supplier-payment-aging.entity';
-import { SupplierReturnSummaryEntity, TopReturnedProductEntity } from '../entities/supplier-return-summary.entity';
+import {
+  SupplierPurchaseSummaryEntity,
+  MonthlySpendEntity,
+} from '../entities/supplier-purchase-summary.entity';
+import {
+  SupplierProductPurchaseEntity,
+  SupplierProductPurchaseListEntity,
+} from '../entities/supplier-product-purchase.entity';
+import {
+  SupplierReliabilityEntity,
+  RecentDeliveryEntity,
+} from '../entities/supplier-reliability.entity';
+import {
+  SupplierPriceHistoryEntity,
+  PricePointEntity,
+} from '../entities/supplier-price-history.entity';
+import {
+  SupplierPaymentAgingEntity,
+  PaymentAgingBucketsEntity,
+  OverdueInvoiceEntity,
+} from '../entities/supplier-payment-aging.entity';
+import {
+  SupplierReturnSummaryEntity,
+  TopReturnedProductEntity,
+} from '../entities/supplier-return-summary.entity';
 import { SupplierPerformanceEntity } from '../entities/supplier-performance.entity';
-import { SupplierOrderPipelineEntity, OrderPipelineSummaryEntity, RecentOrderEntity } from '../entities/supplier-order-pipeline.entity';
+import {
+  SupplierOrderPipelineEntity,
+  OrderPipelineSummaryEntity,
+  RecentOrderEntity,
+} from '../entities/supplier-order-pipeline.entity';
 
 const INVOICE_STATUSES = [
   PurchaseInvoiceStatus.APPROVED,
@@ -116,9 +143,7 @@ export class SupplierAnalyticsService {
     }
 
     const weightedAvg =
-      totalItemQty > 0
-        ? totalItemSpend.div(totalItemQty)
-        : new Decimal(0);
+      totalItemQty > 0 ? totalItemSpend.div(totalItemQty) : new Decimal(0);
 
     // 5. Returns aggregation (only APPROVED/COMPLETED — DRAFT must not reduce AP)
     // G14-03-03: base currency ONLY, same as invoices above.
@@ -126,7 +151,9 @@ export class SupplierAnalyticsService {
       supplierId,
       companyId,
       deletedAt: null,
-      status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+      status: {
+        in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED],
+      },
       isCancelled: false,
       currency: baseCurrency,
       returnDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
@@ -164,41 +191,45 @@ export class SupplierAnalyticsService {
 
     // 7. Current financial status (not period-scoped)
     // G14-03-03: base currency ONLY — same rule as the period aggregates.
-    const currentInvoiceAgg = await this.prismaService.purchaseInvoice.aggregate({
-      where: {
-        supplierId,
-        companyId,
-        deletedAt: null,
-        status: { in: INVOICE_STATUSES },
-        currency: baseCurrency,
-      },
-      _sum: { grandTotal: true },
-    });
+    const currentInvoiceAgg =
+      await this.prismaService.purchaseInvoice.aggregate({
+        where: {
+          supplierId,
+          companyId,
+          deletedAt: null,
+          status: { in: INVOICE_STATUSES },
+          currency: baseCurrency,
+        },
+        _sum: { grandTotal: true },
+      });
 
     // G9-B1: Use allocations as canonical payment coverage.
     // Allocations carry no currency field; scope to the base-currency
     // context exactly like the canonical credit-summary model: allocations
     // tied to base-currency invoices, plus supplier-level allocations with
     // no invoice (payments are always recorded in base currency, G3-2).
-    const currentAllocationAgg = await this.prismaService.supplierPaymentAllocation.aggregate({
-      where: {
-        supplierId,
-        companyId,
-        deletedAt: null,
-        OR: [
-          { purchaseInvoice: { currency: baseCurrency } },
-          { purchaseInvoiceId: null },
-        ],
-      },
-      _sum: { amount: true },
-    });
+    const currentAllocationAgg =
+      await this.prismaService.supplierPaymentAllocation.aggregate({
+        where: {
+          supplierId,
+          companyId,
+          deletedAt: null,
+          OR: [
+            { purchaseInvoice: { currency: baseCurrency } },
+            { purchaseInvoiceId: null },
+          ],
+        },
+        _sum: { amount: true },
+      });
 
     const currentReturnAgg = await this.prismaService.purchaseReturn.aggregate({
       where: {
         supplierId,
         companyId,
         deletedAt: null,
-        status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+        status: {
+          in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED],
+        },
         isCancelled: false,
         currency: baseCurrency,
       },
@@ -213,7 +244,9 @@ export class SupplierAnalyticsService {
     // G9-B1: Canonical payment coverage = SUM of active allocations
     const currentPaid = new Decimal(currentAllocationAgg._sum.amount ?? 0);
     const currentReturned = new Decimal(currentReturnAgg._sum.grandTotal ?? 0);
-    const currentOutstanding = currentInvoiced.sub(currentPaid).sub(currentReturned);
+    const currentOutstanding = currentInvoiced
+      .sub(currentPaid)
+      .sub(currentReturned);
 
     return {
       currency,
@@ -274,8 +307,9 @@ export class SupplierAnalyticsService {
       : new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
 
     // 3. Whitelist sort
-    const sortColumn = SupplierAnalyticsService.ALLOWED_SORT_FIELDS[sortBy]
-      ?? SupplierAnalyticsService.ALLOWED_SORT_FIELDS['totalPurchaseSpend']!;
+    const sortColumn =
+      SupplierAnalyticsService.ALLOWED_SORT_FIELDS[sortBy] ??
+      SupplierAnalyticsService.ALLOWED_SORT_FIELDS['totalPurchaseSpend']!;
     const sortDir = sortOrder === 'asc' ? 'ASC' : 'DESC';
 
     // 4. Search filter
@@ -529,12 +563,16 @@ export class SupplierAnalyticsService {
 
       if (receiptDate) {
         const receipt = new Date(receiptDate);
-        leadTimeDays = Math.round((receipt.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24));
+        leadTimeDays = Math.round(
+          (receipt.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24),
+        );
         deliveryCount++;
         totalLeadTimeDays += leadTimeDays;
 
-        if (minLeadTime === null || leadTimeDays < minLeadTime) minLeadTime = leadTimeDays;
-        if (maxLeadTime === null || leadTimeDays > maxLeadTime) maxLeadTime = leadTimeDays;
+        if (minLeadTime === null || leadTimeDays < minLeadTime)
+          minLeadTime = leadTimeDays;
+        if (maxLeadTime === null || leadTimeDays > maxLeadTime)
+          maxLeadTime = leadTimeDays;
 
         if (expectedDate) {
           onTime = receipt <= expectedDate;
@@ -547,7 +585,9 @@ export class SupplierAnalyticsService {
         recentDeliveries.push({
           orderNumber: row.orderNumber,
           orderDate: new Date(row.orderDate).toISOString(),
-          expectedDate: row.expectedDate ? new Date(row.expectedDate).toISOString() : null,
+          expectedDate: row.expectedDate
+            ? new Date(row.expectedDate).toISOString()
+            : null,
           receiptDate: receiptDate ? new Date(receiptDate).toISOString() : null,
           leadTimeDays,
           onTime,
@@ -562,19 +602,24 @@ export class SupplierAnalyticsService {
     const onTimeDenominator = deliveryRows.filter(
       (r) => r.expectedDate != null && r.receiptDate != null,
     ).length;
-    const onTimeDeliveryRate = onTimeDenominator > 0
-      ? Math.round((onTimeCount / onTimeDenominator) * 1000) / 10
-      : 0;
+    const onTimeDeliveryRate =
+      onTimeDenominator > 0
+        ? Math.round((onTimeCount / onTimeDenominator) * 1000) / 10
+        : 0;
 
-    const averageLeadTimeDays = deliveryCount > 0
-      ? Math.round((totalLeadTimeDays / deliveryCount) * 10) / 10
-      : 0;
+    const averageLeadTimeDays =
+      deliveryCount > 0
+        ? Math.round((totalLeadTimeDays / deliveryCount) * 10) / 10
+        : 0;
 
-    const totalReceipts = deliveryRows.filter((r) => r.receiptDate != null).length;
+    const totalReceipts = deliveryRows.filter(
+      (r) => r.receiptDate != null,
+    ).length;
 
-    const cancellationRate = totalOrders > 0
-      ? Math.round((ordersCancelled / totalOrders) * 1000) / 10
-      : 0;
+    const cancellationRate =
+      totalOrders > 0
+        ? Math.round((ordersCancelled / totalOrders) * 1000) / 10
+        : 0;
 
     return {
       dateFrom: effectiveDateFrom.toISOString(),
@@ -689,12 +734,27 @@ export class SupplierAnalyticsService {
     let maxUnitCost = new Decimal(0);
 
     if (priceRows.length > 0) {
-      const costs = priceRows.map((r) => new Decimal(r.unitCost?.toString() ?? '0'));
-      const totalQty = priceRows.reduce((sum, r) => sum + Number(r.quantity), 0);
-      const totalSpend = costs.reduce((sum, c, i) => sum.plus(c.mul(Number(priceRows[i]!.quantity))), new Decimal(0));
-      averageUnitCost = totalQty > 0 ? totalSpend.div(totalQty) : new Decimal(0);
-      minUnitCost = costs.reduce((min, c) => c.lessThan(min) ? c : min, costs[0]!);
-      maxUnitCost = costs.reduce((max, c) => c.greaterThan(max) ? c : max, costs[0]!);
+      const costs = priceRows.map(
+        (r) => new Decimal(r.unitCost?.toString() ?? '0'),
+      );
+      const totalQty = priceRows.reduce(
+        (sum, r) => sum + Number(r.quantity),
+        0,
+      );
+      const totalSpend = costs.reduce(
+        (sum, c, i) => sum.plus(c.mul(Number(priceRows[i]!.quantity))),
+        new Decimal(0),
+      );
+      averageUnitCost =
+        totalQty > 0 ? totalSpend.div(totalQty) : new Decimal(0);
+      minUnitCost = costs.reduce(
+        (min, c) => (c.lessThan(min) ? c : min),
+        costs[0]!,
+      );
+      maxUnitCost = costs.reduce(
+        (max, c) => (c.greaterThan(max) ? c : max),
+        costs[0]!,
+      );
     }
 
     return {
@@ -788,7 +848,9 @@ export class SupplierAnalyticsService {
         supplierId,
         companyId,
         deletedAt: null,
-        status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+        status: {
+          in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED],
+        },
         isCancelled: false,
         currency: baseCurrency,
       },
@@ -816,7 +878,9 @@ export class SupplierAnalyticsService {
     for (const row of invoiceRows) {
       const grandTotal = new Decimal(row.grandTotal?.toString() ?? '0');
       // G9-B1: Use allocations as canonical payment coverage
-      const allocatedAmount = new Decimal(row.allocatedAmount?.toString() ?? '0');
+      const allocatedAmount = new Decimal(
+        row.allocatedAmount?.toString() ?? '0',
+      );
       let outstanding = grandTotal.sub(allocatedAmount);
 
       // G14-03-02: apply the return pool oldest-first, floored per invoice
@@ -842,7 +906,10 @@ export class SupplierAnalyticsService {
       }
 
       const diffMs = today.getTime() - dueDate.getTime();
-      const daysOverdue = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+      const daysOverdue = Math.max(
+        0,
+        Math.floor(diffMs / (1000 * 60 * 60 * 24)),
+      );
 
       if (daysOverdue <= 0) {
         // Not yet due
@@ -854,7 +921,8 @@ export class SupplierAnalyticsService {
       } else if (daysOverdue <= 90) {
         agingBuckets.days61_90 = agingBuckets.days61_90.add(outstanding);
       } else {
-        agingBuckets.overdue90plus = agingBuckets.overdue90plus.add(outstanding);
+        agingBuckets.overdue90plus =
+          agingBuckets.overdue90plus.add(outstanding);
       }
 
       // Collect overdue invoices (dueDate < today)
@@ -930,7 +998,9 @@ export class SupplierAnalyticsService {
         supplierId,
         companyId,
         deletedAt: null,
-        status: { in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED] },
+        status: {
+          in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED],
+        },
         isCancelled: false,
         returnDate: { gte: effectiveDateFrom, lte: effectiveDateTo },
       },
@@ -970,7 +1040,8 @@ export class SupplierAnalyticsService {
     `;
 
     const totalReturnedQuantity = returnItemRows.reduce(
-      (sum, row) => sum + Number(row.returnedQuantity), 0,
+      (sum, row) => sum + Number(row.returnedQuantity),
+      0,
     );
 
     // 5. Purchase baseline (same semantics as G5-B1/B2)
@@ -993,16 +1064,22 @@ export class SupplierAnalyticsService {
         AND pi."invoiceDate" <= ${effectiveDateTo}
     `;
 
-    const totalPurchaseSpend = new Decimal(purchaseAgg[0]?.totalSpend?.toString() ?? '0');
+    const totalPurchaseSpend = new Decimal(
+      purchaseAgg[0]?.totalSpend?.toString() ?? '0',
+    );
     const totalPurchasedQuantity = Number(purchaseAgg[0]?.totalQuantity ?? 0);
 
     // 6. Return rates
     const amountReturnRate = totalPurchaseSpend.greaterThan(0)
-      ? Math.round(totalReturnedAmount.div(totalPurchaseSpend).mul(1000).toNumber()) / 10
+      ? Math.round(
+          totalReturnedAmount.div(totalPurchaseSpend).mul(1000).toNumber(),
+        ) / 10
       : 0;
-    const quantityReturnRate = totalPurchasedQuantity > 0
-      ? Math.round((totalReturnedQuantity / totalPurchasedQuantity) * 1000) / 10
-      : 0;
+    const quantityReturnRate =
+      totalPurchasedQuantity > 0
+        ? Math.round((totalReturnedQuantity / totalPurchasedQuantity) * 1000) /
+          10
+        : 0;
 
     // 7. Top returned products with names
     const topReturnedProducts: TopReturnedProductEntity[] = [];
@@ -1016,7 +1093,9 @@ export class SupplierAnalyticsService {
         productName: product?.name ?? 'Unknown',
         sku: product?.sku ?? null,
         returnedQuantity: Number(row.returnedQuantity),
-        returnedAmount: new Decimal(row.returnedAmount?.toString() ?? '0').toString(),
+        returnedAmount: new Decimal(
+          row.returnedAmount?.toString() ?? '0',
+        ).toString(),
         returnCount: Number(row.returnCount),
       });
     }
@@ -1058,12 +1137,13 @@ export class SupplierAnalyticsService {
     }
 
     // 2. Call existing methods in parallel — no new SQL
-    const [summary, reliability, paymentAging, returnSummary] = await Promise.all([
-      this.getPurchaseSummary(supplierId, companyId, dateFrom, dateTo),
-      this.getReliability(supplierId, companyId, dateFrom, dateTo),
-      this.getPaymentAging(supplierId, companyId),
-      this.getReturnSummary(supplierId, companyId, dateFrom, dateTo),
-    ]);
+    const [summary, reliability, paymentAging, returnSummary] =
+      await Promise.all([
+        this.getPurchaseSummary(supplierId, companyId, dateFrom, dateTo),
+        this.getReliability(supplierId, companyId, dateFrom, dateTo),
+        this.getPaymentAging(supplierId, companyId),
+        this.getReturnSummary(supplierId, companyId, dateFrom, dateTo),
+      ]);
 
     // 3. Compute effective date range for display
     const now = new Date();
@@ -1154,12 +1234,13 @@ export class SupplierAnalyticsService {
       // If filtering for CANCELLED specifically: value is 0
       // (cancelled orders have no financial value)
     }
-    const valueAgg = status !== 'CANCELLED'
-      ? await this.prismaService.purchaseOrder.aggregate({
-          where: valueWhere,
-          _sum: { grandTotal: true },
-        })
-      : { _sum: { grandTotal: new Decimal(0) } };
+    const valueAgg =
+      status !== 'CANCELLED'
+        ? await this.prismaService.purchaseOrder.aggregate({
+            where: valueWhere,
+            _sum: { grandTotal: true },
+          })
+        : { _sum: { grandTotal: new Decimal(0) } };
     const totalOrderValue = new Decimal(valueAgg._sum.grandTotal ?? 0);
 
     // 6. Status counts — only when no status filter
@@ -1184,13 +1265,27 @@ export class SupplierAnalyticsService {
       });
       for (const row of statusRows) {
         switch (row.status) {
-          case 'DRAFT': draftCount = row._count.id; break;
-          case 'PENDING': pendingCount = row._count.id; break;
-          case 'APPROVED': approvedCount = row._count.id; break;
-          case 'ORDERED': orderedCount = row._count.id; break;
-          case 'PARTIALLY_RECEIVED': partiallyReceivedCount = row._count.id; break;
-          case 'RECEIVED': receivedCount = row._count.id; break;
-          case 'CANCELLED': cancelledCount = row._count.id; break;
+          case 'DRAFT':
+            draftCount = row._count.id;
+            break;
+          case 'PENDING':
+            pendingCount = row._count.id;
+            break;
+          case 'APPROVED':
+            approvedCount = row._count.id;
+            break;
+          case 'ORDERED':
+            orderedCount = row._count.id;
+            break;
+          case 'PARTIALLY_RECEIVED':
+            partiallyReceivedCount = row._count.id;
+            break;
+          case 'RECEIVED':
+            receivedCount = row._count.id;
+            break;
+          case 'CANCELLED':
+            cancelledCount = row._count.id;
+            break;
         }
       }
     }
@@ -1206,21 +1301,20 @@ export class SupplierAnalyticsService {
         status: true,
         grandTotal: true,
       },
-      orderBy: [
-        { orderDate: 'desc' },
-        { id: 'asc' },
-      ],
+      orderBy: [{ orderDate: 'desc' }, { id: 'asc' }],
       take: 10,
     });
 
-    const recentOrderEntities: RecentOrderEntity[] = recentOrders.map((row) => ({
-      orderId: row.id,
-      orderNumber: row.orderNumber,
-      orderDate: row.orderDate.toISOString(),
-      expectedDate: row.expectedDate?.toISOString() ?? null,
-      status: row.status,
-      grandTotal: new Decimal(row.grandTotal?.toString() ?? '0').toString(),
-    }));
+    const recentOrderEntities: RecentOrderEntity[] = recentOrders.map(
+      (row) => ({
+        orderId: row.id,
+        orderNumber: row.orderNumber,
+        orderDate: row.orderDate.toISOString(),
+        expectedDate: row.expectedDate?.toISOString() ?? null,
+        status: row.status,
+        grandTotal: new Decimal(row.grandTotal?.toString() ?? '0').toString(),
+      }),
+    );
 
     return {
       dateFrom: effectiveDateFrom.toISOString(),

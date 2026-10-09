@@ -375,9 +375,8 @@ export class InventoryCountService {
     // G16-B-02 PH3 (B02-08 remediation): an inactive product is unusable for a
     // count. Surfaced as the same indistinguishable 404 as foreign/missing/
     // deleted so no tenant- or state-existence oracle is exposed.
-    const inactive = products.find(
-      (product) => product.isActive === false,
-    );
-    if (inactive) throw new NotFoundException(`Product with id ${inactive.id} not found`);
+    const inactive = products.find((product) => product.isActive === false);
+    if (inactive)
+      throw new NotFoundException(`Product with id ${inactive.id} not found`);
   }
 }

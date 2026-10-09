@@ -281,56 +281,36 @@ describe('ChartOfAccountsRepository — extraWhere cannot override the authorita
   });
 
   it('1. extraWhere.companyId cannot override the authoritative companyId', async () => {
-    await repo.update(
-      'acc-1',
-      data,
-      'comp-1',
-      0,
-      undefined,
-      { companyId: 'other-tenant' } as Prisma.ChartOfAccountWhereInput,
-    );
+    await repo.update('acc-1', data, 'comp-1', 0, undefined, {
+      companyId: 'other-tenant',
+    } as Prisma.ChartOfAccountWhereInput);
 
     expect(lastWhere().companyId).toBe('comp-1');
     expect(lastWhere().companyId).not.toBe('other-tenant');
   });
 
   it('2. extraWhere.rowVersion cannot override the authoritative rowVersion', async () => {
-    await repo.update(
-      'acc-1',
-      data,
-      'comp-1',
-      7,
-      undefined,
-      { rowVersion: 999 } as Prisma.ChartOfAccountWhereInput,
-    );
+    await repo.update('acc-1', data, 'comp-1', 7, undefined, {
+      rowVersion: 999,
+    } as Prisma.ChartOfAccountWhereInput);
 
     expect(lastWhere().rowVersion).toBe(7);
     expect(lastWhere().rowVersion).not.toBe(999);
   });
 
   it('3. extraWhere.id cannot override the authoritative id', async () => {
-    await repo.update(
-      'acc-1',
-      data,
-      'comp-1',
-      0,
-      undefined,
-      { id: 'acc-someone-else' } as Prisma.ChartOfAccountWhereInput,
-    );
+    await repo.update('acc-1', data, 'comp-1', 0, undefined, {
+      id: 'acc-someone-else',
+    } as Prisma.ChartOfAccountWhereInput);
 
     expect(lastWhere().id).toBe('acc-1');
     expect(lastWhere().id).not.toBe('acc-someone-else');
   });
 
   it('4. extraWhere.deletedAt cannot override deletedAt: null', async () => {
-    await repo.update(
-      'acc-1',
-      data,
-      'comp-1',
-      0,
-      undefined,
-      { deletedAt: new Date('2020-01-01') } as Prisma.ChartOfAccountWhereInput,
-    );
+    await repo.update('acc-1', data, 'comp-1', 0, undefined, {
+      deletedAt: new Date('2020-01-01'),
+    } as Prisma.ChartOfAccountWhereInput);
 
     expect(lastWhere().deletedAt).toBeNull();
   });
@@ -404,20 +384,13 @@ describe('ChartOfAccountsRepository — extraWhere cannot override the authorita
   });
 
   it('8. a single spread cannot defeat the ordering — all four keys hold at once', async () => {
-    await repo.update(
-      'acc-1',
-      data,
-      'comp-1',
-      5,
-      undefined,
-      {
-        id: 'x',
-        companyId: 'y',
-        rowVersion: 0,
-        deletedAt: new Date(),
-        journalLines: { none: {} },
-      } as Prisma.ChartOfAccountWhereInput,
-    );
+    await repo.update('acc-1', data, 'comp-1', 5, undefined, {
+      id: 'x',
+      companyId: 'y',
+      rowVersion: 0,
+      deletedAt: new Date(),
+      journalLines: { none: {} },
+    } as Prisma.ChartOfAccountWhereInput);
 
     expect(lastWhere()).toEqual({
       journalLines: { none: {} },

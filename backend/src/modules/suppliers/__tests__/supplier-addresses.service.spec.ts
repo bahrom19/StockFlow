@@ -38,7 +38,9 @@ describe('SupplierAddressesService', () => {
       findById: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue(baseAddress as any),
       update: jest.fn().mockResolvedValue(baseAddress as any),
-      softDelete: jest.fn().mockResolvedValue({ ...baseAddress, deletedAt: new Date() } as any),
+      softDelete: jest
+        .fn()
+        .mockResolvedValue({ ...baseAddress, deletedAt: new Date() } as any),
       findActiveDefault: jest.fn().mockResolvedValue(null),
       clearDefault: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<SupplierAddressesRepository>;
@@ -58,7 +60,11 @@ describe('SupplierAddressesService', () => {
         { provide: SuppliersService, useValue: mockSuppliersService },
         { provide: PrismaService, useValue: mockPrisma },
         // G1 (P3-04): audit logging is wired in; unit tests stub it out.
-        { provide: require('../../shared/services/audit-log.service').AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: require('../../shared/services/audit-log.service')
+            .AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -174,7 +180,12 @@ describe('SupplierAddressesService', () => {
   it('should throw NotFoundException when updating missing address', async () => {
     mockAddressesRepo.findById.mockResolvedValue(null);
     await expect(
-      service.update('supp-1', 'missing', { city: 'Astana' } as any, currentUser),
+      service.update(
+        'supp-1',
+        'missing',
+        { city: 'Astana' } as any,
+        currentUser,
+      ),
     ).rejects.toThrow(NotFoundException);
   });
 

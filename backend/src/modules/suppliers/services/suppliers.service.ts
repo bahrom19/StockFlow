@@ -97,9 +97,7 @@ export class SuppliersService {
         currentUser.companyId,
       );
       if (dup) {
-        throw new ConflictException(
-          'A supplier with this BIN already exists',
-        );
+        throw new ConflictException('A supplier with this BIN already exists');
       }
     }
 
@@ -240,9 +238,7 @@ export class SuppliersService {
         id,
       );
       if (dup) {
-        throw new ConflictException(
-          'A supplier with this BIN already exists',
-        );
+        throw new ConflictException('A supplier with this BIN already exists');
       }
     }
 

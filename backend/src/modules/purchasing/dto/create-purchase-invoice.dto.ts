@@ -90,7 +90,11 @@ export class CreatePurchaseInvoiceDto {
   @IsEnum(['DRAFT', 'APPROVED', 'PAID', 'CANCELLED'])
   status?: string;
 
-  @ApiPropertyOptional({ enum: Currency, default: 'KZT', description: 'Currency (must match linked PO currency)' })
+  @ApiPropertyOptional({
+    enum: Currency,
+    default: 'KZT',
+    description: 'Currency (must match linked PO currency)',
+  })
   @IsOptional()
   @IsEnum(Currency)
   currency?: Currency;

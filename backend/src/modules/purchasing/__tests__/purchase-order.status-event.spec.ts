@@ -57,7 +57,9 @@ describe('PurchaseOrderService — purchase.order.status.changed publishing', ()
     const auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     const documentSequenceService = { nextNumber: jest.fn() };
     const eventBus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const companiesService = { getBaseCurrency: jest.fn().mockResolvedValue('KZT') };
+    const companiesService = {
+      getBaseCurrency: jest.fn().mockResolvedValue('KZT'),
+    };
     const service = new PurchaseOrderService(
       purchaseOrderRepository as unknown as PurchaseOrderRepository,
       prismaService as unknown as PrismaService,
@@ -72,9 +74,9 @@ describe('PurchaseOrderService — purchase.order.status.changed publishing', ()
   const statusEventFrom = (eventBus: { publish: jest.Mock }) =>
     eventBus.publish.mock.calls
       .map((c) => c[0])
-      .find(
-        (e) => e.eventName === 'purchase.order.status.changed',
-      ) as PurchaseOrderStatusChangedEvent | undefined;
+      .find((e) => e.eventName === 'purchase.order.status.changed') as
+      | PurchaseOrderStatusChangedEvent
+      | undefined;
 
   it('transitionStatus publishes the generic event with full transition payload', async () => {
     const { service, eventBus } = makeService();
@@ -165,7 +167,9 @@ describe('PurchaseOrderService — receipt-driven status events (changedBy: null
     items: [],
   };
 
-  const makeService = (items: Array<{ quantity: number; receivedQuantity: number }>) => {
+  const makeService = (
+    items: Array<{ quantity: number; receivedQuantity: number }>,
+  ) => {
     const purchaseOrderRepository = {
       findById: jest.fn().mockResolvedValue(baseOrder),
       update: jest.fn().mockImplementation(async (_id, data) => ({
@@ -178,7 +182,9 @@ describe('PurchaseOrderService — receipt-driven status events (changedBy: null
     };
     const auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     const eventBus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const companiesService = { getBaseCurrency: jest.fn().mockResolvedValue('KZT') };
+    const companiesService = {
+      getBaseCurrency: jest.fn().mockResolvedValue('KZT'),
+    };
     const service = new PurchaseOrderService(
       purchaseOrderRepository as unknown as PurchaseOrderRepository,
       prismaService as unknown as PrismaService,
@@ -196,9 +202,9 @@ describe('PurchaseOrderService — receipt-driven status events (changedBy: null
   const statusEventFrom = (eventBus: { publish: jest.Mock }) =>
     eventBus.publish.mock.calls
       .map((c) => c[0])
-      .find(
-        (e) => e.eventName === 'purchase.order.status.changed',
-      ) as PurchaseOrderStatusChangedEvent | undefined;
+      .find((e) => e.eventName === 'purchase.order.status.changed') as
+      | PurchaseOrderStatusChangedEvent
+      | undefined;
 
   it('full receipt → RECEIVED event with changedBy null and post-update rowVersion', async () => {
     const { service, eventBus, tx } = makeService([

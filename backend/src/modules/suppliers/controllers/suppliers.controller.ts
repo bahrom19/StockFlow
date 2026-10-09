@@ -78,18 +78,25 @@ export class SuppliersController {
   // BEFORE @Get(':id') or NestJS would match /suppliers/duplicates as :id.
   @Get('duplicates')
   @RequirePermission('suppliers:read')
-  @ApiOperation({ summary: 'Check for active suppliers with the same normalized company name (non-blocking warning)' })
+  @ApiOperation({
+    summary:
+      'Check for active suppliers with the same normalized company name (non-blocking warning)',
+  })
   @ApiQuery({ name: 'companyName', required: true, type: String })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Active suppliers with an equal normalized name (may be empty)',
+    description:
+      'Active suppliers with an equal normalized name (may be empty)',
     type: [SupplierEntity],
   })
   async checkDuplicates(
     @Query('companyName') companyName: string,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<SupplierEntity[]> {
-    return this.suppliersService.checkDuplicateName(companyName ?? '', currentUser);
+    return this.suppliersService.checkDuplicateName(
+      companyName ?? '',
+      currentUser,
+    );
   }
 
   @Get(':id')

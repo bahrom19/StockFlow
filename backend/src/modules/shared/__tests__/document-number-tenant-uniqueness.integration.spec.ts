@@ -192,4 +192,3 @@ describe('G8 tenant-scoped document numbering', () => {
     }
   });
 });
-

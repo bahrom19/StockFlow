@@ -59,7 +59,9 @@ describe('JobRunService', () => {
     });
 
     it('returns null and does not throw when persistence fails (isolation guarantee)', async () => {
-      mockPrisma.jobRun.create.mockRejectedValue(new Error('JobRun table missing'));
+      mockPrisma.jobRun.create.mockRejectedValue(
+        new Error('JobRun table missing'),
+      );
 
       await expect(service.start('billing.cleanup')).resolves.toBeNull();
     });
@@ -103,7 +105,9 @@ describe('JobRunService', () => {
     });
 
     it('never throws when persistence fails — cron/business operation must not break', async () => {
-      mockPrisma.jobRun.create.mockRejectedValue(new Error('JobRun table missing'));
+      mockPrisma.jobRun.create.mockRejectedValue(
+        new Error('JobRun table missing'),
+      );
 
       await expect(
         service.skip('billing.cleanup', 'LOCK_CONTENDED'),
@@ -119,7 +123,10 @@ describe('JobRunService', () => {
       const finishedAt = new Date('2026-09-29T10:00:05.000Z');
       jest.useFakeTimers().setSystemTime(finishedAt);
 
-      await service.finish('run-1', JobRunStatus.SUCCEEDED, { processed: 7, succeeded: 7 });
+      await service.finish('run-1', JobRunStatus.SUCCEEDED, {
+        processed: 7,
+        succeeded: 7,
+      });
 
       expect(mockPrisma.jobRun.update).toHaveBeenCalledWith({
         where: { id: 'run-1' },
@@ -157,7 +164,9 @@ describe('JobRunService', () => {
 
       await service.finish('run-1', JobRunStatus.SUCCEEDED);
 
-      expect(mockPrisma.jobRun.update.mock.calls[0][0].data.durationMs).toBeNull();
+      expect(
+        mockPrisma.jobRun.update.mock.calls[0][0].data.durationMs,
+      ).toBeNull();
     });
 
     it('is a no-op when runId is null (start failed) and does not touch Prisma', async () => {
@@ -171,7 +180,9 @@ describe('JobRunService', () => {
       mockPrisma.jobRun.findUnique.mockResolvedValue({ startedAt: STARTED_AT });
       mockPrisma.jobRun.update.mockRejectedValue(new Error('connection lost'));
 
-      await expect(service.finish('run-1', JobRunStatus.FAILED)).resolves.toBeUndefined();
+      await expect(
+        service.finish('run-1', JobRunStatus.FAILED),
+      ).resolves.toBeUndefined();
     });
   });
 });

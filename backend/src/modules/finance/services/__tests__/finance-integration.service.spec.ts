@@ -3,7 +3,10 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { FinancialPeriodStatus, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { FinanceIntegrationService } from '../finance-integration.service';
-import { FiscalCalendarService, CalendarResult } from '../fiscal-calendar.service';
+import {
+  FiscalCalendarService,
+  CalendarResult,
+} from '../fiscal-calendar.service';
 import { GlEngineService, PostJournalEntryInput } from '../gl-engine.service';
 import { SaleCompletedEventPayload } from '../../../sales/interfaces/sale-event.interface';
 
@@ -170,7 +173,11 @@ describe('FinanceIntegrationService', () => {
 
     mockCalendarService.ensureCurrentCalendar.mockResolvedValue({
       fiscalYear: { id: 'fy-1', year: 2026 } as any,
-      financialPeriod: { id: periodId, name: '2026-09', status: FinancialPeriodStatus.OPEN } as any,
+      financialPeriod: {
+        id: periodId,
+        name: '2026-09',
+        status: FinancialPeriodStatus.OPEN,
+      } as any,
       isPostable: true,
     });
     mockGlEngine.post.mockResolvedValue({} as any);
@@ -351,7 +358,11 @@ describe('FinanceIntegrationService', () => {
   it('should throw BadRequestException when no open financial period exists', async () => {
     mockCalendarService.ensureCurrentCalendar.mockResolvedValue({
       fiscalYear: { id: 'fy-1', year: 2026 } as any,
-      financialPeriod: { id: periodId, name: '2026-09', status: FinancialPeriodStatus.CLOSED } as any,
+      financialPeriod: {
+        id: periodId,
+        name: '2026-09',
+        status: FinancialPeriodStatus.CLOSED,
+      } as any,
       isPostable: false,
     });
 
@@ -421,7 +432,11 @@ describe('FinanceIntegrationService', () => {
   it('should throw BadRequestException on refund when no open period exists', async () => {
     mockCalendarService.ensureCurrentCalendar.mockResolvedValue({
       fiscalYear: { id: 'fy-1', year: 2026 } as any,
-      financialPeriod: { id: periodId, name: '2026-09', status: FinancialPeriodStatus.CLOSED } as any,
+      financialPeriod: {
+        id: periodId,
+        name: '2026-09',
+        status: FinancialPeriodStatus.CLOSED,
+      } as any,
       isPostable: false,
     });
 
@@ -609,11 +624,18 @@ describe('FinanceIntegrationService', () => {
         saleNumber,
         total: '1000.00',
         currency: 'KZT',
-        items: [{
-          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
-          costPrice: '600.00', discount: '0', subtotal: '1000.00',
-          total: '1000.00', margin: '400.00',
-        }],
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: '1000.00',
+            costPrice: '600.00',
+            discount: '0',
+            subtotal: '1000.00',
+            total: '1000.00',
+            margin: '400.00',
+          },
+        ],
         payments: [{ method: 'CARD', amount: '1000.00' }],
       },
       mockTx as unknown as Prisma.TransactionClient,
@@ -647,11 +669,18 @@ describe('FinanceIntegrationService', () => {
         saleNumber,
         total: '1000.00',
         currency: 'KZT',
-        items: [{
-          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
-          costPrice: '600.00', discount: '0', subtotal: '1000.00',
-          total: '1000.00', margin: '400.00',
-        }],
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: '1000.00',
+            costPrice: '600.00',
+            discount: '0',
+            subtotal: '1000.00',
+            total: '1000.00',
+            margin: '400.00',
+          },
+        ],
         payments: [
           { method: 'CASH', amount: '400.00' },
           { method: 'CARD', amount: '600.00' },
@@ -689,11 +718,18 @@ describe('FinanceIntegrationService', () => {
         saleNumber,
         total: '1000.00',
         currency: 'KZT',
-        items: [{
-          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
-          costPrice: '600.00', discount: '0', subtotal: '1000.00',
-          total: '1000.00', margin: '400.00',
-        }],
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: '1000.00',
+            costPrice: '600.00',
+            discount: '0',
+            subtotal: '1000.00',
+            total: '1000.00',
+            margin: '400.00',
+          },
+        ],
         payments: [{ method: 'STORE_CREDIT', amount: '1000.00' }],
       },
       mockTx as unknown as Prisma.TransactionClient,
@@ -727,11 +763,18 @@ describe('FinanceIntegrationService', () => {
         saleNumber,
         total: '1000.00',
         currency: 'KZT',
-        items: [{
-          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
-          costPrice: '600.00', discount: '0', subtotal: '1000.00',
-          total: '1000.00', margin: '400.00',
-        }],
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: '1000.00',
+            costPrice: '600.00',
+            discount: '0',
+            subtotal: '1000.00',
+            total: '1000.00',
+            margin: '400.00',
+          },
+        ],
         payments: [
           { method: 'CASH', amount: '200.00' },
           { method: 'CARD', amount: '300.00' },
@@ -780,11 +823,18 @@ describe('FinanceIntegrationService', () => {
           saleNumber,
           total: '500.00',
           currency: 'KZT',
-          items: [{
-            productId: 'prod-1', quantity: 1, unitPrice: '500.00',
-            costPrice: '300.00', discount: '0', subtotal: '500.00',
-            total: '500.00', margin: '200.00',
-          }],
+          items: [
+            {
+              productId: 'prod-1',
+              quantity: 1,
+              unitPrice: '500.00',
+              costPrice: '300.00',
+              discount: '0',
+              subtotal: '500.00',
+              total: '500.00',
+              margin: '200.00',
+            },
+          ],
           payments: [{ method, amount: '500.00' }],
         },
         mockTx as unknown as Prisma.TransactionClient,
@@ -810,11 +860,18 @@ describe('FinanceIntegrationService', () => {
         saleNumber,
         total: '1000.00',
         currency: 'KZT',
-        items: [{
-          productId: 'prod-1', quantity: 1, unitPrice: '1000.00',
-          costPrice: '600.00', discount: '0', subtotal: '1000.00',
-          total: '1000.00', margin: '400.00',
-        }],
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: '1000.00',
+            costPrice: '600.00',
+            discount: '0',
+            subtotal: '1000.00',
+            total: '1000.00',
+            margin: '400.00',
+          },
+        ],
         payments: [{ method: 'GIFT_CARD', amount: '1000.00' }],
       },
       mockTx as unknown as Prisma.TransactionClient,
@@ -877,13 +934,15 @@ describe('FinanceIntegrationService', () => {
       const lines = journal.lines;
 
       const revDebit = lines.find(
-        (l) => l.accountId === revenueAccountId && Number.parseFloat(l.debit) > 0,
+        (l) =>
+          l.accountId === revenueAccountId && Number.parseFloat(l.debit) > 0,
       );
       const cashCredit = lines.find(
         (l) => l.accountId === cashAccountId && Number.parseFloat(l.credit) > 0,
       );
       const invDebit = lines.find(
-        (l) => l.accountId === inventoryAccountId && Number.parseFloat(l.debit) > 0,
+        (l) =>
+          l.accountId === inventoryAccountId && Number.parseFloat(l.debit) > 0,
       );
       const cogsCredit = lines.find(
         (l) => l.accountId === cogsAccountId && Number.parseFloat(l.credit) > 0,
@@ -901,7 +960,14 @@ describe('FinanceIntegrationService', () => {
           total: '300.0000',
           items: [
             { ...partialEvent().items[0], fifoCost: '180.0000' },
-            { ...partialEvent().items[0], saleItemId: 'sale-item-2', quantity: 1, unitPrice: '100.0000', total: '100.0000', fifoCost: '60.0000' },
+            {
+              ...partialEvent().items[0],
+              saleItemId: 'sale-item-2',
+              quantity: 1,
+              unitPrice: '100.0000',
+              total: '100.0000',
+              fifoCost: '60.0000',
+            },
           ],
         }) as any,
         mockTx as unknown as Prisma.TransactionClient,
@@ -914,11 +980,28 @@ describe('FinanceIntegrationService', () => {
     });
     it('3: multiple partial refunds produce separate journals (each its own amount)', async () => {
       await service.onSalePartiallyRefunded(
-        partialEvent({ refundId: 'refund-1', total: '300.0000', items: [{ ...partialEvent().items[0], fifoCost: '180.0000' }] }) as any,
+        partialEvent({
+          refundId: 'refund-1',
+          total: '300.0000',
+          items: [{ ...partialEvent().items[0], fifoCost: '180.0000' }],
+        }) as any,
         mockTx as unknown as Prisma.TransactionClient,
       );
       await service.onSalePartiallyRefunded(
-        partialEvent({ refundId: 'refund-2', total: '200.0000', items: [{ ...partialEvent().items[0], saleItemId: 'sale-item-2', quantity: 2, unitPrice: '100.0000', total: '200.0000', fifoCost: '120.0000' }] }) as any,
+        partialEvent({
+          refundId: 'refund-2',
+          total: '200.0000',
+          items: [
+            {
+              ...partialEvent().items[0],
+              saleItemId: 'sale-item-2',
+              quantity: 2,
+              unitPrice: '100.0000',
+              total: '200.0000',
+              fifoCost: '120.0000',
+            },
+          ],
+        }) as any,
         mockTx as unknown as Prisma.TransactionClient,
       );
 
@@ -929,12 +1012,12 @@ describe('FinanceIntegrationService', () => {
 
       expect(j1.referenceId).toBe('refund-1');
       expect(j2.referenceId).toBe('refund-2');
-      expect(j1.lines.find((l) => l.accountId === revenueAccountId)!.debit).toBe(
-        '300',
-      );
-      expect(j2.lines.find((l) => l.accountId === revenueAccountId)!.debit).toBe(
-        '200',
-      );
+      expect(
+        j1.lines.find((l) => l.accountId === revenueAccountId)!.debit,
+      ).toBe('300');
+      expect(
+        j2.lines.find((l) => l.accountId === revenueAccountId)!.debit,
+      ).toBe('200');
     });
 
     it('4: current refund only — no cumulative amounts', async () => {
@@ -957,26 +1040,39 @@ describe('FinanceIntegrationService', () => {
         expect(Number.parseFloat(revDebit)).toBeLessThan(500);
       }
       expect(
-        (mockGlEngine.post.mock.calls[0]![0] as PostJournalEntryInput).lines.find(
-          (l) => l.accountId === revenueAccountId,
-        )!.debit,
+        (
+          mockGlEngine.post.mock.calls[0]![0] as PostJournalEntryInput
+        ).lines.find((l) => l.accountId === revenueAccountId)!.debit,
       ).toBe('300');
       expect(
-        (mockGlEngine.post.mock.calls[1]![0] as PostJournalEntryInput).lines.find(
-          (l) => l.accountId === revenueAccountId,
-        )!.debit,
+        (
+          mockGlEngine.post.mock.calls[1]![0] as PostJournalEntryInput
+        ).lines.find((l) => l.accountId === revenueAccountId)!.debit,
       ).toBe('200');
     });
 
     it('5: final-after-partial posts ONLY the final remainder', async () => {
       await service.onSalePartiallyRefunded(
-        partialEvent({ refundId: 'refund-final', total: '200.0000', items: [{ ...partialEvent().items[0], quantity: 2, total: '200.0000', fifoCost: '119.9999' }] }) as any,
+        partialEvent({
+          refundId: 'refund-final',
+          total: '200.0000',
+          items: [
+            {
+              ...partialEvent().items[0],
+              quantity: 2,
+              total: '200.0000',
+              fifoCost: '119.9999',
+            },
+          ],
+        }) as any,
         mockTx as unknown as Prisma.TransactionClient,
       );
 
       const journal = getPostedJournal();
       expect(journal.referenceId).toBe('refund-final');
-      expect(journal.lines.find((l) => l.accountId === revenueAccountId)!.debit).toBe('200');
+      expect(
+        journal.lines.find((l) => l.accountId === revenueAccountId)!.debit,
+      ).toBe('200');
       expect(
         journal.lines.find((l) => l.accountId === inventoryAccountId)!.debit,
       ).toBe('119.9999');
@@ -989,7 +1085,14 @@ describe('FinanceIntegrationService', () => {
           partialEvent({
             refundId: `refund-${i + 1}`,
             total: '100.0000',
-            items: [{ ...partialEvent().items[0], quantity: 1, total: '100.0000', fifoCost: lines[i] }],
+            items: [
+              {
+                ...partialEvent().items[0],
+                quantity: 1,
+                total: '100.0000',
+                fifoCost: lines[i],
+              },
+            ],
           }) as any,
           mockTx as unknown as Prisma.TransactionClient,
         );
@@ -999,7 +1102,11 @@ describe('FinanceIntegrationService', () => {
       let sum = new Decimal(0);
       for (const call of mockGlEngine.post.mock.calls) {
         const j = call[0] as PostJournalEntryInput;
-        sum = sum.add(new Decimal(j.lines.find((l) => l.accountId === inventoryAccountId)!.debit));
+        sum = sum.add(
+          new Decimal(
+            j.lines.find((l) => l.accountId === inventoryAccountId)!.debit,
+          ),
+        );
       }
       expect(sum.toFixed(4)).toBe('100.0000');
     });
@@ -1020,13 +1127,19 @@ describe('FinanceIntegrationService', () => {
         product: { findUnique: productFindUnique, findFirst: productFindFirst },
       };
       await service.onSalePartiallyRefunded(
-        partialEvent({ items: [{ ...partialEvent().items[0], fifoCost: '77.7777' }] }) as any,
+        partialEvent({
+          items: [{ ...partialEvent().items[0], fifoCost: '77.7777' }],
+        }) as any,
         txWithProduct as unknown as Prisma.TransactionClient,
       );
       expect(productFindUnique).not.toHaveBeenCalled();
       expect(productFindFirst).not.toHaveBeenCalled();
       expect(
-        (getPostedJournal().lines.find((l) => l.accountId === inventoryAccountId)! as any).debit,
+        (
+          getPostedJournal().lines.find(
+            (l) => l.accountId === inventoryAccountId,
+          )! as any
+        ).debit,
       ).toBe('77.7777');
     });
 
@@ -1052,7 +1165,10 @@ describe('FinanceIntegrationService', () => {
           where: expect.objectContaining({ companyId: 'comp-99' }),
         }),
       );
-      expect(mockCalendarService.ensureCurrentCalendar).toHaveBeenCalledWith('comp-99', mockTx);
+      expect(mockCalendarService.ensureCurrentCalendar).toHaveBeenCalledWith(
+        'comp-99',
+        mockTx,
+      );
       expect(getPostedJournal().companyId).toBe('comp-99');
     });
 
@@ -1065,13 +1181,19 @@ describe('FinanceIntegrationService', () => {
       // GL metadata carries the payload currency untouched
       expect(journal.description).toContain('Partial refund');
       // amounts posted verbatim from payload strings (no conversion)
-      expect(journal.lines.find((l) => l.accountId === revenueAccountId)!.debit).toBe('300');
+      expect(
+        journal.lines.find((l) => l.accountId === revenueAccountId)!.debit,
+      ).toBe('300');
     });
 
     it('14: missing OPEN financial period → throws (fail fast)', async () => {
       mockCalendarService.ensureCurrentCalendar.mockResolvedValueOnce({
         fiscalYear: { id: 'fy-1', year: 2026 } as any,
-        financialPeriod: { id: periodId, name: '2026-09', status: FinancialPeriodStatus.CLOSED } as any,
+        financialPeriod: {
+          id: periodId,
+          name: '2026-09',
+          status: FinancialPeriodStatus.CLOSED,
+        } as any,
         isPostable: false,
       });
       await expect(
@@ -1107,13 +1229,10 @@ describe('FinanceIntegrationService', () => {
     });
 
     it('17: handler without transactionClient fails fast and never calls the integration service', async () => {
-      const { SalePartiallyRefundedEventHandler } = await import(
-        '../../events/sale-partially-refunded.handler'
-      );
+      const { SalePartiallyRefundedEventHandler } =
+        await import('../../events/sale-partially-refunded.handler');
       const integration = { onSalePartiallyRefunded: jest.fn() };
-      const handler = new SalePartiallyRefundedEventHandler(
-        integration as any,
-      );
+      const handler = new SalePartiallyRefundedEventHandler(integration as any);
 
       await expect(
         handler.handle(
@@ -1224,8 +1343,7 @@ describe('FinanceIntegrationService', () => {
       const creditFor = (accountId: string) =>
         Number.parseFloat(
           lines.find(
-            (l) =>
-              l.accountId === accountId && Number.parseFloat(l.credit) > 0,
+            (l) => l.accountId === accountId && Number.parseFloat(l.credit) > 0,
           )!.credit,
         );
       expect(creditFor(cashAccountId)).toBe(100);
@@ -1281,7 +1399,11 @@ describe('FinanceIntegrationService', () => {
       ).toBe(150);
       // no zero-value credit lines anywhere
       expect(
-        lines.filter((l) => Number.parseFloat(l.credit) === 0 && Number.parseFloat(l.debit) === 0),
+        lines.filter(
+          (l) =>
+            Number.parseFloat(l.credit) === 0 &&
+            Number.parseFloat(l.debit) === 0,
+        ),
       ).toHaveLength(0);
     });
 

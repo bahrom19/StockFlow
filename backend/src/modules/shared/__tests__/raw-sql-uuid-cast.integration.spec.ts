@@ -529,28 +529,29 @@ describeDb(
         // join and the Prisma relation path report "none"). Seed fixtures inside a
         // transaction that is ALWAYS rolled back, so the positive branch is
         // genuinely exercised while leaving no data behind.
-        await prisma.$transaction(async (tx) => {
-          const company = await tx.company.create({
-            data: { name: 'G16-UUID-CAST-CREDITLIMIT-PROBE' },
-          });
-          const otherCompany = await tx.company.create({
-            data: { name: 'G16-UUID-CAST-CREDITLIMIT-OTHER' },
-          });
-          const customer = await tx.customer.create({
-            data: { companyId: company.id, type: 'PERSON' },
-          });
-          const foreignCustomer = await tx.customer.create({
-            data: { companyId: otherCompany.id, type: 'PERSON' },
-          });
-          await tx.creditLimit.create({
-            data: { customerId: customer.id, amount: '100.0000' },
-          });
-          await tx.creditLimit.create({
-            data: { customerId: foreignCustomer.id, amount: '100.0000' },
-          });
+        await prisma
+          .$transaction(async (tx) => {
+            const company = await tx.company.create({
+              data: { name: 'G16-UUID-CAST-CREDITLIMIT-PROBE' },
+            });
+            const otherCompany = await tx.company.create({
+              data: { name: 'G16-UUID-CAST-CREDITLIMIT-OTHER' },
+            });
+            const customer = await tx.customer.create({
+              data: { companyId: company.id, type: 'PERSON' },
+            });
+            const foreignCustomer = await tx.customer.create({
+              data: { companyId: otherCompany.id, type: 'PERSON' },
+            });
+            await tx.creditLimit.create({
+              data: { customerId: customer.id, amount: '100.0000' },
+            });
+            await tx.creditLimit.create({
+              data: { customerId: foreignCustomer.id, amount: '100.0000' },
+            });
 
-          const existsFor = async (companyId: string) => {
-            const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
+            const existsFor = async (companyId: string) => {
+              const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
               SELECT EXISTS(
                 SELECT 1 FROM "CreditLimit" cl
                 JOIN "Customer" c ON c."id" = cl."customerId"
@@ -558,20 +559,21 @@ describeDb(
                 LIMIT 1
               )
             `;
-            return rows[0]!.exists;
-          };
+              return rows[0]!.exists;
+            };
 
-          // Owning company must be blocked from changing currency.
-          expect(await existsFor(company.id)).toBe(true);
-          // A different tenant's CreditLimit must NOT leak into the decision.
-          expect(await existsFor(otherCompany.id)).toBe(true);
-          expect(await existsFor(ABSENT_UUID)).toBe(false);
+            // Owning company must be blocked from changing currency.
+            expect(await existsFor(company.id)).toBe(true);
+            // A different tenant's CreditLimit must NOT leak into the decision.
+            expect(await existsFor(otherCompany.id)).toBe(true);
+            expect(await existsFor(ABSENT_UUID)).toBe(false);
 
-          throw new Error('ROLLBACK_G16_PROBE');
-        }).catch((error: unknown) => {
-          // Expected: the forced throw rolls the transaction back.
-          expect(pgMessage(error)).toContain('ROLLBACK_G16_PROBE');
-        });
+            throw new Error('ROLLBACK_G16_PROBE');
+          })
+          .catch((error: unknown) => {
+            // Expected: the forced throw rolls the transaction back.
+            expect(pgMessage(error)).toContain('ROLLBACK_G16_PROBE');
+          });
 
         // Prove the rollback really removed everything.
         const residue = await prisma.company.count({

@@ -122,7 +122,11 @@ export class CustomerCreditLedgerService {
       companyId: string;
       customerId: string | null;
       currency: Currency;
-      allocations: Array<{ id: string; method: PaymentMethod; amount: Decimal }>;
+      allocations: Array<{
+        id: string;
+        method: PaymentMethod;
+        amount: Decimal;
+      }>;
       createdBy: string;
     },
   ): Promise<CustomerCreditTransactionEntity[]> {
@@ -221,13 +225,17 @@ export class CustomerCreditLedgerService {
       return null;
     }
 
-    const row = await this.repository.issueLegacyRefundCredit(tx, facts.companyId, {
-      refundId: facts.refundId,
-      customerId: facts.customerId,
-      currency: facts.currency,
-      amount: creditAmount,
-      createdBy: facts.createdBy,
-    });
+    const row = await this.repository.issueLegacyRefundCredit(
+      tx,
+      facts.companyId,
+      {
+        refundId: facts.refundId,
+        customerId: facts.customerId,
+        currency: facts.currency,
+        amount: creditAmount,
+        createdBy: facts.createdBy,
+      },
+    );
     return CustomerCreditTransactionMapper.toEntity(row);
   }
 
@@ -252,7 +260,9 @@ export class CustomerCreditLedgerService {
       if (amount.isNegative()) {
         // negative → ADJUSTED write-off; amount stored positive
       } else {
-        throw new BadRequestException('Adjustment amount must be a finite number');
+        throw new BadRequestException(
+          'Adjustment amount must be a finite number',
+        );
       }
     }
     const currency = dto.currency as Currency;

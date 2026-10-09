@@ -1,4 +1,11 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -33,8 +40,18 @@ export class SupplierAnalyticsController {
   @RequirePermission('suppliers:read')
   @ApiOperation({ summary: 'Get supplier purchase analytics summary' })
   @ApiParam({ name: 'supplierId', type: String })
-  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
-  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description: 'ISO date (default: 12 months ago)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description: 'ISO date (default: today)',
+  })
   @ApiResponse({ status: 200, type: SupplierPurchaseSummaryEntity })
   async getPurchaseSummary(
     @Param('supplierId', ParseUUIDPipe) supplierId: string,
@@ -90,8 +107,18 @@ export class SupplierAnalyticsController {
   @RequirePermission('suppliers:read')
   @ApiOperation({ summary: 'Get supplier delivery reliability metrics' })
   @ApiParam({ name: 'supplierId', type: String })
-  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
-  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description: 'ISO date (default: 12 months ago)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description: 'ISO date (default: today)',
+  })
   @ApiResponse({ status: 200, type: SupplierReliabilityEntity })
   async getReliability(
     @Param('supplierId', ParseUUIDPipe) supplierId: string,
@@ -111,9 +138,24 @@ export class SupplierAnalyticsController {
   @RequirePermission('suppliers:read')
   @ApiOperation({ summary: 'Get supplier product purchase price history' })
   @ApiParam({ name: 'supplierId', type: String })
-  @ApiQuery({ name: 'productId', required: true, type: String, description: 'Product ID' })
-  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
-  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
+  @ApiQuery({
+    name: 'productId',
+    required: true,
+    type: String,
+    description: 'Product ID',
+  })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description: 'ISO date (default: 12 months ago)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description: 'ISO date (default: today)',
+  })
   @ApiResponse({ status: 200, type: SupplierPriceHistoryEntity })
   async getPriceHistory(
     @Param('supplierId', ParseUUIDPipe) supplierId: string,
@@ -140,18 +182,25 @@ export class SupplierAnalyticsController {
     @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @CurrentUser() user?: JwtPayload,
   ) {
-    return this.analyticsService.getPaymentAging(
-      supplierId,
-      user!.companyId,
-    );
+    return this.analyticsService.getPaymentAging(supplierId, user!.companyId);
   }
 
   @Get('analytics/return-summary')
   @RequirePermission('suppliers:read')
   @ApiOperation({ summary: 'Get supplier return analysis summary' })
   @ApiParam({ name: 'supplierId', type: String })
-  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
-  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description: 'ISO date (default: 12 months ago)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description: 'ISO date (default: today)',
+  })
   @ApiResponse({ status: 200, type: SupplierReturnSummaryEntity })
   async getReturnSummary(
     @Param('supplierId', ParseUUIDPipe) supplierId: string,
@@ -169,10 +218,22 @@ export class SupplierAnalyticsController {
 
   @Get('analytics/performance')
   @RequirePermission('suppliers:read')
-  @ApiOperation({ summary: 'Get supplier performance overview (KPI dashboard)' })
+  @ApiOperation({
+    summary: 'Get supplier performance overview (KPI dashboard)',
+  })
   @ApiParam({ name: 'supplierId', type: String })
-  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
-  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description: 'ISO date (default: 12 months ago)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description: 'ISO date (default: today)',
+  })
   @ApiResponse({ status: 200, type: SupplierPerformanceEntity })
   async getPerformance(
     @Param('supplierId', ParseUUIDPipe) supplierId: string,
@@ -192,9 +253,24 @@ export class SupplierAnalyticsController {
   @RequirePermission('suppliers:read')
   @ApiOperation({ summary: 'Get supplier order pipeline' })
   @ApiParam({ name: 'supplierId', type: String })
-  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'ISO date (default: 12 months ago)' })
-  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'ISO date (default: today)' })
-  @ApiQuery({ name: 'status', required: false, type: String, description: 'Filter by PurchaseOrderStatus' })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description: 'ISO date (default: 12 months ago)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description: 'ISO date (default: today)',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    type: String,
+    description: 'Filter by PurchaseOrderStatus',
+  })
   @ApiResponse({ status: 200, type: SupplierOrderPipelineEntity })
   async getOrderPipeline(
     @Param('supplierId', ParseUUIDPipe) supplierId: string,

@@ -181,7 +181,10 @@ describe('TaskService', () => {
 
       await expect(
         service.create(
-          { title: 'T', customerId: '00000000-0000-0000-0000-000000000000' } as any,
+          {
+            title: 'T',
+            customerId: '00000000-0000-0000-0000-000000000000',
+          } as any,
           companyId,
           userId,
         ),

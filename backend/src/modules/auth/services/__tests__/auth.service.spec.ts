@@ -58,26 +58,28 @@ describe('AuthService', () => {
     mockPrisma = { $transaction: mockTransaction };
 
     const mockCalendarService = {
-      ensureCurrentCalendar: jest.fn().mockImplementation(async (companyId: string, tx: any) => {
-        // Simulate the real behavior: upsert FiscalYear and FinancialPeriod
-        const now = new Date();
-        const year = now.getUTCFullYear();
-        const month = now.getUTCMonth() + 1;
-        return {
-          fiscalYear: { id: 'fy-1', companyId, year },
-          financialPeriod: {
-            id: 'fp-1',
-            companyId,
-            name: `${year}-${String(month).padStart(2, '0')}`,
-            year,
-            month,
-            startDate: new Date(Date.UTC(year, month - 1, 1)),
-            endDate: new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)),
-            status: FinancialPeriodStatus.OPEN,
-          },
-          isPostable: true,
-        };
-      }),
+      ensureCurrentCalendar: jest
+        .fn()
+        .mockImplementation(async (companyId: string, tx: any) => {
+          // Simulate the real behavior: upsert FiscalYear and FinancialPeriod
+          const now = new Date();
+          const year = now.getUTCFullYear();
+          const month = now.getUTCMonth() + 1;
+          return {
+            fiscalYear: { id: 'fy-1', companyId, year },
+            financialPeriod: {
+              id: 'fp-1',
+              companyId,
+              name: `${year}-${String(month).padStart(2, '0')}`,
+              year,
+              month,
+              startDate: new Date(Date.UTC(year, month - 1, 1)),
+              endDate: new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)),
+              status: FinancialPeriodStatus.OPEN,
+            },
+            isPostable: true,
+          };
+        }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -88,7 +90,12 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: EmailService, useValue: { sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: EmailService,
+          useValue: {
+            sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+          },
+        },
         { provide: FiscalCalendarService, useValue: mockCalendarService },
       ],
     }).compile();
@@ -169,10 +176,16 @@ describe('AuthService', () => {
         chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
         role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
         permission: { findMany: jest.fn().mockResolvedValue([]) },
-        rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        rolePermission: {
+          createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
         userRole: { create: jest.fn().mockResolvedValue({}) },
-        fiscalYear: { upsert: jest.fn().mockResolvedValue({ id: 'fy-1', year: 2026 }) },
-        financialPeriod: { upsert: jest.fn().mockResolvedValue({ id: 'fp-1', status: 'OPEN' }) },
+        fiscalYear: {
+          upsert: jest.fn().mockResolvedValue({ id: 'fy-1', year: 2026 }),
+        },
+        financialPeriod: {
+          upsert: jest.fn().mockResolvedValue({ id: 'fp-1', status: 'OPEN' }),
+        },
       };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockJwtService.signAsync.mockResolvedValue('access-token');
@@ -203,10 +216,20 @@ describe('AuthService', () => {
         chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
         role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
         permission: { findMany: jest.fn().mockResolvedValue([]) },
-        rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        rolePermission: {
+          createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
         userRole: { create: jest.fn().mockResolvedValue({}) },
-        fiscalYear: { upsert: jest.fn().mockResolvedValue({ id: 'fy-existing', year: 2026 }) },
-        financialPeriod: { upsert: jest.fn().mockResolvedValue({ id: 'fp-existing', status: 'OPEN' }) },
+        fiscalYear: {
+          upsert: jest
+            .fn()
+            .mockResolvedValue({ id: 'fy-existing', year: 2026 }),
+        },
+        financialPeriod: {
+          upsert: jest
+            .fn()
+            .mockResolvedValue({ id: 'fp-existing', status: 'OPEN' }),
+        },
       };
       mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
       mockJwtService.signAsync.mockResolvedValue('access-token');
@@ -705,14 +728,20 @@ describe('AuthService', () => {
       mockJwtService.signAsync.mockResolvedValue('access-token');
       mockConfigService.get.mockReturnValue('15m');
 
-      const fiscalYear = { upsert: jest.fn().mockResolvedValue({ id: 'fy-1', year: 2026 }) };
-      const financialPeriod = { upsert: jest.fn().mockResolvedValue({ id: 'fp-1', status: 'OPEN' }) };
+      const fiscalYear = {
+        upsert: jest.fn().mockResolvedValue({ id: 'fy-1', year: 2026 }),
+      };
+      const financialPeriod = {
+        upsert: jest.fn().mockResolvedValue({ id: 'fp-1', status: 'OPEN' }),
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) =>
         cb({
           chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
           role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
           permission: { findMany: jest.fn().mockResolvedValue([]) },
-          rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          rolePermission: {
+            createMany: jest.fn().mockResolvedValue({ count: 0 }),
+          },
           userRole: { create: jest.fn().mockResolvedValue({}) },
           fiscalYear,
           financialPeriod,
@@ -759,14 +788,20 @@ describe('AuthService', () => {
       mockJwtService.signAsync.mockResolvedValue('access-token');
       mockConfigService.get.mockReturnValue('15m');
 
-      const fiscalYear = { upsert: jest.fn().mockResolvedValue({ id: 'fy-1', year: 2026 }) };
-      const financialPeriod = { upsert: jest.fn().mockResolvedValue({ id: 'fp-1', status: 'OPEN' }) };
+      const fiscalYear = {
+        upsert: jest.fn().mockResolvedValue({ id: 'fy-1', year: 2026 }),
+      };
+      const financialPeriod = {
+        upsert: jest.fn().mockResolvedValue({ id: 'fp-1', status: 'OPEN' }),
+      };
       mockTransaction.mockImplementation((cb: (tx: any) => any) =>
         cb({
           chartOfAccount: { create: jest.fn().mockResolvedValue({}) },
           role: { create: jest.fn().mockResolvedValue({ id: 'role-1' }) },
           permission: { findMany: jest.fn().mockResolvedValue([]) },
-          rolePermission: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          rolePermission: {
+            createMany: jest.fn().mockResolvedValue({ count: 0 }),
+          },
           userRole: { create: jest.fn().mockResolvedValue({}) },
           fiscalYear,
           financialPeriod,

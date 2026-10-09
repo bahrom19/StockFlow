@@ -204,9 +204,7 @@ describe('SaleRefundedEventHandler — G9-F3 FIFO CostLayer restore', () => {
     costing.findOutLayersByReferenceAndProduct.mockImplementation(
       (_c: string, _r: string, _s: string, productId: string) =>
         Promise.resolve(
-          productId === 'prod-a'
-            ? [outLayer(1, '100')]
-            : [outLayer(2, '90')],
+          productId === 'prod-a' ? [outLayer(1, '100')] : [outLayer(2, '90')],
         ),
     );
 
@@ -278,9 +276,7 @@ describe('SaleRefundedEventHandler — G9-F3 FIFO CostLayer restore', () => {
 
     expect(costing.restoreLayer).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'OUT layers cover 3 units but refund expects 5',
-      ),
+      expect.stringContaining('OUT layers cover 3 units but refund expects 5'),
     );
   });
 
@@ -297,9 +293,7 @@ describe('SaleRefundedEventHandler — G9-F3 FIFO CostLayer restore', () => {
 
     expect(costing.restoreLayer).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'OUT layers cover 7 units but refund expects 5',
-      ),
+      expect.stringContaining('OUT layers cover 7 units but refund expects 5'),
     );
   });
 

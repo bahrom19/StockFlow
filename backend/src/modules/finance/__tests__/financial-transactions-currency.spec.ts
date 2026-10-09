@@ -41,8 +41,12 @@ describe('FinancialTransactionsService — currency enforcement', () => {
       currency: 'KZT',
       amount: new (require('@prisma/client/runtime/library').Decimal)('1000'),
       fee: new (require('@prisma/client/runtime/library').Decimal)('0'),
-      netAmount: new (require('@prisma/client/runtime/library').Decimal)('1000'),
-      exchangeRate: new (require('@prisma/client/runtime/library').Decimal)('1'),
+      netAmount: new (require('@prisma/client/runtime/library').Decimal)(
+        '1000',
+      ),
+      exchangeRate: new (require('@prisma/client/runtime/library').Decimal)(
+        '1',
+      ),
       type: 'INCOME',
       direction: 'DEBIT',
       transactionDate: new Date(),
@@ -93,7 +97,12 @@ describe('FinancialTransactionsService — currency enforcement', () => {
   it('should reject USD when company currency is KZT', async () => {
     await expect(
       service.create(
-        { amount: '1000', type: 'INCOME', direction: 'DEBIT', currency: 'USD' } as any,
+        {
+          amount: '1000',
+          type: 'INCOME',
+          direction: 'DEBIT',
+          currency: 'USD',
+        } as any,
         { companyId, userId } as any,
       ),
     ).rejects.toThrow(BadRequestException);
@@ -101,7 +110,12 @@ describe('FinancialTransactionsService — currency enforcement', () => {
 
   it('should allow KZT when company currency is KZT', async () => {
     await service.create(
-      { amount: '1000', type: 'INCOME', direction: 'DEBIT', currency: 'KZT' } as any,
+      {
+        amount: '1000',
+        type: 'INCOME',
+        direction: 'DEBIT',
+        currency: 'KZT',
+      } as any,
       { companyId, userId } as any,
     );
     expect(mockRepo.create).toHaveBeenCalled();
@@ -119,8 +133,12 @@ describe('FinancialTransactionsService — company USD', () => {
       currency: 'USD',
       amount: new (require('@prisma/client/runtime/library').Decimal)('1000'),
       fee: new (require('@prisma/client/runtime/library').Decimal)('0'),
-      netAmount: new (require('@prisma/client/runtime/library').Decimal)('1000'),
-      exchangeRate: new (require('@prisma/client/runtime/library').Decimal)('1'),
+      netAmount: new (require('@prisma/client/runtime/library').Decimal)(
+        '1000',
+      ),
+      exchangeRate: new (require('@prisma/client/runtime/library').Decimal)(
+        '1',
+      ),
       type: 'INCOME',
       direction: 'DEBIT',
       transactionDate: new Date(),
@@ -170,7 +188,12 @@ describe('FinancialTransactionsService — company USD', () => {
 
   it('should allow explicit USD', async () => {
     await service.create(
-      { amount: '1000', type: 'INCOME', direction: 'DEBIT', currency: 'USD' } as any,
+      {
+        amount: '1000',
+        type: 'INCOME',
+        direction: 'DEBIT',
+        currency: 'USD',
+      } as any,
       { companyId, userId } as any,
     );
     expect(mockRepo.create).toHaveBeenCalled();
@@ -179,7 +202,12 @@ describe('FinancialTransactionsService — company USD', () => {
   it('should reject KZT when company currency is USD', async () => {
     await expect(
       service.create(
-        { amount: '1000', type: 'INCOME', direction: 'DEBIT', currency: 'KZT' } as any,
+        {
+          amount: '1000',
+          type: 'INCOME',
+          direction: 'DEBIT',
+          currency: 'KZT',
+        } as any,
         { companyId, userId } as any,
       ),
     ).rejects.toThrow(BadRequestException);

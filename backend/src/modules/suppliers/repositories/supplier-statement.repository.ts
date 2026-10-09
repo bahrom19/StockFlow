@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { Currency, Prisma, PurchaseInvoiceStatus, PurchaseReturnStatus } from '@prisma/client';
+import {
+  Currency,
+  Prisma,
+  PurchaseInvoiceStatus,
+  PurchaseReturnStatus,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 

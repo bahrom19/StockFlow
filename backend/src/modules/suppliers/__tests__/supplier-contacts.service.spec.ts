@@ -40,7 +40,9 @@ describe('SupplierContactsService', () => {
       findById: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue(baseContact as any),
       update: jest.fn().mockResolvedValue(baseContact as any),
-      softDelete: jest.fn().mockResolvedValue({ ...baseContact, deletedAt: new Date() } as any),
+      softDelete: jest
+        .fn()
+        .mockResolvedValue({ ...baseContact, deletedAt: new Date() } as any),
       findActivePrimary: jest.fn().mockResolvedValue(null),
       clearPrimary: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<SupplierContactsRepository>;
@@ -60,7 +62,11 @@ describe('SupplierContactsService', () => {
         { provide: SuppliersService, useValue: mockSuppliersService },
         { provide: PrismaService, useValue: mockPrisma },
         // G1 (P3-04): audit logging is wired in; unit tests stub it out.
-        { provide: require('../../shared/services/audit-log.service').AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: require('../../shared/services/audit-log.service')
+            .AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

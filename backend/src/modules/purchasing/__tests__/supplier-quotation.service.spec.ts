@@ -113,7 +113,11 @@ describe('SupplierQuotationService (G14-03-06 supplier/product validation)', () 
     mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
     await expect(
-      service.create(dto('foreign-supplier', [itemDto(productId)]) as any, userId, companyId),
+      service.create(
+        dto('foreign-supplier', [itemDto(productId)]) as any,
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(NotFoundException);
     expect(mockRepo.create).not.toHaveBeenCalled();
   });
@@ -127,7 +131,11 @@ describe('SupplierQuotationService (G14-03-06 supplier/product validation)', () 
     mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
     await expect(
-      service.create(dto('deleted-supplier', [itemDto(productId)]) as any, userId, companyId),
+      service.create(
+        dto('deleted-supplier', [itemDto(productId)]) as any,
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(NotFoundException);
     expect(mockRepo.create).not.toHaveBeenCalled();
   });
@@ -138,7 +146,11 @@ describe('SupplierQuotationService (G14-03-06 supplier/product validation)', () 
     mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
     mockRepo.create.mockResolvedValue(baseQuotation as any);
 
-    await service.create(dto(supplierId, [itemDto(productId)]) as any, userId, companyId);
+    await service.create(
+      dto(supplierId, [itemDto(productId)]) as any,
+      userId,
+      companyId,
+    );
 
     expect(mockTx.product.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -160,7 +172,11 @@ describe('SupplierQuotationService (G14-03-06 supplier/product validation)', () 
     mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
     await expect(
-      service.create(dto(supplierId, [itemDto('foreign-product')]) as any, userId, companyId),
+      service.create(
+        dto(supplierId, [itemDto('foreign-product')]) as any,
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(NotFoundException);
     expect(mockRepo.create).not.toHaveBeenCalled();
   });
@@ -174,7 +190,11 @@ describe('SupplierQuotationService (G14-03-06 supplier/product validation)', () 
     mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
     await expect(
-      service.create(dto(supplierId, [itemDto('deleted-product')]) as any, userId, companyId),
+      service.create(
+        dto(supplierId, [itemDto('deleted-product')]) as any,
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(NotFoundException);
     expect(mockRepo.create).not.toHaveBeenCalled();
   });
@@ -188,7 +208,11 @@ describe('SupplierQuotationService (G14-03-06 supplier/product validation)', () 
     mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
     await expect(
-      service.create(dto(supplierId, [itemDto('no-such-product')]) as any, userId, companyId),
+      service.create(
+        dto(supplierId, [itemDto('no-such-product')]) as any,
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(NotFoundException);
     expect(mockRepo.create).not.toHaveBeenCalled();
   });

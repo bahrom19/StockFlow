@@ -148,7 +148,10 @@ describe('OpportunityService', () => {
 
       await expect(
         service.create(
-          { title: 'Big Deal', customerId: '00000000-0000-0000-0000-000000000000' } as any,
+          {
+            title: 'Big Deal',
+            customerId: '00000000-0000-0000-0000-000000000000',
+          } as any,
           companyId,
           userId,
         ),

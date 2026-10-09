@@ -34,7 +34,10 @@ function supplierFixture(creditLimit: Decimal | null) {
 
 describe('SupplierCreditSummaryService', () => {
   let service: SupplierCreditSummaryService;
-  let suppliersRepo: { findById: jest.Mock; findArchivedSupplierById: jest.Mock };
+  let suppliersRepo: {
+    findById: jest.Mock;
+    findArchivedSupplierById: jest.Mock;
+  };
   let companiesService: { getBaseCurrency: jest.Mock };
   let invoiceAggregate: jest.Mock;
   let allocationAggregate: jest.Mock;
@@ -63,7 +66,9 @@ describe('SupplierCreditSummaryService', () => {
     };
     companiesService = { getBaseCurrency: jest.fn().mockResolvedValue(KZT) };
 
-    const creditSummaryRepo = new SupplierCreditSummaryRepository(prismaService);
+    const creditSummaryRepo = new SupplierCreditSummaryRepository(
+      prismaService,
+    );
     service = new SupplierCreditSummaryService(
       suppliersRepo as unknown as SuppliersRepository,
       creditSummaryRepo,
@@ -284,7 +289,11 @@ describe('SupplierCreditSummaryService', () => {
     await service.getCreditSummary(supplierId, companyId);
 
     expect(suppliersRepo.findById).toHaveBeenCalledWith(supplierId, companyId);
-    for (const agg of [invoiceAggregate, allocationAggregate, returnAggregate]) {
+    for (const agg of [
+      invoiceAggregate,
+      allocationAggregate,
+      returnAggregate,
+    ]) {
       expect(agg).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ companyId, supplierId }),

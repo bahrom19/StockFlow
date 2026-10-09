@@ -9,12 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiOperation,
-  ApiParam,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../rbac/guards/roles.guard';
 import { RequirePermission } from '../../rbac/decorators/require-permission.decorator';
@@ -55,11 +50,7 @@ export class CustomerCreditController {
     @Query('currency') currency: string | undefined,
     @CurrentUser() user: JwtPayload,
   ): Promise<CustomerCreditBalanceEntity[]> {
-    return this.ledgerService.getBalances(
-      customerId,
-      user.companyId,
-      currency,
-    );
+    return this.ledgerService.getBalances(customerId, user.companyId, currency);
   }
 
   @Get('transactions')

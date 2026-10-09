@@ -154,13 +154,14 @@ export class SaleRefundedEventHandler implements EventHandler<SaleRefundedEvent>
     }
 
     for (const [productId, expectedQuantity] of expectedQtyByProduct) {
-      const outLayers = await this.costingService.findOutLayersByReferenceAndProduct(
-        event.payload.companyId,
-        'SALE',
-        event.payload.saleId,
-        productId,
-        tx,
-      );
+      const outLayers =
+        await this.costingService.findOutLayersByReferenceAndProduct(
+          event.payload.companyId,
+          'SALE',
+          event.payload.saleId,
+          productId,
+          tx,
+        );
 
       // Legacy sale (pre-G9-F2, no persisted OUT layers): the legacy
       // costPrice fallback applies end-to-end; no layer restore.

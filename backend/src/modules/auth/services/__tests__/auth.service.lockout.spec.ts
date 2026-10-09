@@ -106,14 +106,20 @@ describe('AuthService — Account Lockout', () => {
         },
         {
           provide: EmailService,
-          useValue: { sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined) },
+          useValue: {
+            sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+          },
         },
         {
           provide: FiscalCalendarService,
           useValue: {
             ensureCurrentCalendar: jest.fn().mockResolvedValue({
               fiscalYear: { id: 'fy-1', year: 2026 },
-              financialPeriod: { id: 'fp-1', name: '2026-09', status: FinancialPeriodStatus.OPEN },
+              financialPeriod: {
+                id: 'fp-1',
+                name: '2026-09',
+                status: FinancialPeriodStatus.OPEN,
+              },
               isPostable: true,
             }),
           },

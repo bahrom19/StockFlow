@@ -145,7 +145,9 @@ describe('OverdueInvoiceRepository — canonical allocation source & overdue bou
     // so the DB would not return a row even though paidAmount < grandTotal.
     void repo.findOverdueInvoices(companyId, startOfToday);
     const sql = getLastSql();
-    expect(sql).toContain('(pi."grandTotal" - COALESCE(spa."allocatedAmount", 0)) > 0');
+    expect(sql).toContain(
+      '(pi."grandTotal" - COALESCE(spa."allocatedAmount", 0)) > 0',
+    );
     expect(sql).not.toContain('"paidAmount"');
   });
 

@@ -67,9 +67,7 @@ export class SupplierCreditSummaryService {
       );
 
     // Canonical AP model (unchanged), restricted to the base currency.
-    const outstandingAP = totalInvoiced
-      .sub(totalAllocated)
-      .sub(totalReturned);
+    const outstandingAP = totalInvoiced.sub(totalAllocated).sub(totalReturned);
 
     // null = limit not configured — explicitly different from 0.
     const creditLimit =

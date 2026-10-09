@@ -58,12 +58,18 @@ describe('G15-07-C1 migration — static SQL verification', () => {
     expect(sql).toMatch(
       /VALUES \( '3200', 'Retained Earnings', 'Accumulated profit and loss transferred at fiscal year close', 'EQUITY'::"AccountType", 'CREDIT'::"NormalBalance", 12 \)/,
     );
-    expect(sql).toMatch(/WHERE NOT EXISTS \( SELECT 1 FROM "ChartOfAccount" ca/);
-    expect(sql).toMatch(/ca\."companyId" = c\."id" AND ca\."code" = seed\."code"/);
+    expect(sql).toMatch(
+      /WHERE NOT EXISTS \( SELECT 1 FROM "ChartOfAccount" ca/,
+    );
+    expect(sql).toMatch(
+      /ca\."companyId" = c\."id" AND ca\."code" = seed\."code"/,
+    );
     // Canonical insert shape from the seeder.
     expect(sql).toMatch(/gen_random_uuid\(\)/);
     expect(sql).toMatch(/FROM "Company" c/);
-    expect(sql).toMatch(/true, true, 0, seed\."sortOrder", 0, CURRENT_TIMESTAMP,/);
+    expect(sql).toMatch(
+      /true, true, 0, seed\."sortOrder", 0, CURRENT_TIMESTAMP,/,
+    );
   });
 
   it('runs guard → restore → insert in that order', () => {

@@ -26,20 +26,26 @@ describe('StockReconciliationService — G16-I-3', () => {
 
   const stockRow = (quantity: number) => ({ id: 'stock-1', quantity });
   const productRow = (costPrice: Decimal | null) => ({ costPrice });
-  const agg = (remaining: number) => ({ _sum: { remainingQuantity: remaining } });
+  const agg = (remaining: number) => ({
+    _sum: { remainingQuantity: remaining },
+  });
 
   /** Default tx mock: positive stock, costPrice 15, IN remaining 20, no recon layer. */
   beforeEach(async () => {
     mockTx = {
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'stock-1' }]),
       stock: { findFirst: jest.fn().mockResolvedValue(stockRow(45)) },
-      product: { findFirst: jest.fn().mockResolvedValue(productRow(new Decimal(15))) },
+      product: {
+        findFirst: jest.fn().mockResolvedValue(productRow(new Decimal(15))),
+      },
       costLayer: {
         aggregate: jest.fn().mockResolvedValue(agg(20)),
         findFirst: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockImplementation(({ data }: any) =>
-          Promise.resolve({ id: 'layer-new', ...data }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }: any) =>
+            Promise.resolve({ id: 'layer-new', ...data }),
+          ),
       },
     };
     mockPrisma = {
@@ -61,7 +67,9 @@ describe('StockReconciliationService — G16-I-3', () => {
       ],
     }).compile();
 
-    service = module.get<StockReconciliationService>(StockReconciliationService);
+    service = module.get<StockReconciliationService>(
+      StockReconciliationService,
+    );
   });
 
   const layerData = (): any => mockTx.costLayer.create.mock.calls[0][0].data;
@@ -90,7 +98,9 @@ describe('StockReconciliationService — G16-I-3', () => {
     expect(mockTx.$queryRaw).toHaveBeenCalledWith(
       expect.objectContaining({ values: [COMPANY, PRODUCT] }),
     );
-    expect(mockTx.$queryRaw.mock.calls[0][0].strings.join(' ')).toContain('FOR UPDATE');
+    expect(mockTx.$queryRaw.mock.calls[0][0].strings.join(' ')).toContain(
+      'FOR UPDATE',
+    );
   });
 
   it('T5 (G16-J-R1): the resolved actor UUID is the AuditLog userId (never an arbitrary string)', async () => {
@@ -187,7 +197,9 @@ describe('StockReconciliationService — G16-I-3', () => {
 
     expect(result.status).toBe('SKIPPED');
     expect(mockTx.stock.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { companyId: COMPANY, productId: PRODUCT } }),
+      expect.objectContaining({
+        where: { companyId: COMPANY, productId: PRODUCT },
+      }),
     );
     expect(mockTx.product.findFirst).not.toHaveBeenCalled();
     expect(mockTx.costLayer.create).not.toHaveBeenCalled();
@@ -196,7 +208,9 @@ describe('StockReconciliationService — G16-I-3', () => {
   it('ROLLBACK: audit failure propagates → transaction aborts (no partial state)', async () => {
     mockAuditLog.log.mockRejectedValue(new Error('audit down'));
 
-    await expect(service.reconcilePair(COMPANY, PRODUCT, USER)).rejects.toThrow('audit down');
+    await expect(service.reconcilePair(COMPANY, PRODUCT, USER)).rejects.toThrow(
+      'audit down',
+    );
     // layer create attempted inside the tx; its commit is what gets rolled back.
     expect(mockTx.costLayer.create).toHaveBeenCalledTimes(1);
     expect(mockAuditLog.log).toHaveBeenCalledTimes(1);
@@ -263,7 +277,9 @@ describe('StockReconciliationService — G16-I-3', () => {
       new ConflictException('Cost layer modified concurrently'),
     );
 
-    await expect(service.reconcilePair(COMPANY, PRODUCT, USER)).rejects.toThrow(ConflictException);
+    await expect(service.reconcilePair(COMPANY, PRODUCT, USER)).rejects.toThrow(
+      ConflictException,
+    );
     expect(mockAuditLog.log).not.toHaveBeenCalled();
     expect(BadRequestException).toBeDefined();
   });

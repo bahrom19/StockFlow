@@ -99,9 +99,27 @@ export class SupplierStatementService {
     const limit = query.limit ?? 50;
 
     const [invoices, payments, returns] = await Promise.all([
-      this.statementRepo.findInvoices(supplierId, companyId, dateFrom, dateTo, currency),
-      this.statementRepo.findPayments(supplierId, companyId, dateFrom, dateTo, currency),
-      this.statementRepo.findReturns(supplierId, companyId, dateFrom, dateTo, currency),
+      this.statementRepo.findInvoices(
+        supplierId,
+        companyId,
+        dateFrom,
+        dateTo,
+        currency,
+      ),
+      this.statementRepo.findPayments(
+        supplierId,
+        companyId,
+        dateFrom,
+        dateTo,
+        currency,
+      ),
+      this.statementRepo.findReturns(
+        supplierId,
+        companyId,
+        dateFrom,
+        dateTo,
+        currency,
+      ),
     ]);
 
     const paymentIds = payments.map((p) => p.id);
@@ -134,30 +152,28 @@ export class SupplierStatementService {
           status: i.status,
         }),
       ),
-      ...payments.map(
-        (p): RawEntry => {
-          // G14-03-01: canonical AP credit = SUM(active allocations).
-          // allocByPayment is the existing batched fetch (no extra query).
-          const paymentAllocs = allocByPayment.get(p.id) ?? [];
-          const allocated = paymentAllocs.reduce(
-            (sum, a) => sum.add(a.amount),
-            new Decimal(0),
-          );
-          return {
-            entryType: 'PAYMENT',
-            date: p.paymentDate,
-            reference: p.paymentNumber,
-            sourceEntityId: p.id,
-            currency: p.currency,
-            amount: p.amount,
-            debit: new Decimal(0),
-            credit: allocated,
-            status: 'ACTIVE',
-            paymentId: p.id,
-            allocatedCredit: allocated,
-          };
-        },
-      ),
+      ...payments.map((p): RawEntry => {
+        // G14-03-01: canonical AP credit = SUM(active allocations).
+        // allocByPayment is the existing batched fetch (no extra query).
+        const paymentAllocs = allocByPayment.get(p.id) ?? [];
+        const allocated = paymentAllocs.reduce(
+          (sum, a) => sum.add(a.amount),
+          new Decimal(0),
+        );
+        return {
+          entryType: 'PAYMENT',
+          date: p.paymentDate,
+          reference: p.paymentNumber,
+          sourceEntityId: p.id,
+          currency: p.currency,
+          amount: p.amount,
+          debit: new Decimal(0),
+          credit: allocated,
+          status: 'ACTIVE',
+          paymentId: p.id,
+          allocatedCredit: allocated,
+        };
+      }),
       ...returns.map(
         (r): RawEntry => ({
           entryType: 'RETURN',
@@ -185,7 +201,9 @@ export class SupplierStatementService {
           ? await this.computeOpening(supplierId, companyId, dateFrom, cur)
           : new Decimal(0);
 
-      const ordered = [...groupEntries].sort((a, b) => this.compareEntries(a, b));
+      const ordered = [...groupEntries].sort((a, b) =>
+        this.compareEntries(a, b),
+      );
 
       let running = opening;
       const withRunning: SupplierStatementEntryEntity[] = ordered.map((e) => {
@@ -207,12 +225,11 @@ export class SupplierStatementService {
           const paymentAllocs = allocByPayment.get(e.paymentId) ?? [];
           // Reuse the credit already computed from the same batched data.
           const allocated = e.allocatedCredit ?? new Decimal(0);
-          const detail: SupplierStatementAllocationDetailEntity[] = paymentAllocs.map(
-            (a) => ({
+          const detail: SupplierStatementAllocationDetailEntity[] =
+            paymentAllocs.map((a) => ({
               purchaseInvoiceId: a.purchaseInvoiceId ?? '',
               allocatedAmount: a.amount.toString(),
-            }),
-          );
+            }));
           entry.allocations = detail;
           entry.allocatedAmount = allocated.toString();
           entry.unallocatedAmount = e.amount.sub(allocated).toString();
@@ -293,7 +310,9 @@ export class SupplierStatementService {
       exclusiveUpperBound,
       currency,
     );
-    const strictlyBefore = prePayments.filter((p) => p.paymentDate < beforeDate);
+    const strictlyBefore = prePayments.filter(
+      (p) => p.paymentDate < beforeDate,
+    );
     const prePaymentIds = strictlyBefore.map((p) => p.id);
     const preAllocs =
       prePaymentIds.length > 0
@@ -317,7 +336,8 @@ export class SupplierStatementService {
   private compareEntries(a: RawEntry, b: RawEntry): number {
     const timeDiff = a.date.getTime() - b.date.getTime();
     if (timeDiff !== 0) return timeDiff;
-    const typeDiff = ENTRY_TYPE_RANK[a.entryType] - ENTRY_TYPE_RANK[b.entryType];
+    const typeDiff =
+      ENTRY_TYPE_RANK[a.entryType] - ENTRY_TYPE_RANK[b.entryType];
     if (typeDiff !== 0) return typeDiff;
     return a.sourceEntityId < b.sourceEntityId
       ? -1
@@ -326,4 +346,3 @@ export class SupplierStatementService {
         : 0;
   }
 }
-

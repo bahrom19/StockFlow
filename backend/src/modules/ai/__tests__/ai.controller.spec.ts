@@ -38,7 +38,10 @@ describe('AIController', () => {
       controllers: [AIController],
       providers: [
         { provide: AIService, useValue: mockAiService },
-        { provide: ConversationRepository, useValue: mockConversationRepository },
+        {
+          provide: ConversationRepository,
+          useValue: mockConversationRepository,
+        },
         { provide: PrismaService, useValue: mockPrismaService },
       ],
     })
@@ -71,7 +74,12 @@ describe('AIController', () => {
 
       const result = await controller.chat(
         { message: 'Show today sales' },
-        { userId: 'user-1', companyId: 'company-1', roles: ['Admin'], email: 'test@test.com' },
+        {
+          userId: 'user-1',
+          companyId: 'company-1',
+          roles: ['Admin'],
+          email: 'test@test.com',
+        },
       );
 
       expect(result.content).toBe('Today you earned 125,000 KZT');
@@ -96,7 +104,12 @@ describe('AIController', () => {
         createdAt: new Date().toISOString(),
       });
 
-      const user = { userId: 'u-123', companyId: 'c-456', roles: ['Admin'], email: 'a@b.com' };
+      const user = {
+        userId: 'u-123',
+        companyId: 'c-456',
+        roles: ['Admin'],
+        email: 'a@b.com',
+      };
       await controller.chat({ message: 'test' }, user);
 
       expect(aiService.chat).toHaveBeenCalledWith(

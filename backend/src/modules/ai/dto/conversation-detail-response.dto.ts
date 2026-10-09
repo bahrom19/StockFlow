@@ -4,7 +4,10 @@ export class ConversationMessageDto {
   @ApiProperty({ description: 'Message ID' })
   id!: string;
 
-  @ApiProperty({ description: 'Message role', enum: ['user', 'assistant', 'tool'] })
+  @ApiProperty({
+    description: 'Message role',
+    enum: ['user', 'assistant', 'tool'],
+  })
   role!: string;
 
   @ApiProperty({ description: 'Message content' })
@@ -30,6 +33,9 @@ export class ConversationDetailResponseDto {
   @ApiProperty({ description: 'Conversation title', nullable: true })
   title!: string | null;
 
-  @ApiProperty({ description: 'Conversation messages', type: [ConversationMessageDto] })
+  @ApiProperty({
+    description: 'Conversation messages',
+    type: [ConversationMessageDto],
+  })
   messages!: ConversationMessageDto[];
 }

@@ -27,7 +27,8 @@ export class GetSalesSummaryTool implements AITool {
       },
       currency: {
         type: 'string',
-        description: 'Currency code (e.g. KZT, USD). Defaults to company base currency.',
+        description:
+          'Currency code (e.g. KZT, USD). Defaults to company base currency.',
       },
       page: {
         type: 'number',

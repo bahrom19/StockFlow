@@ -1,7 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { NotificationType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsOptional, IsInt, Min, Max } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class NotificationQueryDto {
   @ApiPropertyOptional({ description: 'Page number', default: 1 })
@@ -11,7 +18,11 @@ export class NotificationQueryDto {
   @Transform(({ value }) => Number(value))
   page?: number;
 
-  @ApiPropertyOptional({ description: 'Items per page', default: 20, maximum: 100 })
+  @ApiPropertyOptional({
+    description: 'Items per page',
+    default: 20,
+    maximum: 100,
+  })
   @IsOptional()
   @IsInt()
   @Min(1)

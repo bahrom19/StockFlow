@@ -16,10 +16,7 @@ describe('ProductsController — RBAC metadata (G15-05-D)', () => {
   const required = (method: keyof ProductsController) =>
     reflector.getAllAndOverride<string | string[] | undefined>(
       REQUIRED_PERMISSIONS_KEY,
-      [
-        ProductsController.prototype[method],
-        ProductsController,
-      ] as any,
+      [ProductsController.prototype[method], ProductsController] as any,
     );
 
   it('POST /products requires products:create', () => {

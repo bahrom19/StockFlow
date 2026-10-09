@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Currency, Prisma, PurchaseInvoice, PurchaseInvoiceStatus } from '@prisma/client';
+import {
+  Currency,
+  Prisma,
+  PurchaseInvoice,
+  PurchaseInvoiceStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 
 @Injectable()

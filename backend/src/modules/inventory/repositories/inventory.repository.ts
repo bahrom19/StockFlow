@@ -482,7 +482,9 @@ export class InventoryRepository {
     ids: string[],
     companyId: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<Array<{ id: string; costPrice: Decimal | null; isActive: boolean }>> {
+  ): Promise<
+    Array<{ id: string; costPrice: Decimal | null; isActive: boolean }>
+  > {
     return this.prisma(tx).product.findMany({
       where: {
         id: { in: ids },

@@ -37,7 +37,8 @@ export class CreditLimitService {
   ): Promise<CreditLimitEntity> {
     return this.prisma.$transaction(async (tx) => {
       await this.assertCustomer(dto.customerId, companyId, tx);
-      const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+      const companyCurrency =
+        await this.companiesService.getBaseCurrency(companyId);
       const data: Prisma.CreditLimitCreateInput = {
         amount: dto.amount,
         currency: companyCurrency as PrismaCurrency,
@@ -99,7 +100,10 @@ export class CreditLimitService {
     customerId: string,
     companyId: string,
   ): Promise<CreditLimitEntity | null> {
-    const entity = await this.repository.findByCustomerId(customerId, companyId);
+    const entity = await this.repository.findByCustomerId(
+      customerId,
+      companyId,
+    );
     if (!entity) {
       // Tenant-safe: foreign/unknown customer == not found (CRM convention).
       throw new NotFoundException(`Customer ${customerId} not found`);

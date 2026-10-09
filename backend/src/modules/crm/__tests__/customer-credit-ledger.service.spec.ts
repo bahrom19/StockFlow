@@ -216,9 +216,21 @@ describe('CustomerCreditLedgerService', () => {
         customerId,
         currency: Currency.KZT,
         allocations: [
-          { id: 'alloc-1', method: PaymentMethod.STORE_CREDIT, amount: new Decimal('80.0000') },
-          { id: 'alloc-2', method: PaymentMethod.GIFT_CARD, amount: new Decimal('20.0000') },
-          { id: 'alloc-3', method: PaymentMethod.CASH, amount: new Decimal('900.0000') },
+          {
+            id: 'alloc-1',
+            method: PaymentMethod.STORE_CREDIT,
+            amount: new Decimal('80.0000'),
+          },
+          {
+            id: 'alloc-2',
+            method: PaymentMethod.GIFT_CARD,
+            amount: new Decimal('20.0000'),
+          },
+          {
+            id: 'alloc-3',
+            method: PaymentMethod.CASH,
+            amount: new Decimal('900.0000'),
+          },
         ],
         createdBy: userId,
       });
@@ -245,7 +257,11 @@ describe('CustomerCreditLedgerService', () => {
         customerId,
         currency: Currency.KZT,
         allocations: [
-          { id: 'alloc-c', method: PaymentMethod.CASH, amount: new Decimal('10') },
+          {
+            id: 'alloc-c',
+            method: PaymentMethod.CASH,
+            amount: new Decimal('10'),
+          },
         ],
         createdBy: userId,
       });
@@ -260,7 +276,11 @@ describe('CustomerCreditLedgerService', () => {
           customerId: null,
           currency: Currency.KZT,
           allocations: [
-            { id: 'alloc-1', method: PaymentMethod.STORE_CREDIT, amount: new Decimal('10') },
+            {
+              id: 'alloc-1',
+              method: PaymentMethod.STORE_CREDIT,
+              amount: new Decimal('10'),
+            },
           ],
           createdBy: userId,
         }),
@@ -476,14 +496,38 @@ describe('CustomerCreditLedgerService', () => {
           if (cur === Currency.USD) {
             return Promise.resolve(
               new Map([
-                ['USD', { balance: new Decimal('5.0000'), issuedTotal: new Decimal('5'), spentTotal: new Decimal('0'), adjustedTotal: new Decimal('0') }],
+                [
+                  'USD',
+                  {
+                    balance: new Decimal('5.0000'),
+                    issuedTotal: new Decimal('5'),
+                    spentTotal: new Decimal('0'),
+                    adjustedTotal: new Decimal('0'),
+                  },
+                ],
               ]),
             );
           }
           return Promise.resolve(
             new Map([
-              ['KZT', { balance: new Decimal('1000.0000'), issuedTotal: new Decimal('2000'), spentTotal: new Decimal('1000'), adjustedTotal: new Decimal('0') }],
-              ['USD', { balance: new Decimal('5.0000'), issuedTotal: new Decimal('5'), spentTotal: new Decimal('0'), adjustedTotal: new Decimal('0') }],
+              [
+                'KZT',
+                {
+                  balance: new Decimal('1000.0000'),
+                  issuedTotal: new Decimal('2000'),
+                  spentTotal: new Decimal('1000'),
+                  adjustedTotal: new Decimal('0'),
+                },
+              ],
+              [
+                'USD',
+                {
+                  balance: new Decimal('5.0000'),
+                  issuedTotal: new Decimal('5'),
+                  spentTotal: new Decimal('0'),
+                  adjustedTotal: new Decimal('0'),
+                },
+              ],
             ]),
           );
         },
@@ -520,7 +564,17 @@ describe('CustomerCreditLedgerService', () => {
     it('Decimal 4-place precision is preserved end-to-end (§23.21)', async () => {
       repo.getBalances.mockResolvedValue(
         new Map([
-          ['KZT', { balance: new Decimal('33.3333').add(new Decimal('33.3333')).add(new Decimal('33.3334')), issuedTotal: new Decimal('100.0000'), spentTotal: new Decimal('0'), adjustedTotal: new Decimal('0') }],
+          [
+            'KZT',
+            {
+              balance: new Decimal('33.3333')
+                .add(new Decimal('33.3333'))
+                .add(new Decimal('33.3334')),
+              issuedTotal: new Decimal('100.0000'),
+              spentTotal: new Decimal('0'),
+              adjustedTotal: new Decimal('0'),
+            },
+          ],
         ]),
       );
       const balances = await service.getBalances(customerId, companyId, 'KZT');

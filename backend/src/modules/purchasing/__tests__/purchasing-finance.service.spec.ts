@@ -21,7 +21,12 @@ function mockTx() {
       findMany: jest.fn().mockResolvedValue(
         Object.entries(accountIds).map(([key, id]) => ({
           id,
-          code: { inventory: '1300', accountsPayable: '2100', grni: '2110', purchaseDiscount: '5200' }[key],
+          code: {
+            inventory: '1300',
+            accountsPayable: '2100',
+            grni: '2110',
+            purchaseDiscount: '5200',
+          }[key],
           isActive: true,
           deletedAt: null,
         })),
@@ -39,7 +44,7 @@ function mockTx() {
  * Two distinct economic values:
  *   A. AP debit  = declared supplier return value (unitCost × qty)
  *   B. Inventory credit = actual FIFO consumed cost (consumeFifoLayers result)   *   Difference → explicit variance leg on account 5200 (credit when the
-   *   declared AP value exceeds the FIFO cost, debit in the reverse case).
+ *   declared AP value exceeds the FIFO cost, debit in the reverse case).
  * When no FIFO basis is supplied (legacy/non-costed flows) the declared
  * basis is used and the journal keeps its historical two-leg shape.
  */
@@ -77,8 +82,14 @@ describe('PurchasingFinanceService — G9-F4 purchase return journal', () => {
   }
 
   function totalBy(lines: Array<{ debit: string; credit: string }>) {
-    const debit = lines.reduce((s, l) => s.plus(l.debit), new Prisma.Decimal(0));
-    const credit = lines.reduce((s, l) => s.plus(l.credit), new Prisma.Decimal(0));
+    const debit = lines.reduce(
+      (s, l) => s.plus(l.debit),
+      new Prisma.Decimal(0),
+    );
+    const credit = lines.reduce(
+      (s, l) => s.plus(l.credit),
+      new Prisma.Decimal(0),
+    );
     return { debit, credit };
   }
 
@@ -96,8 +107,14 @@ describe('PurchasingFinanceService — G9-F4 purchase return journal', () => {
     expect(lines).toHaveLength(2);
     expect(lines).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ accountId: accountIds.accountsPayable, debit: '700' }),
-        expect.objectContaining({ accountId: accountIds.inventory, credit: '700' }),
+        expect.objectContaining({
+          accountId: accountIds.accountsPayable,
+          debit: '700',
+        }),
+        expect.objectContaining({
+          accountId: accountIds.inventory,
+          credit: '700',
+        }),
       ]),
     );
     const { debit, credit } = totalBy(lines);
@@ -118,8 +135,14 @@ describe('PurchasingFinanceService — G9-F4 purchase return journal', () => {
     expect(lines).toHaveLength(3);
     expect(lines).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ accountId: accountIds.accountsPayable, debit: '800' }),
-        expect.objectContaining({ accountId: accountIds.inventory, credit: '700' }),
+        expect.objectContaining({
+          accountId: accountIds.accountsPayable,
+          debit: '800',
+        }),
+        expect.objectContaining({
+          accountId: accountIds.inventory,
+          credit: '700',
+        }),
         expect.objectContaining({
           accountId: accountIds.purchaseDiscount,
           debit: '0',
@@ -145,8 +168,14 @@ describe('PurchasingFinanceService — G9-F4 purchase return journal', () => {
     expect(lines).toHaveLength(3);
     expect(lines).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ accountId: accountIds.accountsPayable, debit: '700' }),
-        expect.objectContaining({ accountId: accountIds.inventory, credit: '800' }),
+        expect.objectContaining({
+          accountId: accountIds.accountsPayable,
+          debit: '700',
+        }),
+        expect.objectContaining({
+          accountId: accountIds.inventory,
+          credit: '800',
+        }),
         expect.objectContaining({
           accountId: accountIds.purchaseDiscount,
           debit: '100',
@@ -177,8 +206,14 @@ describe('PurchasingFinanceService — G9-F4 purchase return journal', () => {
     const lines = postedLines();
     expect(lines).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ accountId: accountIds.accountsPayable, debit: '850' }),
-        expect.objectContaining({ accountId: accountIds.inventory, credit: '800' }),
+        expect.objectContaining({
+          accountId: accountIds.accountsPayable,
+          debit: '850',
+        }),
+        expect.objectContaining({
+          accountId: accountIds.inventory,
+          credit: '800',
+        }),
         expect.objectContaining({
           accountId: accountIds.purchaseDiscount,
           debit: '0',
@@ -203,8 +238,14 @@ describe('PurchasingFinanceService — G9-F4 purchase return journal', () => {
     expect(lines).toHaveLength(2);
     expect(lines).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ accountId: accountIds.accountsPayable, debit: '700' }),
-        expect.objectContaining({ accountId: accountIds.inventory, credit: '700' }),
+        expect.objectContaining({
+          accountId: accountIds.accountsPayable,
+          debit: '700',
+        }),
+        expect.objectContaining({
+          accountId: accountIds.inventory,
+          credit: '700',
+        }),
       ]),
     );
   });

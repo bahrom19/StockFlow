@@ -1,6 +1,4 @@
-import {
-  ApiPropertyOptional,
-} from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsOptional,

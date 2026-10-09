@@ -5,7 +5,9 @@ function toMoney(value: unknown): string {
   return value == null ? '0.0000' : String(value);
 }
 
-export function toPaymentEntity(payment: SupplierPayment): SupplierPaymentEntity {
+export function toPaymentEntity(
+  payment: SupplierPayment,
+): SupplierPaymentEntity {
   return {
     id: payment.id,
     companyId: payment.companyId,

@@ -91,7 +91,11 @@ describe('RFQService (G14-03-06 product validation)', () => {
     mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
     await expect(
-      service.create({ items: [itemDto('foreign-product')] } as any, userId, companyId),
+      service.create(
+        { items: [itemDto('foreign-product')] } as any,
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(NotFoundException);
     expect(mockRepo.create).not.toHaveBeenCalled();
   });
@@ -104,7 +108,11 @@ describe('RFQService (G14-03-06 product validation)', () => {
     mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
     await expect(
-      service.create({ items: [itemDto('deleted-product')] } as any, userId, companyId),
+      service.create(
+        { items: [itemDto('deleted-product')] } as any,
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(NotFoundException);
     expect(mockRepo.create).not.toHaveBeenCalled();
   });
@@ -117,7 +125,11 @@ describe('RFQService (G14-03-06 product validation)', () => {
     mockTransaction.mockImplementation((cb: (tx: any) => any) => cb(mockTx));
 
     await expect(
-      service.create({ items: [itemDto('no-such-product')] } as any, userId, companyId),
+      service.create(
+        { items: [itemDto('no-such-product')] } as any,
+        userId,
+        companyId,
+      ),
     ).rejects.toThrow(NotFoundException);
     expect(mockRepo.create).not.toHaveBeenCalled();
   });

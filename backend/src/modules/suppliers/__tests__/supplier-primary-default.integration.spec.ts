@@ -43,9 +43,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await prisma.supplierContact.deleteMany({ where: { supplierId: { in: [supplierId, otherSupplierId] } } });
-  await prisma.supplierAddress.deleteMany({ where: { supplierId: { in: [supplierId, otherSupplierId] } } });
-  await prisma.supplier.deleteMany({ where: { id: { in: [supplierId, otherSupplierId] } } });
+  await prisma.supplierContact.deleteMany({
+    where: { supplierId: { in: [supplierId, otherSupplierId] } },
+  });
+  await prisma.supplierAddress.deleteMany({
+    where: { supplierId: { in: [supplierId, otherSupplierId] } },
+  });
+  await prisma.supplier.deleteMany({
+    where: { id: { in: [supplierId, otherSupplierId] } },
+  });
   await prisma.company.deleteMany({ where: { id: companyId } });
   await prisma.$disconnect();
 });
@@ -100,7 +106,9 @@ describe('SupplierContact primary uniqueness (G14-03-07)', () => {
     } as never);
     expect(a.isPrimary).toBe(false);
     expect(b.isPrimary).toBe(false);
-    await prisma.supplierContact.deleteMany({ where: { id: { in: [a.id, b.id] } } });
+    await prisma.supplierContact.deleteMany({
+      where: { id: { in: [a.id, b.id] } },
+    });
   });
 
   it('allows a new primary after the previous one is soft-deleted', async () => {
@@ -131,7 +139,9 @@ describe('SupplierContact primary uniqueness (G14-03-07)', () => {
       isPrimary: true,
     } as never);
     expect(own.isPrimary).toBe(true);
-    await prisma.supplierContact.deleteMany({ where: { id: { in: [other.id, own.id] } } });
+    await prisma.supplierContact.deleteMany({
+      where: { id: { in: [other.id, own.id] } },
+    });
   });
 });
 
@@ -185,7 +195,9 @@ describe('SupplierAddress default uniqueness (G14-03-07)', () => {
     } as never);
     expect(a.isDefault).toBe(false);
     expect(b.isDefault).toBe(false);
-    await prisma.supplierAddress.deleteMany({ where: { id: { in: [a.id, b.id] } } });
+    await prisma.supplierAddress.deleteMany({
+      where: { id: { in: [a.id, b.id] } },
+    });
   });
 
   it('allows a new default after the previous one is soft-deleted', async () => {
@@ -216,6 +228,8 @@ describe('SupplierAddress default uniqueness (G14-03-07)', () => {
       isDefault: true,
     } as never);
     expect(own.isDefault).toBe(true);
-    await prisma.supplierAddress.deleteMany({ where: { id: { in: [other.id, own.id] } } });
+    await prisma.supplierAddress.deleteMany({
+      where: { id: { in: [other.id, own.id] } },
+    });
   });
 });

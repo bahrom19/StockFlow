@@ -21,9 +21,7 @@ import { FinanceIntegrationService } from '../services/finance-integration.servi
  * `(companyId, 'REFUND', refundId)` StockMovement marker.
  */
 @Injectable()
-export class SalePartiallyRefundedEventHandler
-  implements EventHandler<SalePartiallyRefundedEvent>
-{
+export class SalePartiallyRefundedEventHandler implements EventHandler<SalePartiallyRefundedEvent> {
   private readonly logger = new Logger(SalePartiallyRefundedEventHandler.name);
 
   constructor(private readonly integration: FinanceIntegrationService) {}

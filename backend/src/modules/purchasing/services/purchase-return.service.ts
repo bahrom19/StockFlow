@@ -131,7 +131,8 @@ export class PurchaseReturnService {
     }
 
     // Enforce document currency == Company.currency
-    const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+    const companyCurrency =
+      await this.companiesService.getBaseCurrency(companyId);
     if (dto.currency && dto.currency !== companyCurrency) {
       throw new BadRequestException(
         `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
@@ -341,7 +342,8 @@ export class PurchaseReturnService {
       }
       if (dto.notes !== undefined) updateData.notes = dto.notes;
       if (dto.currency) {
-        const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+        const companyCurrency =
+          await this.companiesService.getBaseCurrency(companyId);
         if (dto.currency !== companyCurrency) {
           throw new BadRequestException(
             `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
@@ -352,21 +354,19 @@ export class PurchaseReturnService {
 
       // G14-03-05-B: map phase (no writes yet). Row write goes first so a
       // CAS failure leaves nothing mutated — including the items below.
-      let itemsData:
-        | Array<{
-            purchaseReturnId: string;
-            productId: string;
-            quantity: number;
-            unitCost: Decimal;
-            discountPercent: Decimal | null;
-            discountAmount: Decimal;
-            taxPercent: Decimal | null;
-            taxAmount: Decimal;
-            subtotal: Decimal;
-            total: Decimal;
-            notes?: string | null;
-          }>
-        | null = null;
+      let itemsData: Array<{
+        purchaseReturnId: string;
+        productId: string;
+        quantity: number;
+        unitCost: Decimal;
+        discountPercent: Decimal | null;
+        discountAmount: Decimal;
+        taxPercent: Decimal | null;
+        taxAmount: Decimal;
+        subtotal: Decimal;
+        total: Decimal;
+        notes?: string | null;
+      }> | null = null;
 
       if (dto.items) {
         // G14-03-05-B: revalidate products BEFORE any item write — an invalid
@@ -499,9 +499,7 @@ export class PurchaseReturnService {
         tx,
       );
       if (!updated) {
-        throw new NotFoundException(
-          `Purchase return with id ${id} not found`,
-        );
+        throw new NotFoundException(`Purchase return with id ${id} not found`);
       }
 
       // G14-03-05-B: update audit trail in the same transaction, same style
@@ -630,11 +628,7 @@ export class PurchaseReturnService {
     companyId: string,
     tx: Prisma.TransactionClient,
   ): Promise<PurchaseReturnEntity> {
-    const ret = await this.purchaseReturnRepository.findById(
-      id,
-      companyId,
-      tx,
-    );
+    const ret = await this.purchaseReturnRepository.findById(id, companyId, tx);
     if (!ret) {
       throw new NotFoundException(`Purchase return with id ${id} not found`);
     }
@@ -912,10 +906,7 @@ export class PurchaseReturnService {
           companyId,
           deletedAt: null,
           status: {
-            in: [
-              PurchaseReturnStatus.APPROVED,
-              PurchaseReturnStatus.COMPLETED,
-            ],
+            in: [PurchaseReturnStatus.APPROVED, PurchaseReturnStatus.COMPLETED],
           },
           isCancelled: false,
           ...(excludeReturnId ? { id: { not: excludeReturnId } } : {}),
@@ -1089,7 +1080,8 @@ export class PurchaseReturnService {
         }
 
         // Restore at weighted average unit cost
-        const avgUnitCost = totalQty > 0 ? totalCost.div(totalQty) : new Decimal(0);
+        const avgUnitCost =
+          totalQty > 0 ? totalCost.div(totalQty) : new Decimal(0);
         await this.costingService.restoreLayer(
           item.productId,
           companyId,
@@ -1173,7 +1165,10 @@ export class PurchaseReturnService {
           entityType: 'PurchaseReturn',
           entityId: id,
           action: 'CANCELLED',
-          before: { status: PurchaseReturnStatus.COMPLETED, isCancelled: false },
+          before: {
+            status: PurchaseReturnStatus.COMPLETED,
+            isCancelled: false,
+          },
           after: { status: PurchaseReturnStatus.COMPLETED, isCancelled: true },
         },
         tx,

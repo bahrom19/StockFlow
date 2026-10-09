@@ -1,5 +1,8 @@
 import { OpenAIProvider } from '../providers/openai-provider';
-import { AIProviderError, AIResponse } from '../providers/ai-provider.interface';
+import {
+  AIProviderError,
+  AIResponse,
+} from '../providers/ai-provider.interface';
 
 /** Mirrors the constant in openai-provider.ts */
 const DEFAULT_TOTAL_BUDGET_MS = 60_000;
@@ -82,7 +85,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
   describe('F1: Retry-After parsing', () => {
     it('uses Retry-After header value for 429 delay', async () => {
       fetchSpy
-        .mockResolvedValueOnce(makeErrorResponse(429, undefined, { 'Retry-After': '3' }))
+        .mockResolvedValueOnce(
+          makeErrorResponse(429, undefined, { 'Retry-After': '3' }),
+        )
         .mockResolvedValueOnce(makeSuccessResponse());
 
       const result = await provider.chat(SIMPLE_REQUEST);
@@ -94,7 +99,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
 
     it('handles Retry-After as integer seconds string', async () => {
       fetchSpy
-        .mockResolvedValueOnce(makeErrorResponse(429, undefined, { 'Retry-After': '1' }))
+        .mockResolvedValueOnce(
+          makeErrorResponse(429, undefined, { 'Retry-After': '1' }),
+        )
         .mockResolvedValueOnce(makeSuccessResponse());
 
       await provider.chat(SIMPLE_REQUEST);
@@ -103,7 +110,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
 
     it('handles Retry-After with decimal seconds', async () => {
       fetchSpy
-        .mockResolvedValueOnce(makeErrorResponse(429, undefined, { 'Retry-After': '2.5' }))
+        .mockResolvedValueOnce(
+          makeErrorResponse(429, undefined, { 'Retry-After': '2.5' }),
+        )
         .mockResolvedValueOnce(makeSuccessResponse());
 
       await provider.chat(SIMPLE_REQUEST);
@@ -131,7 +140,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
   describe('Retry-After invalid values', () => {
     it('falls back to exponential when Retry-After is non-numeric', async () => {
       fetchSpy
-        .mockResolvedValueOnce(makeErrorResponse(429, undefined, { 'Retry-After': 'abc' }))
+        .mockResolvedValueOnce(
+          makeErrorResponse(429, undefined, { 'Retry-After': 'abc' }),
+        )
         .mockResolvedValueOnce(makeSuccessResponse());
 
       await provider.chat(SIMPLE_REQUEST);
@@ -142,7 +153,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
 
     it('falls back to exponential when Retry-After is empty', async () => {
       fetchSpy
-        .mockResolvedValueOnce(makeErrorResponse(429, undefined, { 'Retry-After': '' }))
+        .mockResolvedValueOnce(
+          makeErrorResponse(429, undefined, { 'Retry-After': '' }),
+        )
         .mockResolvedValueOnce(makeSuccessResponse());
 
       await provider.chat(SIMPLE_REQUEST);
@@ -155,7 +168,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
   describe('Retry-After clamping', () => {
     it('clamps Retry-After to MAX_RETRY_AFTER_MS (10s)', async () => {
       fetchSpy
-        .mockResolvedValueOnce(makeErrorResponse(429, undefined, { 'Retry-After': '999' }))
+        .mockResolvedValueOnce(
+          makeErrorResponse(429, undefined, { 'Retry-After': '999' }),
+        )
         .mockResolvedValueOnce(makeSuccessResponse());
 
       await provider.chat(SIMPLE_REQUEST);
@@ -166,7 +181,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
 
     it('handles Retry-After = 0 (immediate retry)', async () => {
       fetchSpy
-        .mockResolvedValueOnce(makeErrorResponse(429, undefined, { 'Retry-After': '0' }))
+        .mockResolvedValueOnce(
+          makeErrorResponse(429, undefined, { 'Retry-After': '0' }),
+        )
         .mockResolvedValueOnce(makeSuccessResponse());
 
       await provider.chat(SIMPLE_REQUEST);
@@ -175,7 +192,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
 
     it('handles negative Retry-After by falling back to exponential', async () => {
       fetchSpy
-        .mockResolvedValueOnce(makeErrorResponse(429, undefined, { 'Retry-After': '-5' }))
+        .mockResolvedValueOnce(
+          makeErrorResponse(429, undefined, { 'Retry-After': '-5' }),
+        )
         .mockResolvedValueOnce(makeSuccessResponse());
 
       const result = await provider.chat(SIMPLE_REQUEST);
@@ -215,7 +234,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
 
     it('uses exponential backoff for timeout errors', async () => {
       fetchSpy
-        .mockRejectedValueOnce(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+        .mockRejectedValueOnce(
+          Object.assign(new Error('aborted'), { name: 'AbortError' }),
+        )
         .mockResolvedValueOnce(makeSuccessResponse());
 
       await provider.chat(SIMPLE_REQUEST);
@@ -228,10 +249,11 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
 
   describe('Max retries', () => {
     it('does not retry more than 2 times', async () => {
-      fetchSpy
-        .mockResolvedValue(makeErrorResponse(429)); // always 429
+      fetchSpy.mockResolvedValue(makeErrorResponse(429)); // always 429
 
-      await expect(provider.chat(SIMPLE_REQUEST)).rejects.toThrow(AIProviderError);
+      await expect(provider.chat(SIMPLE_REQUEST)).rejects.toThrow(
+        AIProviderError,
+      );
 
       // Initial + 2 retries = 3 total calls
       expect(fetchSpy).toHaveBeenCalledTimes(3);
@@ -244,7 +266,9 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
         .mockResolvedValueOnce(makeErrorResponse(500))
         .mockResolvedValueOnce(makeErrorResponse(500));
 
-      await expect(provider.chat(SIMPLE_REQUEST)).rejects.toThrow(AIProviderError);
+      await expect(provider.chat(SIMPLE_REQUEST)).rejects.toThrow(
+        AIProviderError,
+      );
 
       expect(fetchSpy).toHaveBeenCalledTimes(3);
       expect(delayCalls).toEqual([1000, 2000]);
@@ -359,7 +383,10 @@ describe('OpenAIProvider — AI-4A Retry & Timeout', () => {
                 tool_calls: [
                   {
                     id: 'call_123',
-                    function: { name: 'get_dashboard', arguments: '{"currency":"KZT"}' },
+                    function: {
+                      name: 'get_dashboard',
+                      arguments: '{"currency":"KZT"}',
+                    },
                   },
                 ],
               },

@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PaymentMethod, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import {
@@ -714,7 +710,10 @@ export class FinanceIntegrationService {
       // per GL account (G11-D map: CASH→1010, CARD/QR/BANK_TRANSFER/
       // MOBILE_WALLET→1020, STORE_CREDIT/GIFT_CARD→1200). Zero-value lines are
       // omitted; Σ credits must equal the refund total exactly.
-      const byAccount = new Map<string, { amount: Decimal; methods: PaymentMethod[] }>();
+      const byAccount = new Map<
+        string,
+        { amount: Decimal; methods: PaymentMethod[] }
+      >();
       for (const row of allocationRows) {
         const amount = new Decimal(row.amount);
         if (amount.lte(0)) {

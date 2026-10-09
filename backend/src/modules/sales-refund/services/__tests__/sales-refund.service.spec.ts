@@ -125,7 +125,6 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     issueLegacyRefundCredit: jest.Mock;
   };
 
-
   const allocationsFor = (refundId: string) =>
     allocationLedger.filter((a) => a.salesRefundId === refundId);
 
@@ -235,8 +234,8 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
         store.push(refund);
         return refund;
       }),
-      findById: jest.fn(async (id: string) =>
-        store.find((r) => r.id === id) ?? null,
+      findById: jest.fn(
+        async (id: string) => store.find((r) => r.id === id) ?? null,
       ),
       findBySaleId: jest.fn(async () => store),
       aggregateCompletedBySaleItem: jest.fn(async () => buildAggregate()),
@@ -275,15 +274,15 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
 
     const mockPrisma = {
       $transaction: jest.fn(async (fn: any) => {
-      const before = snapshot();
-      const allocationsBefore = allocationLedger.map((a) => ({ ...a }));
-      try {
-        return await fn(mockTx);
-      } catch (error) {
-        store = before;
-        allocationLedger = allocationsBefore; // rollback removes allocation rows too
-        throw error;
-      }
+        const before = snapshot();
+        const allocationsBefore = allocationLedger.map((a) => ({ ...a }));
+        try {
+          return await fn(mockTx);
+        } catch (error) {
+          store = before;
+          allocationLedger = allocationsBefore; // rollback removes allocation rows too
+          throw error;
+        }
       }),
     };
 
@@ -299,14 +298,25 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: EVENT_BUS, useValue: mockEventBus },
         CustomerCreditLedgerService,
-        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), issueLegacyRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },
+        {
+          provide: CustomerCreditLedgerRepository,
+          useValue: {
+            atomicSpend: jest.fn().mockResolvedValue({}),
+            findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }),
+            getBalances: jest.fn().mockResolvedValue(new Map()),
+            issueRefundCredit: jest.fn().mockResolvedValue({}),
+            issueLegacyRefundCredit: jest.fn().mockResolvedValue({}),
+            createManualAdjustment: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get(SalesRefundService);
     creditLedgerRepo = module.get(CustomerCreditLedgerRepository);
   });
-  const refund = (items?: Array<{ saleItemId: string; quantity: number }>) =>    service.createRefund('sale-1', { items }, 'user-1', COMPANY);
+  const refund = (items?: Array<{ saleItemId: string; quantity: number }>) =>
+    service.createRefund('sale-1', { items }, 'user-1', COMPANY);
 
   const persistedFifo = (saleItemId = 'item-1') =>
     store
@@ -672,9 +682,9 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
   it('final refund after a partial publishes sale.partially_refunded, not the legacy event', async () => {
     await refund([{ saleItemId: 'item-1', quantity: 3 }]);
     expect(mockEventBus.publish).toHaveBeenCalledTimes(1);
-    expect(
-      (mockEventBus.publish.mock.calls[0]?.[0] as any).eventName,
-    ).toBe('sale.partially_refunded');
+    expect((mockEventBus.publish.mock.calls[0]?.[0] as any).eventName).toBe(
+      'sale.partially_refunded',
+    );
 
     await refund([{ saleItemId: 'item-1', quantity: 2 }]);
     expect(saleRow.status).toBe(SaleStatus.REFUNDED);
@@ -699,9 +709,9 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     // final-after-partial must not publish the legacy full-sale event —
     // G11-E E3: it publishes sale.partially_refunded instead
     expect(mockEventBus.publish).toHaveBeenCalledTimes(1);
-    expect(
-      (mockEventBus.publish.mock.calls[0]?.[0] as any).eventName,
-    ).toBe('sale.partially_refunded');
+    expect((mockEventBus.publish.mock.calls[0]?.[0] as any).eventName).toBe(
+      'sale.partially_refunded',
+    );
   });
 
   // ── Audit ────────────────────────────────────────────────────
@@ -743,12 +753,12 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     const rows = allocationsFor('refund-1');
     const total = rows.reduce((acc, r) => acc.add(r.amount), new Decimal(0));
     expect(total.toString()).toBe('4000');
-    expect(
-      rows.find((r) => r.method === 'CASH')?.amount.toString(),
-    ).toBe('2400');
-    expect(
-      rows.find((r) => r.method === 'CARD')?.amount.toString(),
-    ).toBe('1600');
+    expect(rows.find((r) => r.method === 'CASH')?.amount.toString()).toBe(
+      '2400',
+    );
+    expect(rows.find((r) => r.method === 'CARD')?.amount.toString()).toBe(
+      '1600',
+    );
     expect(rows.every((r) => r.companyId === COMPANY)).toBe(true);
     expect(rows.every((r) => r.currency === 'KZT')).toBe(true);
   });
@@ -774,9 +784,7 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
   it('legacy full refund with STORE_CREDIT only issues exactly one ISSUED for the aggregated amount', async () => {
     saleRow = { ...saleRow, customerId: 'cust-1' } as ReturnType<typeof sale>;
     payments = [{ method: 'STORE_CREDIT', amount: new Decimal('10000.0000') }];
-    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(
-      legacyRow(),
-    );
+    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(legacyRow());
     await refund([]);
     expect(creditLedgerRepo.issueLegacyRefundCredit).toHaveBeenCalledTimes(1);
     const [tx, , facts] = creditLedgerRepo.issueLegacyRefundCredit.mock
@@ -790,9 +798,7 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
   it('legacy full refund with GIFT_CARD only issues exactly one ISSUED', async () => {
     saleRow = { ...saleRow, customerId: 'cust-1' } as ReturnType<typeof sale>;
     payments = [{ method: 'GIFT_CARD', amount: new Decimal('750.5000') }];
-    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(
-      legacyRow(),
-    );
+    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(legacyRow());
     await refund([]);
     const [, , facts] = creditLedgerRepo.issueLegacyRefundCredit.mock
       .calls[0] as [unknown, unknown, Record<string, unknown>];
@@ -807,9 +813,7 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
       { method: 'STORE_CREDIT', amount: new Decimal('3000.0000') },
       { method: 'GIFT_CARD', amount: new Decimal('3000.0000') },
     ];
-    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(
-      legacyRow(),
-    );
+    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(legacyRow());
     await refund([]);
     expect(creditLedgerRepo.issueLegacyRefundCredit).toHaveBeenCalledTimes(1);
     const [, , facts] = creditLedgerRepo.issueLegacyRefundCredit.mock
@@ -824,9 +828,7 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
       { method: 'STORE_CREDIT', amount: new Decimal('2000.0000') },
       { method: 'GIFT_CARD', amount: new Decimal('500.0000') },
     ];
-    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(
-      legacyRow(),
-    );
+    creditLedgerRepo.issueLegacyRefundCredit.mockResolvedValueOnce(legacyRow());
     await refund([]);
     expect(creditLedgerRepo.issueLegacyRefundCredit).toHaveBeenCalledTimes(1);
     const [, , facts] = creditLedgerRepo.issueLegacyRefundCredit.mock
@@ -857,9 +859,7 @@ describe('SalesRefundService — G11-E E2 refund lifecycle', () => {
     expect(entry.entityType).toBe('CustomerCreditTransaction');
     expect(entry.entityId).toBe('refund-1');
     expect((entry.after as Record<string, unknown>).creditAmount).toBe('5000');
-    expect((entry.after as Record<string, unknown>).reason).toBe(
-      'no customer',
-    );
+    expect((entry.after as Record<string, unknown>).reason).toBe('no customer');
   });
 
   it('legacy bridge rollback: a failed refund leaves no issuance call persisted', async () => {

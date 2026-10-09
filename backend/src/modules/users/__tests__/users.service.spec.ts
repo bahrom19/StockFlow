@@ -98,7 +98,10 @@ describe('UsersService (G16-B-01)', () => {
       let storedHash = '';
       mockRepo.create.mockImplementation((async (data: any) => {
         storedHash = data.passwordHash;
-        return prismaUser({ email: data.email, passwordHash: data.passwordHash });
+        return prismaUser({
+          email: data.email,
+          passwordHash: data.passwordHash,
+        });
       }) as any);
       mockRepo.createCompanyMember.mockResolvedValue({ id: 'member-1' } as any);
       mockRepo.findById.mockResolvedValue(prismaUser() as any);
@@ -207,7 +210,10 @@ describe('UsersService (G16-B-01)', () => {
       mockRepo.findById.mockResolvedValue(prismaUser() as any);
 
       const dto = (n: number) =>
-        ({ email: `race${n}@test.com`, password: 'StrongPass123' }) as CreateUserDto;
+        ({
+          email: `race${n}@test.com`,
+          password: 'StrongPass123',
+        }) as CreateUserDto;
       // Order-independent: whichever bcrypt finishes first wins the mock's
       // success slot. Assert SET semantics, never positional order (PA-01).
       const results = await Promise.allSettled([
@@ -376,9 +382,9 @@ describe('UsersService (G16-B-01)', () => {
       await expect(
         transformCreate({ email: 'u@test.com', password }),
       ).rejects.toThrow(BadRequestException);
-      await expect(
-        transformUpdate({ password }),
-      ).rejects.toThrow(BadRequestException);
+      await expect(transformUpdate({ password })).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('D: accepts policy-compliant password', async () => {

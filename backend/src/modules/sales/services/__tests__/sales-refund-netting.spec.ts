@@ -173,7 +173,16 @@ describe('SalesRefundService — refund cash shift netting (v1.1.1, E2 owner)', 
         { provide: IdempotencyService, useValue: {} }, // G16-C: unused on the no-key path
         { provide: EVENT_BUS, useValue: mockEventBus },
         CustomerCreditLedgerService,
-        { provide: CustomerCreditLedgerRepository, useValue: { findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn(), atomicSpend: jest.fn() } },
+        {
+          provide: CustomerCreditLedgerRepository,
+          useValue: {
+            findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }),
+            getBalances: jest.fn().mockResolvedValue(new Map()),
+            issueRefundCredit: jest.fn().mockResolvedValue({}),
+            createManualAdjustment: jest.fn(),
+            atomicSpend: jest.fn(),
+          },
+        },
       ],
     }).compile();
 

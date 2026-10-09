@@ -18,7 +18,10 @@ describe('SaleRefundedEventHandler — exact restore (strict stock)', () => {
     updateStock: jest.Mock;
     createStock: jest.Mock;
   };
-  let costing: { findOutLayersByReferenceAndProduct: jest.Mock; restoreLayer: jest.Mock };
+  let costing: {
+    findOutLayersByReferenceAndProduct: jest.Mock;
+    restoreLayer: jest.Mock;
+  };
   let updateStock: jest.Mock;
   let createStock: jest.Mock;
   let createMovement: jest.Mock;

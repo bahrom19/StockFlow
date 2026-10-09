@@ -102,7 +102,13 @@ describe('ReportsService — net refunds (P1)', () => {
       revenue: dec('1500'),
       cogs: dec('1000'),
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('1500'), cogs: dec('1000'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('1500'),
+          cogs: dec('1000'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -119,7 +125,13 @@ describe('ReportsService — net refunds (P1)', () => {
       revenue: dec('5000'),
       cogs: dec('4200'),
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('5000'), cogs: dec('4200'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('5000'),
+          cogs: dec('4200'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -137,7 +149,13 @@ describe('ReportsService — net refunds (P1)', () => {
       revenue: dec('500'),
       cogs: dec('300'),
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('500'), cogs: dec('300'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('500'),
+          cogs: dec('300'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -154,7 +172,13 @@ describe('ReportsService — net refunds (P1)', () => {
       revenue: dec('100'),
       cogs: dec('60'),
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('100'), cogs: dec('60'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('100'),
+          cogs: dec('60'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -488,10 +512,9 @@ describe('ReportsService — net refunds (P1)', () => {
       { _sum: {}, _count: { id: 0 }, _avg: {} },
       { _sum: {} },
     ]);
-    await service.getSalesReport(
-      'comp-1',
-      { currency: 'KZT' } as ReportQueryDto,
-    );
+    await service.getSalesReport('comp-1', {
+      currency: 'KZT',
+    } as ReportQueryDto);
     const where = repo.salesReportData.mock.calls[0][1];
     expect(where.currency).toBe('KZT');
     expect(where.status).toEqual({ in: ['COMPLETED', 'PARTIALLY_REFUNDED'] });
@@ -503,10 +526,9 @@ describe('ReportsService — net refunds (P1)', () => {
       { _sum: {}, _count: { id: 0 }, _avg: {} },
       { _sum: {} },
     ]);
-    await service.getSalesReport(
-      'comp-1',
-      { currency: 'USD' } as ReportQueryDto,
-    );
+    await service.getSalesReport('comp-1', {
+      currency: 'USD',
+    } as ReportQueryDto);
     const where = repo.salesReportData.mock.calls[0][1];
     expect(where.currency).toBe('USD');
   });
@@ -520,10 +542,9 @@ describe('ReportsService — net refunds (P1)', () => {
       expenses: dec(0),
       daily: {},
     });
-    await service.getProfitReport(
-      'comp-1',
-      { currency: 'KZT' } as ReportQueryDto,
-    );
+    await service.getProfitReport('comp-1', {
+      currency: 'KZT',
+    } as ReportQueryDto);
     expect(ledgerQuery.getPnlReport).toHaveBeenCalledWith(
       expect.objectContaining({ companyId: 'comp-1' }),
     );
@@ -541,10 +562,9 @@ describe('ReportsService — net refunds (P1)', () => {
       { _sum: { grandTotal: null } },
     ]);
     repo.grossProfitData.mockResolvedValue([]);
-    const dashboard = await service.getDashboard(
-      'comp-1',
-      { currency: 'USD' } as ReportQueryDto,
-    );
+    const dashboard = await service.getDashboard('comp-1', {
+      currency: 'USD',
+    } as ReportQueryDto);
     expect(dashboard.todaySales.revenue).toBe('100');
     expect(repo.dashboardSummary.mock.calls[0][4]).toBe('USD');
     expect(repo.grossProfitData.mock.calls[0][1]).toBe('USD');
@@ -577,10 +597,9 @@ describe('ReportsService — net refunds (P1)', () => {
       { _sum: {}, _count: { id: 0 } },
       [],
     ]);
-    await service.getPurchasingReport(
-      'comp-1',
-      { currency: 'USD' } as ReportQueryDto,
-    );
+    await service.getPurchasingReport('comp-1', {
+      currency: 'USD',
+    } as ReportQueryDto);
     expect(repo.buildPurchaseWhere).toHaveBeenCalledWith(
       'comp-1',
       undefined,
@@ -591,10 +610,9 @@ describe('ReportsService — net refunds (P1)', () => {
 
   it('cash shift report: currency filter reaches buildCashShiftWhere', async () => {
     repo.cashShiftData.mockResolvedValue([[], 0]);
-    await service.getCashShiftReport(
-      'comp-1',
-      { currency: 'KZT' } as ReportQueryDto,
-    );
+    await service.getCashShiftReport('comp-1', {
+      currency: 'KZT',
+    } as ReportQueryDto);
     expect(repo.buildCashShiftWhere).toHaveBeenCalledWith(
       'comp-1',
       undefined,
@@ -653,7 +671,13 @@ describe('ReportsService — net refunds (P1)', () => {
       revenue: dec('1500'),
       cogs: dec('70'),
       expenses: dec('200'),
-      daily: { '2026-01-15': { revenue: dec('1500'), cogs: dec('70'), expenses: dec('200') } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('1500'),
+          cogs: dec('70'),
+          expenses: dec('200'),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -670,10 +694,16 @@ describe('ReportsService — net refunds (P1)', () => {
     // G15-06b-02: Manual Dr Cash / Cr Revenue journal is already in the GL
     // when POSTED — no special operational handling needed.
     ledgerQuery.getPnlReport.mockResolvedValue({
-      revenue: dec('2500'),  // 1500 sale + 1000 manual journal
+      revenue: dec('2500'), // 1500 sale + 1000 manual journal
       cogs: dec('1000'),
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('2500'), cogs: dec('1000'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('2500'),
+          cogs: dec('1000'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -688,8 +718,14 @@ describe('ReportsService — net refunds (P1)', () => {
     ledgerQuery.getPnlReport.mockResolvedValue({
       revenue: dec('3000'),
       cogs: dec('1200'),
-      expenses: dec('500'),  // Manual Dr Expense / Cr Cash
-      daily: { '2026-01-15': { revenue: dec('3000'), cogs: dec('1200'), expenses: dec('500') } },
+      expenses: dec('500'), // Manual Dr Expense / Cr Cash
+      daily: {
+        '2026-01-15': {
+          revenue: dec('3000'),
+          cogs: dec('1200'),
+          expenses: dec('500'),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -704,9 +740,15 @@ describe('ReportsService — net refunds (P1)', () => {
   it('GL-backed P&L: manual COGS journal (Dr COGS / Cr Inventory) appears in cost', async () => {
     ledgerQuery.getPnlReport.mockResolvedValue({
       revenue: dec('2000'),
-      cogs: dec('900'),   // 700 operational + 200 manual
+      cogs: dec('900'), // 700 operational + 200 manual
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('2000'), cogs: dec('900'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('2000'),
+          cogs: dec('900'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -720,10 +762,16 @@ describe('ReportsService — net refunds (P1)', () => {
     // G15-06b-02: only POSTED entries appear in the GL. A DRAFT manual
     // revenue journal does not affect the P&L until posted.
     ledgerQuery.getPnlReport.mockResolvedValue({
-      revenue: dec('1500'),  // Only the posted sale, DRAFT excluded
+      revenue: dec('1500'), // Only the posted sale, DRAFT excluded
       cogs: dec('1000'),
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('1500'), cogs: dec('1000'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('1500'),
+          cogs: dec('1000'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -736,10 +784,16 @@ describe('ReportsService — net refunds (P1)', () => {
     // G15-06b-02: Refund journals already reverse Revenue and COGS in the GL.
     // The GL balance is the net position — no operational refund subtraction.
     ledgerQuery.getPnlReport.mockResolvedValue({
-      revenue: dec('500'),   // 1500 sale - 1000 refund reversal = 500 net
-      cogs: dec('300'),      // 1000 COGS - 700 refund reversal = 300 net
+      revenue: dec('500'), // 1500 sale - 1000 refund reversal = 500 net
+      cogs: dec('300'), // 1000 COGS - 700 refund reversal = 300 net
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('500'), cogs: dec('300'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('500'),
+          cogs: dec('300'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -755,7 +809,13 @@ describe('ReportsService — net refunds (P1)', () => {
       revenue: dec('1500'),
       cogs: dec('70'),
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('1500'), cogs: dec('70'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('1500'),
+          cogs: dec('70'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -839,9 +899,15 @@ describe('ReportsService — net refunds (P1)', () => {
   it('GL-backed P&L: multi-product sale resolves each sale by its own GL COGS', async () => {
     ledgerQuery.getPnlReport.mockResolvedValue({
       revenue: dec('4500'),
-      cogs: dec('300'),   // 70 from s1 + 230 from s2
+      cogs: dec('300'), // 70 from s1 + 230 from s2
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('4500'), cogs: dec('300'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('4500'),
+          cogs: dec('300'),
+          expenses: dec(0),
+        },
+      },
     });
     const result = await service.getProfitReport(
       'comp-1',
@@ -855,12 +921,21 @@ describe('ReportsService — net refunds (P1)', () => {
     // G15-06b-02: Refund journals (Dr 4000 Revenue / Cr AR) and
     // (Dr Inventory / Cr 5000 COGS) reduce GL balances automatically.
     ledgerQuery.getPnlReport.mockResolvedValue({
-      revenue: dec('600'),    // 1000 sale − 400 refund reversal
-      cogs: dec('360'),       // 600 COGS − 240 refund reversal
+      revenue: dec('600'), // 1000 sale − 400 refund reversal
+      cogs: dec('360'), // 600 COGS − 240 refund reversal
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('600'), cogs: dec('360'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('600'),
+          cogs: dec('360'),
+          expenses: dec(0),
+        },
+      },
     });
-    const result = await service.getProfitReport('comp-1', {} as ReportQueryDto);
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
     expect(result.summary.revenue).toBe('600');
     expect(result.summary.cost).toBe('360');
     expect(result.summary.profit).toBe('240');
@@ -876,9 +951,18 @@ describe('ReportsService — net refunds (P1)', () => {
       revenue: dec('1000'),
       cogs: dec('600'),
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('1000'), cogs: dec('600'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('1000'),
+          cogs: dec('600'),
+          expenses: dec(0),
+        },
+      },
     });
-    const result = await service.getProfitReport('comp-1', {} as ReportQueryDto);
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
     expect(result.summary.revenue).toBe('1000');
     expect(result.summary.cost).toBe('600');
   });
@@ -904,7 +988,12 @@ describe('ReportsService — net refunds (P1)', () => {
       { _sum: { quantity: 1, costPrice: dec('0') } },
     ]);
     repo.salesRefundTotals.mockResolvedValue(
-      new Map([['s1', { refundTotal: dec('250.0000'), refundFifoCost: dec('100.0000') }]]),
+      new Map([
+        [
+          's1',
+          { refundTotal: dec('250.0000'), refundFifoCost: dec('100.0000') },
+        ],
+      ]),
     );
     const result = await service.getSalesReport('comp-1', {} as ReportQueryDto);
     expect(result.summary.revenue).toBe('750'); // 1000 − 250
@@ -917,9 +1006,18 @@ describe('ReportsService — net refunds (P1)', () => {
       revenue: dec('1000'),
       cogs: dec('600'),
       expenses: dec(0),
-      daily: { '2026-01-15': { revenue: dec('1000'), cogs: dec('600'), expenses: dec(0) } },
+      daily: {
+        '2026-01-15': {
+          revenue: dec('1000'),
+          cogs: dec('600'),
+          expenses: dec(0),
+        },
+      },
     });
-    const result = await service.getProfitReport('comp-1', {} as ReportQueryDto);
+    const result = await service.getProfitReport(
+      'comp-1',
+      {} as ReportQueryDto,
+    );
     expect(result.summary.revenue).toBe('1000');
     expect(result.summary.cost).toBe('600');
   });
@@ -942,7 +1040,15 @@ describe('ReportsService — net refunds (P1)', () => {
     repo.salesRefundTotals.mockImplementation(
       async (_c: string, ids: string[]) =>
         ids.includes('s1')
-          ? new Map([['s1', { refundTotal: dec('500.0000'), refundFifoCost: dec('300.0000') }]])
+          ? new Map([
+              [
+                's1',
+                {
+                  refundTotal: dec('500.0000'),
+                  refundFifoCost: dec('300.0000'),
+                },
+              ],
+            ])
           : new Map(),
     );
     const result = await service.getDashboard('comp-1', {} as ReportQueryDto);

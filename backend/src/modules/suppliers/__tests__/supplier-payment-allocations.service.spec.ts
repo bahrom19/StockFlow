@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Currency, PaymentMethod, PurchaseInvoiceStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { SupplierPaymentAllocationsService } from '../services/supplier-payment-allocations.service';
@@ -74,7 +78,11 @@ describe('SupplierPaymentAllocationsService', () => {
   beforeEach(async () => {
     mockPrisma = {
       $transaction: jest.fn((cb: any) => cb(mockPrisma)),
-      $queryRaw: jest.fn().mockResolvedValue([{ id: paymentId, amount: new Decimal('100000'), deletedAt: null }]),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValue([
+          { id: paymentId, amount: new Decimal('100000'), deletedAt: null },
+        ]),
       purchaseInvoice: {
         findFirst: jest.fn().mockImplementation((args: any) => {
           if (args.where.id === invoiceId) return { ...baseInvoice };
@@ -144,12 +152,17 @@ describe('SupplierPaymentAllocationsService', () => {
         SupplierPaymentAllocationsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: SupplierPaymentsRepository, useValue: mockPaymentsRepo },
-        { provide: SupplierPaymentAllocationsRepository, useValue: mockAllocationsRepo },
+        {
+          provide: SupplierPaymentAllocationsRepository,
+          useValue: mockAllocationsRepo,
+        },
         { provide: IdempotencyService, useValue: mockIdempotency },
       ],
     }).compile();
 
-    service = module.get<SupplierPaymentAllocationsService>(SupplierPaymentAllocationsService);
+    service = module.get<SupplierPaymentAllocationsService>(
+      SupplierPaymentAllocationsService,
+    );
   });
 
   // ─────────────────────────────────────────────
@@ -173,7 +186,11 @@ describe('SupplierPaymentAllocationsService', () => {
         },
       ]);
 
-      const result = await service.findByPayment(paymentId, supplierId, companyId);
+      const result = await service.findByPayment(
+        paymentId,
+        supplierId,
+        companyId,
+      );
       expect(result).toHaveLength(1);
       expect(result[0]!.purchaseInvoiceId).toBe(invoiceId);
       expect(result[0]!.amount).toBe('100000');
@@ -193,7 +210,11 @@ describe('SupplierPaymentAllocationsService', () => {
       });
 
       // Verify the payment entity can have null purchaseInvoiceId
-      const payment = await mockPaymentsRepo.findById(paymentId, supplierId, companyId);
+      const payment = await mockPaymentsRepo.findById(
+        paymentId,
+        supplierId,
+        companyId,
+      );
       expect(payment.purchaseInvoiceId).toBeNull();
     });
   });
@@ -273,7 +294,14 @@ describe('SupplierPaymentAllocationsService', () => {
       });
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 120000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          120000,
+          userId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -284,7 +312,14 @@ describe('SupplierPaymentAllocationsService', () => {
       });
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 30000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          30000,
+          userId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -300,7 +335,14 @@ describe('SupplierPaymentAllocationsService', () => {
         .mockResolvedValueOnce({ _sum: { amount: new Decimal('0') } }); // invoice check
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 120000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          120000,
+          userId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -319,7 +361,14 @@ describe('SupplierPaymentAllocationsService', () => {
         .mockResolvedValueOnce({ _sum: { amount: new Decimal('20000') } }); // invoice check
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 90000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          90000,
+          userId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -339,7 +388,14 @@ describe('SupplierPaymentAllocationsService', () => {
         .mockResolvedValueOnce({ _sum: { amount: new Decimal('0') } }); // invoice check
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 30000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          30000,
+          userId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -352,7 +408,14 @@ describe('SupplierPaymentAllocationsService', () => {
       mockPaymentsRepo.findById.mockResolvedValue(null);
 
       await expect(
-        service.create(supplierId, companyBId, paymentId, invoiceId, 50000, userId),
+        service.create(
+          supplierId,
+          companyBId,
+          paymentId,
+          invoiceId,
+          50000,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -360,7 +423,14 @@ describe('SupplierPaymentAllocationsService', () => {
       mockPrisma.purchaseInvoice.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          50000,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -373,7 +443,14 @@ describe('SupplierPaymentAllocationsService', () => {
       mockPaymentsRepo.findById.mockResolvedValue(null);
 
       await expect(
-        service.create(supplierBId, companyId, paymentId, invoiceId, 50000, userId),
+        service.create(
+          supplierBId,
+          companyId,
+          paymentId,
+          invoiceId,
+          50000,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -381,7 +458,14 @@ describe('SupplierPaymentAllocationsService', () => {
       mockPrisma.purchaseInvoice.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          50000,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -397,7 +481,14 @@ describe('SupplierPaymentAllocationsService', () => {
       });
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          50000,
+          userId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -407,7 +498,14 @@ describe('SupplierPaymentAllocationsService', () => {
   // ─────────────────────────────────────────────
   describe('A10: Concurrency protection', () => {
     it('should use SELECT ... FOR UPDATE to lock payment row', async () => {
-      await service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId);
+      await service.create(
+        supplierId,
+        companyId,
+        paymentId,
+        invoiceId,
+        50000,
+        userId,
+      );
 
       // Verify raw query is used for locking.
       expect(mockPrisma.$queryRaw).toHaveBeenCalled();
@@ -424,7 +522,14 @@ describe('SupplierPaymentAllocationsService', () => {
 
     // G14-02-12: canonical lock order — invoice lock BEFORE payment lock.
     it('should acquire the invoice lock before the payment lock (G14-02-12)', async () => {
-      await service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId);
+      await service.create(
+        supplierId,
+        companyId,
+        paymentId,
+        invoiceId,
+        50000,
+        userId,
+      );
 
       expect(mockPrisma.$queryRaw.mock.calls.length).toBeGreaterThanOrEqual(2);
       const firstLock = mockPrisma.$queryRaw.mock.calls[0][0].join('');
@@ -442,7 +547,14 @@ describe('SupplierPaymentAllocationsService', () => {
       mockPrisma.$queryRaw.mockResolvedValueOnce([]);
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          50000,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -454,12 +566,26 @@ describe('SupplierPaymentAllocationsService', () => {
         .mockResolvedValueOnce([]);
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          50000,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('should use transaction for allocation creation', async () => {
-      await service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId);
+      await service.create(
+        supplierId,
+        companyId,
+        paymentId,
+        invoiceId,
+        50000,
+        userId,
+      );
 
       // runWithIdempotency uses $transaction internally
       expect(mockPrisma.$transaction).toHaveBeenCalled();
@@ -507,7 +633,12 @@ describe('SupplierPaymentAllocationsService', () => {
       mockIdempotency.reserve.mockResolvedValue({
         type: 'replayed',
         status: 201,
-        body: { id: 'alloc-1', paymentId, purchaseInvoiceId: invoiceId, amount: '50000' },
+        body: {
+          id: 'alloc-1',
+          paymentId,
+          purchaseInvoiceId: invoiceId,
+          amount: '50000',
+        },
       });
 
       const result = await service.create(
@@ -524,7 +655,9 @@ describe('SupplierPaymentAllocationsService', () => {
       expect(result).toEqual(
         expect.objectContaining({ id: 'alloc-1', paymentId }),
       );
-      expect(mockPrisma.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+      expect(
+        mockPrisma.supplierPaymentAllocation.create,
+      ).not.toHaveBeenCalled();
       expect(mockIdempotency.complete).not.toHaveBeenCalled();
     });
 
@@ -542,7 +675,9 @@ describe('SupplierPaymentAllocationsService', () => {
           idempotencyKey,
         ),
       ).rejects.toThrow(ConflictException);
-      expect(mockPrisma.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+      expect(
+        mockPrisma.supplierPaymentAllocation.create,
+      ).not.toHaveBeenCalled();
       expect(mockIdempotency.complete).not.toHaveBeenCalled();
     });
 
@@ -557,7 +692,9 @@ describe('SupplierPaymentAllocationsService', () => {
         idempotencyKey,
       );
       // Company A: reserve() received Company A's companyId
-      expect(mockIdempotency.reserve.mock.calls[0][1].companyId).toBe(companyId);
+      expect(mockIdempotency.reserve.mock.calls[0][1].companyId).toBe(
+        companyId,
+      );
     });
 
     it('should not persist reservation when work throws', async () => {
@@ -655,7 +792,11 @@ describe('SupplierPaymentAllocationsService', () => {
         },
       ]);
 
-      const result = await service.findByPayment(paymentId, supplierId, companyId);
+      const result = await service.findByPayment(
+        paymentId,
+        supplierId,
+        companyId,
+      );
       expect(result).toHaveLength(1);
       expect(result[0]!.paymentId).toBe(paymentId);
     });
@@ -689,7 +830,11 @@ describe('SupplierPaymentAllocationsService', () => {
         },
       ]);
 
-      const result = await service.findByInvoice(invoiceId, supplierId, companyId);
+      const result = await service.findByInvoice(
+        invoiceId,
+        supplierId,
+        companyId,
+      );
       expect(result).toHaveLength(1);
       expect(result[0]!.purchaseInvoiceId).toBe(invoiceId);
     });
@@ -715,7 +860,14 @@ describe('SupplierPaymentAllocationsService', () => {
 
     it('should reject negative amount', async () => {
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, -1000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          -1000,
+          userId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -726,7 +878,14 @@ describe('SupplierPaymentAllocationsService', () => {
       });
 
       await expect(
-        service.create(supplierId, companyId, paymentId, invoiceId, 50000, userId),
+        service.create(
+          supplierId,
+          companyId,
+          paymentId,
+          invoiceId,
+          50000,
+          userId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });

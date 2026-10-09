@@ -1,4 +1,10 @@
-import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -19,9 +25,7 @@ import { SupplierExposureEntity } from '../entities/supplier-exposure.entity';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('suppliers/:supplierId')
 export class SupplierExposureController {
-  constructor(
-    private readonly exposureService: SupplierExposureService,
-  ) {}
+  constructor(private readonly exposureService: SupplierExposureService) {}
 
   @Get('open-po-exposure')
   @RequirePermission('suppliers:read')
@@ -36,9 +40,6 @@ export class SupplierExposureController {
     @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<SupplierExposureEntity> {
-    return this.exposureService.getOpenPoExposure(
-      supplierId,
-      user.companyId,
-    );
+    return this.exposureService.getOpenPoExposure(supplierId, user.companyId);
   }
 }

@@ -171,7 +171,9 @@ export class AuthRepository {
 
   async findValidPasswordResetTokens(
     tx?: Prisma.TransactionClient,
-  ): Promise<{ id: string; userId: string; tokenHash: string; expiresAt: Date }[]> {
+  ): Promise<
+    { id: string; userId: string; tokenHash: string; expiresAt: Date }[]
+  > {
     return this.getClient(tx).passwordResetToken.findMany({
       where: {
         usedAt: null,

@@ -1,10 +1,6 @@
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import {
-  ApiOkResponse,
-  DocumentBuilder,
-  SwaggerModule,
-} from '@nestjs/swagger';
+import { ApiOkResponse, DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Decimal } from '@prisma/client/runtime/library';
 import { CashAccountEntity } from '../entities/cash-account.entity';
 import { BankAccountEntity } from '../entities/bank-account.entity';

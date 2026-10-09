@@ -85,7 +85,10 @@ describe('SalesRepository — Optimistic Locking', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
         SalesRepository,
         { provide: PrismaService, useValue: mockPrisma },
         {
@@ -332,9 +335,24 @@ describe('SalesService — Concurrent Completion (Optimistic Locking)', () => {
         },
         { provide: EVENT_BUS, useValue: mockEventBus },
         CustomerCreditLedgerService,
-        { provide: CustomerCreditLedgerRepository, useValue: { atomicSpend: jest.fn().mockResolvedValue({}), findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }), getBalances: jest.fn().mockResolvedValue(new Map()), issueRefundCredit: jest.fn().mockResolvedValue({}), createManualAdjustment: jest.fn() } },
-        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CustomerCreditLedgerRepository,
+          useValue: {
+            atomicSpend: jest.fn().mockResolvedValue({}),
+            findCustomerCompany: jest.fn().mockResolvedValue({ id: 'cust-1' }),
+            getBalances: jest.fn().mockResolvedValue(new Map()),
+            issueRefundCredit: jest.fn().mockResolvedValue({}),
+            createManualAdjustment: jest.fn(),
+          },
+        },
+        {
+          provide: AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
       ],
     }).compile();
 

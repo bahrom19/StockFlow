@@ -104,7 +104,12 @@ describe('NotificationRepository — scoping, dedupe primitives, tx passthrough'
       repo.markReadForUser('comp-1', 'user-1', 'n-404'),
     ).resolves.toBe(false);
     expect(prisma.notification.updateMany).toHaveBeenCalledWith({
-      where: { id: 'n-404', companyId: 'comp-1', userId: 'user-1', readAt: null },
+      where: {
+        id: 'n-404',
+        companyId: 'comp-1',
+        userId: 'user-1',
+        readAt: null,
+      },
       data: { readAt: expect.any(Date) },
     });
 

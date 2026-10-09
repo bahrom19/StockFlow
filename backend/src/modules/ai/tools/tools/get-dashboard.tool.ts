@@ -19,7 +19,8 @@ export class GetDashboardTool implements AITool {
     properties: {
       currency: {
         type: 'string',
-        description: 'Currency code filter (e.g. KZT, USD, RUB). Defaults to company base currency.',
+        description:
+          'Currency code filter (e.g. KZT, USD, RUB). Defaults to company base currency.',
       },
     },
   };

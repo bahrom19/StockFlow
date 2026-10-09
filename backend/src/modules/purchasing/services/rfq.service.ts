@@ -167,7 +167,8 @@ export class RFQService {
     }
   }
 
-  async softDelete(id: string, companyId: string): Promise<void> {    const existing = await this.repository.findById(id, companyId);
+  async softDelete(id: string, companyId: string): Promise<void> {
+    const existing = await this.repository.findById(id, companyId);
     if (!existing) throw new NotFoundException(`RFQ ${id} not found`);
     if (existing.status !== RFQStatus.DRAFT)
       throw new BadRequestException('Only DRAFT RFQs can be deleted');

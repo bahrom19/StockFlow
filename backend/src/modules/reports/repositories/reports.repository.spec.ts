@@ -288,8 +288,8 @@ describe('ReportsRepository — revenue scoping (P1 net refunds)', () => {
     });
     const result = await repository.cashRefundedForShift('shift-1', 'comp-1');
     expect(result.toString()).toBe('700');
-    const where = mockPrisma.refundPaymentAllocation.aggregate.mock.calls[0][0]
-      .where;
+    const where =
+      mockPrisma.refundPaymentAllocation.aggregate.mock.calls[0][0].where;
     expect(where.companyId).toBe('comp-1');
     expect(where.method).toBe('CASH');
     expect(where.deletedAt).toBeNull();

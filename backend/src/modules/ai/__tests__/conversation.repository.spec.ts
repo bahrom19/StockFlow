@@ -181,11 +181,7 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
     it('deletes own conversation', async () => {
       prisma.aiConversation.deleteMany.mockResolvedValue({ count: 1 });
 
-      const result = await repo.deleteConversation(
-        'conv-1',
-        companyId,
-        userId,
-      );
+      const result = await repo.deleteConversation('conv-1', companyId, userId);
 
       expect(prisma.aiConversation.deleteMany).toHaveBeenCalledWith({
         where: { id: 'conv-1', companyId, userId },
@@ -231,7 +227,13 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
       };
       prisma.aiMessage.create.mockResolvedValue(message);
 
-      const result = await repo.createMessage('conv-1', companyId, userId, 'user', 'Hello');
+      const result = await repo.createMessage(
+        'conv-1',
+        companyId,
+        userId,
+        'user',
+        'Hello',
+      );
 
       expect(prisma.aiConversation.findFirst).toHaveBeenCalledWith({
         where: { id: 'conv-1', companyId, userId },
@@ -255,10 +257,17 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
       prisma.aiConversation.findFirst.mockResolvedValue({ id: 'conv-1' });
       prisma.aiMessage.create.mockResolvedValue({ id: 'msg-2' });
 
-      await repo.createMessage('conv-1', companyId, userId, 'assistant', 'Response', {
-        toolCallsJson: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
-        tokenCount: 150,
-      });
+      await repo.createMessage(
+        'conv-1',
+        companyId,
+        userId,
+        'assistant',
+        'Response',
+        {
+          toolCallsJson: [{ id: 'tc-1', name: 'get_dashboard', arguments: {} }],
+          tokenCount: 150,
+        },
+      );
 
       expect(prisma.aiMessage.create).toHaveBeenCalledWith({
         data: {
@@ -277,10 +286,17 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
       prisma.aiConversation.findFirst.mockResolvedValue({ id: 'conv-1' });
       prisma.aiMessage.create.mockResolvedValue({ id: 'msg-3' });
 
-      await repo.createMessage('conv-1', companyId, userId, 'tool', '{"result": "data"}', {
-        toolCallId: 'tc-1',
-        toolName: 'get_dashboard',
-      });
+      await repo.createMessage(
+        'conv-1',
+        companyId,
+        userId,
+        'tool',
+        '{"result": "data"}',
+        {
+          toolCallId: 'tc-1',
+          toolName: 'get_dashboard',
+        },
+      );
 
       expect(prisma.aiMessage.create).toHaveBeenCalledWith({
         data: {
@@ -299,7 +315,11 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
       prisma.aiConversation.findFirst.mockResolvedValue(null);
 
       const result = await repo.createMessage(
-        'conv-1', companyId, otherUserId, 'user', 'Injected message',
+        'conv-1',
+        companyId,
+        otherUserId,
+        'user',
+        'Injected message',
       );
 
       expect(prisma.aiConversation.findFirst).toHaveBeenCalledWith({
@@ -314,7 +334,11 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
       prisma.aiConversation.findFirst.mockResolvedValue(null);
 
       const result = await repo.createMessage(
-        'conv-1', otherCompanyId, userId, 'user', 'Injected message',
+        'conv-1',
+        otherCompanyId,
+        userId,
+        'user',
+        'Injected message',
       );
 
       expect(prisma.aiConversation.findFirst).toHaveBeenCalledWith({
@@ -332,8 +356,18 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
       prisma.aiConversation.findFirst.mockResolvedValue({ id: 'conv-1' });
 
       const messages = [
-        { id: 'msg-2', role: 'assistant', content: 'Hi', createdAt: new Date('2026-09-07T10:00:01Z') },
-        { id: 'msg-1', role: 'user', content: 'Hello', createdAt: new Date('2026-09-07T10:00:00Z') },
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: 'Hi',
+          createdAt: new Date('2026-09-07T10:00:01Z'),
+        },
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'Hello',
+          createdAt: new Date('2026-09-07T10:00:00Z'),
+        },
       ];
       prisma.aiMessage.findMany.mockResolvedValue(messages);
 
@@ -354,11 +388,7 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
     it('returns null when conversation not found or not owned', async () => {
       prisma.aiConversation.findFirst.mockResolvedValue(null);
 
-      const result = await repo.listMessages(
-        'conv-1',
-        companyId,
-        otherUserId,
-      );
+      const result = await repo.listMessages('conv-1', companyId, otherUserId);
 
       expect(result).toBeNull();
       expect(prisma.aiMessage.findMany).not.toHaveBeenCalled();
@@ -389,11 +419,7 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
     it('returns 0 when conversation not owned', async () => {
       prisma.aiConversation.findFirst.mockResolvedValue(null);
 
-      const result = await repo.countMessages(
-        'conv-1',
-        companyId,
-        otherUserId,
-      );
+      const result = await repo.countMessages('conv-1', companyId, otherUserId);
 
       expect(result).toBe(0);
       expect(prisma.aiMessage.count).not.toHaveBeenCalled();
@@ -484,11 +510,7 @@ describe('ConversationRepository — tenant isolation, CRUD, message ordering', 
     it('cross-user message listing: returns null', async () => {
       prisma.aiConversation.findFirst.mockResolvedValue(null);
 
-      const result = await repo.listMessages(
-        'conv-1',
-        companyId,
-        otherUserId,
-      );
+      const result = await repo.listMessages('conv-1', companyId, otherUserId);
 
       expect(result).toBeNull();
     });

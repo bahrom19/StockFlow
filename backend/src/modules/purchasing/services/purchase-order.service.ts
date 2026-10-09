@@ -5,7 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, PurchaseOrderStatus, PurchaseInvoiceStatus, StockMovementType, Currency } from '@prisma/client';
+import {
+  Prisma,
+  PurchaseOrderStatus,
+  PurchaseInvoiceStatus,
+  StockMovementType,
+  Currency,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
@@ -89,7 +95,8 @@ export class PurchaseOrderService {
       }
 
       // Enforce document currency == Company.currency
-      const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+      const companyCurrency =
+        await this.companiesService.getBaseCurrency(companyId);
       if (dto.currency && dto.currency !== companyCurrency) {
         throw new BadRequestException(
           `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
@@ -324,7 +331,8 @@ export class PurchaseOrderService {
         updateData.expectedDate = new Date(dto.expectedDate);
       if (dto.notes !== undefined) updateData.notes = dto.notes;
       if (dto.currency) {
-        const companyCurrency = await this.companiesService.getBaseCurrency(companyId);
+        const companyCurrency =
+          await this.companiesService.getBaseCurrency(companyId);
         if (dto.currency !== companyCurrency) {
           throw new BadRequestException(
             `Currency ${dto.currency} does not match company currency ${companyCurrency}`,
@@ -468,10 +476,7 @@ export class PurchaseOrderService {
             companyId,
             deletedAt: null,
             status: {
-              in: [
-                PurchaseInvoiceStatus.APPROVED,
-                PurchaseInvoiceStatus.PAID,
-              ],
+              in: [PurchaseInvoiceStatus.APPROVED, PurchaseInvoiceStatus.PAID],
             },
           },
         });

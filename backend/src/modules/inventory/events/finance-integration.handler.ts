@@ -161,7 +161,9 @@ export class InventoryFinanceHandler implements EventHandler {
           reason: 'inventory chart of accounts not configured',
           missingAccountCodes: [
             ...(!inventoryAccountId ? [ACCOUNT_CODES.INVENTORY] : []),
-            ...(!adjustmentAccountId ? [ACCOUNT_CODES.INVENTORY_ADJUSTMENT] : []),
+            ...(!adjustmentAccountId
+              ? [ACCOUNT_CODES.INVENTORY_ADJUSTMENT]
+              : []),
           ],
         },
         tx,

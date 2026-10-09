@@ -25,7 +25,11 @@ const aggRow = (accountId: string, debit: string, credit: string) => ({
   totalCredit: dec(credit),
 });
 
-const je = (id: string, referenceType: string | null, referenceId: string | null = null) => ({
+const je = (
+  id: string,
+  referenceType: string | null,
+  referenceId: string | null = null,
+) => ({
   id,
   referenceType,
   referenceId,
@@ -79,7 +83,10 @@ describe('CashFlowService — G15-07-C3-C', () => {
     service = module.get(CashFlowService);
   });
 
-  const range = { dateFrom: new Date('2026-09-01'), dateTo: new Date('2026-09-30') };
+  const range = {
+    dateFrom: new Date('2026-09-01'),
+    dateTo: new Date('2026-09-30'),
+  };
   const call = (over: Record<string, any> = {}) =>
     service.getCashFlow({ companyId, ...range, ...over });
 
@@ -98,10 +105,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
   });
 
   it('B. beginning balance is cumulative cash before dateFrom', async () => {
-    cumulative.set(
-      new Date('2026-08-31T23:59:59.999Z').getTime(),
-      [aggRow('cash-1', '1000', '0')],
-    );
+    cumulative.set(new Date('2026-08-31T23:59:59.999Z').getTime(), [
+      aggRow('cash-1', '1000', '0'),
+    ]);
     cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), [
       aggRow('cash-1', '1000', '0'),
     ]);
@@ -117,7 +123,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
 
   it('C/I/J. SALE cash receipt is operating inflow; AR leg excluded', async () => {
     // JE: Dr 1010 500 / Cr 4000 500 — the revenue leg is not in population.
-    ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE', 's-1')]);
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'SALE', 's-1'),
+    ]);
     partitions.set('je-1', [aggRow('cash-1', '500', '0')]);
     cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), [
       aggRow('cash-1', '500', '0'),
@@ -162,7 +170,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
   });
 
   it('E/F. investing and financing are zero with no domains', async () => {
-    ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE', 's-1')]);
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'SALE', 's-1'),
+    ]);
     partitions.set('je-1', [aggRow('cash-1', '100', '0')]);
 
     const result = await call();
@@ -208,7 +218,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
   // ── K/M: refund + reversal ─────────────────────────────────────────
 
   it('K. REFUND cash repayment is operating outflow', async () => {
-    ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'REFUND', 'r-1')]);
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'REFUND', 'r-1'),
+    ]);
     partitions.set('je-1', [aggRow('cash-1', '0', '150')]);
 
     const result = await call();
@@ -265,11 +277,12 @@ describe('CashFlowService — G15-07-C3-C', () => {
       je('je-1', 'FINANCIAL_TRANSACTION', 'ft-fee'),
       je('je-2', 'FINANCIAL_TRANSACTION', 'ft-int'),
     ]);
-    ftRepo.findTypesByIds.mockImplementation(async (_c: string, ids: string[]) =>
-      ids.map((id) => ({
-        id,
-        type: id === 'ft-fee' ? 'FEE' : 'INTEREST',
-      })),
+    ftRepo.findTypesByIds.mockImplementation(
+      async (_c: string, ids: string[]) =>
+        ids.map((id) => ({
+          id,
+          type: id === 'ft-fee' ? 'FEE' : 'INTEREST',
+        })),
     );
     partitions.set('je-1,je-2', [aggRow('cash-1', '50', '25')]);
 
@@ -337,9 +350,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
   });
 
   it('AI. validation rejects missing/invalid/inverted dates', async () => {
-    await expect(
-      service.getCashFlow({ companyId }),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.getCashFlow({ companyId })).rejects.toThrow(
+      BadRequestException,
+    );
     await expect(
       service.getCashFlow({
         companyId,
@@ -390,7 +403,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
         accountType: 'ASSET',
       },
     ]);
-    ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE', 's-1')]);
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'SALE', 's-1'),
+    ]);
     partitions.set('je-1', [aggRow('petty-9', '75', '0')]);
     cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), [
       aggRow('petty-9', '75', '0'),
@@ -612,7 +627,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
     cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), [
       aggRow('cash-1', '1300', '0'),
     ]);
-    ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE', 's-1')]);
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'SALE', 's-1'),
+    ]);
     partitions.set('je-1', [aggRow('cash-1', '200', '0')]);
 
     const result = await call();
@@ -651,7 +668,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
   });
 
   it('AG. Decimal exactness (0.1 + 0.2)', async () => {
-    ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE', 's-1')]);
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'SALE', 's-1'),
+    ]);
     partitions.set('je-1', [aggRow('cash-1', '0.3', '0.1')]);
 
     const result = await call();
@@ -662,7 +681,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
   it('AJ. sale buckets cannot duplicate: one JE counts its cash leg once', async () => {
     // A sale JE touches cash once (Dr 1010) alongside revenue/AR legs that
     // are outside the population — operating counts exactly the cash leg.
-    ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE', 's-1')]);
+    ledger.findCashJournalEntries.mockResolvedValue([
+      je('je-1', 'SALE', 's-1'),
+    ]);
     partitions.set('je-1', [aggRow('cash-1', '1000', '0')]);
     cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), [
       aggRow('cash-1', '1000', '0'),
@@ -905,7 +926,9 @@ describe('CashFlowService — G15-07-C3-C', () => {
 
   describe('G16-N-8-B — existing semantics unchanged', () => {
     it('normal movement unchanged', async () => {
-      ledger.findCashJournalEntries.mockResolvedValue([je('je-1', 'SALE', 's-1')]);
+      ledger.findCashJournalEntries.mockResolvedValue([
+        je('je-1', 'SALE', 's-1'),
+      ]);
       partitions.set('je-1', [aggRow('cash-1', '500', '0')]);
       cumulative.set(new Date('2026-09-30T23:59:59.999Z').getTime(), [
         aggRow('cash-1', '500', '0'),

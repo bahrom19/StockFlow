@@ -14,7 +14,10 @@ export class GetTopProductsTool implements AITool {
       dateFrom: { type: 'string', description: 'Start date (ISO 8601)' },
       dateTo: { type: 'string', description: 'End date (ISO 8601)' },
       currency: { type: 'string', description: 'Currency code' },
-      top: { type: 'number', description: 'Top N results (default 10, max 50)' },
+      top: {
+        type: 'number',
+        description: 'Top N results (default 10, max 50)',
+      },
     },
   };
   readonly requiredPermission = 'reports:read';

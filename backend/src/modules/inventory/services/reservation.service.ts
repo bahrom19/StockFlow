@@ -6,13 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, StockMovementType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import {
-  IsInt,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 import { PrismaService } from '../../../common/prisma';
 import { EventBus, EVENT_BUS } from '../../../common/events';
 import { AuditLogService } from '../../shared/services/audit-log.service';

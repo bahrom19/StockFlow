@@ -76,10 +76,7 @@ describe('GlobalExceptionFilter', () => {
 
   it('P2002 with SKU target → field-specific message', () => {
     const { host, jsonMock } = createHost();
-    filter.catch(
-      p2002({ target: ['companyId', 'sku'] }),
-      host,
-    );
+    filter.catch(p2002({ target: ['companyId', 'sku'] }), host);
 
     const body = jsonMock.mock.calls[0][0];
     expect(body.statusCode).toBe(409);
@@ -88,10 +85,7 @@ describe('GlobalExceptionFilter', () => {
 
   it('P2002 with barcode target → field-specific message', () => {
     const { host, jsonMock } = createHost();
-    filter.catch(
-      p2002({ target: ['companyId', 'barcode'] }),
-      host,
-    );
+    filter.catch(p2002({ target: ['companyId', 'barcode'] }), host);
 
     const body = jsonMock.mock.calls[0][0];
     expect(body.statusCode).toBe(409);
@@ -100,10 +94,7 @@ describe('GlobalExceptionFilter', () => {
 
   it('P2002 with bin target → field-specific message', () => {
     const { host, jsonMock } = createHost();
-    filter.catch(
-      p2002({ target: ['companyId', 'bin'] }),
-      host,
-    );
+    filter.catch(p2002({ target: ['companyId', 'bin'] }), host);
 
     const body = jsonMock.mock.calls[0][0];
     expect(body.statusCode).toBe(409);
@@ -112,10 +103,7 @@ describe('GlobalExceptionFilter', () => {
 
   it('P2002 with supplier paymentNumber target → 409 (G8 composite unique)', () => {
     const { host, statusMock, jsonMock } = createHost();
-    filter.catch(
-      p2002({ target: ['companyId', 'paymentNumber'] }),
-      host,
-    );
+    filter.catch(p2002({ target: ['companyId', 'paymentNumber'] }), host);
 
     expect(statusMock).toHaveBeenCalledWith(409);
     const body = jsonMock.mock.calls[0][0];
@@ -128,10 +116,7 @@ describe('GlobalExceptionFilter', () => {
 
   it('P2002 with unknown target → generic message', () => {
     const { host, jsonMock } = createHost();
-    filter.catch(
-      p2002({ target: ['companyId', 'email'] }),
-      host,
-    );
+    filter.catch(p2002({ target: ['companyId', 'email'] }), host);
 
     const body = jsonMock.mock.calls[0][0];
     expect(body.statusCode).toBe(409);
@@ -142,10 +127,7 @@ describe('GlobalExceptionFilter', () => {
 
   it('P2002 with non-array target → generic message', () => {
     const { host, jsonMock } = createHost();
-    filter.catch(
-      p2002({ target: 'sku' }),
-      host,
-    );
+    filter.catch(p2002({ target: 'sku' }), host);
 
     const body = jsonMock.mock.calls[0][0];
     expect(body.statusCode).toBe(409);
@@ -182,10 +164,11 @@ describe('GlobalExceptionFilter', () => {
 
   it('maps P0001 with SQLSTATE 57014 (statement timeout) to HTTP 408', () => {
     const { host, statusMock, jsonMock } = createHost();
-    const err = new Prisma.PrismaClientKnownRequestError(
-      'query timeout',
-      { code: 'P0001', clientVersion: 'test', meta: { code: '57014' } },
-    );
+    const err = new Prisma.PrismaClientKnownRequestError('query timeout', {
+      code: 'P0001',
+      clientVersion: 'test',
+      meta: { code: '57014' },
+    });
     filter.catch(err, host);
 
     expect(statusMock).toHaveBeenCalledWith(408);
@@ -242,10 +225,10 @@ describe('GlobalExceptionFilter', () => {
 
   it('keeps P2024 at HTTP 400 (not a transaction timeout in Prisma 6.x)', () => {
     const { host, statusMock, jsonMock } = createHost();
-    const err = new Prisma.PrismaClientKnownRequestError(
-      'Some other P2024',
-      { code: 'P2024', clientVersion: 'test' },
-    );
+    const err = new Prisma.PrismaClientKnownRequestError('Some other P2024', {
+      code: 'P2024',
+      clientVersion: 'test',
+    });
     filter.catch(err, host);
 
     expect(statusMock).toHaveBeenCalledWith(400);

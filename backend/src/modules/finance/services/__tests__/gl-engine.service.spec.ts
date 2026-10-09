@@ -235,13 +235,7 @@ describe('GlEngineService — L1-a UTC AccountBalance identity', () => {
           t: typeof tx,
         ) => Promise<void>;
       }
-    ).updateAccountBalances(
-      companyId,
-      financialPeriodId,
-      entryDate,
-      lines,
-      tx,
-    );
+    ).updateAccountBalances(companyId, financialPeriodId, entryDate, lines, tx);
 
   it('uses the UTC month for an east-of-UTC boundary instant', async () => {
     // 2026-10-01T00:30+05:00 === 2026-09-30T19:30Z.
@@ -399,9 +393,7 @@ describe('GlEngineService.reverse — CAS protection (G15-03-02)', () => {
         rowVersion: { increment: 1 },
       },
     });
-    expect(
-      journalRepository.createInTransaction,
-    ).toHaveBeenCalledTimes(1);
+    expect(journalRepository.createInTransaction).toHaveBeenCalledTimes(1);
     // Exact negation of the original lines.
     const created = journalRepository.createInTransaction.mock.calls[0][1];
     expect(created.lines).toEqual([
@@ -419,13 +411,11 @@ describe('GlEngineService.reverse — CAS protection (G15-03-02)', () => {
     });
     tx.journalEntry.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(
-      service.reverse('je-1', companyId, userId),
-    ).rejects.toThrow(ConflictException);
+    await expect(service.reverse('je-1', companyId, userId)).rejects.toThrow(
+      ConflictException,
+    );
 
-    expect(
-      journalRepository.createInTransaction,
-    ).not.toHaveBeenCalled();
+    expect(journalRepository.createInTransaction).not.toHaveBeenCalled();
     expect(auditLog.log).not.toHaveBeenCalled();
   });
 
@@ -438,13 +428,11 @@ describe('GlEngineService.reverse — CAS protection (G15-03-02)', () => {
     const first = await service.reverse('je-1', companyId, userId);
     expect(first.reversalEntryId).toBe('je-rev-1');
 
-    await expect(
-      service.reverse('je-1', companyId, userId),
-    ).rejects.toThrow(ConflictException);
+    await expect(service.reverse('je-1', companyId, userId)).rejects.toThrow(
+      ConflictException,
+    );
 
-    expect(
-      journalRepository.createInTransaction,
-    ).toHaveBeenCalledTimes(1);
+    expect(journalRepository.createInTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('failed reversal posting: CAS won first, no audit, no partial side effects', async () => {
@@ -454,32 +442,28 @@ describe('GlEngineService.reverse — CAS protection (G15-03-02)', () => {
       new Error('Financial period is not open'),
     );
 
-    await expect(
-      service.reverse('je-1', companyId, userId),
-    ).rejects.toThrow('Financial period is not open');
+    await expect(service.reverse('je-1', companyId, userId)).rejects.toThrow(
+      'Financial period is not open',
+    );
 
     // CAS ran before any side effect; the failure aborts before journal
     // creation and audit (rollback itself is the shared transaction).
     expect(
       tx.journalEntry.updateMany.mock.invocationCallOrder[0]!,
     ).toBeLessThan(validationService.validate.mock.invocationCallOrder[0]!);
-    expect(
-      journalRepository.createInTransaction,
-    ).not.toHaveBeenCalled();
+    expect(journalRepository.createInTransaction).not.toHaveBeenCalled();
     expect(auditLog.log).not.toHaveBeenCalled();
   });
 
   it('tenant isolation: foreign-company journal is not found, CAS never runs', async () => {
     journalRepository.findById.mockResolvedValue(null);
 
-    await expect(
-      service.reverse('je-1', 'comp-other', userId),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.reverse('je-1', 'comp-other', userId)).rejects.toThrow(
+      NotFoundException,
+    );
 
     expect(tx.journalEntry.updateMany).not.toHaveBeenCalled();
-    expect(
-      journalRepository.createInTransaction,
-    ).not.toHaveBeenCalled();
+    expect(journalRepository.createInTransaction).not.toHaveBeenCalled();
   });
 
   // G16-N-8-A: a GlEngine reversal compensation (referenceType='REVERSAL')

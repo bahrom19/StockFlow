@@ -1,7 +1,9 @@
 import { SupplierProduct } from '@prisma/client';
 import { SupplierProductEntity } from '../entities/supplier-product.entity';
 
-type SupplierProductWithProduct = SupplierProduct & { product: { id: string; name: string; sku: string | null } };
+type SupplierProductWithProduct = SupplierProduct & {
+  product: { id: string; name: string; sku: string | null };
+};
 
 function toMoney(value: unknown): string | null {
   return value == null ? null : String(value);

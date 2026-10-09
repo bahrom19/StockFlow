@@ -47,8 +47,12 @@ describe('G15-07-C3-A schema migration — static SQL verification', () => {
   });
 
   it('adds indexes without unique constraints on the new columns', () => {
-    expect(sql).toMatch(/CREATE INDEX "FinancialTransaction_postingStatus_idx"/);
-    expect(sql).toMatch(/CREATE INDEX "FinancialTransaction_journalEntryId_idx"/);
+    expect(sql).toMatch(
+      /CREATE INDEX "FinancialTransaction_postingStatus_idx"/,
+    );
+    expect(sql).toMatch(
+      /CREATE INDEX "FinancialTransaction_journalEntryId_idx"/,
+    );
     expect(sql).toMatch(
       /CREATE INDEX "FinancialTransaction_destinationBankAccountId_idx"/,
     );
@@ -70,7 +74,10 @@ describe('G15-07-C3-A schema migration — static SQL verification', () => {
   it('is additive only — no DELETE, DROP, TRUNCATE, no data rewrite', () => {
     // Strip referential actions ("ON DELETE SET NULL") so the assertion
     // targets statements, not FK clauses.
-    const statements = sql.replace(/ON DELETE (SET NULL|CASCADE|RESTRICT)/gi, '');
+    const statements = sql.replace(
+      /ON DELETE (SET NULL|CASCADE|RESTRICT)/gi,
+      '',
+    );
     expect(statements).not.toMatch(/\bDELETE\b/i);
     expect(statements).not.toMatch(/\bDROP\b/i);
     expect(statements).not.toMatch(/\bTRUNCATE\b/i);
@@ -101,8 +108,12 @@ describe('G15-07-C3-A cash-GL backfill migration — static SQL verification', (
   it('fails closed on conflicting non-canonical rows before provisioning', () => {
     expect(sql).toMatch(/DO \$\$/);
     expect(sql).toMatch(/RAISE EXCEPTION/);
-    expect(sql).toMatch(/'6100', 'EXPENSE'::"AccountType", 'DEBIT'::"NormalBalance"/);
-    expect(sql).toMatch(/'4200', 'REVENUE'::"AccountType", 'CREDIT'::"NormalBalance"/);
+    expect(sql).toMatch(
+      /'6100', 'EXPENSE'::"AccountType", 'DEBIT'::"NormalBalance"/,
+    );
+    expect(sql).toMatch(
+      /'4200', 'REVENUE'::"AccountType", 'CREDIT'::"NormalBalance"/,
+    );
     expect(sql).toMatch(/ca\."isSystem" = false/);
     // The guard aborts before any provisioning write.
     expect(sql.indexOf('RAISE EXCEPTION')).toBeLessThan(
@@ -122,8 +133,12 @@ describe('G15-07-C3-A cash-GL backfill migration — static SQL verification', (
     for (const code of ['6100', '4200', '6200', '4210']) {
       expect(sql).toContain(`'${code}'`);
     }
-    expect(sql).toMatch(/WHERE NOT EXISTS \( SELECT 1 FROM "ChartOfAccount" ca/);
-    expect(sql).toMatch(/ca\."companyId" = c\."id" AND ca\."code" = seed\."code"/);
+    expect(sql).toMatch(
+      /WHERE NOT EXISTS \( SELECT 1 FROM "ChartOfAccount" ca/,
+    );
+    expect(sql).toMatch(
+      /ca\."companyId" = c\."id" AND ca\."code" = seed\."code"/,
+    );
     expect(sql).toMatch(/gen_random_uuid\(\)/);
     expect(sql).toMatch(/FROM "Company" c/);
   });

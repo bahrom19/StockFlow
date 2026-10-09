@@ -78,7 +78,10 @@ export class UpdatePurchaseReturnDto {
   @IsEnum(['DRAFT', 'APPROVED', 'COMPLETED', 'CANCELLED'])
   status?: string;
 
-  @ApiPropertyOptional({ enum: Currency, description: 'Currency (only changeable while DRAFT)' })
+  @ApiPropertyOptional({
+    enum: Currency,
+    description: 'Currency (only changeable while DRAFT)',
+  })
   @IsOptional()
   @IsEnum(Currency)
   currency?: Currency;

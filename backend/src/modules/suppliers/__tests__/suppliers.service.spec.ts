@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { SuppliersService } from '../services/suppliers.service';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
@@ -59,7 +63,11 @@ describe('SuppliersService', () => {
         { provide: SuppliersRepository, useValue: mockRepo },
         { provide: PrismaService, useValue: mockPrisma },
         // G1 (P3-04): audit logging is wired in; unit tests stub it out.
-        { provide: require('../../shared/services/audit-log.service').AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: require('../../shared/services/audit-log.service')
+            .AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -91,28 +99,42 @@ describe('SuppliersService', () => {
   it('should reject duplicate email on create', async () => {
     mockRepo.findActiveByEmail.mockResolvedValue(baseSupplier as any);
     await expect(
-      service.create({ companyName: 'New', email: 'dup@test.com' } as any, currentUser),
+      service.create(
+        { companyName: 'New', email: 'dup@test.com' } as any,
+        currentUser,
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
   it('should reject duplicate phone on create', async () => {
     mockRepo.findActiveByPhone.mockResolvedValue(baseSupplier as any);
     await expect(
-      service.create({ companyName: 'New', phone: '+77001112233' } as any, currentUser),
+      service.create(
+        { companyName: 'New', phone: '+77001112233' } as any,
+        currentUser,
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
   it('should reject duplicate BIN on create', async () => {
     mockRepo.findActiveByBin.mockResolvedValue(baseSupplier as any);
     await expect(
-      service.create({ companyName: 'New', bin: '123456789012' } as any, currentUser),
+      service.create(
+        { companyName: 'New', bin: '123456789012' } as any,
+        currentUser,
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
   it('should allow create when no duplicates', async () => {
     mockRepo.create.mockResolvedValue(baseSupplier as any);
     const result = await service.create(
-      { companyName: 'Supply Co', email: 'new@test.com', phone: '+77009998877', bin: '999999999999' } as any,
+      {
+        companyName: 'Supply Co',
+        email: 'new@test.com',
+        phone: '+77009998877',
+        bin: '999999999999',
+      } as any,
       currentUser,
     );
     expect(result.id).toBe('supp-1');
@@ -167,35 +189,64 @@ describe('SuppliersService', () => {
   // G1: field-level duplicate checks on update
   it('should reject duplicate email on update', async () => {
     mockRepo.findById.mockResolvedValue(baseSupplier as any);
-    mockRepo.findActiveByEmail.mockResolvedValue({ ...baseSupplier, id: 'other' } as any);
+    mockRepo.findActiveByEmail.mockResolvedValue({
+      ...baseSupplier,
+      id: 'other',
+    } as any);
     await expect(
-      service.update('supp-1', { email: 'taken@test.com', rowVersion: 0 } as any, currentUser),
+      service.update(
+        'supp-1',
+        { email: 'taken@test.com', rowVersion: 0 } as any,
+        currentUser,
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
   it('should reject duplicate phone on update', async () => {
     mockRepo.findById.mockResolvedValue(baseSupplier as any);
-    mockRepo.findActiveByPhone.mockResolvedValue({ ...baseSupplier, id: 'other' } as any);
+    mockRepo.findActiveByPhone.mockResolvedValue({
+      ...baseSupplier,
+      id: 'other',
+    } as any);
     await expect(
-      service.update('supp-1', { phone: '+77009998877', rowVersion: 0 } as any, currentUser),
+      service.update(
+        'supp-1',
+        { phone: '+77009998877', rowVersion: 0 } as any,
+        currentUser,
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
   it('should reject duplicate BIN on update', async () => {
     mockRepo.findById.mockResolvedValue(baseSupplier as any);
-    mockRepo.findActiveByBin.mockResolvedValue({ ...baseSupplier, id: 'other' } as any);
+    mockRepo.findActiveByBin.mockResolvedValue({
+      ...baseSupplier,
+      id: 'other',
+    } as any);
     await expect(
-      service.update('supp-1', { bin: '999999999999', rowVersion: 0 } as any, currentUser),
+      service.update(
+        'supp-1',
+        { bin: '999999999999', rowVersion: 0 } as any,
+        currentUser,
+      ),
     ).rejects.toThrow(ConflictException);
   });
 
   it('should allow self-update with same email/phone/BIN', async () => {
     mockRepo.findById.mockResolvedValue(baseSupplier as any);
-    mockRepo.update.mockResolvedValue({ ...baseSupplier, companyName: 'Updated' } as any);
+    mockRepo.update.mockResolvedValue({
+      ...baseSupplier,
+      companyName: 'Updated',
+    } as any);
     // Same values as existing — should not trigger duplicate check
     const result = await service.update(
       'supp-1',
-      { email: 'supply@test.com', phone: '+77001112233', bin: '123456789012', rowVersion: 0 } as any,
+      {
+        email: 'supply@test.com',
+        phone: '+77001112233',
+        bin: '123456789012',
+        rowVersion: 0,
+      } as any,
       currentUser,
     );
     expect(result.companyName).toBe('Updated');
@@ -302,11 +353,11 @@ describe('SuppliersService', () => {
         creditLimit: new Prisma.Decimal('250000.5'),
       } as any);
 
-    const result = await service.update(
-      'supp-1',
-      { defaultDueDays: 45, creditLimit: 250000.5, rowVersion: 0 } as any,
-      currentUser,
-    );
+      const result = await service.update(
+        'supp-1',
+        { defaultDueDays: 45, creditLimit: 250000.5, rowVersion: 0 } as any,
+        currentUser,
+      );
 
       expect(mockRepo.update).toHaveBeenCalledWith(
         'supp-1',
@@ -326,7 +377,11 @@ describe('SuppliersService', () => {
       mockRepo.findById.mockResolvedValue(baseSupplier as any);
       mockRepo.update.mockResolvedValue(baseSupplier as any);
 
-      await service.update('supp-1', { notes: 'x', rowVersion: 0 } as any, currentUser);
+      await service.update(
+        'supp-1',
+        { notes: 'x', rowVersion: 0 } as any,
+        currentUser,
+      );
 
       const data = mockRepo.update.mock.calls[0]?.[1] as any;
       expect(data.defaultDueDays).toBeUndefined();
@@ -336,11 +391,10 @@ describe('SuppliersService', () => {
     it('keeps tenant isolation on terms updates', async () => {
       mockRepo.findById.mockResolvedValue(null);
       await expect(
-        service.update(
-          'supp-1',
-          { defaultDueDays: 30, rowVersion: 0 } as any,
-          { ...currentUser, companyId: 'other-comp' },
-        ),
+        service.update('supp-1', { defaultDueDays: 30, rowVersion: 0 } as any, {
+          ...currentUser,
+          companyId: 'other-comp',
+        }),
       ).rejects.toThrow(NotFoundException);
     });
 

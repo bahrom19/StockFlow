@@ -349,5 +349,4 @@ export class ProductsRepository {
       select: { id: true },
     });
   }
-
 }

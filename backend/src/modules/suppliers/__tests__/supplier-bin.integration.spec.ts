@@ -1,8 +1,10 @@
 /**
  * G1: Supplier BIN uniqueness integration tests.
  *
- * Validates the partial unique index `supplier_company_bin_unique` and
- * application-level duplicate detection for BIN within a company.
+ * Validates the partial unique index `supplier_company_bin_active_unique`
+ * (consolidated from the original G1 `supplier_company_bin_unique` by
+ * migration 20260923000000) and application-level duplicate detection for
+ * BIN within a company.
  *
  * Runs against a real PostgreSQL database (same as other integration tests).
  */
@@ -167,7 +169,7 @@ describe('Supplier BIN uniqueness (G1)', () => {
       SELECT indexname, indexdef
       FROM pg_indexes
       WHERE tablename = 'Supplier'
-      AND indexname = 'supplier_company_bin_unique'
+      AND indexname = 'supplier_company_bin_active_unique'
     `);
 
     expect(indexes).toHaveLength(1);
@@ -177,6 +179,12 @@ describe('Supplier BIN uniqueness (G1)', () => {
     expect(idx!.indexdef).toContain('companyId');
     expect(idx!.indexdef).toContain('bin');
     expect(idx!.indexdef).toContain('deletedAt');
+    // G16-CI-1B: the guarantee is a PARTIAL unique index — only active
+    // suppliers with a non-empty BIN participate, so archiving a supplier
+    // frees its BIN for reuse. Migration 20260923000000 consolidated the
+    // original G1 index (supplier_company_bin_unique) into this name and
+    // widened the predicate; assert the partial qualifier explicitly.
+    expect(idx!.indexdef).toMatch(/WHERE\b/i);
   });
 
   it('should verify FK constraints are RESTRICT for historical documents', async () => {

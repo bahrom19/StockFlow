@@ -101,15 +101,22 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
           };
         }),
       },
-      financialPeriod: { findFirst: jest.fn().mockResolvedValue({ id: 'fp-1' }) },
+      financialPeriod: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'fp-1' }),
+      },
       // G16-B-04 (B02-11): warehouse ownership guard for openShift —
       // resolvable by default so legacy openShift specs keep passing.
-      warehouse: { findFirst: jest.fn().mockResolvedValue({ id: warehouseId }) },
+      warehouse: {
+        findFirst: jest.fn().mockResolvedValue({ id: warehouseId }),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
         CashShiftService,
         { provide: CashShiftRepository, useValue: repo },
         { provide: PrismaService, useValue: mockPrisma },
@@ -117,12 +124,18 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
           provide: IdempotencyService,
           useValue: { hashRequest: jest.fn().mockReturnValue('hash') },
         },
-        { provide: GlEngineService, useValue: { post: jest.fn().mockResolvedValue({ id: 'je-1' }) } },
+        {
+          provide: GlEngineService,
+          useValue: { post: jest.fn().mockResolvedValue({ id: 'je-1' }) },
+        },
         {
           provide: FiscalCalendarService,
           useValue: { ensureCurrentCalendar: jest.fn().mockResolvedValue({}) },
         },
-        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -201,7 +214,11 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
   // ───────────────────────────────
   describe('G16-B-04 (B02-11): openShift warehouse ownership', () => {
     const open = () =>
-      service.openShift({ warehouseId, openingBalance: 100 }, userId, companyId);
+      service.openShift(
+        { warehouseId, openingBalance: 100 },
+        userId,
+        companyId,
+      );
 
     it('opens a shift for an own active warehouse', async () => {
       repo.findOpenShift.mockResolvedValue(null);
@@ -312,7 +329,9 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
 
     // 100 opening + 500 cashSales − 120.5 partial CASH refunds = 479.5
     const payload = repo.update.mock.calls[0]![1] as Record<string, unknown>;
-    expect((payload.expectedClosing as Prisma.Decimal).toString()).toBe('479.5');
+    expect((payload.expectedClosing as Prisma.Decimal).toString()).toBe(
+      '479.5',
+    );
   });
 
   it('G11-F1 closeShift: CARD-only refunds leave expected closing unchanged', async () => {
@@ -339,8 +358,8 @@ describe('CashShiftService — H1 atomic open / H2 optimistic locking', () => {
     const result = await service.closeShift({}, userId, companyId, warehouseId);
 
     expect(result.expectedClosing.toString()).toBe('100');
-    const where = mockPrisma.refundPaymentAllocation.aggregate.mock.calls[0][0]
-      .where;
+    const where =
+      mockPrisma.refundPaymentAllocation.aggregate.mock.calls[0][0].where;
     expect(where.companyId).toBe(companyId);
     expect(where.method).toBe('CASH');
     expect(where.deletedAt).toBeNull();

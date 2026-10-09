@@ -111,7 +111,12 @@ describe('ProductsService — NTIN', () => {
     mockRepo.create.mockResolvedValue({ ...baseProduct, ntin: null } as any);
 
     const result = await service.create(
-      { name: 'Молоко 1 л', sku: 'MILK-001', barcode: '4870001234567', price: 450 } as any,
+      {
+        name: 'Молоко 1 л',
+        sku: 'MILK-001',
+        barcode: '4870001234567',
+        price: 450,
+      } as any,
       currentUser,
     );
 
@@ -149,8 +154,14 @@ describe('ProductsService — NTIN', () => {
   });
 
   it('updates ntin', async () => {
-    mockRepo.findById.mockResolvedValue({ ...baseProduct, ntin: '123456789' } as any);
-    mockRepo.update.mockResolvedValue({ ...baseProduct, ntin: '987654321' } as any);
+    mockRepo.findById.mockResolvedValue({
+      ...baseProduct,
+      ntin: '123456789',
+    } as any);
+    mockRepo.update.mockResolvedValue({
+      ...baseProduct,
+      ntin: '987654321',
+    } as any);
 
     const result = await service.update(
       'prod-1',
@@ -168,7 +179,10 @@ describe('ProductsService — NTIN', () => {
   });
 
   it('clears ntin with an explicit null', async () => {
-    mockRepo.findById.mockResolvedValue({ ...baseProduct, ntin: '123456789' } as any);
+    mockRepo.findById.mockResolvedValue({
+      ...baseProduct,
+      ntin: '123456789',
+    } as any);
     mockRepo.update.mockResolvedValue({ ...baseProduct, ntin: null } as any);
 
     const result = await service.update(
@@ -183,10 +197,20 @@ describe('ProductsService — NTIN', () => {
   });
 
   it('keeps ntin untouched when the field is omitted (partial update)', async () => {
-    mockRepo.findById.mockResolvedValue({ ...baseProduct, ntin: '123456789' } as any);
-    mockRepo.update.mockResolvedValue({ ...baseProduct, ntin: '123456789' } as any);
+    mockRepo.findById.mockResolvedValue({
+      ...baseProduct,
+      ntin: '123456789',
+    } as any);
+    mockRepo.update.mockResolvedValue({
+      ...baseProduct,
+      ntin: '123456789',
+    } as any);
 
-    await service.update('prod-1', { name: 'Молоко 1.5 л' } as any, currentUser);
+    await service.update(
+      'prod-1',
+      { name: 'Молоко 1.5 л' } as any,
+      currentUser,
+    );
 
     const data = mockRepo.update.mock.calls[0]![1] as Record<string, unknown>;
     expect(Object.prototype.hasOwnProperty.call(data, 'ntin')).toBe(false);
@@ -217,10 +241,7 @@ describe('ProductsService — NTIN', () => {
   it('passes the ntin filter to the repository for search', async () => {
     mockRepo.findAll.mockResolvedValue({ items: [], total: 0 });
 
-    await service.findAll(
-      { ntin: '123456789' } as any,
-      currentUser,
-    );
+    await service.findAll({ ntin: '123456789' } as any, currentUser);
 
     expect(mockRepo.findAll).toHaveBeenCalledWith(
       expect.objectContaining({ companyId: 'comp-1', ntin: '123456789' }),

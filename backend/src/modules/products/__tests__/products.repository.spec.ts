@@ -20,7 +20,9 @@ describe('ProductsRepository — search by identifiers', () => {
         return { findMany, count };
       },
     };
-    repository = new ProductsRepository(prismaService as unknown as PrismaService);
+    repository = new ProductsRepository(
+      prismaService as unknown as PrismaService,
+    );
   });
 
   it('free-text search matches name, sku, barcode AND ntin', async () => {
@@ -253,7 +255,10 @@ describe('ProductsRepository — findActiveBySkuAndCompany', () => {
   it('returns conflicting product when found', async () => {
     findFirst.mockResolvedValue({ id: 'other', name: 'Other' });
 
-    const result = await repository.findActiveBySkuAndCompany('SKU-001', 'comp-1');
+    const result = await repository.findActiveBySkuAndCompany(
+      'SKU-001',
+      'comp-1',
+    );
 
     expect(result).toEqual({ id: 'other', name: 'Other' });
   });

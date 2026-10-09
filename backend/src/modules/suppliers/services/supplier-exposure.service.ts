@@ -66,9 +66,7 @@ export class SupplierExposureService {
     }
 
     // G9-D1 contract: base currency only for the headline numbers.
-    const baseCurrency = await this.companiesService.getBaseCurrency(
-      companyId,
-    );
+    const baseCurrency = await this.companiesService.getBaseCurrency(companyId);
 
     const rows: SupplierExposureCurrencyRow[] =
       await this.exposureRepo.getOpenPoExposureAggregates(

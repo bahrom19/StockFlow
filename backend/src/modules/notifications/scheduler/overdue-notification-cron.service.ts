@@ -45,7 +45,10 @@ export class OverdueNotificationCronService {
     const lockKey = 'overdue-notifications';
     // G16-L-2C-3: discriminated lock result — a synthetic token (Redis
     // disabled in dev / explicit fail-open) means RUN, never SKIPPED.
-    const lock = await this.redisService.acquireLock(LOCK_PREFIX + lockKey, LOCK_TTL_SEC);
+    const lock = await this.redisService.acquireLock(
+      LOCK_PREFIX + lockKey,
+      LOCK_TTL_SEC,
+    );
     if (!lock.acquired) {
       // Best-effort terminal SKIPPED row; JobRunService.skip never throws.
       await this.jobRunService.skip('notifications.scan-overdue', lock.reason);
@@ -58,7 +61,11 @@ export class OverdueNotificationCronService {
       const startOfToday = this.getScanStart();
       const dayBucket = this.formatDayBucket(startOfToday);
       const companies = await this.prismaService.company.findMany({
-        where: { deletedAt: null, isActive: true, status: CompanyStatus.ACTIVE },
+        where: {
+          deletedAt: null,
+          isActive: true,
+          status: CompanyStatus.ACTIVE,
+        },
         select: { id: true },
       });
 

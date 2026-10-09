@@ -45,9 +45,9 @@ describe('inspect-job-runs CLI (read-only JobRun inspector)', () => {
   });
 
   it('stale detection config covers exactly the 10 approved jobs', () => {
-    const jobNames = [
-      ...source.matchAll(/jobName: '([a-z.-]+)'/g),
-    ].map((m) => m[1]);
+    const jobNames = [...source.matchAll(/jobName: '([a-z.-]+)'/g)].map(
+      (m) => m[1],
+    );
 
     expect(jobNames.sort()).toEqual(
       [
@@ -65,7 +65,7 @@ describe('inspect-job-runs CLI (read-only JobRun inspector)', () => {
     );
     // staleAfter = max(2 x interval, 2 x TTL) — formula pinned in SQL.
     expect(source).toContain('GREATEST');
-    expect(source).toContain("* 2");
+    expect(source).toContain('* 2');
   });
 
   it('printReport destructures the actual report keys (OPS-2 P2 regression pin)', () => {
@@ -86,41 +86,35 @@ describe('inspect-job-runs CLI (read-only JobRun inspector)', () => {
     const backendRoot = join(__dirname, '..', '..', '..', '..');
     const cliPath = join(backendRoot, 'scripts', 'inspect-job-runs.mjs');
 
-    it(
-      'human mode exits 0 with every report section rendered (no TypeError/FATAL)',
-      () => {
-        const res = spawnSync(process.execPath, [cliPath], {
-          cwd: backendRoot,
-          encoding: 'utf8',
-          timeout: 60_000,
-        });
-        expect(res.error).toBeUndefined();
-        expect(res.status).toBe(0);
-        expect(`${res.stderr}${res.stdout}`).not.toMatch(/TypeError|FATAL/);
-        expect(res.stdout).toContain('===== JobRun inspection (read-only) =====');
-        expect(res.stdout).toContain('--- Latest run per job ---');
-        expect(res.stdout).toContain('--- Consecutive failures ---');
-        expect(res.stdout).toContain('--- Stale RUNNING');
-        expect(res.stdout).toContain('--- Duration percentiles');
-      },
-    );
+    it('human mode exits 0 with every report section rendered (no TypeError/FATAL)', () => {
+      const res = spawnSync(process.execPath, [cliPath], {
+        cwd: backendRoot,
+        encoding: 'utf8',
+        timeout: 60_000,
+      });
+      expect(res.error).toBeUndefined();
+      expect(res.status).toBe(0);
+      expect(`${res.stderr}${res.stdout}`).not.toMatch(/TypeError|FATAL/);
+      expect(res.stdout).toContain('===== JobRun inspection (read-only) =====');
+      expect(res.stdout).toContain('--- Latest run per job ---');
+      expect(res.stdout).toContain('--- Consecutive failures ---');
+      expect(res.stdout).toContain('--- Stale RUNNING');
+      expect(res.stdout).toContain('--- Duration percentiles');
+    });
 
-    it(
-      '--json mode exits 0 with a parseable report of array sections',
-      () => {
-        const res = spawnSync(process.execPath, [cliPath, '--json'], {
-          cwd: backendRoot,
-          encoding: 'utf8',
-          timeout: 60_000,
-        });
-        expect(res.error).toBeUndefined();
-        expect(res.status).toBe(0);
-        const report = JSON.parse(res.stdout) as Record<string, unknown>;
-        expect(Array.isArray(report.latest)).toBe(true);
-        expect(Array.isArray(report.consecutiveFailures)).toBe(true);
-        expect(Array.isArray(report.staleRunning)).toBe(true);
-        expect(Array.isArray(report.durationPercentiles)).toBe(true);
-      },
-    );
+    it('--json mode exits 0 with a parseable report of array sections', () => {
+      const res = spawnSync(process.execPath, [cliPath, '--json'], {
+        cwd: backendRoot,
+        encoding: 'utf8',
+        timeout: 60_000,
+      });
+      expect(res.error).toBeUndefined();
+      expect(res.status).toBe(0);
+      const report = JSON.parse(res.stdout) as Record<string, unknown>;
+      expect(Array.isArray(report.latest)).toBe(true);
+      expect(Array.isArray(report.consecutiveFailures)).toBe(true);
+      expect(Array.isArray(report.staleRunning)).toBe(true);
+      expect(Array.isArray(report.durationPercentiles)).toBe(true);
+    });
   });
 });

@@ -50,7 +50,10 @@ describe('StripeWebhookController (G13-03-08-01 fail-closed gate)', () => {
 
   it('should reject a missing signature with 400 without invoking the engine', async () => {
     await expect(
-      controller.handleStripeWebhook(reqFor(forgedCheckoutBody), undefined as any),
+      controller.handleStripeWebhook(
+        reqFor(forgedCheckoutBody),
+        undefined as any,
+      ),
     ).rejects.toThrow(BadRequestException);
     expect(engine.verifySignature).not.toHaveBeenCalled();
     expect(engine.handleWebhook).not.toHaveBeenCalled();

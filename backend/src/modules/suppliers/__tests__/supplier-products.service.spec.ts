@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { SupplierProductsService } from '../services/supplier-products.service';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { SupplierProductsRepository } from '../repositories/supplier-products.repository';
@@ -67,25 +71,39 @@ describe('SupplierProductsService', () => {
       findMany: jest.fn().mockResolvedValue({ items: [], total: 0 }),
       findById: jest.fn().mockResolvedValue(null),
       findBySupplierAndProduct: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockImplementation((data: any) =>
-        Promise.resolve({ ...baseSp, ...data }),
-      ),
-      update: jest.fn().mockImplementation((id: string, companyId: string, data: any) =>
-        Promise.resolve({ ...baseSp, ...data }),
-      ),
+      create: jest
+        .fn()
+        .mockImplementation((data: any) =>
+          Promise.resolve({ ...baseSp, ...data }),
+        ),
+      update: jest
+        .fn()
+        .mockImplementation((id: string, companyId: string, data: any) =>
+          Promise.resolve({ ...baseSp, ...data }),
+        ),
       softDelete: jest.fn().mockResolvedValue(undefined),
       clearPreferred: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
         SupplierProductsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: SuppliersRepository, useValue: mockSuppliersRepo },
-        { provide: SupplierProductsRepository, useValue: mockSupplierProductsRepo },
+        {
+          provide: SupplierProductsRepository,
+          useValue: mockSupplierProductsRepo,
+        },
         // G1 (P3-04): audit logging is wired in; unit tests stub it out.
-        { provide: require('../../shared/services/audit-log.service').AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: require('../../shared/services/audit-log.service')
+            .AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -124,12 +142,18 @@ describe('SupplierProductsService', () => {
     it('should reject cross-tenant product', async () => {
       mockPrisma.product.findFirst.mockResolvedValue(null);
       await expect(
-        service.create(supplierId, { productId: 'other-company-product' }, companyId),
+        service.create(
+          supplierId,
+          { productId: 'other-company-product' },
+          companyId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('should reject duplicate active relation', async () => {
-      mockSupplierProductsRepo.findBySupplierAndProduct.mockResolvedValue(baseSp);
+      mockSupplierProductsRepo.findBySupplierAndProduct.mockResolvedValue(
+        baseSp,
+      );
       await expect(
         service.create(supplierId, { productId }, companyId),
       ).rejects.toThrow(ConflictException);
@@ -137,7 +161,11 @@ describe('SupplierProductsService', () => {
 
     it('should reject non-KZT currency', async () => {
       await expect(
-        service.create(supplierId, { productId, currency: 'USD' as any }, companyId),
+        service.create(
+          supplierId,
+          { productId, currency: 'USD' as any },
+          companyId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -149,7 +177,11 @@ describe('SupplierProductsService', () => {
 
     it('should reject negative purchase price', async () => {
       await expect(
-        service.create(supplierId, { productId, purchasePrice: -100 }, companyId),
+        service.create(
+          supplierId,
+          { productId, purchasePrice: -100 },
+          companyId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -174,7 +206,9 @@ describe('SupplierProductsService', () => {
 
   describe('duplicate / P2002 regression (G14-02-06)', () => {
     it('should reject sequential duplicate (existing check)', async () => {
-      mockSupplierProductsRepo.findBySupplierAndProduct.mockResolvedValue(baseSp);
+      mockSupplierProductsRepo.findBySupplierAndProduct.mockResolvedValue(
+        baseSp,
+      );
       await expect(
         service.create(supplierId, { productId }, companyId),
       ).rejects.toThrow(ConflictException);
@@ -264,7 +298,11 @@ describe('SupplierProductsService', () => {
         ...baseSupplier,
         companyId: otherCompanyId,
       });
-      const result = await service.create(otherCompanyId, { productId }, otherCompanyId);
+      const result = await service.create(
+        otherCompanyId,
+        { productId },
+        otherCompanyId,
+      );
       expect(result).toBeDefined();
     });
   });
@@ -335,9 +373,9 @@ describe('SupplierProductsService', () => {
 
     it('should reject not found', async () => {
       mockSupplierProductsRepo.findById.mockResolvedValue(null);
-      await expect(
-        service.remove(spId, supplierId, companyId),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.remove(spId, supplierId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -357,9 +395,9 @@ describe('SupplierProductsService', () => {
 
     it('should reject supplier not found', async () => {
       mockSuppliersRepo.findById.mockResolvedValue(null);
-      await expect(
-        service.findAll(supplierId, companyId),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findAll(supplierId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

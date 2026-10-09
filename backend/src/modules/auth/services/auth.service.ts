@@ -8,12 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'crypto';
-import {
-  AccountType,
-  NormalBalance,
-  Prisma,
-  UserStatus,
-} from '@prisma/client';
+import { AccountType, NormalBalance, Prisma, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../../common/prisma';
 import { RegisterDto } from '../dto/register.dto';
@@ -519,9 +514,7 @@ export class AuthService {
    * Used by E2E tests that cannot access a real email inbox.
    * Must NOT be exposed in production.
    */
-  async devGetResetToken(
-    email: string,
-  ): Promise<{ token: string }> {
+  async devGetResetToken(email: string): Promise<{ token: string }> {
     const user = await this.authRepository.findUserByEmail(email);
     if (!user || !user.isActive || user.deletedAt) {
       throw new BadRequestException('User not found');
@@ -545,9 +538,7 @@ export class AuthService {
    * Always returns the same generic response regardless of whether
    * the email exists — prevents email enumeration.
    */
-  async forgotPassword(
-    email: string,
-  ): Promise<{ message: string }> {
+  async forgotPassword(email: string): Promise<{ message: string }> {
     const user = await this.authRepository.findUserByEmail(email);
 
     if (user && user.isActive && !user.deletedAt) {
@@ -587,8 +578,7 @@ export class AuthService {
     // Bcrypt is non-deterministic — same input produces different hashes.
     // We cannot hash the token and look up by hash. Instead, fetch all valid
     // (unused, not expired) tokens and verify via bcrypt.compare().
-    const candidates =
-      await this.authRepository.findValidPasswordResetTokens();
+    const candidates = await this.authRepository.findValidPasswordResetTokens();
 
     let resetRecord: { id: string; userId: string } | null = null;
     for (const candidate of candidates) {
@@ -613,16 +603,10 @@ export class AuthService {
         tx,
       );
 
-      await this.authRepository.markPasswordResetTokenUsed(
-        resetRecord.id,
-        tx,
-      );
+      await this.authRepository.markPasswordResetTokenUsed(resetRecord.id, tx);
 
       // Revoke all refresh tokens — user must re-login with new password
-      await this.authRepository.revokeRefreshTokens(
-        resetRecord.userId,
-        tx,
-      );
+      await this.authRepository.revokeRefreshTokens(resetRecord.userId, tx);
     });
 
     return {

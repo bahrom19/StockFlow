@@ -65,13 +65,12 @@ describe('RefundPaymentAllocationService — G11-E5', () => {
       payment: { findMany: jest.fn(async () => payments) },
       salesRefund: { findMany: jest.fn(async () => refunds) },
       refundPaymentAllocation: {
-        findMany: jest.fn(
-          async ({ where }: any) =>
-            allocationLedger.filter(
-              (row) =>
-                row.companyId === where.companyId &&
-                where.salesRefundId.in.includes(row.salesRefundId),
-            ),
+        findMany: jest.fn(async ({ where }: any) =>
+          allocationLedger.filter(
+            (row) =>
+              row.companyId === where.companyId &&
+              where.salesRefundId.in.includes(row.salesRefundId),
+          ),
         ),
         createMany: jest.fn(async ({ data }: any) => {
           allocationLedger.push(...data);
@@ -203,7 +202,9 @@ describe('RefundPaymentAllocationService — G11-E5', () => {
       PaymentMethod.STORE_CREDIT,
       PaymentMethod.GIFT_CARD,
     ]) {
-      expect(facts.find((f) => f.method === method)!.amount.toString()).toBe('1');
+      expect(facts.find((f) => f.method === method)!.amount.toString()).toBe(
+        '1',
+      );
     }
   });
 
@@ -223,13 +224,35 @@ describe('RefundPaymentAllocationService — G11-E5', () => {
     expect(facts).toHaveLength(7);
     const total = facts.reduce((acc, f) => acc.add(f.amount), new Decimal(0));
     expect(total.toString()).toBe('1');
-    expect(facts.find((f) => f.method === PaymentMethod.CASH)!.amount.toString()).toBe('0.1429');
-    expect(facts.find((f) => f.method === PaymentMethod.CARD)!.amount.toString()).toBe('0.1429');
-    expect(facts.find((f) => f.method === PaymentMethod.QR)!.amount.toString()).toBe('0.1429');
-    expect(facts.find((f) => f.method === PaymentMethod.BANK_TRANSFER)!.amount.toString()).toBe('0.1429');
-    expect(facts.find((f) => f.method === PaymentMethod.MOBILE_WALLET)!.amount.toString()).toBe('0.1428');
-    expect(facts.find((f) => f.method === PaymentMethod.STORE_CREDIT)!.amount.toString()).toBe('0.1428');
-    expect(facts.find((f) => f.method === PaymentMethod.GIFT_CARD)!.amount.toString()).toBe('0.1428');
+    expect(
+      facts.find((f) => f.method === PaymentMethod.CASH)!.amount.toString(),
+    ).toBe('0.1429');
+    expect(
+      facts.find((f) => f.method === PaymentMethod.CARD)!.amount.toString(),
+    ).toBe('0.1429');
+    expect(
+      facts.find((f) => f.method === PaymentMethod.QR)!.amount.toString(),
+    ).toBe('0.1429');
+    expect(
+      facts
+        .find((f) => f.method === PaymentMethod.BANK_TRANSFER)!
+        .amount.toString(),
+    ).toBe('0.1429');
+    expect(
+      facts
+        .find((f) => f.method === PaymentMethod.MOBILE_WALLET)!
+        .amount.toString(),
+    ).toBe('0.1428');
+    expect(
+      facts
+        .find((f) => f.method === PaymentMethod.STORE_CREDIT)!
+        .amount.toString(),
+    ).toBe('0.1428');
+    expect(
+      facts
+        .find((f) => f.method === PaymentMethod.GIFT_CARD)!
+        .amount.toString(),
+    ).toBe('0.1428');
   });
 
   // ── 7. changeAmount cash clamp ──────────────────────────────
@@ -423,8 +446,8 @@ describe('RefundPaymentAllocationService — G11-E5', () => {
       payment(PaymentMethod.STORE_CREDIT, '4000'),
     ];
     await run('2500', {}, 'refund-77');
-    const payload = mockTx.refundPaymentAllocation.createMany.mock
-      .calls[0][0].data as Array<{
+    const payload = mockTx.refundPaymentAllocation.createMany.mock.calls[0][0]
+      .data as Array<{
       salesRefundId: string;
       createdBy: string;
       companyId: string;
@@ -443,7 +466,9 @@ describe('RefundPaymentAllocationService — G11-E5', () => {
       payload.find((r) => r.method === PaymentMethod.CASH)!.amount.toString(),
     ).toBe('1500');
     expect(
-      payload.find((r) => r.method === PaymentMethod.STORE_CREDIT)!.amount.toString(),
+      payload
+        .find((r) => r.method === PaymentMethod.STORE_CREDIT)!
+        .amount.toString(),
     ).toBe('1000');
   });
 });

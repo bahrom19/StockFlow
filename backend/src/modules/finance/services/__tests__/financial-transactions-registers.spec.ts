@@ -144,7 +144,10 @@ describe('FinancialTransactionsService — register ownership (G16-B-02 PH1)', (
       tx.bankAccount.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.create(baseDto({ bankAccountId: 'bank-evil' }) as any, currentUser),
+        service.create(
+          baseDto({ bankAccountId: 'bank-evil' }) as any,
+          currentUser,
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(mockRepo.create).not.toHaveBeenCalled();
     });
@@ -165,7 +168,10 @@ describe('FinancialTransactionsService — register ownership (G16-B-02 PH1)', (
       tx.cashAccount.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.create(baseDto({ cashAccountId: 'cash-old' }) as any, currentUser),
+        service.create(
+          baseDto({ cashAccountId: 'cash-old' }) as any,
+          currentUser,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -198,7 +204,11 @@ describe('FinancialTransactionsService — register ownership (G16-B-02 PH1)', (
       tx.cashAccount.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.update('ft-1', { cashAccountId: 'cash-evil' } as any, currentUser),
+        service.update(
+          'ft-1',
+          { cashAccountId: 'cash-evil' } as any,
+          currentUser,
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(mockRepo.update).not.toHaveBeenCalled();
     });
@@ -207,7 +217,11 @@ describe('FinancialTransactionsService — register ownership (G16-B-02 PH1)', (
       tx.bankAccount.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.update('ft-1', { bankAccountId: 'bank-evil' } as any, currentUser),
+        service.update(
+          'ft-1',
+          { bankAccountId: 'bank-evil' } as any,
+          currentUser,
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(mockRepo.update).not.toHaveBeenCalled();
     });
@@ -220,7 +234,11 @@ describe('FinancialTransactionsService — register ownership (G16-B-02 PH1)', (
     });
 
     it('should accept a same-company register on update', async () => {
-      await service.update('ft-1', { cashAccountId: 'cash-1' } as any, currentUser);
+      await service.update(
+        'ft-1',
+        { cashAccountId: 'cash-1' } as any,
+        currentUser,
+      );
 
       expect(mockRepo.update).toHaveBeenCalledWith(
         'ft-1',

@@ -10,8 +10,10 @@ export interface ValidationResult {
   errors: string[];
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO_DATE_REGEX =
+  /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 /**
  * Validate tool input against its inputSchema.
@@ -41,7 +43,9 @@ export function validateToolInput(
   }
 
   // 2. Validate known properties from schema
-  const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
+  const properties = schema.properties as
+    | Record<string, Record<string, unknown>>
+    | undefined;
   if (!properties) {
     return { valid: true, errors: [] }; // No properties defined, accept anything
   }
@@ -95,8 +99,13 @@ export function validateToolInput(
       }
 
       // Date validation for dateFrom/dateTo
-      if ((key === 'dateFrom' || key === 'dateTo') && !ISO_DATE_REGEX.test(value)) {
-        errors.push(`Tool "${toolName}": "${key}" must be a valid ISO date (YYYY-MM-DD)`);
+      if (
+        (key === 'dateFrom' || key === 'dateTo') &&
+        !ISO_DATE_REGEX.test(value)
+      ) {
+        errors.push(
+          `Tool "${toolName}": "${key}" must be a valid ISO date (YYYY-MM-DD)`,
+        );
         continue;
       }
     }
@@ -120,7 +129,9 @@ export function sanitizeToolInput(
     return {};
   }
 
-  const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
+  const properties = schema.properties as
+    | Record<string, Record<string, unknown>>
+    | undefined;
   if (!properties) {
     return input;
   }

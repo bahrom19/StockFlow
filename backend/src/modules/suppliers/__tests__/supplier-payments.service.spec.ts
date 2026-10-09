@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Currency, PaymentMethod, PurchaseInvoiceStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { SupplierPaymentsService } from '../services/supplier-payments.service';
@@ -133,10 +137,14 @@ describe('SupplierPaymentsService', () => {
         }),
       },
       cashAccount: {
-        findFirst: jest.fn().mockResolvedValue({ chartOfAccountId: cashChartAccountId }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ chartOfAccountId: cashChartAccountId }),
       },
       bankAccount: {
-        findFirst: jest.fn().mockResolvedValue({ chartOfAccountId: cashChartAccountId }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ chartOfAccountId: cashChartAccountId }),
       },
       chartOfAccount: {
         findFirst: jest.fn().mockResolvedValue({ id: apAccountId }),
@@ -202,7 +210,13 @@ describe('SupplierPaymentsService', () => {
     };
 
     mockGlEngine = {
-      post: jest.fn().mockResolvedValue({ id: 'journal-1', entryNumber: 1, status: 'POSTED', totalDebit: '50000', totalCredit: '50000' }),
+      post: jest.fn().mockResolvedValue({
+        id: 'journal-1',
+        entryNumber: 1,
+        status: 'POSTED',
+        totalDebit: '50000',
+        totalCredit: '50000',
+      }),
     };
 
     mockDocSeq = {
@@ -235,7 +249,10 @@ describe('SupplierPaymentsService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: SuppliersRepository, useValue: mockSuppliersRepo },
         { provide: SupplierPaymentsRepository, useValue: mockPaymentsRepo },
-        { provide: SupplierPaymentAllocationsRepository, useValue: mockAllocationsRepo },
+        {
+          provide: SupplierPaymentAllocationsRepository,
+          useValue: mockAllocationsRepo,
+        },
         { provide: GlEngineService, useValue: mockGlEngine },
         { provide: DocumentSequenceService, useValue: mockDocSeq },
         { provide: AuditLogService, useValue: mockAuditLog },
@@ -313,7 +330,9 @@ describe('SupplierPaymentsService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
       expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
-      expect(mockPrisma.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+      expect(
+        mockPrisma.supplierPaymentAllocation.create,
+      ).not.toHaveBeenCalled();
       expect(mockGlEngine.post).not.toHaveBeenCalled();
       expect(mockPrisma.purchaseInvoice.updateMany).not.toHaveBeenCalled();
       expect(mockAuditLog.log).not.toHaveBeenCalled();
@@ -355,7 +374,9 @@ describe('SupplierPaymentsService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
       expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
-      expect(mockPrisma.supplierPaymentAllocation.create).not.toHaveBeenCalled();
+      expect(
+        mockPrisma.supplierPaymentAllocation.create,
+      ).not.toHaveBeenCalled();
       expect(mockGlEngine.post).not.toHaveBeenCalled();
       expect(mockPrisma.purchaseInvoice.updateMany).not.toHaveBeenCalled();
       expect(mockAuditLog.log).not.toHaveBeenCalled();
@@ -612,7 +633,10 @@ describe('SupplierPaymentsService', () => {
 
     // G14-02-07 TEST 1: CANCELLED invoice rejected
     it('should reject void when linked PurchaseInvoice is CANCELLED', async () => {
-      mockPaymentsRepo.findById.mockResolvedValue({ ...voidedPaymentRow, purchaseInvoiceId: cancelledInvoice.id });
+      mockPaymentsRepo.findById.mockResolvedValue({
+        ...voidedPaymentRow,
+        purchaseInvoiceId: cancelledInvoice.id,
+      });
       mockPrisma.purchaseInvoice.findFirst.mockResolvedValue(cancelledInvoice);
 
       await expect(
@@ -626,9 +650,12 @@ describe('SupplierPaymentsService', () => {
       expect(mockAuditLog.log).not.toHaveBeenCalled();
     });
 
-// G14-02-07 TEST 2: CANCELLED invoice remains unchanged
+    // G14-02-07 TEST 2: CANCELLED invoice remains unchanged
     it('should keep CANCELLED invoice unchanged after rejected void', async () => {
-      mockPaymentsRepo.findById.mockResolvedValue({ ...voidedPaymentRow, purchaseInvoiceId: cancelledInvoice.id });
+      mockPaymentsRepo.findById.mockResolvedValue({
+        ...voidedPaymentRow,
+        purchaseInvoiceId: cancelledInvoice.id,
+      });
       mockPrisma.purchaseInvoice.findFirst.mockResolvedValue(cancelledInvoice);
 
       await expect(
@@ -696,7 +723,10 @@ describe('SupplierPaymentsService', () => {
         supplierId,
         companyId,
         0,
-        expect.objectContaining({ notes: 'Updated note', reference: 'REF-002' }),
+        expect.objectContaining({
+          notes: 'Updated note',
+          reference: 'REF-002',
+        }),
       );
     });
 
@@ -939,7 +969,9 @@ describe('SupplierPaymentsService', () => {
         idempotencyKey,
       );
       // Company A: reserve() received Company A's companyId.
-      expect(mockIdempotency.reserve.mock.calls[0][1].companyId).toBe(companyId);
+      expect(mockIdempotency.reserve.mock.calls[0][1].companyId).toBe(
+        companyId,
+      );
 
       // Company B replay path: same key, reservation scoped to Company B.
       mockIdempotency.reserve.mockClear();
@@ -962,7 +994,9 @@ describe('SupplierPaymentsService', () => {
         idempotencyKey,
       );
 
-      expect(mockIdempotency.reserve.mock.calls[0][1].companyId).toBe(companyBId);
+      expect(mockIdempotency.reserve.mock.calls[0][1].companyId).toBe(
+        companyBId,
+      );
     });
 
     it('should not persist reservation when `work` throws (G3-8 Test 5: rollback semantics)', async () => {
@@ -1114,7 +1148,9 @@ describe('SupplierPaymentsService', () => {
       );
 
       expect(mockGlEngine.post.mock.calls[0][0].companyId).toBe(companyId);
-      expect(mockIdempotency.reserve.mock.calls[0][1].companyId).toBe(companyId);
+      expect(mockIdempotency.reserve.mock.calls[0][1].companyId).toBe(
+        companyId,
+      );
       expect(mockAuditLog.log.mock.calls[0][0].companyId).toBe(companyId);
     });
 
@@ -1165,9 +1201,9 @@ describe('SupplierPaymentsService', () => {
     it('should throw for non-existent supplier', async () => {
       mockSuppliersRepo.findById.mockResolvedValue(null);
 
-      await expect(
-        service.findAll(supplierId, companyId),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findAll(supplierId, companyId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

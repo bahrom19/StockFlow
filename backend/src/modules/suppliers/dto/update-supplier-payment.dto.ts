@@ -7,7 +7,10 @@ import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
  * require void (DELETE) + create (POST).
  */
 export class UpdateSupplierPaymentDto {
-  @ApiProperty({ example: 0, description: 'Current payment rowVersion for optimistic locking (G3-4)' })
+  @ApiProperty({
+    example: 0,
+    description: 'Current payment rowVersion for optimistic locking (G3-4)',
+  })
   @IsInt()
   @Min(0)
   rowVersion!: number;

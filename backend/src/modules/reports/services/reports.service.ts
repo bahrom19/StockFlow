@@ -154,32 +154,42 @@ export class ReportsService {
     // They now use the revenue statuses and are netted by the same canonical
     // refund facts (refund date is not attributed — bucket remains the sale's
     // day, matching the sale-centric aggregation contract).
-    const [todayRefunds, yesterdayRefunds, monthRefunds] =
-      await Promise.all([
-        this.saleRefundDeductions(
+    const [todayRefunds, yesterdayRefunds, monthRefunds] = await Promise.all([
+      this.saleRefundDeductions(
+        companyId,
+        (await this.repo.revenueSaleIds(
           companyId,
-          (await this.repo.revenueSaleIds(companyId, todayStart, todayEnd, currency)) as string[],
-        ),
-        this.saleRefundDeductions(
+          todayStart,
+          todayEnd,
+          currency,
+        )) as string[],
+      ),
+      this.saleRefundDeductions(
+        companyId,
+        (await this.repo.revenueSaleIds(
           companyId,
-          (await this.repo.revenueSaleIds(
-            companyId,
-            new Date(todayStart.getTime() - 86400000),
-            todayStart,
-            currency,
-          )) as string[],
-        ),
-        this.saleRefundDeductions(
+          new Date(todayStart.getTime() - 86400000),
+          todayStart,
+          currency,
+        )) as string[],
+      ),
+      this.saleRefundDeductions(
+        companyId,
+        (await this.repo.revenueSaleIds(
           companyId,
-          (await this.repo.revenueSaleIds(companyId, monthStart, todayEnd, currency)) as string[],
-        ),
-      ]);
+          monthStart,
+          todayEnd,
+          currency,
+        )) as string[],
+      ),
+    ]);
     const netOf = (
       raw: { _sum: { total: Prisma.Decimal | null } },
       deductions: Map<string, { refundTotal: Prisma.Decimal }>,
     ) => {
       let refunded = new Prisma.Decimal(0);
-      for (const d of deductions.values()) refunded = refunded.add(d.refundTotal);
+      for (const d of deductions.values())
+        refunded = refunded.add(d.refundTotal);
       return (raw._sum.total ?? new Prisma.Decimal(0)).sub(refunded);
     };
     const todayTotal = netOf(todayRaw, todayRefunds);
@@ -277,7 +287,9 @@ export class ReportsService {
     let productsSold = 0;
     let totalCost = new Prisma.Decimal(0);
     for (const sale of sales) {
-      totalCost = totalCost.add(this.canonicalSaleCost(sale, fifoCosts.get(sale.id)));
+      totalCost = totalCost.add(
+        this.canonicalSaleCost(sale, fifoCosts.get(sale.id)),
+      );
       for (const item of sale.items ?? []) {
         productsSold += item.quantity;
       }
@@ -326,7 +338,9 @@ export class ReportsService {
 
     // G11-F1: revenue/cost are net of completed partial refunds — the page
     // rows still show gross sale facts; the summary carries the net economy.
-    const revenue = (agg._sum.total ?? new Prisma.Decimal(0)).sub(refundTotalSum);
+    const revenue = (agg._sum.total ?? new Prisma.Decimal(0)).sub(
+      refundTotalSum,
+    );
     const cost = totalCost.sub(refundFifoSum);
     const profit = revenue.sub(cost);
     const margin = revenue.gt(0)
@@ -687,11 +701,7 @@ export class ReportsService {
       ? grossProfit.div(revenue).mul(100)
       : new Prisma.Decimal(0);
 
-    const fmt = (
-      r: Prisma.Decimal,
-      c: Prisma.Decimal,
-      e: Prisma.Decimal,
-    ) => ({
+    const fmt = (r: Prisma.Decimal, c: Prisma.Decimal, e: Prisma.Decimal) => ({
       revenue: r.toString(),
       cost: c.toString(),
       expenses: e.toString(),
@@ -707,7 +717,11 @@ export class ReportsService {
 
     const weeklyBuckets: Record<
       string,
-      { revenue: Prisma.Decimal; cogs: Prisma.Decimal; expenses: Prisma.Decimal }
+      {
+        revenue: Prisma.Decimal;
+        cogs: Prisma.Decimal;
+        expenses: Prisma.Decimal;
+      }
     > = {};
     for (const [k, v] of Object.entries(gl.daily)) {
       const d = new Date(k);
@@ -731,7 +745,11 @@ export class ReportsService {
 
     const monthlyBuckets: Record<
       string,
-      { revenue: Prisma.Decimal; cogs: Prisma.Decimal; expenses: Prisma.Decimal }
+      {
+        revenue: Prisma.Decimal;
+        cogs: Prisma.Decimal;
+        expenses: Prisma.Decimal;
+      }
     > = {};
     for (const [k, v] of Object.entries(gl.daily)) {
       const monthKey = k.slice(0, 7);
@@ -744,9 +762,7 @@ export class ReportsService {
       monthlyBuckets[monthKey].revenue = monthlyBuckets[monthKey].revenue.add(
         v.revenue,
       );
-      monthlyBuckets[monthKey].cogs = monthlyBuckets[monthKey].cogs.add(
-        v.cogs,
-      );
+      monthlyBuckets[monthKey].cogs = monthlyBuckets[monthKey].cogs.add(v.cogs);
       monthlyBuckets[monthKey].expenses = monthlyBuckets[monthKey].expenses.add(
         v.expenses,
       );

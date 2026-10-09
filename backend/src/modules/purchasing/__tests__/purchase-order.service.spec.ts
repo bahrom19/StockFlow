@@ -108,7 +108,10 @@ describe('PurchaseOrderService', () => {
         { provide: AuditLogService, useValue: mockAuditLog },
         { provide: DocumentSequenceService, useValue: mockSeq },
         { provide: EVENT_BUS, useValue: mockEventBus },
-        { provide: CompaniesService, useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') } },
+        {
+          provide: CompaniesService,
+          useValue: { getBaseCurrency: jest.fn().mockResolvedValue('KZT') },
+        },
       ],
     }).compile();
 
@@ -139,7 +142,9 @@ describe('PurchaseOrderService', () => {
     it('should create a purchase order and return entity', async () => {
       const mockTx = {
         purchaseOrderItem: { createMany: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ id: supplierId }),
+        },
         // G14-03-04: tenant-scoped product validation now runs before create.
         product: { findMany: jest.fn().mockResolvedValue([{ id: productId }]) },
       };
@@ -238,7 +243,9 @@ describe('PurchaseOrderService', () => {
     it('should calculate totals correctly for multiple items', async () => {
       const mockTx = {
         purchaseOrderItem: { createMany: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ id: supplierId }),
+        },
         // G14-03-04: both requested products resolve in-tenant.
         product: {
           findMany: jest.fn().mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]),
@@ -411,7 +418,10 @@ describe('PurchaseOrderService', () => {
 
       await expect(
         service.create(
-          { supplierId, items: [itemDto(productId), itemDto('foreign-product')] },
+          {
+            supplierId,
+            items: [itemDto(productId), itemDto('foreign-product')],
+          },
           userId,
           companyId,
         ),
@@ -622,7 +632,12 @@ describe('PurchaseOrderService', () => {
       mockRepo.findById.mockResolvedValue(basePo as any);
 
       await expect(
-        service.update('po-1', { supplierId: 'foreign-supplier' }, userId, companyId),
+        service.update(
+          'po-1',
+          { supplierId: 'foreign-supplier' },
+          userId,
+          companyId,
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(mockRepo.update).not.toHaveBeenCalled();
     });
@@ -922,7 +937,9 @@ describe('PurchaseOrderService', () => {
     it('should default to KZT when currency not provided', async () => {
       const mockTx = {
         purchaseOrderItem: { createMany: jest.fn() },
-        supplier: { findFirst: jest.fn().mockResolvedValue({ id: supplierId }) },
+        supplier: {
+          findFirst: jest.fn().mockResolvedValue({ id: supplierId }),
+        },
         // G14-03-04: tenant-scoped product validation now runs before create.
         product: { findMany: jest.fn().mockResolvedValue([{ id: productId }]) },
       };
@@ -939,7 +956,11 @@ describe('PurchaseOrderService', () => {
 
     it('should reject USD when company currency is KZT', async () => {
       await expect(
-        service.create({ ...validDto, currency: 'USD' as any }, userId, companyId),
+        service.create(
+          { ...validDto, currency: 'USD' as any },
+          userId,
+          companyId,
+        ),
       ).rejects.toThrow('does not match company currency');
     });
 
@@ -951,12 +972,7 @@ describe('PurchaseOrderService', () => {
       mockRepo.findById.mockResolvedValue(basePo as any);
 
       await expect(
-        service.update(
-          'po-1',
-          { currency: 'USD' as any },
-          userId,
-          companyId,
-        ),
+        service.update('po-1', { currency: 'USD' as any }, userId, companyId),
       ).rejects.toThrow('does not match company currency');
     });
 
@@ -969,12 +985,7 @@ describe('PurchaseOrderService', () => {
       mockRepo.findById.mockResolvedValue(approvedPo as any);
 
       await expect(
-        service.update(
-          'po-1',
-          { currency: 'USD' as any },
-          userId,
-          companyId,
-        ),
+        service.update('po-1', { currency: 'USD' as any }, userId, companyId),
       ).rejects.toThrow(BadRequestException);
     });
   });

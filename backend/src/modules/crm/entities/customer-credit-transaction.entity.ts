@@ -26,7 +26,9 @@ export class CustomerCreditTransactionEntity {
   @ApiProperty({ default: 'KZT' })
   currency!: string;
 
-  @ApiProperty({ enum: ['REFUND_ALLOCATION', 'SALE_PAYMENT', 'MANUAL_ADJUSTMENT'] })
+  @ApiProperty({
+    enum: ['REFUND_ALLOCATION', 'SALE_PAYMENT', 'MANUAL_ADJUSTMENT'],
+  })
   referenceType!: 'REFUND_ALLOCATION' | 'SALE_PAYMENT' | 'MANUAL_ADJUSTMENT';
 
   @ApiProperty()
@@ -56,7 +58,9 @@ export class CustomerCreditBalanceEntity {
   @ApiProperty()
   currency!: string;
 
-  @ApiProperty({ description: 'ISSUED − SPENT − ADJUSTED, Decimal(18,4) as string' })
+  @ApiProperty({
+    description: 'ISSUED − SPENT − ADJUSTED, Decimal(18,4) as string',
+  })
   balance!: string;
 
   @ApiProperty()

@@ -37,7 +37,11 @@ export class CreateSupplierPaymentDto {
   @IsUUID()
   bankAccountId?: string;
 
-  @ApiPropertyOptional({ enum: Currency, example: Currency.KZT, default: Currency.KZT })
+  @ApiPropertyOptional({
+    enum: Currency,
+    example: Currency.KZT,
+    default: Currency.KZT,
+  })
   @IsOptional()
   @IsEnum(Currency)
   currency?: Currency;

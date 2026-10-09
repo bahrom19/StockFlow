@@ -300,7 +300,10 @@ export class RefundPaymentAllocationService {
     }
     const cashRaw = effective.get(PaymentMethod.CASH);
     if (cashRaw !== undefined) {
-      effective.set(PaymentMethod.CASH, Decimal.max(ZERO, cashRaw.sub(changeAmount)));
+      effective.set(
+        PaymentMethod.CASH,
+        Decimal.max(ZERO, cashRaw.sub(changeAmount)),
+      );
     }
     return effective;
   }

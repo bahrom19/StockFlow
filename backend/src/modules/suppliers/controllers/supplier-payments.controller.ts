@@ -52,10 +52,7 @@ export class SupplierPaymentsController {
     @Param('supplierId', ParseUUIDPipe) supplierId: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.paymentsService.getFinanceSummary(
-      supplierId,
-      user.companyId,
-    );
+    return this.paymentsService.getFinanceSummary(supplierId, user.companyId);
   }
 
   // ─────────────────────────────────────────────
@@ -98,11 +95,7 @@ export class SupplierPaymentsController {
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.paymentsService.findById(
-      paymentId,
-      supplierId,
-      user.companyId,
-    );
+    return this.paymentsService.findById(paymentId, supplierId, user.companyId);
   }
 
   // ─────────────────────────────────────────────

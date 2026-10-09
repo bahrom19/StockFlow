@@ -95,7 +95,11 @@ describe('LedgerQueryService — G15-06b', () => {
     it('single account — single period cumulative balance', async () => {
       repo.findChartOfAccounts.mockResolvedValue([assetAccount()]);
       repo.aggregatedJournalLines.mockResolvedValue([
-        { accountId: 'acc-1', totalDebit: dec('1500'), totalCredit: dec('300') },
+        {
+          accountId: 'acc-1',
+          totalDebit: dec('1500'),
+          totalCredit: dec('300'),
+        },
       ]);
 
       const result = await service.getTrialBalance({ companyId: 'comp-1' });
@@ -113,9 +117,21 @@ describe('LedgerQueryService — G15-06b', () => {
         expenseAccount(),
       ]);
       repo.aggregatedJournalLines.mockResolvedValue([
-        { accountId: 'acc-1', totalDebit: dec('5000'), totalCredit: dec('2000') },
-        { accountId: 'acc-2', totalDebit: dec('500'), totalCredit: dec('10000') },
-        { accountId: 'acc-3', totalDebit: dec('3000'), totalCredit: dec('200') },
+        {
+          accountId: 'acc-1',
+          totalDebit: dec('5000'),
+          totalCredit: dec('2000'),
+        },
+        {
+          accountId: 'acc-2',
+          totalDebit: dec('500'),
+          totalCredit: dec('10000'),
+        },
+        {
+          accountId: 'acc-3',
+          totalDebit: dec('3000'),
+          totalCredit: dec('200'),
+        },
       ]);
 
       const result = await service.getTrialBalance({ companyId: 'comp-1' });
@@ -136,7 +152,11 @@ describe('LedgerQueryService — G15-06b', () => {
       repo.findChartOfAccounts.mockResolvedValue([assetAccount()]);
       // Simulating cumulative across multiple periods
       repo.aggregatedJournalLines.mockResolvedValue([
-        { accountId: 'acc-1', totalDebit: dec('50000'), totalCredit: dec('48000') },
+        {
+          accountId: 'acc-1',
+          totalDebit: dec('50000'),
+          totalCredit: dec('48000'),
+        },
       ]);
 
       const result = await service.getTrialBalance({ companyId: 'comp-1' });
@@ -160,7 +180,11 @@ describe('LedgerQueryService — G15-06b', () => {
     it('asOfDate after all entries — full cumulative balance', async () => {
       repo.findChartOfAccounts.mockResolvedValue([assetAccount()]);
       repo.aggregatedJournalLines.mockResolvedValue([
-        { accountId: 'acc-1', totalDebit: dec('10000'), totalCredit: dec('7500') },
+        {
+          accountId: 'acc-1',
+          totalDebit: dec('10000'),
+          totalCredit: dec('7500'),
+        },
       ]);
 
       const result = await service.getTrialBalance({
@@ -173,7 +197,11 @@ describe('LedgerQueryService — G15-06b', () => {
     it('asOfDate inside period — only entries up to that date', async () => {
       repo.findChartOfAccounts.mockResolvedValue([assetAccount()]);
       repo.aggregatedJournalLines.mockResolvedValue([
-        { accountId: 'acc-1', totalDebit: dec('3000'), totalCredit: dec('1000') },
+        {
+          accountId: 'acc-1',
+          totalDebit: dec('3000'),
+          totalCredit: dec('1000'),
+        },
       ]);
 
       const result = await service.getTrialBalance({
@@ -250,7 +278,11 @@ describe('LedgerQueryService — G15-06b', () => {
     it('deterministic — same inputs produce same output', async () => {
       repo.findChartOfAccounts.mockResolvedValue([assetAccount()]);
       repo.aggregatedJournalLines.mockResolvedValue([
-        { accountId: 'acc-1', totalDebit: dec('1000'), totalCredit: dec('500') },
+        {
+          accountId: 'acc-1',
+          totalDebit: dec('1000'),
+          totalCredit: dec('500'),
+        },
       ]);
 
       const r1 = await service.getTrialBalance({ companyId: 'comp-1' });
@@ -263,7 +295,11 @@ describe('LedgerQueryService — G15-06b', () => {
       // AccountBalance snapshots correctly affect the Trial Balance.
       repo.findChartOfAccounts.mockResolvedValue([assetAccount()]);
       repo.aggregatedJournalLines.mockResolvedValue([
-        { accountId: 'acc-1', totalDebit: dec('2000'), totalCredit: dec('500') },
+        {
+          accountId: 'acc-1',
+          totalDebit: dec('2000'),
+          totalCredit: dec('500'),
+        },
       ]);
 
       const result = await service.getTrialBalance({ companyId: 'comp-1' });
@@ -288,7 +324,11 @@ describe('LedgerQueryService — G15-06b', () => {
       repo.findChartOfAccounts.mockResolvedValue([revenueAccount()]);
       // More debits than credits on a revenue account (unusual but valid)
       repo.aggregatedJournalLines.mockResolvedValue([
-        { accountId: 'acc-2', totalDebit: dec('5000'), totalCredit: dec('1000') },
+        {
+          accountId: 'acc-2',
+          totalDebit: dec('5000'),
+          totalCredit: dec('1000'),
+        },
       ]);
 
       const result = await service.getTrialBalance({ companyId: 'comp-1' });
@@ -338,7 +378,10 @@ describe('LedgerQueryService — G15-06b', () => {
       level: 0,
       ...lifecycle,
     });
-    const RETIRED = { isActive: false, deletedAt: new Date('2026-01-01T00:00:00Z') };
+    const RETIRED = {
+      isActive: false,
+      deletedAt: new Date('2026-01-01T00:00:00Z'),
+    };
 
     /** totals must equal the sum of the rendered rows — the core invariant */
     const sumRows = (rows: { debit: string; credit: string }[]) =>
@@ -507,7 +550,11 @@ describe('LedgerQueryService — G15-06b', () => {
       ]);
       repo.aggregatedJournalLines.mockResolvedValue([
         { accountId: 'mine', totalDebit: dec('5000'), totalCredit: dec('0') },
-        { accountId: 'theirs', totalDebit: dec('999999'), totalCredit: dec('0') },
+        {
+          accountId: 'theirs',
+          totalDebit: dec('999999'),
+          totalCredit: dec('0'),
+        },
       ]);
 
       const result = await service.getTrialBalance({ companyId: 'tenant-X' });
@@ -558,7 +605,10 @@ describe('LedgerQueryService — G15-06b', () => {
         { accountId: 'r1', totalDebit: dec('0'), totalCredit: dec('1000') },
       ]);
 
-      await service.getTrialBalance({ companyId: 'comp-1', accountType: 'ASSET' });
+      await service.getTrialBalance({
+        companyId: 'comp-1',
+        accountType: 'ASSET',
+      });
 
       expect(repo.findChartOfAccounts).toHaveBeenCalledWith({
         companyId: 'comp-1',
@@ -587,13 +637,28 @@ describe('LedgerQueryService — G15-06b', () => {
 
   describe('getPnlReport — G15-06b-02', () => {
     const revenueAcc = (id = 'r1', code = '4000') => ({
-      id, code, name: 'Revenue', accountType: 'REVENUE', normalBalance: 'CREDIT', level: 0,
+      id,
+      code,
+      name: 'Revenue',
+      accountType: 'REVENUE',
+      normalBalance: 'CREDIT',
+      level: 0,
     });
     const cogsAcc = (id = 'c1', code = '5000') => ({
-      id, code, name: 'COGS', accountType: 'EXPENSE', normalBalance: 'DEBIT', level: 0,
+      id,
+      code,
+      name: 'COGS',
+      accountType: 'EXPENSE',
+      normalBalance: 'DEBIT',
+      level: 0,
     });
     const expenseAcc = (id = 'e1', code = '6000') => ({
-      id, code, name: 'Rent', accountType: 'EXPENSE', normalBalance: 'DEBIT', level: 0,
+      id,
+      code,
+      name: 'Rent',
+      accountType: 'EXPENSE',
+      normalBalance: 'DEBIT',
+      level: 0,
     });
 
     it('GL revenue — correctly aggregated from REVENUE accounts', async () => {
@@ -601,7 +666,11 @@ describe('LedgerQueryService — G15-06b', () => {
       // REVENUE: net = credit − debit (normal credit balance)
       repo.aggregatedJournalLines
         .mockResolvedValueOnce([
-          { accountId: 'r1', totalDebit: dec('100'), totalCredit: dec('10000') },
+          {
+            accountId: 'r1',
+            totalDebit: dec('100'),
+            totalCredit: dec('10000'),
+          },
         ])
         .mockResolvedValueOnce([]); // EXPENSE
 
@@ -634,7 +703,11 @@ describe('LedgerQueryService — G15-06b', () => {
     });
 
     it('net profit — revenue − COGS − expenses', async () => {
-      repo.findChartOfAccounts.mockResolvedValue([revenueAcc(), cogsAcc(), expenseAcc()]);
+      repo.findChartOfAccounts.mockResolvedValue([
+        revenueAcc(),
+        cogsAcc(),
+        expenseAcc(),
+      ]);
       repo.aggregatedJournalLines
         .mockResolvedValueOnce([
           { accountId: 'r1', totalDebit: dec(0), totalCredit: dec('20000') },
@@ -733,7 +806,10 @@ describe('LedgerQueryService — G15-06b', () => {
       expect(repo.findChartOfAccounts).toHaveBeenCalledWith(
         expect.objectContaining({ companyId: 'tenant-B' }),
       );
-      expect(repo.aggregatedJournalLines).toHaveBeenCalledWith('tenant-B', expect.anything());
+      expect(repo.aggregatedJournalLines).toHaveBeenCalledWith(
+        'tenant-B',
+        expect.anything(),
+      );
     });
 
     it('daily buckets — correctly grouped by entry date', async () => {
@@ -789,7 +865,11 @@ describe('LedgerQueryService — G15-06b', () => {
       // Revenue reduced by refund reversal
       repo.aggregatedJournalLines
         .mockResolvedValueOnce([
-          { accountId: 'r1', totalDebit: dec('2000'), totalCredit: dec('12000') },
+          {
+            accountId: 'r1',
+            totalDebit: dec('2000'),
+            totalCredit: dec('12000'),
+          },
         ])
         .mockResolvedValueOnce([]);
 
@@ -948,7 +1028,12 @@ describe('LedgerQueryService.getPnlReport — G16-N-8-B canonical population', (
     journalEntry: { entryDate: new Date(`${day}T10:00:00Z`) },
   });
 
-  const sumDaily = (daily: Record<string, { revenue: Decimal; cogs: Decimal; expenses: Decimal }>) =>
+  const sumDaily = (
+    daily: Record<
+      string,
+      { revenue: Decimal; cogs: Decimal; expenses: Decimal }
+    >,
+  ) =>
     Object.values(daily).reduce(
       (acc, d) => ({
         revenue: acc.revenue.add(d.revenue),
@@ -960,11 +1045,9 @@ describe('LedgerQueryService.getPnlReport — G16-N-8-B canonical population', (
 
   beforeEach(async () => {
     repo = {
-      findChartOfAccounts: jest.fn().mockResolvedValue([
-        revenue,
-        cogs,
-        expense,
-      ]),
+      findChartOfAccounts: jest
+        .fn()
+        .mockResolvedValue([revenue, cogs, expense]),
       aggregatedJournalLines: jest.fn().mockResolvedValue([]),
       findJournalLinesWithEntry: jest.fn().mockResolvedValue([]),
       countJournalLines: jest.fn().mockResolvedValue(0),
@@ -976,7 +1059,10 @@ describe('LedgerQueryService.getPnlReport — G16-N-8-B canonical population', (
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [LedgerQueryService, { provide: LedgerRepository, useValue: repo }],
+      providers: [
+        LedgerQueryService,
+        { provide: LedgerRepository, useValue: repo },
+      ],
     }).compile();
 
     service = module.get<LedgerQueryService>(LedgerQueryService);
@@ -988,7 +1074,11 @@ describe('LedgerQueryService.getPnlReport — G16-N-8-B canonical population', (
     const from = new Date('2026-01-01T00:00:00Z');
     const to = new Date('2026-12-31T23:59:59Z');
 
-    await service.getPnlReport({ companyId: 'comp-1', dateFrom: from, dateTo: to });
+    await service.getPnlReport({
+      companyId: 'comp-1',
+      dateFrom: from,
+      dateTo: to,
+    });
 
     // The factory is consulted with the report's own company + range.
     expect(repo.positionalJournalEntryWhere).toHaveBeenCalledWith('comp-1', {
@@ -1021,7 +1111,9 @@ describe('LedgerQueryService.getPnlReport — G16-N-8-B canonical population', (
   it('does not filter the classification lookup by isActive / deletedAt', async () => {
     await service.getPnlReport({ companyId: 'comp-1' });
 
-    expect(repo.findChartOfAccounts).toHaveBeenCalledWith({ companyId: 'comp-1' });
+    expect(repo.findChartOfAccounts).toHaveBeenCalledWith({
+      companyId: 'comp-1',
+    });
     expect(repo.findChartOfAccounts).not.toHaveBeenCalledWith(
       expect.objectContaining({ isActive: expect.anything() }),
     );
@@ -1057,9 +1149,11 @@ describe('LedgerQueryService.getPnlReport — G16-N-8-B canonical population', (
       expense,
       softDeletedExpense,
     ]);
-    repo.aggregatedJournalLines.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      { accountId: 'e9', totalDebit: dec('175'), totalCredit: dec('0') },
-    ]);
+    repo.aggregatedJournalLines
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { accountId: 'e9', totalDebit: dec('175'), totalCredit: dec('0') },
+      ]);
     repo.findJournalLinesWithEntry.mockResolvedValue([
       line('e9', '2026-02-01', '175', '0'),
     ]);
@@ -1075,9 +1169,11 @@ describe('LedgerQueryService.getPnlReport — G16-N-8-B canonical population', (
     // from the map, so `account?.code.startsWith('5')` was undefined and the
     // historical COGS amount landed in operating expenses instead.
     repo.findChartOfAccounts.mockResolvedValue([revenue, cogs, inactiveCogs]);
-    repo.aggregatedJournalLines.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      { accountId: 'c9', totalDebit: dec('420'), totalCredit: dec('0') },
-    ]);
+    repo.aggregatedJournalLines
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { accountId: 'c9', totalDebit: dec('420'), totalCredit: dec('0') },
+      ]);
     repo.findJournalLinesWithEntry.mockResolvedValue([
       line('c9', '2026-02-01', '420', '0'),
     ]);
@@ -1159,9 +1255,11 @@ describe('LedgerQueryService.getPnlReport — G16-N-8-B canonical population', (
       .mockResolvedValueOnce(full(1000, '2026-01-01'))
       .mockResolvedValueOnce(full(1000, '2026-01-02'))
       .mockResolvedValueOnce([line('e1', '2026-01-03', '7', '0')]);
-    repo.aggregatedJournalLines.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      { accountId: 'e1', totalDebit: dec('2007'), totalCredit: dec('0') },
-    ]);
+    repo.aggregatedJournalLines
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { accountId: 'e1', totalDebit: dec('2007'), totalCredit: dec('0') },
+      ]);
 
     const result = await service.getPnlReport({ companyId: 'comp-1' });
 

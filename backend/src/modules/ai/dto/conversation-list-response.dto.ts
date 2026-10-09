@@ -4,7 +4,10 @@ export class ConversationSummaryDto {
   @ApiProperty({ description: 'Conversation ID' })
   id!: string;
 
-  @ApiProperty({ description: 'Conversation title (from first message)', nullable: true })
+  @ApiProperty({
+    description: 'Conversation title (from first message)',
+    nullable: true,
+  })
   title!: string | null;
 
   @ApiProperty({ description: 'Creation timestamp' })
@@ -18,7 +21,10 @@ export class ConversationSummaryDto {
 }
 
 export class ConversationListResponseDto {
-  @ApiProperty({ description: 'List of conversations', type: [ConversationSummaryDto] })
+  @ApiProperty({
+    description: 'List of conversations',
+    type: [ConversationSummaryDto],
+  })
   items!: ConversationSummaryDto[];
 
   @ApiProperty({ description: 'Total number of conversations' })

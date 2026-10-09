@@ -46,7 +46,11 @@ describe('SupplierAnalyticsService', () => {
       findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
 
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+    service = new SupplierAnalyticsService(
+      mockPrisma,
+      mockSuppliersRepo,
+      mockCompaniesService,
+    );
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -177,7 +181,9 @@ describe('SupplierAnalyticsService', () => {
 
     // Currency comes from CompaniesService.getBaseCurrency — explicit label
     // for the returned amounts, never inferred from the payment rows.
-    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(companyId);
+    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(
+      companyId,
+    );
     expect(result.currency).toBe('KZT');
     expect(result.totalInvoiced).toBe('500000');
     expect(result.totalReturned).toBe('50000');
@@ -187,8 +193,12 @@ describe('SupplierAnalyticsService', () => {
     expect(result.weightedAverageUnitCost).toBe('2000');
     expect(result.invoiceCount).toBe(5);
     expect(result.returnCount).toBe(1);
-    expect(result.firstPurchaseDate).toBe(new Date('2026-01-15T00:00:00.000Z').toISOString());
-    expect(result.lastPurchaseDate).toBe(new Date('2026-08-20T00:00:00.000Z').toISOString());
+    expect(result.firstPurchaseDate).toBe(
+      new Date('2026-01-15T00:00:00.000Z').toISOString(),
+    );
+    expect(result.lastPurchaseDate).toBe(
+      new Date('2026-08-20T00:00:00.000Z').toISOString(),
+    );
     expect(result.monthlySpend).toEqual([
       { month: '2026-01', amount: '100000' },
       { month: '2026-08', amount: '400000' },
@@ -356,7 +366,9 @@ describe('SupplierAnalyticsService', () => {
       _min: { invoiceDate: new Date('2026-01-01') },
       _max: { invoiceDate: new Date('2026-01-01') },
     });
-    mockPrisma.purchaseInvoiceItem.aggregate.mockResolvedValue({ _sum: { quantity: 10 } });
+    mockPrisma.purchaseInvoiceItem.aggregate.mockResolvedValue({
+      _sum: { quantity: 10 },
+    });
     mockPrisma.purchaseInvoiceItem.groupBy.mockResolvedValue([
       { _sum: { quantity: 10, total: '1000' } },
     ]);
@@ -364,20 +376,28 @@ describe('SupplierAnalyticsService', () => {
       _sum: { grandTotal: null },
       _count: { id: 0 },
     });
-    mockPrisma.$queryRaw.mockResolvedValue([{ month: '2026-01', amount: '1000' }]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      { month: '2026-01', amount: '1000' },
+    ]);
 
     const result = await service.getPurchaseSummary(supplierId, companyId);
 
     // Base currency comes from CompaniesService, never hardcoded.
-    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(companyId);
+    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(
+      companyId,
+    );
     expect(result.currency).toBe('KZT');
     expect(result.totalInvoiced).toBe('1000');
     // Every invoice/return aggregate call carries the base-currency predicate.
     for (const call of mockPrisma.purchaseInvoice.aggregate.mock.calls) {
-      expect(call[0].where).toEqual(expect.objectContaining({ currency: 'KZT' }));
+      expect(call[0].where).toEqual(
+        expect.objectContaining({ currency: 'KZT' }),
+      );
     }
     for (const call of mockPrisma.purchaseReturn.aggregate.mock.calls) {
-      expect(call[0].where).toEqual(expect.objectContaining({ currency: 'KZT' }));
+      expect(call[0].where).toEqual(
+        expect.objectContaining({ currency: 'KZT' }),
+      );
     }
     // Monthly spend raw SQL filters base currency (no KZT+USD mixing).
     const monthlySql = String(mockPrisma.$queryRaw.mock.calls[0][0]);
@@ -414,7 +434,11 @@ describe('SupplierAnalyticsService.getProductPurchases', () => {
       // → 404) without weakening them.
       findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+    service = new SupplierAnalyticsService(
+      mockPrisma,
+      mockSuppliersRepo,
+      mockCompaniesService,
+    );
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -443,7 +467,11 @@ describe('SupplierAnalyticsService.getProductPurchases', () => {
       ])
       .mockResolvedValueOnce([{ total: BigInt(1) }])
       .mockResolvedValueOnce([
-        { productId: 'p1', returnedQuantity: BigInt(20), returnedSpend: '30000' },
+        {
+          productId: 'p1',
+          returnedQuantity: BigInt(20),
+          returnedSpend: '30000',
+        },
       ]);
 
     const result = await service.getProductPurchases(supplierId, companyId);
@@ -553,7 +581,11 @@ describe('SupplierAnalyticsService.getProductPurchases', () => {
       ])
       .mockResolvedValueOnce([{ total: BigInt(1) }])
       .mockResolvedValueOnce([
-        { productId: 'p1', returnedQuantity: BigInt(10), returnedSpend: '1000' },
+        {
+          productId: 'p1',
+          returnedQuantity: BigInt(10),
+          returnedSpend: '1000',
+        },
       ]);
 
     const result = await service.getProductPurchases(supplierId, companyId);
@@ -570,7 +602,15 @@ describe('SupplierAnalyticsService.getProductPurchases', () => {
       .mockResolvedValueOnce([{ total: BigInt(0) }])
       .mockResolvedValueOnce([]);
 
-    await service.getProductPurchases(supplierId, companyId, undefined, undefined, 1, 20, 'milk');
+    await service.getProductPurchases(
+      supplierId,
+      companyId,
+      undefined,
+      undefined,
+      1,
+      20,
+      'milk',
+    );
 
     // The search clause is embedded in the raw SQL template, not as a parameter
     // Verify the function was called (the search filter is in the SQL string)
@@ -623,14 +663,18 @@ describe('SupplierAnalyticsService.getReliability', () => {
       // → 404) without weakening them.
       findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+    service = new SupplierAnalyticsService(
+      mockPrisma,
+      mockSuppliersRepo,
+      mockCompaniesService,
+    );
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
     mockSuppliersRepo.findById.mockResolvedValue(null);
-    await expect(
-      service.getReliability(supplierId, companyId),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.getReliability(supplierId, companyId)).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('should return zero metrics for supplier with no orders', async () => {
@@ -655,9 +699,9 @@ describe('SupplierAnalyticsService.getReliability', () => {
   it('should compute on-time delivery correctly', async () => {
     mockPrisma.purchaseOrder = {
       aggregate: jest.fn().mockResolvedValue({ _count: { id: 2 } }),
-      groupBy: jest.fn().mockResolvedValue([
-        { status: 'RECEIVED', _count: { id: 2 } },
-      ]),
+      groupBy: jest
+        .fn()
+        .mockResolvedValue([{ status: 'RECEIVED', _count: { id: 2 } }]),
     };
     mockPrisma.$queryRaw.mockResolvedValue([
       {
@@ -691,9 +735,9 @@ describe('SupplierAnalyticsService.getReliability', () => {
   it('should compute average lead time correctly', async () => {
     mockPrisma.purchaseOrder = {
       aggregate: jest.fn().mockResolvedValue({ _count: { id: 2 } }),
-      groupBy: jest.fn().mockResolvedValue([
-        { status: 'RECEIVED', _count: { id: 2 } },
-      ]),
+      groupBy: jest
+        .fn()
+        .mockResolvedValue([{ status: 'RECEIVED', _count: { id: 2 } }]),
     };
     mockPrisma.$queryRaw.mockResolvedValue([
       {
@@ -746,9 +790,9 @@ describe('SupplierAnalyticsService.getReliability', () => {
   it('should use FIRST COMPLETED receipt when multiple GoodsReceipts exist', async () => {
     mockPrisma.purchaseOrder = {
       aggregate: jest.fn().mockResolvedValue({ _count: { id: 1 } }),
-      groupBy: jest.fn().mockResolvedValue([
-        { status: 'RECEIVED', _count: { id: 1 } },
-      ]),
+      groupBy: jest
+        .fn()
+        .mockResolvedValue([{ status: 'RECEIVED', _count: { id: 1 } }]),
     };
     // The SQL uses LEFT JOIN LATERAL with ORDER BY receiptDate ASC LIMIT 1
     // So the mock returns the FIRST completed receipt
@@ -775,9 +819,11 @@ describe('SupplierAnalyticsService.getReliability', () => {
   it('should exclude DRAFT/CANCELLED GoodsReceipts', async () => {
     mockPrisma.purchaseOrder = {
       aggregate: jest.fn().mockResolvedValue({ _count: { id: 1 } }),
-      groupBy: jest.fn().mockResolvedValue([
-        { status: 'PARTIALLY_RECEIVED', _count: { id: 1 } },
-      ]),
+      groupBy: jest
+        .fn()
+        .mockResolvedValue([
+          { status: 'PARTIALLY_RECEIVED', _count: { id: 1 } },
+        ]),
     };
     // SQL filters WHERE gr.status = 'COMPLETED'
     // If no COMPLETED receipt exists, receiptDate is NULL
@@ -804,9 +850,9 @@ describe('SupplierAnalyticsService.getReliability', () => {
   it('should return recentDeliveries sorted by orderDate DESC, max 10', async () => {
     mockPrisma.purchaseOrder = {
       aggregate: jest.fn().mockResolvedValue({ _count: { id: 12 } }),
-      groupBy: jest.fn().mockResolvedValue([
-        { status: 'RECEIVED', _count: { id: 12 } },
-      ]),
+      groupBy: jest
+        .fn()
+        .mockResolvedValue([{ status: 'RECEIVED', _count: { id: 12 } }]),
     };
     const rows = Array.from({ length: 12 }, (_, i) => ({
       orderId: `po-${i}`,
@@ -837,7 +883,13 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
   beforeEach(() => {
     mockPrisma = {
       $queryRaw: jest.fn().mockResolvedValue([]),
-      product: { findFirst: jest.fn().mockResolvedValue({ id: productId, name: 'Milk 1L', sku: 'MLK-001' }) },
+      product: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: productId,
+          name: 'Milk 1L',
+          sku: 'MLK-001',
+        }),
+      },
       supplierProduct: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     mockSuppliersRepo = {
@@ -847,7 +899,11 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
       // → 404) without weakening them.
       findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+    service = new SupplierAnalyticsService(
+      mockPrisma,
+      mockSuppliersRepo,
+      mockCompaniesService,
+    );
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -881,9 +937,15 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
         total: '120000',
       },
     ]);
-    mockPrisma.supplierProduct.findFirst.mockResolvedValue({ purchasePrice: '1600' });
+    mockPrisma.supplierProduct.findFirst.mockResolvedValue({
+      purchasePrice: '1600',
+    });
 
-    const result = await service.getPriceHistory(supplierId, companyId, productId);
+    const result = await service.getPriceHistory(
+      supplierId,
+      companyId,
+      productId,
+    );
 
     expect(result.productId).toBe(productId);
     expect(result.productName).toBe('Milk 1L');
@@ -912,7 +974,11 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
       },
     ]);
 
-    const result = await service.getPriceHistory(supplierId, companyId, productId);
+    const result = await service.getPriceHistory(
+      supplierId,
+      companyId,
+      productId,
+    );
 
     // avg(1400, 1600) weighted by quantity = (1400*100 + 1600*100) / 200 = 1500
     expect(result.averageUnitCost).toBe('1500');
@@ -924,7 +990,11 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
     mockPrisma.supplierProduct.findFirst.mockResolvedValue(null);
     mockPrisma.$queryRaw.mockResolvedValue([]);
 
-    const result = await service.getPriceHistory(supplierId, companyId, productId);
+    const result = await service.getPriceHistory(
+      supplierId,
+      companyId,
+      productId,
+    );
 
     expect(result.currentQuotedPrice).toBeNull();
     expect(result.pricePoints).toHaveLength(0);
@@ -933,7 +1003,11 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
   it('should return empty pricePoints for no invoices', async () => {
     mockPrisma.$queryRaw.mockResolvedValue([]);
 
-    const result = await service.getPriceHistory(supplierId, companyId, productId);
+    const result = await service.getPriceHistory(
+      supplierId,
+      companyId,
+      productId,
+    );
 
     expect(result.pricePoints).toHaveLength(0);
     expect(result.averageUnitCost).toBe('0');
@@ -959,7 +1033,11 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
       },
     ]);
 
-    const result = await service.getPriceHistory(supplierId, companyId, productId);
+    const result = await service.getPriceHistory(
+      supplierId,
+      companyId,
+      productId,
+    );
 
     // SQL sorts ASC, so service should return in the order provided by SQL
     // The mock already has them in the order SQL returns them
@@ -991,7 +1069,11 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
       // → 404) without weakening them.
       findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+    service = new SupplierAnalyticsService(
+      mockPrisma,
+      mockSuppliersRepo,
+      mockCompaniesService,
+    );
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -1015,14 +1097,16 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   it('should compute current bucket for not-yet-due invoices', async () => {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + 30);
-    mockPrisma.$queryRaw.mockResolvedValue([{
-      id: 'inv-1',
-      invoiceNumber: 'INV-001',
-      invoiceDate: new Date('2026-01-01'),
-      dueDate: futureDate,
-      grandTotal: '100000',
-      allocatedAmount: '0', // G9-B1: uses allocations
-    }]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'inv-1',
+        invoiceNumber: 'INV-001',
+        invoiceDate: new Date('2026-01-01'),
+        dueDate: futureDate,
+        grandTotal: '100000',
+        allocatedAmount: '0', // G9-B1: uses allocations
+      },
+    ]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
 
@@ -1034,14 +1118,16 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   it('should compute 1-30 day overdue bucket', async () => {
     const pastDate = new Date();
     pastDate.setDate(pastDate.getDate() - 15);
-    mockPrisma.$queryRaw.mockResolvedValue([{
-      id: 'inv-1',
-      invoiceNumber: 'INV-001',
-      invoiceDate: new Date('2026-01-01'),
-      dueDate: pastDate,
-      grandTotal: '200000',
-      allocatedAmount: '50000', // G9-B1: uses allocations
-    }]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'inv-1',
+        invoiceNumber: 'INV-001',
+        invoiceDate: new Date('2026-01-01'),
+        dueDate: pastDate,
+        grandTotal: '200000',
+        allocatedAmount: '50000', // G9-B1: uses allocations
+      },
+    ]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
 
@@ -1052,14 +1138,16 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('should exclude fully paid invoices', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([{
-      id: 'inv-1',
-      invoiceNumber: 'INV-001',
-      invoiceDate: new Date('2026-01-01'),
-      dueDate: new Date('2026-06-01'),
-      grandTotal: '100000',
-      allocatedAmount: '100000', // G9-B1: uses allocations
-    }]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'inv-1',
+        invoiceNumber: 'INV-001',
+        invoiceDate: new Date('2026-01-01'),
+        dueDate: new Date('2026-06-01'),
+        grandTotal: '100000',
+        allocatedAmount: '100000', // G9-B1: uses allocations
+      },
+    ]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
 
@@ -1101,14 +1189,16 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('should handle null dueDate with explicit undated bucket (G9-B2.1)', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([{
-      id: 'inv-1',
-      invoiceNumber: 'INV-001',
-      invoiceDate: new Date('2026-01-01'),
-      dueDate: null,
-      grandTotal: '100000',
-      allocatedAmount: '0', // G9-B1: uses allocations
-    }]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'inv-1',
+        invoiceNumber: 'INV-001',
+        invoiceDate: new Date('2026-01-01'),
+        dueDate: null,
+        grandTotal: '100000',
+        allocatedAmount: '0', // G9-B1: uses allocations
+      },
+    ]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
 
@@ -1126,24 +1216,77 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('should satisfy bucket sum invariant: all buckets sum to totalOutstanding (G9-B2.1)', async () => {
-    const dMinus15 = new Date(); dMinus15.setDate(dMinus15.getDate() - 15);
-    const dMinus45 = new Date(); dMinus45.setDate(dMinus45.getDate() - 45);
-    const dMinus75 = new Date(); dMinus75.setDate(dMinus75.getDate() - 75);
-    const dMinus100 = new Date(); dMinus100.setDate(dMinus100.getDate() - 100);
-    const dPlus10 = new Date(); dPlus10.setDate(dPlus10.getDate() + 10);
+    const dMinus15 = new Date();
+    dMinus15.setDate(dMinus15.getDate() - 15);
+    const dMinus45 = new Date();
+    dMinus45.setDate(dMinus45.getDate() - 45);
+    const dMinus75 = new Date();
+    dMinus75.setDate(dMinus75.getDate() - 75);
+    const dMinus100 = new Date();
+    dMinus100.setDate(dMinus100.getDate() - 100);
+    const dPlus10 = new Date();
+    dPlus10.setDate(dPlus10.getDate() + 10);
     mockPrisma.$queryRaw.mockResolvedValue([
-      { id: 'inv-1', invoiceNumber: 'INV-001', invoiceDate: new Date(), dueDate: dPlus10, grandTotal: '100000', allocatedAmount: '0' },
-      { id: 'inv-2', invoiceNumber: 'INV-002', invoiceDate: new Date(), dueDate: dMinus15, grandTotal: '150000', allocatedAmount: '0' },
-      { id: 'inv-3', invoiceNumber: 'INV-003', invoiceDate: new Date(), dueDate: dMinus45, grandTotal: '200000', allocatedAmount: '0' },
-      { id: 'inv-4', invoiceNumber: 'INV-004', invoiceDate: new Date(), dueDate: dMinus75, grandTotal: '250000', allocatedAmount: '0' },
-      { id: 'inv-5', invoiceNumber: 'INV-005', invoiceDate: new Date(), dueDate: dMinus100, grandTotal: '50000', allocatedAmount: '0' },
-      { id: 'inv-6', invoiceNumber: 'INV-006', invoiceDate: new Date(), dueDate: null, grandTotal: '70000', allocatedAmount: '0' },
+      {
+        id: 'inv-1',
+        invoiceNumber: 'INV-001',
+        invoiceDate: new Date(),
+        dueDate: dPlus10,
+        grandTotal: '100000',
+        allocatedAmount: '0',
+      },
+      {
+        id: 'inv-2',
+        invoiceNumber: 'INV-002',
+        invoiceDate: new Date(),
+        dueDate: dMinus15,
+        grandTotal: '150000',
+        allocatedAmount: '0',
+      },
+      {
+        id: 'inv-3',
+        invoiceNumber: 'INV-003',
+        invoiceDate: new Date(),
+        dueDate: dMinus45,
+        grandTotal: '200000',
+        allocatedAmount: '0',
+      },
+      {
+        id: 'inv-4',
+        invoiceNumber: 'INV-004',
+        invoiceDate: new Date(),
+        dueDate: dMinus75,
+        grandTotal: '250000',
+        allocatedAmount: '0',
+      },
+      {
+        id: 'inv-5',
+        invoiceNumber: 'INV-005',
+        invoiceDate: new Date(),
+        dueDate: dMinus100,
+        grandTotal: '50000',
+        allocatedAmount: '0',
+      },
+      {
+        id: 'inv-6',
+        invoiceNumber: 'INV-006',
+        invoiceDate: new Date(),
+        dueDate: null,
+        grandTotal: '70000',
+        allocatedAmount: '0',
+      },
     ]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
 
-    const total = [result.aging.current, result.aging.days1_30, result.aging.days31_60, result.aging.days61_90, result.aging.overdue90plus, result.aging.undated]
-      .reduce((sum: Decimal, v) => sum.plus(new Decimal(v)), new Decimal(0));
+    const total = [
+      result.aging.current,
+      result.aging.days1_30,
+      result.aging.days31_60,
+      result.aging.days61_90,
+      result.aging.overdue90plus,
+      result.aging.undated,
+    ].reduce((sum: Decimal, v) => sum.plus(new Decimal(v)), new Decimal(0));
     expect(total.toString()).toBe(result.totalOutstanding);
     expect(result.invoiceCount).toBe(6);
     expect(result.aging.undated).toBe('70000');
@@ -1164,26 +1307,42 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
     const due = new Date();
     due.setHours(0, 0, 0, 0);
     due.setDate(due.getDate() - days);
-    mockPrisma.$queryRaw.mockResolvedValue([{
-      id: 'inv-b', invoiceNumber: 'INV-B', invoiceDate: new Date(), dueDate: due,
-      grandTotal: '100000', allocatedAmount: '0',
-    }]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'inv-b',
+        invoiceNumber: 'INV-B',
+        invoiceDate: new Date(),
+        dueDate: due,
+        grandTotal: '100000',
+        allocatedAmount: '0',
+      },
+    ]);
 
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.aging[bucket as keyof typeof result.aging]).toBe('100000');
   });
 
   it('should sort overdue invoices by daysOverdue DESC', async () => {
-    const d1 = new Date(); d1.setDate(d1.getDate() - 10);
-    const d2 = new Date(); d2.setDate(d2.getDate() - 60);
+    const d1 = new Date();
+    d1.setDate(d1.getDate() - 10);
+    const d2 = new Date();
+    d2.setDate(d2.getDate() - 60);
     mockPrisma.$queryRaw.mockResolvedValue([
       {
-        id: 'inv-1', invoiceNumber: 'INV-001', invoiceDate: new Date(),
-        dueDate: d1, grandTotal: '100000', allocatedAmount: '0', // G9-B1: uses allocations
+        id: 'inv-1',
+        invoiceNumber: 'INV-001',
+        invoiceDate: new Date(),
+        dueDate: d1,
+        grandTotal: '100000',
+        allocatedAmount: '0', // G9-B1: uses allocations
       },
       {
-        id: 'inv-2', invoiceNumber: 'INV-002', invoiceDate: new Date(),
-        dueDate: d2, grandTotal: '200000', allocatedAmount: '0', // G9-B1: uses allocations
+        id: 'inv-2',
+        invoiceNumber: 'INV-002',
+        invoiceDate: new Date(),
+        dueDate: d2,
+        grandTotal: '200000',
+        allocatedAmount: '0', // G9-B1: uses allocations
       },
     ]);
 
@@ -1196,21 +1355,34 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   // ── G14-03-02: active returns reduce aging outstanding ──
-  const agingRow = (id: string, grandTotal: string, allocated: string, daysOverdue: number) => {
+  const agingRow = (
+    id: string,
+    grandTotal: string,
+    allocated: string,
+    daysOverdue: number,
+  ) => {
     const due = new Date();
     due.setHours(0, 0, 0, 0);
     due.setDate(due.getDate() - daysOverdue);
     return {
-      id, invoiceNumber: id.toUpperCase(), invoiceDate: new Date(), dueDate: due,
-      grandTotal, allocatedAmount: allocated,
+      id,
+      invoiceNumber: id.toUpperCase(),
+      invoiceDate: new Date(),
+      dueDate: due,
+      grandTotal,
+      allocatedAmount: allocated,
     };
   };
   const setReturns = (grandTotal: string | null) => {
-    mockPrisma.purchaseReturn.aggregate.mockResolvedValue({ _sum: { grandTotal } });
+    mockPrisma.purchaseReturn.aggregate.mockResolvedValue({
+      _sum: { grandTotal },
+    });
   };
 
   it('G14-03-02 A: invoice 1000, no payment, no return → aging 1000', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     setReturns(null);
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.totalOutstanding).toBe('1000');
@@ -1218,7 +1390,9 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('G14-03-02 B: invoice 1000 + return 200 APPROVED → aging 800', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     setReturns('200');
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.totalOutstanding).toBe('800');
@@ -1226,7 +1400,9 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('G14-03-02 C: invoice 1000 + alloc 300 + return 200 → aging 500', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '300', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '300', 10),
+    ]);
     setReturns('200');
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.totalOutstanding).toBe('500');
@@ -1234,7 +1410,9 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('G14-03-02 D: fully covered + return → aging 0, no negative bucket', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '1000', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '1000', 10),
+    ]);
     setReturns('200');
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.totalOutstanding).toBe('0');
@@ -1243,7 +1421,9 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('G14-03-02 E/F: cancelled/soft-deleted returns excluded (repo supplies only active)', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     setReturns(null);
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.totalOutstanding).toBe('1000');
@@ -1260,14 +1440,18 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('G14-03-02 G: multiple returns 100 + 150 → aging 750', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     setReturns('250');
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.totalOutstanding).toBe('750');
   });
 
   it('G14-03-02 H: return reduces the invoice bucket amount, keeps due-date classification', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 45)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 45),
+    ]);
     setReturns('200');
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.aging.days31_60).toBe('800');
@@ -1277,31 +1461,43 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('G14-03-02 tenant: return aggregate scoped to supplier+company', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     setReturns('500');
     await service.getPaymentAging(supplierId, companyId);
     expect(mockPrisma.purchaseReturn.aggregate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ supplierId, companyId, deletedAt: null }),
+        where: expect.objectContaining({
+          supplierId,
+          companyId,
+          deletedAt: null,
+        }),
       }),
     );
   });
 
   // ── G14-03-03: base-currency aging ──
   it('G14-03-03 Test 2: aging invoice query filters base currency', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     setReturns(null);
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.totalOutstanding).toBe('1000');
     // Base currency resolved per tenant, never hardcoded.
-    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(companyId);
+    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(
+      companyId,
+    );
     // The invoice SQL carries the base-currency predicate (foreign rows excluded DB-side).
     const invoiceSql = String(mockPrisma.$queryRaw.mock.calls[0][0]);
     expect(invoiceSql).toContain('currency');
   });
 
   it('G14-03-03 Test 3: foreign return does not reduce base aging', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     // DB-side filtering simulated: a 200 USD return is excluded, pool sum is null.
     setReturns(null);
     const result = await service.getPaymentAging(supplierId, companyId);
@@ -1314,7 +1510,9 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   });
 
   it('G14-03-03 Test 4: base return reduces base aging', async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     setReturns('200');
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.totalOutstanding).toBe('800');
@@ -1323,7 +1521,9 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
   it('G14-03-03 Test 5: mixed invoices + mixed returns → base context only', async () => {
     // DB-side filtering simulated: only the KZT invoice row and the KZT
     // return sum reach the service; USD rows are excluded by predicates.
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     setReturns('200');
     const result = await service.getPaymentAging(supplierId, companyId);
     expect(result.totalOutstanding).toBe('800');
@@ -1338,10 +1538,14 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
 
   it('G14-03-03 Test 6: base currency is tenant-specific, not hardcoded', async () => {
     mockCompaniesService.getBaseCurrency.mockResolvedValueOnce('USD');
-    mockPrisma.$queryRaw.mockResolvedValue([agingRow('inv-1', '1000', '0', 10)]);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      agingRow('inv-1', '1000', '0', 10),
+    ]);
     setReturns(null);
     await service.getPaymentAging(supplierId, companyId);
-    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(companyId);
+    expect(mockCompaniesService.getBaseCurrency).toHaveBeenCalledWith(
+      companyId,
+    );
     const invoiceSql = String(mockPrisma.$queryRaw.mock.calls[0][0]);
     expect(invoiceSql).toContain('currency');
     expect(mockPrisma.purchaseReturn.aggregate).toHaveBeenCalledWith(
@@ -1362,7 +1566,11 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
   beforeEach(() => {
     mockPrisma = {
       $queryRaw: jest.fn().mockResolvedValue([]),
-      purchaseReturn: { aggregate: jest.fn().mockResolvedValue({ _sum: { grandTotal: null }, _count: { id: 0 } }) },
+      purchaseReturn: {
+        aggregate: jest
+          .fn()
+          .mockResolvedValue({ _sum: { grandTotal: null }, _count: { id: 0 } }),
+      },
       product: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     mockSuppliersRepo = {
@@ -1372,7 +1580,11 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
       // → 404) without weakening them.
       findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+    service = new SupplierAnalyticsService(
+      mockPrisma,
+      mockSuppliersRepo,
+      mockCompaniesService,
+    );
   });
 
   it('should throw NotFoundException when supplier not found', async () => {
@@ -1402,10 +1614,22 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
     });
     mockPrisma.$queryRaw
       .mockResolvedValueOnce([
-        { productId: 'p1', returnedQuantity: BigInt(100), returnedAmount: '150000', returnCount: BigInt(3) },
-        { productId: 'p2', returnedQuantity: BigInt(50), returnedAmount: '100000', returnCount: BigInt(2) },
+        {
+          productId: 'p1',
+          returnedQuantity: BigInt(100),
+          returnedAmount: '150000',
+          returnCount: BigInt(3),
+        },
+        {
+          productId: 'p2',
+          returnedQuantity: BigInt(50),
+          returnedAmount: '100000',
+          returnCount: BigInt(2),
+        },
       ])
-      .mockResolvedValueOnce([{ totalSpend: '5000000', totalQuantity: BigInt(3000) }]);
+      .mockResolvedValueOnce([
+        { totalSpend: '5000000', totalQuantity: BigInt(3000) },
+      ]);
     mockPrisma.product.findFirst
       .mockResolvedValueOnce({ name: 'Milk 1L', sku: 'MLK-001' })
       .mockResolvedValueOnce({ name: 'Bread', sku: 'BRD-001' });
@@ -1429,7 +1653,14 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
       _count: { id: 1 },
     });
     mockPrisma.$queryRaw
-      .mockResolvedValueOnce([{ productId: 'p1', returnedQuantity: BigInt(50), returnedAmount: '100000', returnCount: BigInt(1) }])
+      .mockResolvedValueOnce([
+        {
+          productId: 'p1',
+          returnedQuantity: BigInt(50),
+          returnedAmount: '100000',
+          returnCount: BigInt(1),
+        },
+      ])
       .mockResolvedValueOnce([{ totalSpend: '0', totalQuantity: BigInt(0) }]);
     mockPrisma.product.findFirst.mockResolvedValue({ name: 'Milk', sku: null });
 
@@ -1446,10 +1677,22 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
     });
     mockPrisma.$queryRaw
       .mockResolvedValueOnce([
-        { productId: 'p1', returnedQuantity: BigInt(50), returnedAmount: '150000', returnCount: BigInt(1) },
-        { productId: 'p2', returnedQuantity: BigInt(100), returnedAmount: '100000', returnCount: BigInt(1) },
+        {
+          productId: 'p1',
+          returnedQuantity: BigInt(50),
+          returnedAmount: '150000',
+          returnCount: BigInt(1),
+        },
+        {
+          productId: 'p2',
+          returnedQuantity: BigInt(100),
+          returnedAmount: '100000',
+          returnCount: BigInt(1),
+        },
       ])
-      .mockResolvedValueOnce([{ totalSpend: '5000000', totalQuantity: BigInt(3000) }]);
+      .mockResolvedValueOnce([
+        { totalSpend: '5000000', totalQuantity: BigInt(3000) },
+      ]);
     mockPrisma.product.findFirst
       .mockResolvedValueOnce({ name: 'A', sku: null })
       .mockResolvedValueOnce({ name: 'B', sku: null });
@@ -1485,10 +1728,20 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
     });
     mockPrisma.$queryRaw
       .mockResolvedValueOnce([
-        { productId: 'p1', returnedQuantity: BigInt(150), returnedAmount: '200000', returnCount: BigInt(2) },
+        {
+          productId: 'p1',
+          returnedQuantity: BigInt(150),
+          returnedAmount: '200000',
+          returnCount: BigInt(2),
+        },
       ])
-      .mockResolvedValueOnce([{ totalSpend: '1000000', totalQuantity: BigInt(500) }]);
-    mockPrisma.product.findFirst.mockResolvedValue({ name: 'Milk', sku: 'MLK' });
+      .mockResolvedValueOnce([
+        { totalSpend: '1000000', totalQuantity: BigInt(500) },
+      ]);
+    mockPrisma.product.findFirst.mockResolvedValue({
+      name: 'Milk',
+      sku: 'MLK',
+    });
 
     const result = await service.getReturnSummary(supplierId, companyId);
 
@@ -1520,7 +1773,11 @@ describe('SupplierAnalyticsService.getPerformance', () => {
       // → 404) without weakening them.
       findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+    service = new SupplierAnalyticsService(
+      mockPrisma,
+      mockSuppliersRepo,
+      mockCompaniesService,
+    );
   });
 
   afterEach(() => {
@@ -1529,39 +1786,66 @@ describe('SupplierAnalyticsService.getPerformance', () => {
 
   it('should return 404 when supplier not found', async () => {
     mockSuppliersRepo.findById.mockResolvedValue(null);
-    await expect(
-      service.getPerformance(supplierId, companyId),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.getPerformance(supplierId, companyId)).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('should compose data from B1/B3/B5/B6 facade methods', async () => {
     // Spy on internal methods — testing facade composition, not internals
     jest.spyOn(service, 'getPurchaseSummary').mockResolvedValue({
-      dateFrom: '2025-09-04', dateTo: '2026-09-04',
-      totalInvoiced: '10000000', totalReturned: '500000', netPurchaseSpend: '9500000',
-      totalPurchasedQuantity: 3000, weightedAverageUnitCost: '3333.3333',
-      invoiceCount: 20, returnCount: 3,
-      firstPurchaseDate: '2025-01-01', lastPurchaseDate: '2026-01-01',
-      monthlySpend: [], currentTotalPaid: '7500000', currentOutstanding: '2500000',
+      dateFrom: '2025-09-04',
+      dateTo: '2026-09-04',
+      totalInvoiced: '10000000',
+      totalReturned: '500000',
+      netPurchaseSpend: '9500000',
+      totalPurchasedQuantity: 3000,
+      weightedAverageUnitCost: '3333.3333',
+      invoiceCount: 20,
+      returnCount: 3,
+      firstPurchaseDate: '2025-01-01',
+      lastPurchaseDate: '2026-01-01',
+      monthlySpend: [],
+      currentTotalPaid: '7500000',
+      currentOutstanding: '2500000',
       currency: 'KZT',
     } as any);
     jest.spyOn(service, 'getReliability').mockResolvedValue({
-      totalOrders: 10, totalReceipts: 8,
-      onTimeDeliveryRate: 87.5, averageLeadTimeDays: 5.2,
-      minLeadTimeDays: 2, maxLeadTimeDays: 12,
-      ordersReceived: 8, ordersPartiallyReceived: 0, ordersCancelled: 2,
-      cancellationRate: 20, recentDeliveries: [],
+      totalOrders: 10,
+      totalReceipts: 8,
+      onTimeDeliveryRate: 87.5,
+      averageLeadTimeDays: 5.2,
+      minLeadTimeDays: 2,
+      maxLeadTimeDays: 12,
+      ordersReceived: 8,
+      ordersPartiallyReceived: 0,
+      ordersCancelled: 2,
+      cancellationRate: 20,
+      recentDeliveries: [],
     } as any);
     jest.spyOn(service, 'getPaymentAging').mockResolvedValue({
       totalOutstanding: '2500000',
-      aging: { current: '2000000', days1_30: '300000', days31_60: '150000', days61_90: '50000', overdue90plus: '0' },
-      overdueInvoices: [], invoiceCount: 5, overdueCount: 2,
+      aging: {
+        current: '2000000',
+        days1_30: '300000',
+        days31_60: '150000',
+        days61_90: '50000',
+        overdue90plus: '0',
+      },
+      overdueInvoices: [],
+      invoiceCount: 5,
+      overdueCount: 2,
     } as any);
     jest.spyOn(service, 'getReturnSummary').mockResolvedValue({
-      dateFrom: '2025-09-04', dateTo: '2026-09-04',
-      totalReturnedAmount: '500000', totalReturnedQuantity: 200, returnCount: 3,
-      totalPurchaseSpend: '10000000', totalPurchasedQuantity: 3000,
-      amountReturnRate: 5.0, quantityReturnRate: 6.7,
+      dateFrom: '2025-09-04',
+      dateTo: '2026-09-04',
+      totalReturnedAmount: '500000',
+      totalReturnedQuantity: 200,
+      returnCount: 3,
+      totalPurchaseSpend: '10000000',
+      totalPurchasedQuantity: 3000,
+      amountReturnRate: 5.0,
+      quantityReturnRate: 6.7,
       topReturnedProducts: [],
     } as any);
 
@@ -1583,78 +1867,167 @@ describe('SupplierAnalyticsService.getPerformance', () => {
     expect(result.financialRisk.overdue90plus).toBe('0');
 
     // Verify all facade methods were called with correct params
-    expect(service.getPurchaseSummary).toHaveBeenCalledWith(supplierId, companyId, undefined, undefined);
-    expect(service.getReliability).toHaveBeenCalledWith(supplierId, companyId, undefined, undefined);
+    expect(service.getPurchaseSummary).toHaveBeenCalledWith(
+      supplierId,
+      companyId,
+      undefined,
+      undefined,
+    );
+    expect(service.getReliability).toHaveBeenCalledWith(
+      supplierId,
+      companyId,
+      undefined,
+      undefined,
+    );
     expect(service.getPaymentAging).toHaveBeenCalledWith(supplierId, companyId);
-    expect(service.getReturnSummary).toHaveBeenCalledWith(supplierId, companyId, undefined, undefined);
+    expect(service.getReturnSummary).toHaveBeenCalledWith(
+      supplierId,
+      companyId,
+      undefined,
+      undefined,
+    );
   });
 
   it('should pass dateFrom/dateTo to period-based methods but not to payment aging', async () => {
     jest.spyOn(service, 'getPurchaseSummary').mockResolvedValue({
-      dateFrom: '2026-01-01', dateTo: '2026-06-30',
-      totalInvoiced: '5000000', totalReturned: '0', netPurchaseSpend: '5000000',
-      totalPurchasedQuantity: 1500, weightedAverageUnitCost: '3333.3333',
-      invoiceCount: 10, returnCount: 0,
-      firstPurchaseDate: '2026-01-01', lastPurchaseDate: '2026-06-30',
-      monthlySpend: [], currentTotalPaid: '5000000', currentOutstanding: '0',
+      dateFrom: '2026-01-01',
+      dateTo: '2026-06-30',
+      totalInvoiced: '5000000',
+      totalReturned: '0',
+      netPurchaseSpend: '5000000',
+      totalPurchasedQuantity: 1500,
+      weightedAverageUnitCost: '3333.3333',
+      invoiceCount: 10,
+      returnCount: 0,
+      firstPurchaseDate: '2026-01-01',
+      lastPurchaseDate: '2026-06-30',
+      monthlySpend: [],
+      currentTotalPaid: '5000000',
+      currentOutstanding: '0',
       currency: 'KZT',
     } as any);
     jest.spyOn(service, 'getReliability').mockResolvedValue({
-      totalOrders: 5, totalReceipts: 5,
-      onTimeDeliveryRate: 100, averageLeadTimeDays: 3,
-      minLeadTimeDays: 1, maxLeadTimeDays: 5,
-      ordersReceived: 5, ordersPartiallyReceived: 0, ordersCancelled: 0,
-      cancellationRate: 0, recentDeliveries: [],
+      totalOrders: 5,
+      totalReceipts: 5,
+      onTimeDeliveryRate: 100,
+      averageLeadTimeDays: 3,
+      minLeadTimeDays: 1,
+      maxLeadTimeDays: 5,
+      ordersReceived: 5,
+      ordersPartiallyReceived: 0,
+      ordersCancelled: 0,
+      cancellationRate: 0,
+      recentDeliveries: [],
     } as any);
     jest.spyOn(service, 'getPaymentAging').mockResolvedValue({
       totalOutstanding: '0',
-      aging: { current: '0', days1_30: '0', days31_60: '0', days61_90: '0', overdue90plus: '0' },
-      overdueInvoices: [], invoiceCount: 0, overdueCount: 0,
+      aging: {
+        current: '0',
+        days1_30: '0',
+        days31_60: '0',
+        days61_90: '0',
+        overdue90plus: '0',
+      },
+      overdueInvoices: [],
+      invoiceCount: 0,
+      overdueCount: 0,
     } as any);
     jest.spyOn(service, 'getReturnSummary').mockResolvedValue({
-      dateFrom: '2026-01-01', dateTo: '2026-06-30',
-      totalReturnedAmount: '0', totalReturnedQuantity: 0, returnCount: 0,
-      totalPurchaseSpend: '5000000', totalPurchasedQuantity: 1500,
-      amountReturnRate: 0, quantityReturnRate: 0,
+      dateFrom: '2026-01-01',
+      dateTo: '2026-06-30',
+      totalReturnedAmount: '0',
+      totalReturnedQuantity: 0,
+      returnCount: 0,
+      totalPurchaseSpend: '5000000',
+      totalPurchasedQuantity: 1500,
+      amountReturnRate: 0,
+      quantityReturnRate: 0,
       topReturnedProducts: [],
     } as any);
 
-    await service.getPerformance(supplierId, companyId, '2026-01-01', '2026-06-30');
+    await service.getPerformance(
+      supplierId,
+      companyId,
+      '2026-01-01',
+      '2026-06-30',
+    );
 
     // Period methods get dateFrom/dateTo
-    expect(service.getPurchaseSummary).toHaveBeenCalledWith(supplierId, companyId, '2026-01-01', '2026-06-30');
-    expect(service.getReliability).toHaveBeenCalledWith(supplierId, companyId, '2026-01-01', '2026-06-30');
-    expect(service.getReturnSummary).toHaveBeenCalledWith(supplierId, companyId, '2026-01-01', '2026-06-30');
+    expect(service.getPurchaseSummary).toHaveBeenCalledWith(
+      supplierId,
+      companyId,
+      '2026-01-01',
+      '2026-06-30',
+    );
+    expect(service.getReliability).toHaveBeenCalledWith(
+      supplierId,
+      companyId,
+      '2026-01-01',
+      '2026-06-30',
+    );
+    expect(service.getReturnSummary).toHaveBeenCalledWith(
+      supplierId,
+      companyId,
+      '2026-01-01',
+      '2026-06-30',
+    );
     // Payment aging is current-state — no period passed
     expect(service.getPaymentAging).toHaveBeenCalledWith(supplierId, companyId);
   });
 
   it('should return all-zero metrics for supplier with no data', async () => {
     jest.spyOn(service, 'getPurchaseSummary').mockResolvedValue({
-      dateFrom: '2025-09-04', dateTo: '2026-09-04',
-      totalInvoiced: '0', totalReturned: '0', netPurchaseSpend: '0',
-      totalPurchasedQuantity: 0, weightedAverageUnitCost: '0',
-      invoiceCount: 0, returnCount: 0,
-      firstPurchaseDate: null, lastPurchaseDate: null,
-      monthlySpend: [], currentTotalPaid: '0', currentOutstanding: '0',
+      dateFrom: '2025-09-04',
+      dateTo: '2026-09-04',
+      totalInvoiced: '0',
+      totalReturned: '0',
+      netPurchaseSpend: '0',
+      totalPurchasedQuantity: 0,
+      weightedAverageUnitCost: '0',
+      invoiceCount: 0,
+      returnCount: 0,
+      firstPurchaseDate: null,
+      lastPurchaseDate: null,
+      monthlySpend: [],
+      currentTotalPaid: '0',
+      currentOutstanding: '0',
     } as any);
     jest.spyOn(service, 'getReliability').mockResolvedValue({
-      totalOrders: 0, totalReceipts: 0,
-      onTimeDeliveryRate: 0, averageLeadTimeDays: 0,
-      minLeadTimeDays: 0, maxLeadTimeDays: 0,
-      ordersReceived: 0, ordersPartiallyReceived: 0, ordersCancelled: 0,
-      cancellationRate: 0, recentDeliveries: [],
+      totalOrders: 0,
+      totalReceipts: 0,
+      onTimeDeliveryRate: 0,
+      averageLeadTimeDays: 0,
+      minLeadTimeDays: 0,
+      maxLeadTimeDays: 0,
+      ordersReceived: 0,
+      ordersPartiallyReceived: 0,
+      ordersCancelled: 0,
+      cancellationRate: 0,
+      recentDeliveries: [],
     } as any);
     jest.spyOn(service, 'getPaymentAging').mockResolvedValue({
       totalOutstanding: '0',
-      aging: { current: '0', days1_30: '0', days31_60: '0', days61_90: '0', overdue90plus: '0' },
-      overdueInvoices: [], invoiceCount: 0, overdueCount: 0,
+      aging: {
+        current: '0',
+        days1_30: '0',
+        days31_60: '0',
+        days61_90: '0',
+        overdue90plus: '0',
+      },
+      overdueInvoices: [],
+      invoiceCount: 0,
+      overdueCount: 0,
     } as any);
     jest.spyOn(service, 'getReturnSummary').mockResolvedValue({
-      dateFrom: '2025-09-04', dateTo: '2026-09-04',
-      totalReturnedAmount: '0', totalReturnedQuantity: 0, returnCount: 0,
-      totalPurchaseSpend: '0', totalPurchasedQuantity: 0,
-      amountReturnRate: 0, quantityReturnRate: 0,
+      dateFrom: '2025-09-04',
+      dateTo: '2026-09-04',
+      totalReturnedAmount: '0',
+      totalReturnedQuantity: 0,
+      returnCount: 0,
+      totalPurchaseSpend: '0',
+      totalPurchasedQuantity: 0,
+      amountReturnRate: 0,
+      quantityReturnRate: 0,
       topReturnedProducts: [],
     } as any);
 
@@ -1697,7 +2070,11 @@ describe('SupplierAnalyticsService.getOrderPipeline', () => {
       // → 404) without weakening them.
       findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+    service = new SupplierAnalyticsService(
+      mockPrisma,
+      mockSuppliersRepo,
+      mockCompaniesService,
+    );
   });
 
   afterEach(() => {
@@ -1723,7 +2100,14 @@ describe('SupplierAnalyticsService.getOrderPipeline', () => {
       { status: 'CANCELLED', _count: { id: 1 } },
     ]);
     mockPrisma.purchaseOrder.findMany.mockResolvedValue([
-      { id: 'o1', orderNumber: 'PO-001', orderDate: new Date('2026-08-01'), expectedDate: new Date('2026-08-10'), status: 'ORDERED', grandTotal: '500000' },
+      {
+        id: 'o1',
+        orderNumber: 'PO-001',
+        orderDate: new Date('2026-08-01'),
+        expectedDate: new Date('2026-08-10'),
+        status: 'ORDERED',
+        grandTotal: '500000',
+      },
     ]);
 
     const result = await service.getOrderPipeline(supplierId, companyId);
@@ -1764,11 +2148,31 @@ describe('SupplierAnalyticsService.getOrderPipeline', () => {
       .mockResolvedValueOnce({ _sum: { grandTotal: '2000000' } }); // totalOrderValue (filtered)
     // No groupBy when status is specified
     mockPrisma.purchaseOrder.findMany.mockResolvedValue([
-      { id: 'o1', orderNumber: 'PO-001', orderDate: new Date('2026-08-01'), expectedDate: null, status: 'ORDERED', grandTotal: '500000' },
-      { id: 'o2', orderNumber: 'PO-002', orderDate: new Date('2026-07-01'), expectedDate: null, status: 'ORDERED', grandTotal: '600000' },
+      {
+        id: 'o1',
+        orderNumber: 'PO-001',
+        orderDate: new Date('2026-08-01'),
+        expectedDate: null,
+        status: 'ORDERED',
+        grandTotal: '500000',
+      },
+      {
+        id: 'o2',
+        orderNumber: 'PO-002',
+        orderDate: new Date('2026-07-01'),
+        expectedDate: null,
+        status: 'ORDERED',
+        grandTotal: '600000',
+      },
     ]);
 
-    const result = await service.getOrderPipeline(supplierId, companyId, undefined, undefined, 'ORDERED');
+    const result = await service.getOrderPipeline(
+      supplierId,
+      companyId,
+      undefined,
+      undefined,
+      'ORDERED',
+    );
 
     expect(result.summary.totalOrders).toBe(4);
     expect(result.summary.totalOrderValue).toBe('2000000');
@@ -1777,7 +2181,7 @@ describe('SupplierAnalyticsService.getOrderPipeline', () => {
     expect(result.summary.orderedCount).toBe(0);
     expect(result.recentOrders).toHaveLength(2);
     // All recent orders should have the filtered status
-    expect(result.recentOrders.every(o => o.status === 'ORDERED')).toBe(true);
+    expect(result.recentOrders.every((o) => o.status === 'ORDERED')).toBe(true);
   });
 
   it('should return zero values for supplier with no orders', async () => {
@@ -1801,7 +2205,12 @@ describe('SupplierAnalyticsService.getOrderPipeline', () => {
     mockPrisma.purchaseOrder.groupBy.mockResolvedValue([]);
     mockPrisma.purchaseOrder.findMany.mockResolvedValue(
       Array.from({ length: 10 }, (_, i) => ({
-        id: `o${i}`, orderNumber: `PO-${i}`, orderDate: new Date(), expectedDate: null, status: 'ORDERED', grandTotal: '500000',
+        id: `o${i}`,
+        orderNumber: `PO-${i}`,
+        orderDate: new Date(),
+        expectedDate: null,
+        status: 'ORDERED',
+        grandTotal: '500000',
       })),
     );
 
@@ -1851,20 +2260,41 @@ describe('G16-AA-2B archived supplier analytics access', () => {
   /** Full prisma mock covering every downstream call of the eight methods. */
   function buildPrisma(): any {
     return {
-      purchaseInvoice: { aggregate: jest.fn().mockResolvedValue({ _sum: {}, _count: { id: 0 }, _min: {}, _max: {} }) },
+      purchaseInvoice: {
+        aggregate: jest.fn().mockResolvedValue({
+          _sum: {},
+          _count: { id: 0 },
+          _min: {},
+          _max: {},
+        }),
+      },
       purchaseInvoiceItem: {
         aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }),
         groupBy: jest.fn().mockResolvedValue([]),
       },
-      purchaseReturn: { aggregate: jest.fn().mockResolvedValue({ _sum: {}, _count: 0 }) },
+      purchaseReturn: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: {}, _count: 0 }),
+      },
       purchaseOrder: {
-        aggregate: jest.fn().mockResolvedValue({ _count: { id: 0 }, _sum: { grandTotal: null } }),
+        aggregate: jest
+          .fn()
+          .mockResolvedValue({ _count: { id: 0 }, _sum: { grandTotal: null } }),
         groupBy: jest.fn().mockResolvedValue([]),
         findMany: jest.fn().mockResolvedValue([]),
       },
-      supplierPayment: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
-      supplierPaymentAllocation: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
-      product: { findFirst: jest.fn().mockResolvedValue({ id: productId, name: 'Milk 1L', sku: 'MLK-001' }) },
+      supplierPayment: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
+      },
+      supplierPaymentAllocation: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
+      },
+      product: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: productId,
+          name: 'Milk 1L',
+          sku: 'MLK-001',
+        }),
+      },
       supplierProduct: { findFirst: jest.fn().mockResolvedValue(null) },
       $queryRaw: jest.fn().mockResolvedValue([]),
     };
@@ -1877,76 +2307,133 @@ describe('G16-AA-2B archived supplier analytics access', () => {
       findById: jest.fn().mockResolvedValue(null),
       findArchivedSupplierById: jest.fn().mockResolvedValue(archivedSupplier),
     };
-    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+    service = new SupplierAnalyticsService(
+      mockPrisma,
+      mockSuppliersRepo,
+      mockCompaniesService,
+    );
   });
 
   const EIGHT_METHODS: Array<{ name: string; call: () => Promise<unknown> }> = [
-    { name: 'getPurchaseSummary', call: () => service.getPurchaseSummary(supplierId, companyId) },
-    { name: 'getProductPurchases', call: () => service.getProductPurchases(supplierId, companyId) },
-    { name: 'getReliability', call: () => service.getReliability(supplierId, companyId) },
-    { name: 'getPriceHistory', call: () => service.getPriceHistory(supplierId, companyId, productId) },
-    { name: 'getPaymentAging', call: () => service.getPaymentAging(supplierId, companyId) },
-    { name: 'getReturnSummary', call: () => service.getReturnSummary(supplierId, companyId) },
-    { name: 'getPerformance', call: () => service.getPerformance(supplierId, companyId) },
-    { name: 'getOrderPipeline', call: () => service.getOrderPipeline(supplierId, companyId) },
+    {
+      name: 'getPurchaseSummary',
+      call: () => service.getPurchaseSummary(supplierId, companyId),
+    },
+    {
+      name: 'getProductPurchases',
+      call: () => service.getProductPurchases(supplierId, companyId),
+    },
+    {
+      name: 'getReliability',
+      call: () => service.getReliability(supplierId, companyId),
+    },
+    {
+      name: 'getPriceHistory',
+      call: () => service.getPriceHistory(supplierId, companyId, productId),
+    },
+    {
+      name: 'getPaymentAging',
+      call: () => service.getPaymentAging(supplierId, companyId),
+    },
+    {
+      name: 'getReturnSummary',
+      call: () => service.getReturnSummary(supplierId, companyId),
+    },
+    {
+      name: 'getPerformance',
+      call: () => service.getPerformance(supplierId, companyId),
+    },
+    {
+      name: 'getOrderPipeline',
+      call: () => service.getOrderPipeline(supplierId, companyId),
+    },
   ];
 
   // ── Archived supplier of the SAME tenant can read allowed history ──────
 
-  it.each(EIGHT_METHODS)('$name reads permitted history for an archived supplier of the same tenant', async ({ call }) => {
-    const result = await call();
-    expect(result).toBeDefined();
-    expect(mockSuppliersRepo.findById).toHaveBeenCalledWith(supplierId, companyId);
-    expect(mockSuppliersRepo.findArchivedSupplierById).toHaveBeenCalledWith(supplierId, companyId);
-  });
+  it.each(EIGHT_METHODS)(
+    '$name reads permitted history for an archived supplier of the same tenant',
+    async ({ call }) => {
+      const result = await call();
+      expect(result).toBeDefined();
+      expect(mockSuppliersRepo.findById).toHaveBeenCalledWith(
+        supplierId,
+        companyId,
+      );
+      expect(mockSuppliersRepo.findArchivedSupplierById).toHaveBeenCalledWith(
+        supplierId,
+        companyId,
+      );
+    },
+  );
 
   it('resolves an active supplier via the canonical findById and never consults the archived lookup', async () => {
     mockSuppliersRepo.findById.mockResolvedValue(activeSupplier);
 
     await service.getPurchaseSummary(supplierId, companyId);
 
-    expect(mockSuppliersRepo.findById).toHaveBeenCalledWith(supplierId, companyId);
+    expect(mockSuppliersRepo.findById).toHaveBeenCalledWith(
+      supplierId,
+      companyId,
+    );
     expect(mockSuppliersRepo.findArchivedSupplierById).not.toHaveBeenCalled();
   });
 
   // ── Missing supplier and cross-tenant access remain 404 ─────────────────
 
-  it.each(EIGHT_METHODS)('$name still returns 404 when the supplier does not exist at all', async ({ call }) => {
-    mockSuppliersRepo.findById.mockResolvedValue(null);
-    mockSuppliersRepo.findArchivedSupplierById.mockResolvedValue(null);
+  it.each(EIGHT_METHODS)(
+    '$name still returns 404 when the supplier does not exist at all',
+    async ({ call }) => {
+      mockSuppliersRepo.findById.mockResolvedValue(null);
+      mockSuppliersRepo.findArchivedSupplierById.mockResolvedValue(null);
 
-    await expect(call()).rejects.toThrow(NotFoundException);
-  });
+      await expect(call()).rejects.toThrow(NotFoundException);
+    },
+  );
 
-  it.each(EIGHT_METHODS)('$name still returns 404 for an archived supplier of ANOTHER tenant', async ({ call }) => {
-    // The repository lookups are tenant-scoped: they only match the requested
-    // companyId. A foreign supplier therefore resolves to null for company-1,
-    // exactly as if it did not exist.
-    mockSuppliersRepo.findById.mockImplementation(async (_id: string, cid: string) =>
-      cid === companyBId ? activeSupplier : null,
-    );
-    mockSuppliersRepo.findArchivedSupplierById.mockImplementation(async (_id: string, cid: string) =>
-      cid === companyBId ? archivedSupplier : null,
-    );
+  it.each(EIGHT_METHODS)(
+    '$name still returns 404 for an archived supplier of ANOTHER tenant',
+    async ({ call }) => {
+      // The repository lookups are tenant-scoped: they only match the requested
+      // companyId. A foreign supplier therefore resolves to null for company-1,
+      // exactly as if it did not exist.
+      mockSuppliersRepo.findById.mockImplementation(
+        async (_id: string, cid: string) =>
+          cid === companyBId ? activeSupplier : null,
+      );
+      mockSuppliersRepo.findArchivedSupplierById.mockImplementation(
+        async (_id: string, cid: string) =>
+          cid === companyBId ? archivedSupplier : null,
+      );
 
-    await expect(call()).rejects.toThrow(NotFoundException);
-    expect(mockSuppliersRepo.findArchivedSupplierById).toHaveBeenCalledWith(supplierId, companyId);
-  });
+      await expect(call()).rejects.toThrow(NotFoundException);
+      expect(mockSuppliersRepo.findArchivedSupplierById).toHaveBeenCalledWith(
+        supplierId,
+        companyId,
+      );
+    },
+  );
 
   it('does not leak a foreign-tenant archived supplier through the identity gate', async () => {
     mockSuppliersRepo.findArchivedSupplierById.mockResolvedValue(null);
 
-    await expect(service.getPurchaseSummary(supplierId, companyBId)).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(
+      service.getPurchaseSummary(supplierId, companyBId),
+    ).rejects.toThrow(NotFoundException);
   });
 
   // ── Downstream filters are preserved on the archived path ───────────────
 
   it('getPurchaseSummary keeps companyId/supplierId/deletedAt/status/currency/date filters for an archived supplier', async () => {
-    await service.getPurchaseSummary(supplierId, companyId, '2026-01-01', '2026-06-30');
+    await service.getPurchaseSummary(
+      supplierId,
+      companyId,
+      '2026-01-01',
+      '2026-06-30',
+    );
 
-    const invoiceWhere = mockPrisma.purchaseInvoice.aggregate.mock.calls[0]![0].where;
+    const invoiceWhere =
+      mockPrisma.purchaseInvoice.aggregate.mock.calls[0]![0].where;
     expect(invoiceWhere.supplierId).toBe(supplierId);
     expect(invoiceWhere.companyId).toBe(companyId);
     expect(invoiceWhere.deletedAt).toBeNull();
@@ -1959,7 +2446,8 @@ describe('G16-AA-2B archived supplier analytics access', () => {
   it('getPurchaseSummary keeps base-currency + non-cancelled scoping of the return aggregate for an archived supplier', async () => {
     await service.getPurchaseSummary(supplierId, companyId);
 
-    const returnWhere = mockPrisma.purchaseReturn.aggregate.mock.calls[0]![0].where;
+    const returnWhere =
+      mockPrisma.purchaseReturn.aggregate.mock.calls[0]![0].where;
     expect(returnWhere.supplierId).toBe(supplierId);
     expect(returnWhere.companyId).toBe(companyId);
     expect(returnWhere.deletedAt).toBeNull();
@@ -1978,7 +2466,9 @@ describe('G16-AA-2B archived supplier analytics access', () => {
     expect(sql).toContain('pi."currency" =');
     // Outstanding basis stays allocation-based (G9-B1), not paidAmount.
     expect(sql).toContain('COALESCE(spa."allocatedAmount", 0)');
-    expect(mockPrisma.supplierPaymentAllocation.aggregate).not.toHaveBeenCalled();
+    expect(
+      mockPrisma.supplierPaymentAllocation.aggregate,
+    ).not.toHaveBeenCalled();
   });
 
   it('getProductPurchases keeps the isCancelled and deletedAt guards for an archived supplier', async () => {
@@ -1989,7 +2479,9 @@ describe('G16-AA-2B archived supplier analytics access', () => {
 
     // The return-per-product statement keeps non-cancelled + status + tenant
     // + soft-delete guards on the PurchaseReturn alias (pr).
-    const returnSql = sql.find((s: string) => s.includes('PurchaseReturnItem'))!;
+    const returnSql = sql.find((s: string) =>
+      s.includes('PurchaseReturnItem'),
+    )!;
     expect(returnSql).toBeDefined();
     expect(returnSql).toContain('pr."isCancelled" = false');
     expect(returnSql).toContain('pr."deletedAt" IS NULL');
@@ -1999,7 +2491,9 @@ describe('G16-AA-2B archived supplier analytics access', () => {
 
     // The invoice-side statements keep tenant + soft-delete + status guards on
     // the PurchaseInvoice alias (pi).
-    const invoiceSql = sql.filter((s: string) => !s.includes('PurchaseReturnItem'));
+    const invoiceSql = sql.filter(
+      (s: string) => !s.includes('PurchaseReturnItem'),
+    );
     expect(invoiceSql.length).toBeGreaterThan(0);
     for (const statement of invoiceSql) {
       expect(statement).toContain('pi."deletedAt" IS NULL');
@@ -2042,13 +2536,15 @@ describe('G16-AA-2B archived supplier analytics access', () => {
   it('getOrderPipeline keeps tenant, soft-delete, orderDate and CANCELLED-value guards for an archived supplier', async () => {
     await service.getOrderPipeline(supplierId, companyId);
 
-    const baseWhere = mockPrisma.purchaseOrder.aggregate.mock.calls[0]![0].where;
+    const baseWhere =
+      mockPrisma.purchaseOrder.aggregate.mock.calls[0]![0].where;
     expect(baseWhere.supplierId).toBe(supplierId);
     expect(baseWhere.companyId).toBe(companyId);
     expect(baseWhere.deletedAt).toBeNull();
     expect(baseWhere.orderDate).toBeDefined();
 
-    const valueWhere = mockPrisma.purchaseOrder.aggregate.mock.calls[1]![0].where;
+    const valueWhere =
+      mockPrisma.purchaseOrder.aggregate.mock.calls[1]![0].where;
     expect(valueWhere.status).toEqual({ not: 'CANCELLED' });
   });
 
@@ -2059,7 +2555,8 @@ describe('G16-AA-2B archived supplier analytics access', () => {
     expect(sql.length).toBeGreaterThan(0);
     expect(sql[0]).toContain('pr."isCancelled" = false');
 
-    const returnWhere = mockPrisma.purchaseReturn.aggregate.mock.calls[0]![0].where;
+    const returnWhere =
+      mockPrisma.purchaseReturn.aggregate.mock.calls[0]![0].where;
     expect(returnWhere.companyId).toBe(companyId);
     expect(returnWhere.supplierId).toBe(supplierId);
     expect(returnWhere.deletedAt).toBeNull();
@@ -2117,7 +2614,9 @@ describe('G16-AA-2B archived supplier analytics access', () => {
   // ── getPriceHistory contract on the archived path ───────────────────────
 
   it('getPriceHistory returns historical price points for an archived supplier when an active SupplierProduct exists', async () => {
-    mockPrisma.supplierProduct.findFirst.mockResolvedValue({ purchasePrice: new Decimal('450') });
+    mockPrisma.supplierProduct.findFirst.mockResolvedValue({
+      purchasePrice: new Decimal('450'),
+    });
     mockPrisma.$queryRaw.mockResolvedValueOnce([
       {
         invoiceDate: new Date('2026-02-01'),
@@ -2128,7 +2627,11 @@ describe('G16-AA-2B archived supplier analytics access', () => {
       },
     ]);
 
-    const result = await service.getPriceHistory(supplierId, companyId, productId);
+    const result = await service.getPriceHistory(
+      supplierId,
+      companyId,
+      productId,
+    );
 
     expect(result.currentQuotedPrice).toBe('450');
     expect(result.pricePoints).toHaveLength(1);
@@ -2157,7 +2660,11 @@ describe('G16-AA-2B archived supplier analytics access', () => {
       },
     ]);
 
-    const result = await service.getPriceHistory(supplierId, companyId, productId);
+    const result = await service.getPriceHistory(
+      supplierId,
+      companyId,
+      productId,
+    );
 
     expect(result.currentQuotedPrice).toBeNull();
     expect(result.pricePoints).toHaveLength(1);

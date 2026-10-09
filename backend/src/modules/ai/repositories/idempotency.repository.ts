@@ -93,12 +93,12 @@ export class IdempotencyRepository {
         status: 'PENDING',
         expiresAt: new Date(Date.now() + ttlMs),
       };
-      
+
       // Only include conversationId if it's not null
       if (conversationId !== null) {
         createData.conversationId = conversationId;
       }
-      
+
       const record = await client.aiIdempotencyRequest.create({
         data: createData,
       });

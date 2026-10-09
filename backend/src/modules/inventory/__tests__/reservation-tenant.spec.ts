@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ReservationService } from '../services/reservation.service';
 import { InventoryRepository } from '../repositories/inventory.repository';
 import { PrismaService } from '../../../common/prisma';
@@ -76,13 +73,9 @@ describe('ReservationService — reference ownership (G16-B-02 PH3 B02-12)', () 
         .mockImplementation((ids: string[]) =>
           Promise.resolve(ids.map((id) => productRow(id))),
         ),
-      findStockByProductAndWarehouse: jest
-        .fn()
-        .mockResolvedValue(stockRow()),
+      findStockByProductAndWarehouse: jest.fn().mockResolvedValue(stockRow()),
       updateStock: jest.fn().mockResolvedValue({}),
-      createStockMovement: jest
-        .fn()
-        .mockResolvedValue({ id: 'movement-1' }),
+      createStockMovement: jest.fn().mockResolvedValue({ id: 'movement-1' }),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
 
@@ -100,11 +93,7 @@ describe('ReservationService — reference ownership (G16-B-02 PH3 B02-12)', () 
 
   describe('reserve', () => {
     it('reserves stock for a valid same-company active reference', async () => {
-      const result = await service.reserve(
-        reserveDto(),
-        COMPANY_ID,
-        USER_ID,
-      );
+      const result = await service.reserve(reserveDto(), COMPANY_ID, USER_ID);
 
       expect(repo.findWarehouseById).toHaveBeenCalledWith(
         WAREHOUSE_ID,
@@ -226,11 +215,7 @@ describe('ReservationService — reference ownership (G16-B-02 PH3 B02-12)', () 
 
   describe('release', () => {
     it('releases stock for a valid same-company active reference', async () => {
-      const result = await service.release(
-        reserveDto(),
-        COMPANY_ID,
-        USER_ID,
-      );
+      const result = await service.release(reserveDto(), COMPANY_ID, USER_ID);
 
       expect(repo.findWarehouseById).toHaveBeenCalledWith(
         WAREHOUSE_ID,

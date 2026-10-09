@@ -51,11 +51,7 @@ describe('SalesService.create — inactive product rejection (G16-B-03 F-1)', ()
         findFirst: jest
           .fn()
           .mockImplementation(({ where }: any) =>
-            Promise.resolve(
-              where?.isActive === true
-                ? activeProduct
-                : null,
-            ),
+            Promise.resolve(where?.isActive === true ? activeProduct : null),
           ),
       },
       saleItem: { findMany: jest.fn().mockResolvedValue([]) },

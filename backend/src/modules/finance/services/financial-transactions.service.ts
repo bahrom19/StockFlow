@@ -25,9 +25,7 @@ import { CompaniesService } from '../../companies/services/companies.service';
 import { GlEngineService } from './gl-engine.service';
 import { FiscalCalendarService } from './fiscal-calendar.service';
 import { IdempotencyService } from '../../../infrastructure/idempotency/idempotency.service';
-import {
-  runWithIdempotency,
-} from '../../../infrastructure/idempotency/idempotency.helper';
+import { runWithIdempotency } from '../../../infrastructure/idempotency/idempotency.helper';
 import {
   FT_POSTING_REFERENCE_TYPE,
   FT_REVERSAL_REFERENCE_TYPE,
@@ -71,7 +69,10 @@ const FAMILY_FALLBACK_CODE = { CASH: '1010', BANK: '1020' } as const;
 
 @Injectable()
 export class FinancialTransactionsService {
-  private readonly counterpartResolvers = new Map<string, CounterpartResolver>();
+  private readonly counterpartResolvers = new Map<
+    string,
+    CounterpartResolver
+  >();
 
   constructor(
     private readonly repository: FinancialTransactionsRepository,
@@ -238,7 +239,11 @@ export class FinancialTransactionsService {
 
     // D6 — sale-linked REFUNDs must flow through the refund domain.
     if (ft.type === 'REFUND') {
-      this.assertNotSaleLinked(ft, companyId, await this.saleLinkExists(ft, companyId, tx));
+      this.assertNotSaleLinked(
+        ft,
+        companyId,
+        await this.saleLinkExists(ft, companyId, tx),
+      );
     }
 
     const hasDomainCounterpart = await this.resolveDomainCounterpartId(
@@ -572,8 +577,7 @@ export class FinancialTransactionsService {
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.referenceNumber !== undefined)
       data.referenceNumber = dto.referenceNumber;
-    if (dto.referenceType !== undefined)
-      data.referenceType = dto.referenceType;
+    if (dto.referenceType !== undefined) data.referenceType = dto.referenceType;
     if (dto.referenceId !== undefined) data.referenceId = dto.referenceId;
     if (dto.isReconciled !== undefined) data.isReconciled = dto.isReconciled;
     if (dto.type !== undefined)

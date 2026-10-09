@@ -9,7 +9,10 @@ import { WebhookEngineService } from '../webhook-engine.service';
 
 describe('WebhookEngineService.verifySignature (G13-03-08-01 fail-closed)', () => {
   const secret = 'whsec_test_secret_123';
-  const payload = JSON.stringify({ id: 'evt_1', type: 'checkout.session.completed' });
+  const payload = JSON.stringify({
+    id: 'evt_1',
+    type: 'checkout.session.completed',
+  });
   const timestamp = '1710000000';
 
   function sign(secretKey: string, body: string, ts: string): string {
@@ -41,9 +44,9 @@ describe('WebhookEngineService.verifySignature (G13-03-08-01 fail-closed)', () =
 
   it('should return false when the secret is missing and bypass is disabled', () => {
     const engine = makeEngine('', false);
-    expect(engine.verifySignature(payload, sign(secret, payload, timestamp))).toBe(
-      false,
-    );
+    expect(
+      engine.verifySignature(payload, sign(secret, payload, timestamp)),
+    ).toBe(false);
   });
 
   it('should return true only via explicit bypass when enabled', () => {
@@ -54,7 +57,10 @@ describe('WebhookEngineService.verifySignature (G13-03-08-01 fail-closed)', () =
   it('should return false for a signature made with the wrong secret', () => {
     const engine = makeEngine(secret, false);
     expect(
-      engine.verifySignature(payload, sign('whsec_wrong_secret', payload, timestamp)),
+      engine.verifySignature(
+        payload,
+        sign('whsec_wrong_secret', payload, timestamp),
+      ),
     ).toBe(false);
   });
 
@@ -159,8 +165,9 @@ describe('WebhookEngineService.handleSubscriptionDeleted (G13-03-08-02 single ev
   }
 
   it('should not publish SubscriptionCancelledEvent itself on provider deletion', async () => {
-    const { engine, eventBus, companySubscriptionService } =
-      makeDeletionEngine(async () => ({ id: 'sub-1' }));
+    const { engine, eventBus, companySubscriptionService } = makeDeletionEngine(
+      async () => ({ id: 'sub-1' }),
+    );
 
     await (engine as any).handleSubscriptionDeleted({ id: 'sub_prov_1' });
 
@@ -207,9 +214,7 @@ describe('WebhookEngineService.handleChargeRefunded (G13-03-08-03 idempotency)',
     const invoice = {
       findFirst: jest
         .fn()
-        .mockResolvedValue(
-          'invoiceRow' in opts ? opts.invoiceRow : invoiceA,
-        ),
+        .mockResolvedValue('invoiceRow' in opts ? opts.invoiceRow : invoiceA),
     };
     const create =
       opts.createImpl !== undefined
@@ -510,7 +515,9 @@ describe('WebhookEngineService already-applied convergence (G13-03-09-01)', () =
       handled: true,
       eventType: 'invoice.payment_failed',
     });
-    expect(companySubscriptionService.transitionStatus).toHaveBeenCalledTimes(1);
+    expect(companySubscriptionService.transitionStatus).toHaveBeenCalledTimes(
+      1,
+    );
     expect(webhookEvent.upsert).toHaveBeenCalledTimes(1);
   });
 
@@ -663,8 +670,7 @@ describe('WebhookEngineService already-applied convergence (G13-03-09-01)', () =
       subscriptionRepository,
       webhookEvent,
     } = makeConvergenceEngine({
-      findByCompanyImpl: async () =>
-        ++reads === 1 ? pastDueSub : activeSub,
+      findByCompanyImpl: async () => (++reads === 1 ? pastDueSub : activeSub),
       transitionImpl: async () => {
         throw new BadRequestException(
           'Cannot transition from ACTIVE to ACTIVE',
@@ -684,7 +690,9 @@ describe('WebhookEngineService already-applied convergence (G13-03-09-01)', () =
       expect.objectContaining({ providerCustomerId: 'cus_1' }),
     );
     expect(webhookEvent.upsert).toHaveBeenCalledTimes(1);
-    expect(companySubscriptionService.transitionStatus).toHaveBeenCalledTimes(1);
+    expect(companySubscriptionService.transitionStatus).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('should converge a subscription.updated retry already at the target state', async () => {

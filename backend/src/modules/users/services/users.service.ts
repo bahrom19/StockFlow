@@ -101,9 +101,7 @@ export class UsersService {
       );
       if (!scoped) {
         // Defensive: member was just created in this transaction.
-        throw new NotFoundException(
-          `User with id ${createdUser.id} not found`,
-        );
+        throw new NotFoundException(`User with id ${createdUser.id} not found`);
       }
 
       return UserEntity.fromPrisma(scoped);

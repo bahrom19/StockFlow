@@ -114,7 +114,12 @@ export class PurchaseReturnController {
     @Body() dto: UpdatePurchaseReturnDto,
     @CurrentUser() currentUser: JwtPayload,
   ): Promise<PurchaseReturnEntity> {
-    return this.purchaseReturnService.update(id, dto, currentUser.companyId, currentUser.userId);
+    return this.purchaseReturnService.update(
+      id,
+      dto,
+      currentUser.companyId,
+      currentUser.userId,
+    );
   }
 
   @Delete(':id')
@@ -160,7 +165,9 @@ export class PurchaseReturnController {
   // G15-02-B: Cancel a COMPLETED purchase return with full reversal
   @Post(':id/cancel')
   @RequirePermission('purchasing:update')
-  @ApiOperation({ summary: 'Cancel a completed purchase return (full reversal)' })
+  @ApiOperation({
+    summary: 'Cancel a completed purchase return (full reversal)',
+  })
   @ApiParam({ name: 'id', type: 'string' })
   @ApiResponse({
     status: HttpStatus.OK,

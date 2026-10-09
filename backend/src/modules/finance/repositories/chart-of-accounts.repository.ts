@@ -169,8 +169,7 @@ export class ChartOfAccountsRepository {
         where: { id, companyId },
         select: { id: true },
       });
-      if (!owned)
-        throw new NotFoundException('Chart of account not found');
+      if (!owned) throw new NotFoundException('Chart of account not found');
       await prisma.chartOfAccount.update({ where: { id }, data: relationData });
     }
 

@@ -196,10 +196,7 @@ describe('CashShiftService.posting — G15-07-C3-B', () => {
     expect(lines[1]).toEqual(
       expect.objectContaining({ accountId: 'acc-6000', credit: '50.0000' }),
     );
-    expect(calendar.ensureCurrentCalendar).toHaveBeenCalledWith(
-      companyId,
-      tx,
-    );
+    expect(calendar.ensureCurrentCalendar).toHaveBeenCalledWith(companyId, tx);
     expect(auditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({
         companyId,
@@ -284,7 +281,8 @@ describe('CashShiftService.posting — G15-07-C3-B', () => {
       if (where?.id === 'acc-drawer')
         return chartRow('acc-drawer', '1001', 'ASSET');
       if (where?.id) return chartRow(where.id, '6000', 'EXPENSE');
-      if (where?.code) return chartRow(`acc-${where.code}`, where.code, 'ASSET');
+      if (where?.code)
+        return chartRow(`acc-${where.code}`, where.code, 'ASSET');
       return null;
     });
 
@@ -399,7 +397,8 @@ describe('CashShiftService.posting — G15-07-C3-B', () => {
     openShift();
     tx.chartOfAccount.findFirst.mockImplementation(async ({ where }: any) => {
       if (where?.code === '6200') return null;
-      if (where?.code) return chartRow(`acc-${where.code}`, where.code, 'ASSET');
+      if (where?.code)
+        return chartRow(`acc-${where.code}`, where.code, 'ASSET');
       return null;
     });
 
@@ -475,7 +474,8 @@ describe('CashShiftService.posting — G15-07-C3-B', () => {
     tx.chartOfAccount.findFirst.mockImplementation(async ({ where }: any) => {
       if (where?.id === 'acc-dead') return null;
       if (where?.id) return chartRow(where.id, '6000', 'EXPENSE');
-      if (where?.code) return chartRow(`acc-${where.code}`, where.code, 'ASSET');
+      if (where?.code)
+        return chartRow(`acc-${where.code}`, where.code, 'ASSET');
       return null;
     });
     await service.cashIn(dto(), userId, companyId, warehouseId);
@@ -526,7 +526,13 @@ describe('CashShiftService.posting — G15-07-C3-B', () => {
       body: stored,
     });
 
-    const result = await service.cashIn(dto(), userId, companyId, warehouseId, 'k');
+    const result = await service.cashIn(
+      dto(),
+      userId,
+      companyId,
+      warehouseId,
+      'k',
+    );
     expect(result).toEqual(stored);
     expect(glPost).not.toHaveBeenCalled();
     expect(repo.update).not.toHaveBeenCalled();

@@ -29,7 +29,9 @@ describe('SupplierExposureController', () => {
       openPoCount: 0,
       byCurrency: [],
     };
-    const serviceMock = { getOpenPoExposure: jest.fn().mockResolvedValue(expected) };
+    const serviceMock = {
+      getOpenPoExposure: jest.fn().mockResolvedValue(expected),
+    };
     const controller = new SupplierExposureController(
       serviceMock as unknown as SupplierExposureService,
     );

@@ -320,8 +320,14 @@ describe('FiscalCalendarService', () => {
     jest.useFakeTimers({ now: new Date('2026-09-15T12:00:00Z') });
 
     const [r1, r2] = await Promise.all([
-      service.ensureCurrentCalendar(companyId, mockTx as unknown as Prisma.TransactionClient),
-      service.ensureCurrentCalendar(companyId, mockTx as unknown as Prisma.TransactionClient),
+      service.ensureCurrentCalendar(
+        companyId,
+        mockTx as unknown as Prisma.TransactionClient,
+      ),
+      service.ensureCurrentCalendar(
+        companyId,
+        mockTx as unknown as Prisma.TransactionClient,
+      ),
     ]);
 
     // Both calls use upsert — DB uniqueness ensures exactly one row
@@ -337,8 +343,14 @@ describe('FiscalCalendarService', () => {
     jest.useFakeTimers({ now: new Date('2026-09-15T12:00:00Z') });
 
     const [r1, r2] = await Promise.all([
-      service.ensureCurrentCalendar(companyId, mockTx as unknown as Prisma.TransactionClient),
-      service.ensureCurrentCalendar(companyId, mockTx as unknown as Prisma.TransactionClient),
+      service.ensureCurrentCalendar(
+        companyId,
+        mockTx as unknown as Prisma.TransactionClient,
+      ),
+      service.ensureCurrentCalendar(
+        companyId,
+        mockTx as unknown as Prisma.TransactionClient,
+      ),
     ]);
 
     expect(mockTx.fiscalYear.upsert).toHaveBeenCalledTimes(2);
@@ -352,8 +364,14 @@ describe('FiscalCalendarService', () => {
 
     // Simulate two instances calling simultaneously
     const results = await Promise.all([
-      service.ensureCurrentCalendar('comp-a', mockTx as unknown as Prisma.TransactionClient),
-      service.ensureCurrentCalendar('comp-b', mockTx as unknown as Prisma.TransactionClient),
+      service.ensureCurrentCalendar(
+        'comp-a',
+        mockTx as unknown as Prisma.TransactionClient,
+      ),
+      service.ensureCurrentCalendar(
+        'comp-b',
+        mockTx as unknown as Prisma.TransactionClient,
+      ),
     ]);
 
     // Different companies → different rows

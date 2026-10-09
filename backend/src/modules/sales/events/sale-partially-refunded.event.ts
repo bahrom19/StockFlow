@@ -12,9 +12,7 @@ import { randomUUID } from 'crypto';
  * keeps using the unchanged `SaleRefundedEvent` (`sale.refunded`); the two
  * inventory events are mutually exclusive per refund operation.
  */
-export class SalePartiallyRefundedEvent
-  implements DomainEvent<SalePartiallyRefundedEventPayload>
-{
+export class SalePartiallyRefundedEvent implements DomainEvent<SalePartiallyRefundedEventPayload> {
   readonly eventName = 'sale.partially_refunded';
   readonly eventId: string;
   readonly occurredOn: Date;

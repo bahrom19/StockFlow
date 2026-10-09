@@ -111,9 +111,7 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
           Promise.resolve(ids.map((id) => productRow(id))),
         ),
       createInventoryCount: jest.fn().mockResolvedValue({ id: 'count-1' }),
-      createInventoryCountItem: jest
-        .fn()
-        .mockResolvedValue({ id: 'item-1' }),
+      createInventoryCountItem: jest.fn().mockResolvedValue({ id: 'item-1' }),
       findInventoryCountById: jest.fn(),
       updateInventoryCount: jest.fn().mockResolvedValue({}),
       findStockByProductAndWarehouse: jest.fn(),
@@ -269,7 +267,12 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       repo.findWarehouseById.mockResolvedValueOnce(null);
 
       await expect(
-        service.complete('count-1', { rowVersion: 0 } as any, COMPANY_ID, USER_ID),
+        service.complete(
+          'count-1',
+          { rowVersion: 0 } as any,
+          COMPANY_ID,
+          USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expect(repo.findWarehouseById).toHaveBeenCalledWith(
@@ -287,7 +290,12 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       repo.findProductsByIds.mockResolvedValueOnce([productRow('prod-1')]);
 
       await expect(
-        service.complete('count-1', { rowVersion: 0 } as any, COMPANY_ID, USER_ID),
+        service.complete(
+          'count-1',
+          { rowVersion: 0 } as any,
+          COMPANY_ID,
+          USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expectNoCompletionSideEffects();
@@ -303,7 +311,12 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       });
 
       await expect(
-        service.complete('count-1', { rowVersion: 0 } as any, COMPANY_ID, USER_ID),
+        service.complete(
+          'count-1',
+          { rowVersion: 0 } as any,
+          COMPANY_ID,
+          USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expectNoCompletionSideEffects();
@@ -316,7 +329,12 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       repo.findWarehouseById.mockResolvedValueOnce(null);
 
       await expect(
-        service.complete('count-1', { rowVersion: 0 } as any, COMPANY_ID, USER_ID),
+        service.complete(
+          'count-1',
+          { rowVersion: 0 } as any,
+          COMPANY_ID,
+          USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expectNoCompletionSideEffects();
@@ -329,7 +347,12 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       repo.findProductsByIds.mockResolvedValueOnce([]);
 
       await expect(
-        service.complete('count-1', { rowVersion: 0 } as any, COMPANY_ID, USER_ID),
+        service.complete(
+          'count-1',
+          { rowVersion: 0 } as any,
+          COMPANY_ID,
+          USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expectNoCompletionSideEffects();
@@ -341,10 +364,17 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       );
       // Same-company but inactive: must be rejected before status update,
       // Stock reads/writes, movement, audit or events.
-      repo.findProductsByIds.mockResolvedValueOnce([inactiveProductRow('prod-1')]);
+      repo.findProductsByIds.mockResolvedValueOnce([
+        inactiveProductRow('prod-1'),
+      ]);
 
       await expect(
-        service.complete('count-1', { rowVersion: 0 } as any, COMPANY_ID, USER_ID),
+        service.complete(
+          'count-1',
+          { rowVersion: 0 } as any,
+          COMPANY_ID,
+          USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expect(repo.findProductsByIds).toHaveBeenCalledWith(
@@ -362,7 +392,12 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       repo.findWarehouseById.mockResolvedValueOnce(null);
 
       await expect(
-        service.complete('count-1', { rowVersion: 0 } as any, COMPANY_ID, USER_ID),
+        service.complete(
+          'count-1',
+          { rowVersion: 0 } as any,
+          COMPANY_ID,
+          USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expect(repo.createStock).not.toHaveBeenCalled();
@@ -376,7 +411,12 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       repo.findWarehouseById.mockResolvedValueOnce(null);
 
       await expect(
-        service.complete('count-1', { rowVersion: 0 } as any, COMPANY_ID, USER_ID),
+        service.complete(
+          'count-1',
+          { rowVersion: 0 } as any,
+          COMPANY_ID,
+          USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expect(repo.createStockMovement).not.toHaveBeenCalled();
@@ -389,7 +429,12 @@ describe('InventoryCountService — tenant ownership (G16-B-02 PH3 B02-08)', () 
       repo.findWarehouseById.mockResolvedValueOnce(null);
 
       await expect(
-        service.complete('count-1', { rowVersion: 0 } as any, COMPANY_ID, USER_ID),
+        service.complete(
+          'count-1',
+          { rowVersion: 0 } as any,
+          COMPANY_ID,
+          USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
 
       expect(eventBus.publish).not.toHaveBeenCalled();

@@ -127,8 +127,7 @@ export class ReportsRepository {
       deletedAt: null,
       status: 'RECEIVED',
     };
-    if (currency)
-      where.currency = currency as Prisma.EnumCurrencyFilter;
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
     return this.prismaService.purchaseOrder.aggregate({
       where,
       _sum: { grandTotal: true },
@@ -522,8 +521,7 @@ export class ReportsRepository {
       if (dateFrom) where.createdAt.gte = dateFrom;
       if (dateTo) where.createdAt.lte = dateTo;
     }
-    if (currency)
-      where.currency = currency as Prisma.EnumCurrencyFilter;
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
     return this.prismaService.purchaseOrder.groupBy({
       by: ['supplierId'],
       where,
@@ -644,8 +642,7 @@ export class ReportsRepository {
       if (dateFrom) where.createdAt.gte = dateFrom;
       if (dateTo) where.createdAt.lte = dateTo;
     }
-    if (currency)
-      where.currency = currency as Prisma.EnumCurrencyFilter;
+    if (currency) where.currency = currency as Prisma.EnumCurrencyFilter;
     return where;
   }
 

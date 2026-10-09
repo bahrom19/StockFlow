@@ -55,13 +55,21 @@ export class SupplierPaymentAllocationsService {
   ): Promise<SupplierPaymentAllocationEntity> {
     const allocationAmount = new Decimal(amount);
     if (allocationAmount.lte(0)) {
-      throw new BadRequestException('Allocation amount must be greater than zero');
+      throw new BadRequestException(
+        'Allocation amount must be greater than zero',
+      );
     }
 
     // 1. Verify payment exists and belongs to the same company/supplier
-    const payment = await this.paymentsRepo.findById(paymentId, supplierId, companyId);
+    const payment = await this.paymentsRepo.findById(
+      paymentId,
+      supplierId,
+      companyId,
+    );
     if (!payment) {
-      throw new NotFoundException(`Payment ${paymentId} not found for this supplier`);
+      throw new NotFoundException(
+        `Payment ${paymentId} not found for this supplier`,
+      );
     }
 
     if (payment.deletedAt) {
@@ -79,7 +87,9 @@ export class SupplierPaymentAllocationsService {
     });
 
     if (!invoice) {
-      throw new NotFoundException(`Purchase invoice ${purchaseInvoiceId} not found for this supplier`);
+      throw new NotFoundException(
+        `Purchase invoice ${purchaseInvoiceId} not found for this supplier`,
+      );
     }
 
     // 3. Invoice must not be CANCELLED
@@ -131,7 +141,14 @@ export class SupplierPaymentAllocationsService {
     allocationAmount: Decimal;
     tx: Prisma.TransactionClient;
   }): Promise<SupplierPaymentAllocationEntity> {
-    const { supplierId, companyId, paymentId, purchaseInvoiceId, allocationAmount, tx } = params;
+    const {
+      supplierId,
+      companyId,
+      paymentId,
+      purchaseInvoiceId,
+      allocationAmount,
+      tx,
+    } = params;
 
     // G14-02-12: shared invoice lock FIRST (canonical order:
     // invoice → payment). Serializes coverage reads below against
@@ -148,7 +165,9 @@ export class SupplierPaymentAllocationsService {
     `;
 
     if (lockedInvoice.length === 0) {
-      throw new NotFoundException(`Purchase invoice ${purchaseInvoiceId} not found`);
+      throw new NotFoundException(
+        `Purchase invoice ${purchaseInvoiceId} not found`,
+      );
     }
 
     // 5. Lock the payment row with SELECT ... FOR UPDATE
@@ -183,7 +202,7 @@ export class SupplierPaymentAllocationsService {
     if (newTotal.gt(paymentAmount)) {
       throw new BadRequestException(
         `Allocation would exceed payment amount. Payment: ${paymentAmount.toString()}, ` +
-        `already allocated: ${totalAllocated.toString()}, requested: ${allocationAmount.toString()}`,
+          `already allocated: ${totalAllocated.toString()}, requested: ${allocationAmount.toString()}`,
       );
     }
 
@@ -215,7 +234,9 @@ export class SupplierPaymentAllocationsService {
       _sum: { amount: true },
     });
 
-    const totalInvoiceAllocated = new Decimal(invoiceAllocated._sum.amount ?? 0);
+    const totalInvoiceAllocated = new Decimal(
+      invoiceAllocated._sum.amount ?? 0,
+    );
     const newInvoiceTotal = totalInvoiceAllocated.add(allocationAmount);
     const invoiceGrandTotal = new Decimal(currentInvoice.grandTotal);
     const invoicePaidAmount = new Decimal(currentInvoice.paidAmount);
@@ -224,7 +245,7 @@ export class SupplierPaymentAllocationsService {
     if (newInvoiceTotal.gt(invoiceGrandTotal)) {
       throw new BadRequestException(
         `Allocation would exceed invoice grand total. Invoice: ${invoiceGrandTotal.toString()}, ` +
-        `already allocated: ${totalInvoiceAllocated.toString()}, requested: ${allocationAmount.toString()}`,
+          `already allocated: ${totalInvoiceAllocated.toString()}, requested: ${allocationAmount.toString()}`,
       );
     }
 
@@ -234,7 +255,7 @@ export class SupplierPaymentAllocationsService {
     if (paidPlusNew.gt(invoiceGrandTotal)) {
       throw new BadRequestException(
         `Allocation would exceed invoice outstanding. Invoice grand total: ${invoiceGrandTotal.toString()}, ` +
-        `already paid: ${invoicePaidAmount.toString()}, requested: ${allocationAmount.toString()}`,
+          `already paid: ${invoicePaidAmount.toString()}, requested: ${allocationAmount.toString()}`,
       );
     }
 
@@ -269,12 +290,21 @@ export class SupplierPaymentAllocationsService {
     // companyId, so no separate supplier identity lookup is needed — an
     // archived supplier's allocation history stays readable through the
     // existing tenant-scoped payment gate.
-    const payment = await this.paymentsRepo.findById(paymentId, supplierId, companyId);
+    const payment = await this.paymentsRepo.findById(
+      paymentId,
+      supplierId,
+      companyId,
+    );
     if (!payment) {
-      throw new NotFoundException(`Payment ${paymentId} not found for this supplier`);
+      throw new NotFoundException(
+        `Payment ${paymentId} not found for this supplier`,
+      );
     }
 
-    const allocations = await this.allocationsRepo.findByPayment(paymentId, companyId);
+    const allocations = await this.allocationsRepo.findByPayment(
+      paymentId,
+      companyId,
+    );
     return allocations.map(toAllocationEntity);
   }
 
@@ -297,10 +327,15 @@ export class SupplierPaymentAllocationsService {
     });
 
     if (!invoice) {
-      throw new NotFoundException(`Purchase invoice ${purchaseInvoiceId} not found for this supplier`);
+      throw new NotFoundException(
+        `Purchase invoice ${purchaseInvoiceId} not found for this supplier`,
+      );
     }
 
-    const allocations = await this.allocationsRepo.findByInvoice(purchaseInvoiceId, companyId);
+    const allocations = await this.allocationsRepo.findByInvoice(
+      purchaseInvoiceId,
+      companyId,
+    );
     return allocations.map(toAllocationEntity);
   }
 
@@ -308,11 +343,11 @@ export class SupplierPaymentAllocationsService {
    * Soft-delete all allocations for a payment (used during void).
    * This is called internally by the payment void flow.
    */
-  async voidAllocations(
-    paymentId: string,
-    companyId: string,
-  ): Promise<number> {
-    const count = await this.allocationsRepo.softDeleteByPayment(paymentId, companyId);
+  async voidAllocations(paymentId: string, companyId: string): Promise<number> {
+    const count = await this.allocationsRepo.softDeleteByPayment(
+      paymentId,
+      companyId,
+    );
     this.logger.log(`Voided ${count} allocations for payment ${paymentId}`);
     return count;
   }
