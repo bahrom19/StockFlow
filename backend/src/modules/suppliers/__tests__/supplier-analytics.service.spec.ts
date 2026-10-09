@@ -40,6 +40,10 @@ describe('SupplierAnalyticsService', () => {
 
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+      // G16-AA-2B: active-first, archived-allowed identity gate. Default null
+      // keeps the existing "supplier not found" assertions (both lookups miss
+      // → 404) without weakening them.
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
 
     service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
@@ -405,6 +409,10 @@ describe('SupplierAnalyticsService.getProductPurchases', () => {
     };
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+      // G16-AA-2B: active-first, archived-allowed identity gate. Default null
+      // keeps the existing "supplier not found" assertions (both lookups miss
+      // → 404) without weakening them.
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
     service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
@@ -610,6 +618,10 @@ describe('SupplierAnalyticsService.getReliability', () => {
     };
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+      // G16-AA-2B: active-first, archived-allowed identity gate. Default null
+      // keeps the existing "supplier not found" assertions (both lookups miss
+      // → 404) without weakening them.
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
     service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
@@ -830,6 +842,10 @@ describe('SupplierAnalyticsService.getPriceHistory', () => {
     };
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+      // G16-AA-2B: active-first, archived-allowed identity gate. Default null
+      // keeps the existing "supplier not found" assertions (both lookups miss
+      // → 404) without weakening them.
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
     service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
@@ -970,6 +986,10 @@ describe('SupplierAnalyticsService.getPaymentAging', () => {
     };
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+      // G16-AA-2B: active-first, archived-allowed identity gate. Default null
+      // keeps the existing "supplier not found" assertions (both lookups miss
+      // → 404) without weakening them.
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
     service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
@@ -1347,6 +1367,10 @@ describe('SupplierAnalyticsService.getReturnSummary', () => {
     };
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+      // G16-AA-2B: active-first, archived-allowed identity gate. Default null
+      // keeps the existing "supplier not found" assertions (both lookups miss
+      // → 404) without weakening them.
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
     service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
@@ -1491,6 +1515,10 @@ describe('SupplierAnalyticsService.getPerformance', () => {
     };
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+      // G16-AA-2B: active-first, archived-allowed identity gate. Default null
+      // keeps the existing "supplier not found" assertions (both lookups miss
+      // → 404) without weakening them.
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
     service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
@@ -1664,6 +1692,10 @@ describe('SupplierAnalyticsService.getOrderPipeline', () => {
     };
     mockSuppliersRepo = {
       findById: jest.fn().mockResolvedValue({ id: supplierId, companyId }),
+      // G16-AA-2B: active-first, archived-allowed identity gate. Default null
+      // keeps the existing "supplier not found" assertions (both lookups miss
+      // → 404) without weakening them.
+      findArchivedSupplierById: jest.fn().mockResolvedValue(null),
     };
     service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
   });
@@ -1776,5 +1808,376 @@ describe('SupplierAnalyticsService.getOrderPipeline', () => {
     const result = await service.getOrderPipeline(supplierId, companyId);
 
     expect(result.recentOrders).toHaveLength(10);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// G16-AA-2B: Archived Supplier Analytics
+//
+// The supplier identity gate in all eight read-only analytics methods is
+// archived-allowed via the SHARED resolveSupplierForFinancialRead helper:
+// active suppliers resolve via the canonical findById() first (exact existing
+// semantics), and only on a miss does the archived lookup run. Tenant scoping,
+// downstream filters, and the 404 contract are unchanged.
+//
+// These tests are additive; every pre-existing assertion above is untouched.
+// ─────────────────────────────────────────────────────────────────────────
+describe('G16-AA-2B archived supplier analytics access', () => {
+  let service: SupplierAnalyticsService;
+  let mockPrisma: any;
+  let mockSuppliersRepo: any;
+
+  const companyId = 'company-1';
+  const companyBId = 'company-2';
+  const supplierId = 'supplier-archived-1';
+  const productId = 'product-1';
+
+  // Soft-deleted (archived) supplier of company-1. findById never resolves it
+  // because the canonical gate filters deletedAt IS NULL.
+  const archivedSupplier = {
+    id: supplierId,
+    companyId,
+    companyName: 'Archived Supplier LLP',
+    deletedAt: new Date('2026-01-15'),
+  };
+
+  const activeSupplier = {
+    id: supplierId,
+    companyId,
+    companyName: 'Active Supplier LLP',
+    deletedAt: null,
+  };
+
+  /** Full prisma mock covering every downstream call of the eight methods. */
+  function buildPrisma(): any {
+    return {
+      purchaseInvoice: { aggregate: jest.fn().mockResolvedValue({ _sum: {}, _count: { id: 0 }, _min: {}, _max: {} }) },
+      purchaseInvoiceItem: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      purchaseReturn: { aggregate: jest.fn().mockResolvedValue({ _sum: {}, _count: 0 }) },
+      purchaseOrder: {
+        aggregate: jest.fn().mockResolvedValue({ _count: { id: 0 }, _sum: { grandTotal: null } }),
+        groupBy: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      supplierPayment: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
+      supplierPaymentAllocation: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
+      product: { findFirst: jest.fn().mockResolvedValue({ id: productId, name: 'Milk 1L', sku: 'MLK-001' }) },
+      supplierProduct: { findFirst: jest.fn().mockResolvedValue(null) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+  }
+
+  beforeEach(() => {
+    mockPrisma = buildPrisma();
+    mockSuppliersRepo = {
+      // Active supplier never resolves here → forces the archived branch.
+      findById: jest.fn().mockResolvedValue(null),
+      findArchivedSupplierById: jest.fn().mockResolvedValue(archivedSupplier),
+    };
+    service = new SupplierAnalyticsService(mockPrisma, mockSuppliersRepo, mockCompaniesService);
+  });
+
+  const EIGHT_METHODS: Array<{ name: string; call: () => Promise<unknown> }> = [
+    { name: 'getPurchaseSummary', call: () => service.getPurchaseSummary(supplierId, companyId) },
+    { name: 'getProductPurchases', call: () => service.getProductPurchases(supplierId, companyId) },
+    { name: 'getReliability', call: () => service.getReliability(supplierId, companyId) },
+    { name: 'getPriceHistory', call: () => service.getPriceHistory(supplierId, companyId, productId) },
+    { name: 'getPaymentAging', call: () => service.getPaymentAging(supplierId, companyId) },
+    { name: 'getReturnSummary', call: () => service.getReturnSummary(supplierId, companyId) },
+    { name: 'getPerformance', call: () => service.getPerformance(supplierId, companyId) },
+    { name: 'getOrderPipeline', call: () => service.getOrderPipeline(supplierId, companyId) },
+  ];
+
+  // ── Archived supplier of the SAME tenant can read allowed history ──────
+
+  it.each(EIGHT_METHODS)('$name reads permitted history for an archived supplier of the same tenant', async ({ call }) => {
+    const result = await call();
+    expect(result).toBeDefined();
+    expect(mockSuppliersRepo.findById).toHaveBeenCalledWith(supplierId, companyId);
+    expect(mockSuppliersRepo.findArchivedSupplierById).toHaveBeenCalledWith(supplierId, companyId);
+  });
+
+  it('resolves an active supplier via the canonical findById and never consults the archived lookup', async () => {
+    mockSuppliersRepo.findById.mockResolvedValue(activeSupplier);
+
+    await service.getPurchaseSummary(supplierId, companyId);
+
+    expect(mockSuppliersRepo.findById).toHaveBeenCalledWith(supplierId, companyId);
+    expect(mockSuppliersRepo.findArchivedSupplierById).not.toHaveBeenCalled();
+  });
+
+  // ── Missing supplier and cross-tenant access remain 404 ─────────────────
+
+  it.each(EIGHT_METHODS)('$name still returns 404 when the supplier does not exist at all', async ({ call }) => {
+    mockSuppliersRepo.findById.mockResolvedValue(null);
+    mockSuppliersRepo.findArchivedSupplierById.mockResolvedValue(null);
+
+    await expect(call()).rejects.toThrow(NotFoundException);
+  });
+
+  it.each(EIGHT_METHODS)('$name still returns 404 for an archived supplier of ANOTHER tenant', async ({ call }) => {
+    // The repository lookups are tenant-scoped: they only match the requested
+    // companyId. A foreign supplier therefore resolves to null for company-1,
+    // exactly as if it did not exist.
+    mockSuppliersRepo.findById.mockImplementation(async (_id: string, cid: string) =>
+      cid === companyBId ? activeSupplier : null,
+    );
+    mockSuppliersRepo.findArchivedSupplierById.mockImplementation(async (_id: string, cid: string) =>
+      cid === companyBId ? archivedSupplier : null,
+    );
+
+    await expect(call()).rejects.toThrow(NotFoundException);
+    expect(mockSuppliersRepo.findArchivedSupplierById).toHaveBeenCalledWith(supplierId, companyId);
+  });
+
+  it('does not leak a foreign-tenant archived supplier through the identity gate', async () => {
+    mockSuppliersRepo.findArchivedSupplierById.mockResolvedValue(null);
+
+    await expect(service.getPurchaseSummary(supplierId, companyBId)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  // ── Downstream filters are preserved on the archived path ───────────────
+
+  it('getPurchaseSummary keeps companyId/supplierId/deletedAt/status/currency/date filters for an archived supplier', async () => {
+    await service.getPurchaseSummary(supplierId, companyId, '2026-01-01', '2026-06-30');
+
+    const invoiceWhere = mockPrisma.purchaseInvoice.aggregate.mock.calls[0]![0].where;
+    expect(invoiceWhere.supplierId).toBe(supplierId);
+    expect(invoiceWhere.companyId).toBe(companyId);
+    expect(invoiceWhere.deletedAt).toBeNull();
+    expect(invoiceWhere.status).toEqual({ in: ['APPROVED', 'PAID'] });
+    expect(invoiceWhere.currency).toBe('KZT');
+    expect(invoiceWhere.invoiceDate.gte).toEqual(new Date('2026-01-01'));
+    expect(invoiceWhere.invoiceDate.lte).toEqual(new Date('2026-06-30'));
+  });
+
+  it('getPurchaseSummary keeps base-currency + non-cancelled scoping of the return aggregate for an archived supplier', async () => {
+    await service.getPurchaseSummary(supplierId, companyId);
+
+    const returnWhere = mockPrisma.purchaseReturn.aggregate.mock.calls[0]![0].where;
+    expect(returnWhere.supplierId).toBe(supplierId);
+    expect(returnWhere.companyId).toBe(companyId);
+    expect(returnWhere.deletedAt).toBeNull();
+    expect(returnWhere.currency).toBe('KZT');
+    expect(returnWhere.status).toEqual({ in: ['APPROVED', 'COMPLETED'] });
+  });
+
+  it('getPaymentAging keeps tenant, soft-delete, status, base-currency and allocation filters for an archived supplier', async () => {
+    await service.getPaymentAging(supplierId, companyId);
+
+    const sql = String(mockPrisma.$queryRaw.mock.calls[0]![0]);
+    expect(sql).toContain('pi."supplierId" =');
+    expect(sql).toContain('pi."companyId" =');
+    expect(sql).toContain('pi."deletedAt" IS NULL');
+    expect(sql).toContain(`pi."status" IN ('APPROVED', 'PAID')`);
+    expect(sql).toContain('pi."currency" =');
+    // Outstanding basis stays allocation-based (G9-B1), not paidAmount.
+    expect(sql).toContain('COALESCE(spa."allocatedAmount", 0)');
+    expect(mockPrisma.supplierPaymentAllocation.aggregate).not.toHaveBeenCalled();
+  });
+
+  it('getProductPurchases keeps the isCancelled and deletedAt guards for an archived supplier', async () => {
+    await service.getProductPurchases(supplierId, companyId);
+
+    const sql = mockPrisma.$queryRaw.mock.calls.map((c: any[]) => String(c[0]));
+    expect(sql.length).toBeGreaterThan(0);
+
+    // The return-per-product statement keeps non-cancelled + status + tenant
+    // + soft-delete guards on the PurchaseReturn alias (pr).
+    const returnSql = sql.find((s: string) => s.includes('PurchaseReturnItem'))!;
+    expect(returnSql).toBeDefined();
+    expect(returnSql).toContain('pr."isCancelled" = false');
+    expect(returnSql).toContain('pr."deletedAt" IS NULL');
+    expect(returnSql).toContain(`pr."status" IN ('APPROVED', 'COMPLETED')`);
+    expect(returnSql).toContain('pr."companyId" =');
+    expect(returnSql).toContain('pr."supplierId" =');
+
+    // The invoice-side statements keep tenant + soft-delete + status guards on
+    // the PurchaseInvoice alias (pi).
+    const invoiceSql = sql.filter((s: string) => !s.includes('PurchaseReturnItem'));
+    expect(invoiceSql.length).toBeGreaterThan(0);
+    for (const statement of invoiceSql) {
+      expect(statement).toContain('pi."deletedAt" IS NULL');
+      expect(statement).toContain('pi."companyId" =');
+      expect(statement).toContain('pi."supplierId" =');
+      expect(statement).toContain(`pi."status" IN ('APPROVED', 'PAID')`);
+    }
+  });
+
+  it('getReliability keeps the PO status and receipt-completion guards for an archived supplier', async () => {
+    mockPrisma.purchaseOrder = {
+      aggregate: jest.fn().mockResolvedValue({ _count: { id: 0 } }),
+      groupBy: jest.fn().mockResolvedValue([]),
+    };
+    await service.getReliability(supplierId, companyId);
+
+    // Order-count/groupBy scoping: tenant + soft-delete + orderDate window.
+    const where = mockPrisma.purchaseOrder.aggregate.mock.calls[0]![0].where;
+    expect(where.supplierId).toBe(supplierId);
+    expect(where.companyId).toBe(companyId);
+    expect(where.deletedAt).toBeNull();
+    expect(where.orderDate).toBeDefined();
+
+    const groupWhere = mockPrisma.purchaseOrder.groupBy.mock.calls[0]![0].where;
+    expect(groupWhere.companyId).toBe(companyId);
+    expect(groupWhere.deletedAt).toBeNull();
+
+    // Delivery SQL keeps the PO status allowlist and COMPLETED-receipt rule.
+    const sql = String(mockPrisma.$queryRaw.mock.calls[0]![0]);
+    expect(sql).toContain('po."supplierId" =');
+    expect(sql).toContain('po."companyId" =');
+    expect(sql).toContain('po."deletedAt" IS NULL');
+    expect(sql).toContain(`gr.status = 'COMPLETED'`);
+    expect(sql).toContain('gr."deletedAt" IS NULL');
+    expect(sql).toContain(
+      `po.status IN ('APPROVED', 'ORDERED', 'PARTIALLY_RECEIVED', 'RECEIVED')`,
+    );
+  });
+
+  it('getOrderPipeline keeps tenant, soft-delete, orderDate and CANCELLED-value guards for an archived supplier', async () => {
+    await service.getOrderPipeline(supplierId, companyId);
+
+    const baseWhere = mockPrisma.purchaseOrder.aggregate.mock.calls[0]![0].where;
+    expect(baseWhere.supplierId).toBe(supplierId);
+    expect(baseWhere.companyId).toBe(companyId);
+    expect(baseWhere.deletedAt).toBeNull();
+    expect(baseWhere.orderDate).toBeDefined();
+
+    const valueWhere = mockPrisma.purchaseOrder.aggregate.mock.calls[1]![0].where;
+    expect(valueWhere.status).toEqual({ not: 'CANCELLED' });
+  });
+
+  it('getReturnSummary keeps the isCancelled guard for an archived supplier', async () => {
+    await service.getReturnSummary(supplierId, companyId);
+
+    const sql = mockPrisma.$queryRaw.mock.calls.map((c: any[]) => String(c[0]));
+    expect(sql.length).toBeGreaterThan(0);
+    expect(sql[0]).toContain('pr."isCancelled" = false');
+
+    const returnWhere = mockPrisma.purchaseReturn.aggregate.mock.calls[0]![0].where;
+    expect(returnWhere.companyId).toBe(companyId);
+    expect(returnWhere.supplierId).toBe(supplierId);
+    expect(returnWhere.deletedAt).toBeNull();
+  });
+
+  // ── getPerformance composes correctly for an archived supplier ──────────
+
+  it('getPerformance returns composed KPIs for an archived supplier when all components resolve', async () => {
+    jest.spyOn(service, 'getPurchaseSummary').mockResolvedValue({
+      netPurchaseSpend: '500000',
+      totalPurchasedQuantity: 120,
+      invoiceCount: 4,
+    } as any);
+    jest.spyOn(service, 'getReliability').mockResolvedValue({
+      onTimeDeliveryRate: 92,
+      averageLeadTimeDays: 3.5,
+      cancellationRate: 0,
+    } as any);
+    jest.spyOn(service, 'getPaymentAging').mockResolvedValue({
+      totalOutstanding: '150000',
+      overdueCount: 2,
+      aging: { overdue90plus: '25000' },
+    } as any);
+    jest.spyOn(service, 'getReturnSummary').mockResolvedValue({
+      amountReturnRate: 4,
+      quantityReturnRate: 2,
+      returnCount: 3,
+    } as any);
+
+    const result = await service.getPerformance(supplierId, companyId);
+
+    expect(result.purchase.netPurchaseSpend).toBe('500000');
+    expect(result.purchase.invoiceCount).toBe(4);
+    expect(result.delivery.onTimeDeliveryRate).toBe(92);
+    expect(result.financialRisk.totalOutstanding).toBe('150000');
+    expect(result.financialRisk.overdue90plus).toBe('25000');
+    expect(result.returns.returnCount).toBe(3);
+    // Only the outer gate + 4 component gates run the archived lookup.
+    expect(mockSuppliersRepo.findArchivedSupplierById).toHaveBeenCalledTimes(1);
+  });
+
+  it('getPerformance still returns 404 for an archived supplier of another tenant even though components would succeed', async () => {
+    mockSuppliersRepo.findArchivedSupplierById.mockResolvedValue(null);
+    const summarySpy = jest.spyOn(service, 'getPurchaseSummary');
+    const reliabilitySpy = jest.spyOn(service, 'getReliability');
+
+    await expect(service.getPerformance(supplierId, companyId)).rejects.toThrow(
+      NotFoundException,
+    );
+    // Gate fails first — no downstream work is performed.
+    expect(summarySpy).not.toHaveBeenCalled();
+    expect(reliabilitySpy).not.toHaveBeenCalled();
+  });
+
+  // ── getPriceHistory contract on the archived path ───────────────────────
+
+  it('getPriceHistory returns historical price points for an archived supplier when an active SupplierProduct exists', async () => {
+    mockPrisma.supplierProduct.findFirst.mockResolvedValue({ purchasePrice: new Decimal('450') });
+    mockPrisma.$queryRaw.mockResolvedValueOnce([
+      {
+        invoiceDate: new Date('2026-02-01'),
+        invoiceNumber: 'INV-ARCH-1',
+        unitCost: new Decimal('400'),
+        quantity: BigInt(10),
+        total: new Decimal('4000'),
+      },
+    ]);
+
+    const result = await service.getPriceHistory(supplierId, companyId, productId);
+
+    expect(result.currentQuotedPrice).toBe('450');
+    expect(result.pricePoints).toHaveLength(1);
+    // Product lookup stays active + tenant-scoped (unchanged contract).
+    expect(mockPrisma.product.findFirst).toHaveBeenCalledWith({
+      where: { id: productId, companyId, deletedAt: null },
+    });
+    expect(mockPrisma.supplierProduct.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companyId, supplierId, productId, deletedAt: null },
+      }),
+    );
+  });
+
+  it('getPriceHistory still returns history with currentQuotedPrice null when no active SupplierProduct exists', async () => {
+    // Pre-existing contract: a missing/soft-deleted SupplierProduct is NOT
+    // fatal — the current quote becomes null and the invoice history is intact.
+    mockPrisma.supplierProduct.findFirst.mockResolvedValue(null);
+    mockPrisma.$queryRaw.mockResolvedValueOnce([
+      {
+        invoiceDate: new Date('2026-02-01'),
+        invoiceNumber: 'INV-ARCH-1',
+        unitCost: new Decimal('400'),
+        quantity: BigInt(10),
+        total: new Decimal('4000'),
+      },
+    ]);
+
+    const result = await service.getPriceHistory(supplierId, companyId, productId);
+
+    expect(result.currentQuotedPrice).toBeNull();
+    expect(result.pricePoints).toHaveLength(1);
+    expect(result.averageUnitCost).toBe('400');
+  });
+
+  it('getPriceHistory still returns 404 for a missing product even when the supplier is archived', async () => {
+    mockPrisma.product.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.getPriceHistory(supplierId, companyId, 'product-missing'),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('getPriceHistory does not widen the Product lookup scope for an archived supplier', async () => {
+    await service.getPriceHistory(supplierId, companyId, productId);
+
+    const productWhere = mockPrisma.product.findFirst.mock.calls[0]![0].where;
+    // Supplier archival must NOT leak into the Product identity gate.
+    expect(productWhere).toEqual({ id: productId, companyId, deletedAt: null });
+    expect(productWhere).not.toHaveProperty('supplierId');
   });
 });

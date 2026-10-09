@@ -4,6 +4,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { CompaniesService } from '../../companies/services/companies.service';
+import { resolveSupplierForFinancialRead } from './supplier-statement.service';
 import { SupplierPurchaseSummaryEntity, MonthlySpendEntity } from '../entities/supplier-purchase-summary.entity';
 import { SupplierProductPurchaseEntity, SupplierProductPurchaseListEntity } from '../entities/supplier-product-purchase.entity';
 import { SupplierReliabilityEntity, RecentDeliveryEntity } from '../entities/supplier-reliability.entity';
@@ -40,7 +41,15 @@ export class SupplierAnalyticsService {
     dateTo?: string,
   ): Promise<SupplierPurchaseSummaryEntity> {
     // 1. Verify supplier belongs to company
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // Tenant-scoped identity gate (G16-AA-2A): archived (soft-deleted)
+    // suppliers remain readable for historical purchase analytics; cross-company
+    // access still lands as 404. Downstream filters (deletedAt, status,
+    // currency, date range) are unchanged.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
@@ -246,8 +255,13 @@ export class SupplierAnalyticsService {
     sortBy = 'totalPurchaseSpend',
     sortOrder: 'asc' | 'desc' = 'desc',
   ): Promise<SupplierProductPurchaseListEntity> {
-    // 1. Verify supplier
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // Tenant-scoped identity gate (G16-AA-2A): archived suppliers stay readable
+    // for product-purchase history; cross-company access still lands as 404.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
@@ -404,8 +418,15 @@ export class SupplierAnalyticsService {
     dateFrom?: string,
     dateTo?: string,
   ): Promise<SupplierReliabilityEntity> {
-    // 1. Verify supplier
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // Tenant-scoped identity gate (G16-AA-2A): archived suppliers stay readable
+    // for delivery reliability history; cross-company access still lands as 404.
+    // Downstream filters (PO status, orderDate, receipt.completed, isCancelled)
+    // are unchanged.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
@@ -587,8 +608,15 @@ export class SupplierAnalyticsService {
     dateFrom?: string,
     dateTo?: string,
   ): Promise<SupplierPriceHistoryEntity> {
-    // 1. Verify supplier belongs to company
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // Tenant-scoped identity gate (G16-AA-2A): archived suppliers stay readable
+    // for historical product price history; cross-company access still lands as
+    // 404. Product must still be active/tenant-scoped (unchanged). Supplier
+    // archived status does not extend Product lookup scope.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
@@ -689,8 +717,15 @@ export class SupplierAnalyticsService {
     supplierId: string,
     companyId: string,
   ): Promise<SupplierPaymentAgingEntity> {
-    // 1. Verify supplier belongs to company
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // Tenant-scoped identity gate (G16-AA-2A): archived suppliers stay readable
+    // for payment aging / overdue history; cross-company access still lands as
+    // 404. Downstream filters (invoice status, currency, allocated outstanding)
+    // are unchanged.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
@@ -871,8 +906,13 @@ export class SupplierAnalyticsService {
     dateFrom?: string,
     dateTo?: string,
   ): Promise<SupplierReturnSummaryEntity> {
-    // 1. Verify supplier belongs to company
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // Tenant-scoped identity gate (G16-AA-2A): archived suppliers stay readable
+    // for historical return analysis; cross-company access still lands as 404.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
@@ -1003,8 +1043,16 @@ export class SupplierAnalyticsService {
     dateFrom?: string,
     dateTo?: string,
   ): Promise<SupplierPerformanceEntity> {
-    // 1. Verify supplier belongs to company
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // Tenant-scoped identity gate (G16-AA-2A): archived suppliers stay readable
+    // for the composited performance KPI; cross-company access still lands as
+    // 404. getPerformance delegates to the four analytics read methods, so the
+    // archived-allowed behaviour is exercised only when each component supports
+    // it (see spec).
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
@@ -1059,8 +1107,15 @@ export class SupplierAnalyticsService {
     dateTo?: string,
     status?: string,
   ): Promise<SupplierOrderPipelineEntity> {
-    // 1. Verify supplier
-    const supplier = await this.suppliersRepo.findById(supplierId, companyId);
+    // Tenant-scoped identity gate (G16-AA-2A): archived suppliers stay readable
+    // for order pipeline (historical order history); cross-company access still
+    // lands as 404. Downstream filters (PO status, orderDate, deletedAt) are
+    // unchanged.
+    const supplier = await resolveSupplierForFinancialRead(
+      this.suppliersRepo,
+      supplierId,
+      companyId,
+    );
     if (!supplier) {
       throw new NotFoundException(`Supplier ${supplierId} not found`);
     }
