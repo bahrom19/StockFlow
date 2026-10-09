@@ -1,0 +1,67 @@
+-- G16-CI-1D: preconditions for the three unreplayable AI migrations.
+--
+-- WHY THIS MIGRATION EXISTS
+-- -----------------------
+-- Three migrations in this repository cannot be replayed on an empty database:
+--   20260907120000_add_ai_conversations
+--       REFERENCES "companies", REFERENCES "users"  -> created by NO migration
+--   20260907120000_add_ai_idempotency_request
+--       REFERENCES "ai_conversation" (singular)      -> created by NO migration
+--   20260907160000_make_conversation_id_nullable
+--       ALTER TABLE "ai_idempotency_request"         -> depends on the above
+--
+-- They use snake_case identifiers while init_core creates PascalCase
+-- ("Company", "User"), and 20260907120000_add_ai_idempotency_request
+-- references a singular table that even the preceding migration never creates
+-- (it creates the plural "ai_conversations"). The result is SQLSTATE 42P01
+-- "relation does not exist" and Prisma migrate deploy ABORTS THE ENTIRE RUN
+-- on the first failure.
+--
+-- That abort is why 20260929130000_g16m_ai_schema_repair — the migration that
+-- restores the canonical PascalCase AiConversation / AiMessage /
+-- AiIdempotencyRequest objects — never executes on a fresh database, and why
+-- no migration appended after it can ever help. This migration restores the
+-- missing preconditions so the three broken migrations can replay.
+--
+-- TIMESTAMP (deliberately back-dated to 20260907110000)
+-- -----------------------------------------------------
+-- Prisma orders migrations lexicographically by directory name. The only way
+-- to introduce a precondition without rewriting migration history is to place
+-- it BEFORE the broken pair:
+--     20260906120000_add_notifications_foundation
+--     20260907110000_g16ci1d_ai_shim_precondition   <- this one
+--     20260907120000_add_ai_conversations           <- broken
+--     20260907120000_add_ai_idempotency_request     <- broken
+--     20260907160000_make_conversation_id_nullable  <- broken
+-- A back-dated name is therefore intentional and required, not an accident.
+-- It is unique: verified against every existing migration directory.
+--
+-- KNOWN PRE-EXISTING DUPLICATE TIMESTAMP (NOT INTRODUCED HERE)
+-- ----------------------------------------------------------
+-- 20260907120000_add_ai_conversations and
+-- 20260907120000_add_ai_idempotency_request share the same timestamp
+-- (introduced by f25a978 and 1748118). Prisma breaks the tie
+-- alphabetically, so the order is deterministic. Left untouched on purpose:
+-- renaming either directory would rewrite migration history.
+--
+-- SCOPE AND SAFETY
+-- ----------------
+-- * Creates three EMPTY placeholder relations. No rows, no data movement.
+-- * IDEMPOTENT: IF NOT EXISTS, so a no-op wherever the objects already exist
+--   (for example an environment where they are present for other reasons).
+-- * Adds no columns, no indexes, no constraints, no foreign keys.
+-- * Referenced by nothing: these are FK *targets* only, so no other object
+--   depends on them at this point.
+-- * REMOVED by 20261005000000_g16ci1d_ai_shim_cleanup, which drops them once
+--   the canonical PascalCase objects exist. That cleanup is fail-closed: it
+--   aborts rather than dropping a shim table that contains data.
+--
+-- AFTER THIS MIGRATION THE FINAL SCHEMA IS UNCHANGED: on an empty database it
+-- reaches exactly the same end state (and the same 85 tables / 15 partial
+-- unique indexes) as the 20260929130000 repair path does.
+
+CREATE TABLE IF NOT EXISTS "companies" ("id" UUID PRIMARY KEY);
+
+CREATE TABLE IF NOT EXISTS "users" ("id" UUID PRIMARY KEY);
+
+CREATE TABLE IF NOT EXISTS "ai_conversation" ("id" UUID PRIMARY KEY);
