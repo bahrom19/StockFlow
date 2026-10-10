@@ -68,13 +68,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
           queries: security-and-quality
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           output: codeql-results
           upload: true
@@ -100,34 +100,130 @@ jobs:
         run: npm ci
         working-directory: ${{ env.WORKING_DIR }}
 
-      # - npm audit with .nsprc suppressions
+      # - npm audit: strict high+critical gate.
+      #   NOTE: backend/.nsprc is an nsprc (npm-package-runner) config. `npm audit`
+      #   does NOT read it, so it never suppressed anything here.
       - name: npm audit (high+critical)
-        run: npm audit --audit-level=high
+        run: |
+          set -uo pipefail
+          mkdir -p "${{ runner.temp }}/audit"
+          rc=0
+          npm audit --audit-level=high --json \
+            > "${{ runner.temp }}/audit/audit.json" \
+            2> "${{ runner.temp }}/audit/audit.stderr" || rc=$?
+          echo "report bytes: $(wc -c < "${{ runner.temp }}/audit/audit.json" | tr -d ' ')"
+          {
+            echo "NPM_AUDIT_RC=$rc"
+            echo "AUDIT_REPORT=${{ runner.temp }}/audit/audit.json"
+            echo "AUDIT_STDERR=${{ runner.temp }}/audit/audit.stderr"
+          } >> "$GITHUB_ENV"
+          # npm audit exits 1 when vulnerabilities are found — that verdict is
+          # rendered by the dedicated gate step below, so this step never fails.
+          exit 0
         working-directory: ${{ env.WORKING_DIR }}
-        continue-on-error: true
+
+      - name: npm audit gate
+        run: |
+          set -uo pipefail
+          if [ -s "${AUDIT_STDERR:-}" ]; then
+            echo "--- npm audit stderr (tail) ---"
+            tail -n 5 "$AUDIT_STDERR"
+            echo "-----------------------------"
+          fi
+          node -e '
+            const fs = require("fs");
+            const die = (m) => { console.log("::error::" + m); process.exit(1); };
+            const rcRaw = process.env.NPM_AUDIT_RC;
+            const rc = Number(rcRaw);
+            if (!Number.isInteger(rc)) die("npm audit exit code is not an integer: " + JSON.stringify(rcRaw));
+            const budgetRaw = process.env.AUDIT_ALLOW_HIGH !== undefined && process.env.AUDIT_ALLOW_HIGH !== "" ? process.env.AUDIT_ALLOW_HIGH : "0";
+            if (!/^[0-9]+$/.test(budgetRaw)) die("AUDIT_ALLOW_HIGH must be a non-negative decimal integer, got: " + JSON.stringify(budgetRaw));
+            const budget = Number(budgetRaw);
+            if (!Number.isSafeInteger(budget)) die("AUDIT_ALLOW_HIGH exceeds the safe integer range: " + JSON.stringify(budgetRaw));
+            let raw;
+            try { raw = fs.readFileSync(process.env.AUDIT_REPORT, "utf8"); }
+            catch (e) { die("cannot read npm audit report " + process.env.AUDIT_REPORT + ": " + e.message); }
+            if (raw.trim() === "") die("npm audit report is empty (npm audit exit code " + rc + ")");
+            let doc;
+            try { doc = JSON.parse(raw); }
+            catch (e) { die("npm audit report is not valid JSON (npm audit exit code " + rc + "): " + e.message); }
+            if (doc === null || typeof doc !== "object" || Array.isArray(doc)) die("npm audit report root is not a JSON object");
+            const v = doc.metadata && doc.metadata.vulnerabilities;
+            if (v === undefined || v === null) die("npm audit report has no metadata.vulnerabilities (missing data is never treated as zero)");
+            if (typeof v !== "object" || Array.isArray(v)) die("metadata.vulnerabilities is not an object");
+            const counts = {};
+            for (const k of ["info","low","moderate","high","critical","total"]) {
+              const x = v[k];
+              if (typeof x !== "number" || !Number.isFinite(x) || !Number.isInteger(x) || x < 0)
+                die("metadata.vulnerabilities." + k + " is not a non-negative integer: " + JSON.stringify(x));
+              counts[k] = x;
+            }
+            console.log("npm audit counters: info=" + counts.info + " low=" + counts.low + " moderate=" + counts.moderate + " high=" + counts.high + " critical=" + counts.critical + " total=" + counts.total);
+            const blocking = counts.high + counts.critical;
+            if (blocking > budget) die("npm audit: high(" + counts.high + ") + critical(" + counts.critical + ") = " + blocking + " exceeds budget AUDIT_ALLOW_HIGH=" + budget);
+            console.log("::notice::npm audit gate passed: " + blocking + " high+critical within budget " + budget);
+          '
+
+      # Diagnostic only: the report contains package names, versions and advisory
+      # URLs from the public registry (no .npmrc, no auth tokens in this repo).
+      - name: Upload npm audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: ${{ runner.temp }}/audit/audit.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       # - Generate CycloneDX SBOM
+      #   The CLI is pinned: `@cyclonedx/cyclonedx-npm` ships no `--output` flag in
+      #   any released version (1.x-6.x); the correct flag is `--output-file`/`-o`.
       - name: Generate SBOM (CycloneDX)
         run: |
-          npx -p @cyclonedx/cyclonedx-npm cyclonedx-npm --output ../sbom.json
+          set -euo pipefail
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.1 \
+            --output-format JSON \
+            --spec-version 1.6 \
+            --output-file "${{ runner.temp }}/sbom.json"
         working-directory: ${{ env.WORKING_DIR }}
-        continue-on-error: true
+
+      - name: Verify SBOM
+        env:
+          SBOM_FILE: ${{ runner.temp }}/sbom.json
+        run: |
+          set -euo pipefail
+          test -s "$SBOM_FILE" || { echo "::error::SBOM missing or empty: $SBOM_FILE"; exit 1; }
+          node -e '
+            const fs = require("fs");
+            const die = (m) => { console.log("::error::" + m); process.exit(1); };
+            let doc;
+            try { doc = JSON.parse(fs.readFileSync(process.env.SBOM_FILE, "utf8")); }
+            catch (e) { die("SBOM is not valid JSON: " + e.message); }
+            if (doc === null || typeof doc !== "object" || Array.isArray(doc)) die("SBOM root is not a JSON object");
+            if (doc.bomFormat !== "CycloneDX") die("bomFormat !== CycloneDX: " + JSON.stringify(doc.bomFormat));
+            if (doc.specVersion !== "1.6") die("specVersion !== 1.6: " + JSON.stringify(doc.specVersion));
+            if (!Array.isArray(doc.components)) die("components is not an array: " + JSON.stringify(doc.components));
+            console.log("SBOM valid: bomFormat=" + doc.bomFormat + " specVersion=" + doc.specVersion + " components=" + doc.components.length);
+            if (doc.components.length === 0) console.log("::warning::SBOM contains zero components");
+          '
 
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
           name: sbom
-          path: sbom.json
+          path: ${{ runner.temp }}/sbom.json
           retention-days: 90
-          if-no-files-found: ignore
+          if-no-files-found: error
 
       # - License compliance check
+      #   Advisory by explicit choice: the allowlist policy itself is NOT changed here
+      #   (owner decision). `continue-on-error` removed so the step is not double-masked;
+      #   the `|| echo` below is now the single, visible reason this step stays green.
       - name: License Check
         run: |
           npx license-checker --production --excludePrivatePackages --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;Unlicense;CC0-1.0;0BSD" \
             --summary 2>&1 || echo "⚠️ License check warnings (non-blocking)"
         working-directory: ${{ env.WORKING_DIR }}
-        continue-on-error: true
 
   # ═══════════════════════════════════════════════════════════════
   # CONTAINER SCAN — Trivy (after Docker build)
@@ -136,6 +232,10 @@ jobs:
     name: '🐳 Container Vulnerability Scan (Trivy)'
     runs-on: ubuntu-latest
     needs: [secrets-scan, codeql, dependency-audit]
+    # Fail-closed reporting: a failing dependency must not silently skip this
+    # gate. `!cancelled()` (not `always()`) so Trivy still runs and still
+    # uploads SARIF, but nothing runs after an explicit cancellation.
+    if: ${{ !cancelled() }}
     permissions:
       security-events: write
       contents: read
@@ -154,10 +254,13 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
-          exit-code: 0
+          # Findings must fail the job. Report policy (`severity`) and blocking
+          # policy (`exit-code`) are separate: SARIF keeps every severity that the
+          # scanner emits, this flag decides pass/fail.
+          exit-code: 1
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
           category: trivy
