@@ -36,6 +36,13 @@ defaults:
   run:
     working-directory: ./backend
 
+# Least privilege at workflow level. `contents: read` covers
+# actions/checkout@v4 used by several jobs. The GHCR push in
+# `build-and-push` keeps its own scoped `packages: write` (below), so
+# no job loses a permission it actually uses.
+permissions:
+  contents: read
+
 jobs:
   # ═══════════════════════════════════════════════════════════════
   # 1. BUILD & PUSH DOCKER IMAGE
@@ -43,6 +50,7 @@ jobs:
   build-and-push:
     name: '🐳 Build & Push'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -93,6 +101,7 @@ jobs:
     name: '🚀 Deploy Staging'
     needs: [build-and-push]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: .
@@ -101,23 +110,33 @@ jobs:
       url: https://stockflow-production-04c7.up.railway.app
 
     steps:
+      # ── NOT IMPLEMENTED — fails closed ────────────────────────
+      # This job previously ran `echo` + `sleep 10` and reported
+      # success without deploying anything. That was a false green:
+      # it made the pipeline look healthy while no staging release
+      # had occurred, and it was the only "evidence" the downstream
+      # smoke tests appeared to depend on.
+      #
+      # The single real backend deployer is backend-deploy.yml
+      # (`railway up --service ...`), which also owns the
+      # health + fresh-container verification. Implementing a real
+      # staging deploy here requires infrastructure that is not
+      # provisioned yet (see R2/R3 in the G16-CI-3A design).
+      #
+      # Until then this job FAILS LOUDLY instead of claiming success.
       - name: Deploy to Staging
         run: |
-          echo "🚀 Deploying ${{ needs.build-and-push.outputs.image }} to Staging..."
-          # Replace with actual deployment command:
-          # kubectl set image deployment/stockflow-backend \
-          #   app=${{ needs.build-and-push.outputs.image }} \
-          #   -n stockflow-staging
-          echo "✅ Staging deployment initiated"
+          echo "🚫 Staging deployment is NOT IMPLEMENTED in this repository."
+          echo "   Nothing was deployed and no staging release exists."
+          echo "   The only real backend deployer is:"
+          echo "     .github/workflows/backend-deploy.yml (railway up --service)"
+          echo "::error::deploy-staging is an unimplemented placeholder — failing closed instead of reporting a false success"
+          exit 1
 
       - name: Wait for deployment
         run: |
-          echo "⏳ Waiting for Staging deployment to stabilize..."
-          # Replace with actual rollout status check:
-          # kubectl rollout status deployment/stockflow-backend \
-          #   -n stockflow-staging --timeout=300s
-          sleep 10
-          echo "✅ Staging deployment stable"
+          echo "⛔ Unreachable: deploy-staging failed closed, there is nothing to wait for."
+          exit 1
 
   # ═══════════════════════════════════════════════════════════════
   # 3. SMOKE TESTS (Staging)
@@ -126,17 +145,66 @@ jobs:
     name: '🧪 Smoke Tests'
     needs: [deploy-staging]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: staging
 
     steps:
+      # ── Checks the REAL production deployment ─────────────────
+      # backend-deploy.yml is the only backend deployer, so these
+      # probes verify that deployment rather than a staging release.
+      #
+      # Guardrails:
+      #  * a single OVERALL time budget bounds the retry loop — the
+      #    loop cannot spin indefinitely on repeated Railway fallback
+      #    answers;
+      #  * "Application not found" is treated as "no deployment is
+      #    serving the domain YET" and is therefore retried, not an
+      #    instant failure (it is also what a cold rollout returns);
+      #  * the response is parsed as JSON, never string-matched. HTTP
+      #    200 alone proves nothing: HealthService.fullHealth() returns
+      #    200 even when status is "degraded" or "down".
+      #  * success requires status == "ok". Anything else fails.
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Health check
+        env:
+          HEALTH_URL: https://stockflow-production-04c7.up.railway.app/api/health
+          RETRY_BUDGET_SECONDS: '180'
         run: |
-          echo "🔍 Running health check against Staging..."
-          curl -sSf --max-time 10 \
-            https://stockflow-production-04c7.up.railway.app/api/health || exit 1
+          set -uo pipefail
+          echo "🔍 Running health check against ${HEALTH_URL}..."
+          deadline=$(( $(date +%s) + RETRY_BUDGET_SECONDS ))
+          ok=0
+          while :; do
+            RESP=$(curl -s --max-time 15 -w '\n__CODE__%{http_code}' "$HEALTH_URL" || true)
+            CODE=$(printf '%s' "$RESP" | tail -n1 | sed 's/__CODE__//')
+            PAYLOAD=$(printf '%s' "$RESP" | sed '$d')
+            # Strict contract check against HealthStatus
+            # (health.service.ts). Prints OK on success; on any
+            # violation prints the reason to stderr and exits non-zero,
+            # which the caller turns into a job failure.
+            if [ "$CODE" = "200" ]; then
+              VERDICT=$(printf '%s' "$PAYLOAD" | python3 -c "import sys,json,math; d=json.load(sys.stdin); req=('status','version','timestamp','uptime','checks'); assert isinstance(d,dict),'payload is not a JSON object'; missing=[k for k in req if k not in d]; assert not missing,'missing required field(s): %s'%missing; assert isinstance(d['version'],str),'version is not a string'; assert isinstance(d['timestamp'],str),'timestamp is not a string'; assert isinstance(d['status'],str),'status is not a string'; assert d['status'] in ('ok','degraded','down'),'unexpected status value: %r'%d['status']; assert isinstance(d['uptime'],(int,float)) and not isinstance(d['uptime'],bool),'uptime is not numeric'; assert isinstance(d['checks'],list),'checks is not an array'; assert math.isfinite(d['uptime']),'uptime is not finite'; assert d['uptime']>=0,'uptime is negative'; bad=[c for c in d['checks'] if not isinstance(c,dict)]; assert not bad,'checks[] contains non-object entries: %r'%bad; bad=[c.get('name') for c in d['checks'] if not isinstance(c.get('name'),str) or not c['name'].strip()]; assert not bad,'invalid checks[].name: %r'%bad; bad=[c.get('status') for c in d['checks'] if c.get('status') not in ('ok','degraded','down')]; assert not bad,'invalid checks[].status: %r'%bad; bad=[c.get('latency') for c in d['checks'] if isinstance(c.get('latency'),bool) or not isinstance(c.get('latency'),(int,float)) or not math.isfinite(c['latency']) or c['latency']<0]; assert not bad,'invalid checks[].latency: %r'%bad; bad=[c['message'] for c in d['checks'] if 'message' in c and not isinstance(c['message'],str)]; assert not bad,'invalid checks[].message: %r'%bad; assert d['status']=='ok','service reports status=%s'%d['status']; print('OK')" 2>&1) || VERDICT="${VERDICT:-validator exited non-zero without output}"
+              if [ "$VERDICT" = "OK" ]; then
+                ok=1; echo "health: 200, status=ok"; break
+              fi
+              echo "::error::unhealthy response from ${HEALTH_URL}: ${VERDICT}"
+              exit 1
+            fi
+            if printf '%s' "$PAYLOAD" | grep -q 'Application not found'; then
+              echo "Railway fallback — no application behind the domain yet"
+            else
+              echo "health: ${CODE:-n/a} — waiting for rollout"
+            fi
+            now=$(date +%s)
+            if [ "$now" -ge "$deadline" ]; then
+              echo "::error::${HEALTH_URL} not healthy within ${RETRY_BUDGET_SECONDS}s budget (last code: ${CODE:-n/a})"
+              exit 1
+            fi
+            sleep 15
+          done
+          test "$ok" = "1" || { echo "::error::health check did not succeed"; exit 1; }
           echo "✅ Health check passed"
 
       - name: Liveness probe
@@ -177,6 +245,7 @@ jobs:
     name: '✅ Manual Approval'
     needs: [smoke-tests]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: .
@@ -201,6 +270,7 @@ jobs:
     name: '🚀 Deploy Production'
     needs: [approval, build-and-push]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: .
@@ -209,22 +279,23 @@ jobs:
       url: https://stockflow-production-04c7.up.railway.app
 
     steps:
+      # ── NOT IMPLEMENTED — fails closed ────────────────────────
+      # Previously `echo` + `sleep 15` and reported success without
+      # deploying. Production deploys are owned by
+      # backend-deploy.yml; duplicating a `railway up` here would
+      # create a second, unreviewed deployment path.
       - name: Deploy to Production
         run: |
-          echo "🚀 Deploying ${{ needs.build-and-push.outputs.image }} to Production..."
-          # Replace with actual deployment command:
-          # kubectl set image deployment/stockflow-backend \
-          #   app=${{ needs.build-and-push.outputs.image }} \
-          #   -n stockflow-production
-          echo "✅ Production deployment initiated"
+          echo "🚫 Production deployment is NOT IMPLEMENTED in this workflow."
+          echo "   Nothing was deployed."
+          echo "   Production deploys are owned by .github/workflows/backend-deploy.yml."
+          echo "::error::deploy-production is an unimplemented placeholder — failing closed instead of reporting a false success"
+          exit 1
 
       - name: Wait for deployment
         run: |
-          echo "⏳ Waiting for Production deployment to stabilize..."
-          # kubectl rollout status deployment/stockflow-backend \
-          #   -n stockflow-production --timeout=300s
-          sleep 15
-          echo "✅ Production deployment stable"
+          echo "⛔ Unreachable: deploy-production failed closed, there is nothing to wait for."
+          exit 1
 
   # ═══════════════════════════════════════════════════════════════
   # 6. POST-DEPLOY SMOKE TESTS (Production)
@@ -233,16 +304,29 @@ jobs:
     name: '🔍 Post-Deploy Verification'
     needs: [deploy-production]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: .
     environment: production
     steps:
       - name: Health check
+        env:
+          HEALTH_URL: https://stockflow-production-04c7.up.railway.app/api/health
         run: |
-          curl -sSf --max-time 10 \
-            https://stockflow-production-04c7.up.railway.app/api/health || \
-            (echo "❌ Production health check failed" && exit 1)
+          set -uo pipefail
+          RESP=$(curl -s --max-time 15 -w '\n__CODE__%{http_code}' "$HEALTH_URL" || true)
+          CODE=$(printf '%s' "$RESP" | tail -n1 | sed 's/__CODE__//')
+          PAYLOAD=$(printf '%s' "$RESP" | sed '$d')
+          # Post-deploy verification runs AFTER the fact — no retry
+          # budget here, a transient state must be reported as failure.
+          # Parsed as JSON against HealthStatus (health.service.ts);
+          # HTTP 200 alone is insufficient because fullHealth() returns
+          # 200 even for status "degraded"/"down".
+          [ "$CODE" = "200" ] || { echo "::error::Production health returned $CODE"; exit 1; }
+          VERDICT=$(printf '%s' "$PAYLOAD" | python3 -c "import sys,json,math; d=json.load(sys.stdin); req=('status','version','timestamp','uptime','checks'); assert isinstance(d,dict),'payload is not a JSON object'; missing=[k for k in req if k not in d]; assert not missing,'missing required field(s): %s'%missing; assert isinstance(d['version'],str),'version is not a string'; assert isinstance(d['timestamp'],str),'timestamp is not a string'; assert isinstance(d['status'],str),'status is not a string'; assert d['status'] in ('ok','degraded','down'),'unexpected status value: %r'%d['status']; assert isinstance(d['uptime'],(int,float)) and not isinstance(d['uptime'],bool),'uptime is not numeric'; assert isinstance(d['checks'],list),'checks is not an array'; assert math.isfinite(d['uptime']),'uptime is not finite'; assert d['uptime']>=0,'uptime is negative'; bad=[c for c in d['checks'] if not isinstance(c,dict)]; assert not bad,'checks[] contains non-object entries: %r'%bad; bad=[c.get('name') for c in d['checks'] if not isinstance(c.get('name'),str) or not c['name'].strip()]; assert not bad,'invalid checks[].name: %r'%bad; bad=[c.get('status') for c in d['checks'] if c.get('status') not in ('ok','degraded','down')]; assert not bad,'invalid checks[].status: %r'%bad; bad=[c.get('latency') for c in d['checks'] if isinstance(c.get('latency'),bool) or not isinstance(c.get('latency'),(int,float)) or not math.isfinite(c['latency']) or c['latency']<0]; assert not bad,'invalid checks[].latency: %r'%bad; bad=[c['message'] for c in d['checks'] if 'message' in c and not isinstance(c['message'],str)]; assert not bad,'invalid checks[].message: %r'%bad; assert d['status']=='ok','service reports status=%s'%d['status']; print('OK')" 2>&1) || VERDICT="${VERDICT:-validator exited non-zero without output}"
+          [ "$VERDICT" = "OK" ] || { echo "::error::unhealthy production response: ${VERDICT}"; exit 1; }
+          echo "✅ Production health OK"
 
       - name: Liveness probe
         run: |
@@ -258,35 +342,60 @@ jobs:
 
   # ═══════════════════════════════════════════════════════════════
   # 7. AUTO-ROLLBACK
+  #
+  # Runs ONLY when a real production deployment attempt actually
+  # failed. `deploy-production` is the single job that would represent
+  # a genuine production release; when it is SKIPPED (for example
+  # because the staging fail-closed gate rejected the pipeline) there
+  # is nothing to roll back, and reporting a rollback requirement
+  # would be a false alarm.
+  #
+  # Note: while `deploy-production` itself still fails closed this
+  # condition can never become true — there is no production release
+  # to roll back until a real deployer exists for that environment.
   # ═══════════════════════════════════════════════════════════════
   rollback:
     name: '⏪ Auto-Rollback'
-    if: failure()
+    # failure() alone also fires when a NEED was merely SKIPPED, which
+    # previously produced a green "Auto-Rollback" after a staging
+    # failure. Require the production deploy job itself to have failed.
+    if: failure() && needs.deploy-production.result == 'failure'
     needs: [deploy-production, post-deploy-verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: .
     environment: production
     steps:
+      # ── NOT IMPLEMENTED — fails closed ────────────────────────
+      # Previously two misleading steps:
+      #   * "Rollback to previous version" was `echo` only;
+      #   * "Verify rollback health" used `curl ... || echo`, which
+      #     can NEVER fail the job.
+      # Together they produced a green "Auto-Rollback" that proved
+      # nothing. A rollback is now reported as successful only if it
+      # is actually performed AND independently verified; otherwise
+      # this job fails and escalates to a human.
       - name: Rollback to previous version
         run: |
-          echo "⏪ Production deployment failed — initiating auto-rollback..."
-          # Replace with actual rollback command:
-          # kubectl rollout undo deployment/stockflow-backend \
-          #   -n stockflow-production
-          echo "✅ Rollback completed"
+          echo "🚫 Automated rollback is NOT IMPLEMENTED in this repository."
+          echo "   No rollback has been performed."
+          echo "   The backend deployer (backend-deploy.yml) documents that"
+          echo "   'railway up' keeps the previous deployment, so a failed"
+          echo "   rollout already leaves the last good build live."
+          echo "::error::rollback is an unimplemented placeholder — no rollback performed; manual intervention required in the Railway dashboard"
+          exit 1
 
       - name: Verify rollback health
         run: |
-          echo "🔍 Verifying rollback health..."
-          curl -sSf --max-time 10 \
-            https://stockflow-production-04c7.up.railway.app/api/health/live || \
-            echo "⚠️ Rollback health check failed — manual intervention required"
-          echo "✅ Rollback verification completed"
+          echo "⛔ Unreachable: rollback failed closed, no rollback to verify."
+          echo "::error::rollback verification impossible — no rollback was executed"
+          exit 1
 
       - name: Notify failure
         run: |
           echo "📧 Notification: Deployment to Production failed."
-          echo "   Rollback has been initiated automatically."
+          echo "   No automated rollback was performed."
+          echo "   Manual rollback (if required): Railway dashboard."
           echo "   Check: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

@@ -23,8 +23,13 @@
 # failed rollout leaves the last good build live (rollback via
 # Railway dashboard).
 #
-# The deploy step is guarded: without RAILWAY_TOKEN the workflow
-# reports green with a skip notice (mirrors web-deploy.yml).
+# The deploy step is guarded: RAILWAY_TOKEN is REQUIRED. Unlike
+# web-deploy.yml — which still performs a real Flutter build without a
+# token and therefore has a legitimate "build-only, green" mode — this
+# workflow has no build or test work: its only meaningful action is the
+# deployment itself. Reporting success with every deploy step skipped
+# would be a false green, so a missing token fails the run explicitly.
+# The secret VALUE is never printed.
 # ═══════════════════════════════════════════════════════════════
 
 name: Backend Deploy
@@ -42,6 +47,12 @@ concurrency:
   group: backend-deploy-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: this workflow only needs to read the repository for
+# actions/checkout@v4. No GHCR push, no third-party actions, no GitHub
+# API calls are performed here.
+permissions:
+  contents: read
+
 env:
   RAILWAY_SERVICE_NAME: 'StockFlow'
   API_HEALTH_URL: 'https://stockflow-production-04c7.up.railway.app/api/health'
@@ -50,6 +61,10 @@ jobs:
   deploy:
     name: '🚀 Deploy Backend to Railway'
     runs-on: ubuntu-latest
+    # Bounded so a hung Railway CLI call cannot hold the concurrency
+    # group indefinitely (cancel-in-progress is on, but an explicit
+    # ceiling also bounds a run that is already the only one active).
+    timeout-minutes: 45
     if: github.ref == 'refs/heads/main'
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
@@ -57,6 +72,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # Fail closed when the required credential is absent. Checking
+      # presence only — the value is never echoed, printed or logged.
+      - name: Require RAILWAY_TOKEN
+        run: |
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "::error::RAILWAY_TOKEN is not configured for this repository. This workflow's only action is the deployment, so it cannot pass without it."
+            exit 1
+          fi
+          echo "✅ RAILWAY_TOKEN present (value not shown)"
 
       # Deploy via the official Railway CLI from npm (no third-party
       # action dependency). Must run from the REPO ROOT — not backend/ —
@@ -68,7 +93,24 @@ jobs:
       # directory). Targets the service BY NAME.
       - name: Deploy to Railway
         if: env.RAILWAY_TOKEN != ''
-        run: npx --yes @railway/cli@latest up --service "$RAILWAY_SERVICE_NAME" --ci
+        run: |
+          set -o pipefail
+          OUT=$(npx --yes @railway/cli@latest up --service "$RAILWAY_SERVICE_NAME" --ci 2>&1) || {
+            printf '%s\n' "$OUT"
+            # Distinguish an account/billing block from a genuine
+            # build or config failure. A billing block is an
+            # operational blocker, not a code defect: retrying the
+            # same commit will fail identically until the plan is
+            # restored, so it is reported separately instead of
+            # being masked as a generic deploy failure.
+            if printf '%s' "$OUT" | grep -qi 'trial has expired\|payment\|billing\|plan has expired'; then
+              echo "::error::Railway rejected the deploy on account grounds (expired trial / billing). No deployment was created; the previous deployment, if any, is untouched. Owner action required in the Railway dashboard."
+              exit 1
+            fi
+            echo "::error::railway up failed — see the command output above"
+            exit 1
+          }
+          printf '%s\n' "$OUT"
 
       # Mandatory verification: the deploy is only green if the API is
       # actually live AND the container is fresh. Railway can report a
@@ -81,22 +123,63 @@ jobs:
       # report a small uptime (< 30 min). The strongest identity proof
       # (strict-stock behavior exists in exactly one commit) is the
       # functional smoke that runs after this workflow completes.
+      #
+      # Guardrails:
+      #  * a single OVERALL time budget bounds the retry loop;
+      #  * "Application not found" means "nothing is serving the
+      #    domain yet" — it is RETRIED, not failed instantly, because a
+      #    cold rollout produces exactly that response;
+      #  * the body is parsed as JSON against HealthStatus
+      #    (health.service.ts). HTTP 200 is not sufficient: fullHealth()
+      #    returns 200 even when status is "degraded" or "down".
       - name: Verify health + fresh container
         if: env.RAILWAY_TOKEN != ''
+        env:
+          RETRY_BUDGET_SECONDS: '600'
         run: |
-          for i in $(seq 1 30); do
-            BODY=$(curl -s --max-time 15 "$API_HEALTH_URL" || true)
-            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$API_HEALTH_URL")
-            if [ "$CODE" = "200" ]; then break; fi
-            echo "health: $CODE (attempt $i) — waiting for rollout..."
-            sleep 20
+          set -uo pipefail
+          deadline=$(( $(date +%s) + RETRY_BUDGET_SECONDS ))
+          CODE=""
+          BODY=""
+          while :; do
+            RESP=$(curl -s --max-time 15 -w '\n__CODE__%{http_code}' "$API_HEALTH_URL" || true)
+            CODE=$(printf '%s' "$RESP" | tail -n1 | sed 's/__CODE__//')
+            BODY=$(printf '%s' "$RESP" | sed '$d')
+            if [ "$CODE" != "200" ]; then
+              if printf '%s' "$BODY" | grep -q 'Application not found'; then
+                echo "no application behind the domain yet — waiting for rollout"
+              else
+                echo "health: ${CODE:-n/a} — waiting for rollout"
+              fi
+              now=$(date +%s)
+              if [ "$now" -ge "$deadline" ]; then
+                echo "::error::${API_HEALTH_URL} not healthy within ${RETRY_BUDGET_SECONDS}s budget (last code: ${CODE:-n/a})"
+                exit 1
+              fi
+              sleep 20
+              continue
+            fi
+            # Contract validation against HealthStatus
+            VERDICT=$(printf '%s' "$BODY" | python3 -c "import sys,json,math; d=json.load(sys.stdin); req=('status','version','timestamp','uptime','checks'); assert isinstance(d,dict),'payload is not a JSON object'; missing=[k for k in req if k not in d]; assert not missing,'missing required field(s): %s'%missing; assert isinstance(d['version'],str),'version is not a string'; assert isinstance(d['timestamp'],str),'timestamp is not a string'; assert isinstance(d['status'],str),'status is not a string'; assert d['status'] in ('ok','degraded','down'),'unexpected status value: %r'%d['status']; assert isinstance(d['uptime'],(int,float)) and not isinstance(d['uptime'],bool),'uptime is not numeric'; assert isinstance(d['checks'],list),'checks is not an array'; assert math.isfinite(d['uptime']),'uptime is not finite'; assert d['uptime']>=0,'uptime is negative'; bad=[c for c in d['checks'] if not isinstance(c,dict)]; assert not bad,'checks[] contains non-object entries: %r'%bad; bad=[c.get('name') for c in d['checks'] if not isinstance(c.get('name'),str) or not c['name'].strip()]; assert not bad,'invalid checks[].name: %r'%bad; bad=[c.get('status') for c in d['checks'] if c.get('status') not in ('ok','degraded','down')]; assert not bad,'invalid checks[].status: %r'%bad; bad=[c.get('latency') for c in d['checks'] if isinstance(c.get('latency'),bool) or not isinstance(c.get('latency'),(int,float)) or not math.isfinite(c['latency']) or c['latency']<0]; assert not bad,'invalid checks[].latency: %r'%bad; bad=[c['message'] for c in d['checks'] if 'message' in c and not isinstance(c['message'],str)]; assert not bad,'invalid checks[].message: %r'%bad; print('OK')" 2>&1) || VERDICT="${VERDICT:-validator exited non-zero without output}"
+            if [ "$VERDICT" != "OK" ]; then
+              echo "::error::unhealthy response from ${API_HEALTH_URL}: ${VERDICT}"
+              exit 1
+            fi
+            break
           done
-          test "$CODE" = "200" || { echo "::error::/api/health returned $CODE after rollout"; exit 1; }
+          test "$CODE" = "200" || { echo "::error::/api/health returned $CODE after rollout budget"; exit 1; }
           echo "✅ /api/health = 200"
           echo "body: $(echo "$BODY" | head -c 300)"
+          # Fresh-container gate: a 200 only counts when the responding
+          # container was started by THIS rollout. Missing or malformed
+          # uptime yields -1 and fails — it can never bypass the check.
           UPTIME=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('uptime',-1))" 2>/dev/null || echo -1)
           echo "uptime: ${UPTIME}s"
           test "$UPTIME" -ge 0 -a "$UPTIME" -lt 1800 \
             || { echo "::error::uptime ${UPTIME}s — container is NOT fresh (expected < 1800s after deploy)"; exit 1; }
-          echo "✅ Fresh container confirmed (uptime ${UPTIME}s)"
+          # A "down" service is a failed rollout even if it is fresh.
+          STATUS=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo '')
+          test "$STATUS" = "ok" \
+            || { echo "::error::service reports status=${STATUS:-unknown} — treating the rollout as failed"; exit 1; }
+          echo "✅ Fresh container confirmed (uptime ${UPTIME}s, status ok)"
           echo "✅ Backend deployed — commit $(git rev-parse --short HEAD) now live at $API_HEALTH_URL"
