@@ -176,9 +176,13 @@ jobs:
           if-no-files-found: ignore
 
       # - Generate CycloneDX SBOM
+      #   `!cancelled()` keeps SBOM generation independent from the npm audit gate:
+      #   a failing gate must not suppress this diagnostic artifact. The gate still
+      #   fails the job — `if` controls execution, not the job conclusion.
       #   The CLI is pinned: `@cyclonedx/cyclonedx-npm` ships no `--output` flag in
       #   any released version (1.x-6.x); the correct flag is `--output-file`/`-o`.
       - name: Generate SBOM (CycloneDX)
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           npx --yes @cyclonedx/cyclonedx-npm@6.0.1 \
@@ -188,6 +192,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
 
       - name: Verify SBOM
+        if: ${{ !cancelled() }}
         env:
           SBOM_FILE: ${{ runner.temp }}/sbom.json
         run: |
@@ -208,6 +213,7 @@ jobs:
           '
 
       - name: Upload SBOM
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: sbom
