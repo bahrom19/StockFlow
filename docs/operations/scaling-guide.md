@@ -211,11 +211,27 @@ await cacheService.delPattern('products:*');
 
 See `k6/scenarios.js` for load testing scenarios.
 
+⚠️  Destructive test: it authenticates, then creates sales, completes them and
+    posts GL entries. Run it only against a disposable or otherwise isolated
+    environment — never against a live tenant.
+
+The script ships with no built-in credentials. Export the two variables it
+requires before running. The values are never stored in this repository and
+are not written on the command line:
+
+    export SF_EMAIL='<load-test account e-mail>'
+    export SF_PASSWORD='<load-test account password>'
+
+If either variable is unset or empty, `requireEnv` aborts the run during
+initialisation — before any HTTP request is issued — naming the missing one.
+
 ```bash
 # Run load test
-k6 run --vus 50 --duration 5m k6/scenarios.js
+k6 run -e K6_EMAIL="$SF_EMAIL" -e K6_PASSWORD="$SF_PASSWORD" \
+  --vus 50 --duration 5m k6/scenarios.js
 
 # Run with custom base URL
-k6 run -e BASE_URL=https://staging.stockflow.example.com/api \
+k6 run -e K6_EMAIL="$SF_EMAIL" -e K6_PASSWORD="$SF_PASSWORD" \
+  -e BASE_URL=https://staging.stockflow.example.com/api \
   --vus 100 --duration 10m k6/scenarios.js
 ```
