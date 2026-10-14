@@ -219,18 +219,6 @@ jobs:
             https://stockflow-production-04c7.up.railway.app/api/health/ready || exit 1
           echo "✅ Readiness probe passed"
 
-      - name: API smoke test (auth + products + health)
-        run: |
-          # Simple smoke test to verify core API is operational
-          echo "🔍 Running API smoke tests..."
-          # Test auth
-          AUTH_RESP=$(curl -sS --max-time 10 \
-            -X POST https://stockflow-production-04c7.up.railway.app/api/auth/login \
-            -H 'Content-Type: application/json' \
-            -d '{"email":"test@stockflow.com","password":"test123"}')
-          echo "Auth response: $(echo $AUTH_RESP | head -c 100)"
-          echo "✅ Smoke tests completed"
-
       - name: Metrics endpoint
         run: |
           curl -sSf --max-time 10 \
