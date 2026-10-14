@@ -175,13 +175,53 @@ npx prisma migrate resolve --rolled-back "migration_name"
 curl -sSf https://stockflow.example.com/api/health/ready
 curl -sSf https://stockflow.example.com/api/health/live
 
-# API smoke tests
-TOKEN=$(curl -s -X POST https://stockflow.example.com/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"admin@stockflow.com","password":"admin123"}' | jq -r '.accessToken')
+# API smoke test
+# Requires: jq, and curl >= 7.55.0 for "-H @-" (reads a header from stdin).
+# No credentials are stored in this repository. Export them before running:
+#   export SF_API='https://<your-host>/api'      # base URL INCLUDING the /api prefix
+#   export SF_EMAIL='<operator e-mail>'
+#   export SF_PASSWORD='<operator password>'    # never passed on the command line
+set -euo pipefail
 
-curl -s -H "Authorization: Bearer $TOKEN" \
-  https://stockflow.example.com/api/products?limit=1
+: "${SF_API:?set SF_API to the API base including the /api prefix, e.g. https://<your-host>/api}"
+: "${SF_EMAIL:?set SF_EMAIL to the operator e-mail}"
+: "${SF_PASSWORD:?set SF_PASSWORD to the operator password}"
+
+# Login. jq reads the credentials from the environment and curl receives the
+# JSON body on stdin, so neither the password nor the token ever appears in a
+# process argument list or in the command text.
+TOKEN=$(
+  jq -nc '{email: env.SF_EMAIL, password: env.SF_PASSWORD}' \
+  | curl -sS -X POST "$SF_API/auth/login" \
+        -H 'Content-Type: application/json' \
+        --data @- \
+  | jq -r '.accessToken // empty'
+) || { rc=$?; echo "login failed: transport error (exit $rc)" >&2; exit 1; }
+
+if [ -z "$TOKEN" ]; then
+  echo "login failed: no accessToken in the response" >&2
+  exit 1
+fi
+
+# Authorized request. curl -H @- reads the header from stdin, so the token is
+# not in curl's argv. No trailing newline is emitted: curl adds the
+# end-of-line marker itself and a stray newline would corrupt the header.
+http_code=$(
+  printf 'Authorization: Bearer %s' "$TOKEN" \
+  | curl -sS -o /dev/null -w '%{http_code}' -H @- "$SF_API/products?limit=1"
+) || { rc=$?; echo "products check failed: transport error (exit $rc)" >&2; exit 1; }
+
+case "$http_code" in
+  2*) echo "products check passed (HTTP $http_code)" ;;
+  *)  echo "products check failed: HTTP $http_code" >&2; exit 1 ;;
+esac
+
+# Removes the shell variable binding only.
+# It does NOT scrub the token from: shell history, terminal scrollback, the
+# process environment inherited by children (/proc/<pid>/environ), process
+# memory, swap or page cache. A local shell cannot prevent another process
+# running as the same user from recovering the value while it is in flight.
+unset TOKEN
 
 curl -s https://stockflow.example.com/api/health/metrics | head -10
 
