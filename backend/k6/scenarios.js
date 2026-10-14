@@ -1,7 +1,26 @@
 // ═══════════════════════════════════════════════════════════════
 // StockFlow Enterprise — k6 Load Testing Scenarios
 // ═══════════════════════════════════════════════════════════════
-// Run: k6 run --vus 10 --duration 60s k6/scenarios.js
+//
+// ⚠️  DESTRUCTIVE LOAD TEST — READ BEFORE RUNNING
+//     This script is NOT a read-only probe. It authenticates and then
+//     performs write operations: it creates sales, completes them and
+//     posts GL entries. The default profile ramps to 50 VUs over about
+//     4 minutes.
+//     Run it ONLY against an explicitly permitted, isolated environment
+//     (local stack or a dedicated stand). Never point it at production.
+//
+// Required environment variables (no defaults are built in):
+//   K6_EMAIL      account e-mail used for the load-test login
+//   K6_PASSWORD   password for that account
+// Optional:
+//   BASE_URL      API base, defaults to http://localhost:3000/api
+//   COMPANY_ID    company id, has a fixed placeholder default
+//
+// Run:
+//   K6_EMAIL=... K6_PASSWORD=... k6 run --vus 10 --duration 60s k6/scenarios.js
+// If K6_EMAIL or K6_PASSWORD is missing the run aborts in the init context,
+// before any HTTP request is issued, and the error names only the variable.
 //
 // Measures:
 //   - p95, p99 latency
@@ -23,9 +42,27 @@ const glPostingDuration = new Trend('gl_posting_duration');
 const errorRate = new Rate('errors');
 
 // ── Configuration ──────────────────────────────────────────────
+/**
+ * Required-environment helper.
+ *
+ * Throws in the k6 init context, so the run aborts with a non-zero exit
+ * BEFORE any HTTP request is issued. The error names the missing variable
+ * only — never its value.
+ */
+function requireEnv(name) {
+  const value = __ENV[name];
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable ${name}. Pass it explicitly: ` +
+        `K6_EMAIL / K6_PASSWORD must be set before running this load test.`,
+    );
+  }
+  return value;
+}
+
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000/api';
-const DEFAULT_EMAIL = 'admin@stockflow.com';
-const DEFAULT_PASSWORD = 'admin123';
+const EMAIL = requireEnv('K6_EMAIL');
+const PASSWORD = requireEnv('K6_PASSWORD');
 const COMPANY_ID = __ENV.COMPANY_ID || '00000000-0000-0000-0000-000000000001';
 
 export const options = {
@@ -61,15 +98,15 @@ const state = {
 export function setup() {
   // Login to get initial token and prepare test data
   const loginRes = http.post(`${BASE_URL}/auth/login`, {
-    email: DEFAULT_EMAIL,
-    password: DEFAULT_PASSWORD,
+    email: EMAIL,
+    password: PASSWORD,
   });
 
   check(loginRes, {
     'setup: login successful': (r) => r.status === 200,
   });
 
-  const token = loginRes.json('access_token') || '';
+  const token = loginRes.json('accessToken') || '';
 
   // Fetch a product
   const productRes = http.get(`${BASE_URL}/products?limit=1`, {
@@ -106,22 +143,22 @@ export default function (data) {
   group('Login', function () {
     const start = Date.now();
     const res = http.post(`${BASE_URL}/auth/login`, {
-      email: DEFAULT_EMAIL,
-      password: DEFAULT_PASSWORD,
+      email: EMAIL,
+      password: PASSWORD,
     });
     loginDuration.add(Date.now() - start);
 
     const success = check(res, {
       'login: status 200': (r) => r.status === 200,
-      'login: has token': (r) => r.json('access_token') !== undefined,
+      'login: has token': (r) => r.json('accessToken') !== undefined,
     });
 
     if (!success) {
       errorRate.add(1);
     }
 
-    if (res.json('access_token')) {
-      data.token = res.json('access_token');
+    if (res.json('accessToken')) {
+      data.token = res.json('accessToken');
     }
   });
 
