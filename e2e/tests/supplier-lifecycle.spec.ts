@@ -1,4 +1,5 @@
 import { test, expect, APIRequestContext } from '@playwright/test';
+import { resolveApiBase } from '../helpers/api-base';
 
 /**
  * StockFlow — Supplier lifecycle E2E (G1, request-context only).
@@ -17,8 +18,6 @@ import { test, expect, APIRequestContext } from '@playwright/test';
  */
 
 const PASSWORD = 'E2eStrong123!';
-const API_FALLBACK = 'http://localhost:3000/api';
-
 interface Tenant {
   email: string;
   companyName: string;
@@ -28,20 +27,6 @@ interface Tenant {
 
 function unique(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-}
-
-async function resolveApiBase(request: APIRequestContext): Promise<string> {
-  try {
-    const res = await request.get('http://127.0.0.1:8081/assets/env/.env.prod');
-    if (res.ok()) {
-      const text = await res.text();
-      const m = text.match(/API_BASE_URL=(.+)/);
-      if (m) return m[1].trim();
-    }
-  } catch {
-    /* fall through */
-  }
-  return API_FALLBACK;
 }
 
 async function registerTenant(

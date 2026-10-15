@@ -1,4 +1,5 @@
-import { test, expect, Page, APIRequestContext } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
+import { resolveApiBase } from '../helpers/api-base';
 import {
   enableSemantics,
   reenableSemantics,
@@ -25,20 +26,6 @@ import {
 
 const PASSWORD = 'E2eStrong123!';
 const NEW_PASSWORD = 'NewE2ePass456!';
-
-const API_FALLBACK = 'http://localhost:3000/api';
-
-async function resolveApiBase(request: APIRequestContext): Promise<string> {
-  try {
-    const res = await request.get('http://127.0.0.1:8081/assets/env/.env.prod');
-    if (res.ok()) {
-      const text = await res.text();
-      const m = text.match(/API_BASE_URL=(.+)/);
-      if (m) return m[1].trim();
-    }
-  } catch {}
-  return API_FALLBACK;
-}
 
 let identity: { email: string; companyName: string } | undefined;
 let apiBase: string;

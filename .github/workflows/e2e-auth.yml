@@ -2,32 +2,24 @@
 # StockFlow Enterprise — E2E Authentication Suite (Playwright)
 # ═══════════════════════════════════════════════════════════════
 # Builds the Flutter Web release and drives it with Playwright in a
-# real Chromium browser against the PRODUCTION Railway API (the same
-# binary deployed to stockflow-web). Covers the v1.2.1 first-user
-# authentication flow: register → login → dashboard → F5 → session
-# restore → logout → redirects → error paths.
+# real Chromium browser against an ISOLATED LOOPBACK STAND: an ephemeral
+# PostgreSQL service and a NestJS API started in this job on 127.0.0.1.
+# Never against the production Railway API.
 #
-# Requires no secrets: the web build embeds the production API URL via
-# env/.env.prod (committed), and unique emails per run avoid collisions.
+# The web build is produced with `--dart-define=ENV=e2e`, so the app reads
+# mobile/env/.env.e2e (loopback) — not the production configuration that
+# web-deploy.yml builds for the public site.
+#
+# Covers the v1.2.1 first-user authentication flow: register → login →
+# dashboard → F5 → session restore → logout → redirects → error paths.
+#
+# Requires no secrets: every backend variable below is generated inside the
+# job, and unique emails per run avoid collisions on the throwaway database.
 # ═══════════════════════════════════════════════════════════════
 
 name: E2E Auth (Playwright)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'mobile/lib/**'
-      - 'mobile/test/**'
-      - 'e2e/**'
-      - '.github/workflows/e2e-auth.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'mobile/lib/**'
-      - 'mobile/test/**'
-      - 'e2e/**'
-      - '.github/workflows/e2e-auth.yml'
   workflow_dispatch:
 
 concurrency:
@@ -41,6 +33,37 @@ jobs:
   e2e-auth:
     name: '🧪 Auth E2E (Playwright)'
     runs-on: ubuntu-latest
+
+    # Throwaway PostgreSQL for the API stand, mirroring the proven pattern in
+    # ci.yml. GitHub starts the container, blocks the job until the health
+    # check passes, maps 5432 onto this runner only, and removes it when the
+    # job ends. backend/docker-compose.yml is deliberately NOT used: it has no
+    # health checks, no depends_on condition, requires a gitignored backend/.env
+    # and never runs migrations.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: stockflow_e2e
+          POSTGRES_USER: stockflow_e2e
+          POSTGRES_PASSWORD: stockflow_e2e_local_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Explicit stand configuration. No production host, no Actions secrets.
+      NODE_ENV: test
+      DATABASE_URL: postgresql://stockflow_e2e:stockflow_e2e_local_only@127.0.0.1:5432/stockflow_e2e?schema=public
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      PORT: '3000'
+      # REDIS_URL is intentionally unset: redis.service.ts disables Redis when
+      # it is empty, and the auth paths exercised here never touch it.
 
     steps:
       - name: Checkout repository
@@ -70,10 +93,6 @@ jobs:
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
         working-directory: mobile
 
-      - name: Build web release
-        run: flutter build web --release
-        working-directory: mobile
-
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -81,11 +100,125 @@ jobs:
           cache: 'npm'
           cache-dependency-path: e2e/package-lock.json
 
+      # ─────────────────────────────────────────────────────────────
+      # API STAND — ephemeral, loopback-only, no secrets
+      # ─────────────────────────────────────────────────────────────
+
+      # Generated per run and never printed. Written to $GITHUB_ENV so the
+      # following steps pick it up without it appearing in any log line.
+      - name: Generate ephemeral JWT secret
+        run: |
+          set -euo pipefail
+          SECRET="e2e-local-$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')"
+          echo "::add-mask::$SECRET"
+          echo "JWT_SECRET=$SECRET" >> "$GITHUB_ENV"
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: backend
+
+      - name: Build backend
+        run: npm run build
+        working-directory: backend
+
+      - name: Migrate stand database
+        run: npx prisma migrate deploy
+        working-directory: backend
+
+      - name: Start API stand
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          node dist/main &
+          echo "API_PID=$!" >> "$GITHUB_ENV"
+
+      # health.controller.ts returns HTTP 200 for every readiness payload, so
+      # the status code alone proves nothing: a down PostgreSQL would still
+      # answer 200. The gate therefore requires JSON status !== 'down'.
+      # A disabled Redis yields 'degraded', which is acceptable here.
+      - name: Wait for API readiness
+        run: |
+          set -euo pipefail
+          URL='http://127.0.0.1:3000/api/health/ready'
+          for attempt in $(seq 1 60); do
+            BODY=$(curl --silent --show-error --max-time 5 "$URL" 2>/dev/null) || BODY=''
+            STATUS=$(printf '%s' "$BODY" \
+              | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String(JSON.parse(d).status||''))}catch{process.stdout.write('__invalid__')}});")
+            case "$STATUS" in
+              ok|degraded)
+                echo "API ready (status=$STATUS) after ${attempt} attempt(s)"
+                exit 0
+                ;;
+              down)
+                echo "::error::API reported status=down — PostgreSQL is not usable"
+                exit 1
+                ;;
+              __invalid__)
+                echo "::error::readiness endpoint returned non-JSON — refusing to continue"
+                exit 1
+                ;;
+            esac
+            sleep 2
+          done
+          echo "::error::API did not become ready in time"
+          exit 1
+
+      # ENV=e2e makes the app load mobile/env/.env.e2e (loopback). Building
+      # without the define now aborts at startup by design.
+      - name: Build web release
+        run: flutter build web --release --dart-define=ENV=e2e
+        working-directory: mobile
+
       - name: Install Playwright dependencies
         working-directory: e2e
         run: |
           npm ci
           npx playwright install --with-deps chromium
+
+      - name: 'Fail-closed: refuse non-loopback API target'
+        run: |
+          set -euo pipefail
+          # Both the Playwright specs and the Flutter web bundle resolve the API
+          # base from this single asset. The asset is rebuilt by
+          # "flutter build web --release --dart-define=ENV=e2e" from the tracked
+          # mobile/env/.env.e2e, so it MUST be verified here before any test is
+          # allowed to start. The production asset is never the target.
+          ASSET='mobile/build/web/assets/env/.env.e2e'
+          if [ ! -f "$ASSET" ]; then
+            echo "::error::E2E target check failed: $ASSET not found — refusing to run"
+            exit 1
+          fi
+          URL=$(sed -n 's/^API_BASE_URL=//p' "$ASSET" | head -n 1)
+          if [ -z "$URL" ]; then
+            echo "::error::E2E target check failed: no API_BASE_URL in $ASSET — refusing to run"
+            exit 1
+          fi
+          # Parse strictly. Anything that is not a well-formed http:// URL with an
+          # explicit loopback host is rejected, including https, other schemes,
+          # bare hostnames, and malformed values.
+          case "$URL" in
+            http://*) ;;
+            *)
+              echo "::error::E2E target check failed: non-http scheme in $URL — refusing to run"
+              exit 1
+              ;;
+          esac
+          REST=${URL#http://}
+          HOSTPORT=${REST%%/*}
+          HOST=${HOSTPORT%%:*}
+          case "$HOST" in
+            localhost|127.0.0.1)
+              echo "E2E target verified: loopback host '$HOST'"
+              ;;
+            *)
+              echo "::error::E2E target check failed: '$URL' is not a loopback target (host '$HOST') — refusing to run. Point this workflow at an isolated stand; never at a shared or production API."
+              exit 1
+              ;;
+          esac
 
       - name: Run authentication E2E suite
         working-directory: e2e

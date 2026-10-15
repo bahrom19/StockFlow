@@ -1,4 +1,5 @@
-import { test, expect, Page, APIRequestContext } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
+import { resolveApiBase } from '../helpers/api-base';
 import {
   enableSemantics,
   reenableSemantics,
@@ -31,8 +32,6 @@ import {
  * must NOT poll X-report.
  */
 const PASSWORD = 'E2eStrong123!';
-const API_FALLBACK = 'http://localhost:3000/api';
-
 /** Identity registered + seeded in beforeAll; login-dependent tests share it. */
 let identity: { email: string; companyName: string } | undefined;
 
@@ -43,19 +42,6 @@ const xReportRequests: string[] = [];
  * Resolve the API base URL by reading the bundled .env.prod asset.
  * Works for both production (Railway) and local (localhost) builds.
  */
-async function resolveApiBase(request: APIRequestContext): Promise<string> {
-  try {
-    const res = await request.get('http://127.0.0.1:8081/assets/env/.env.prod');
-    if (res.ok()) {
-      const text = await res.text();
-      const m = text.match(/API_BASE_URL=(.+)/);
-      if (m) return m[1].trim();
-    }
-  } catch {
-    /* fall through to fallback */
-  }
-  return API_FALLBACK;
-}
 
 test.beforeAll(async ({ request }) => {
   const unique = `${Date.now().toString(36)}${Math.random()
