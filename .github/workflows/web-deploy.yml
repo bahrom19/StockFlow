@@ -85,7 +85,7 @@ jobs:
         working-directory: mobile
 
       - name: Build web release
-        run: flutter build web --release
+        run: flutter build web --release --dart-define=ENV=prod
         working-directory: mobile
 
       # The Flutter build output lives at mobile/build/web/. Copy it

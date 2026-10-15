@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,10 +14,19 @@ import 'core/storage/preferences_storage.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables (prod env for release builds)
-  await Environment.init(
-    fileName: kReleaseMode ? 'env/.env.prod' : 'env/.env.dev',
-  );
+  // Load and validate environment variables. The environment is selected by
+  // `--dart-define=ENV=<name>`, which is required for profile and release
+  // builds. `init` proves the loaded configuration resolves to a usable
+  // API target for that environment, so an unusable or disallowed target aborts
+  // startup here instead of surfacing on the first request. The reason is a
+  // fixed enumeration and never contains the configured URL or its
+  // credentials.
+  try {
+    await Environment.init();
+  } on EnvironmentConfigError catch (error) {
+    debugPrint('StockFlow startup aborted: ${error.reason}');
+    rethrow;
+  }
 
   // Initialize services
   final logger = AppLogger('StockFlow');

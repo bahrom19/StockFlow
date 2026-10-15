@@ -118,17 +118,51 @@ flutter analyze
 
 ### Environment Configuration
 
+The environment is selected at build time and decides which bundled
+configuration asset the application loads.
+
 ```bash
-# Development (default)
+# Development (default for debug/profile builds)
 flutter run --dart-define=ENV=dev
 
-# Production
-flutter run --dart-define=ENV=prod
+# End-to-end test build
+flutter run --dart-define=ENV=e2e
+
+# Production (a release build REQUIRES an explicit environment)
+flutter build web --release --dart-define=ENV=prod
 ```
 
+`--dart-define=ENV=<name>` is required for profile and release builds. Without
+it a debug build selects `dev`; a profile or release build aborts at startup
+with `EnvironmentConfigError` rather than assuming an environment.
+
 Environment files:
-- `env/.env.dev` — Development API endpoints
-- `env/.env.prod` — Production API endpoints
+
+| File | Environment | API target |
+|------|-------------|------------|
+| `env/.env.dev` | `dev`, `test` | `http://localhost:3000/api` |
+| `env/.env.e2e` | `e2e` | `http://localhost:3000/api` |
+| `env/.env.prod` | `prod` | production API |
+
+Safety rules enforced by `core/config/environment.dart`:
+
+- There is **no implicit API target**. A missing `API_BASE_URL` throws
+  `EnvironmentConfigError` before the first frame instead of falling back to a
+  default.
+- `ENV` must be set explicitly for profile and release builds. There is no
+  implicit production environment: a release build without the define refuses
+  to start instead of silently loading the development configuration.
+- A Railway host (`*.up.railway.app`) is reachable **only** when `ENV=prod`.
+  In `dev`, `test`, and `e2e` it is rejected.
+- The value is parsed with the standard URL parser. Values carrying
+  credentials, an IPv6 literal, a missing or non-numeric port, a port outside
+  1-65535, whitespace, or a control character are rejected.
+- Error reasons never contain the configured URL or its credentials.
+- `debugOverrideForTesting` exists only in debug builds and throws in profile
+  and release builds.
+
+To point a build at a different backend, edit the matching file in `env/` —
+do not hardcode a target in Dart source.
 
 ## Dependencies
 
