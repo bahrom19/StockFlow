@@ -45,7 +45,11 @@ afterEach(() => {
 async function createGuard() {
   const storage = new ThrottlerStorageService();
   openStorages.push(storage);
-  const guard = new ThrottlerGuard(THROTTLER_DEFINITIONS, storage, new Reflector());
+  const guard = new ThrottlerGuard(
+    THROTTLER_DEFINITIONS,
+    storage,
+    new Reflector(),
+  );
   // Required: populates `throttlers` / `commonOptions` from the options array.
   await guard.onModuleInit();
   const increment = jest.spyOn(storage, 'increment');
@@ -53,7 +57,11 @@ async function createGuard() {
   return { guard, storage, consumed };
 }
 
-function makeContext(handler: (...args: any[]) => any, cls: any, userId?: string) {
+function makeContext(
+  handler: (...args: any[]) => any,
+  cls: any,
+  userId?: string,
+) {
   const req: Record<string, any> = { ip: CLIENT_IP, headers: {} };
   if (userId !== undefined) {
     req.user = { userId };
@@ -82,7 +90,10 @@ class AiController {
 describe('ThrottlerGuard behaviour with THROTTLER_DEFINITIONS', () => {
   it('S1: ordinary routes never consume the AI buckets', async () => {
     const { guard, consumed } = await createGuard();
-    const { context } = makeContext(ProductsController.prototype.create, ProductsController);
+    const { context } = makeContext(
+      ProductsController.prototype.create,
+      ProductsController,
+    );
 
     // 15 requests is more than the 10/min AI budget. Paced so that only the
     // AI buckets could block; `short` stays under its own limit.
@@ -112,8 +123,13 @@ describe('ThrottlerGuard behaviour with THROTTLER_DEFINITIONS', () => {
 
     // Clears `short` so ai-minute is the only bucket that can block.
     await sleep(CLEAR_SHORT_MS);
-    await expect(guard.canActivate(context)).rejects.toThrow(ThrottlerException);
-    expect(header).toHaveBeenCalledWith('Retry-After-ai-minute', expect.anything());
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      ThrottlerException,
+    );
+    expect(header).toHaveBeenCalledWith(
+      'Retry-After-ai-minute',
+      expect.anything(),
+    );
   });
 
   it('S3: the short bucket still limits ordinary routes', async () => {
@@ -127,15 +143,25 @@ describe('ThrottlerGuard behaviour with THROTTLER_DEFINITIONS', () => {
       expect(await guard.canActivate(context)).toBe(true);
     }
 
-    await expect(guard.canActivate(context)).rejects.toThrow(ThrottlerException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      ThrottlerException,
+    );
     expect(header).toHaveBeenCalledWith('Retry-After-short', expect.anything());
     expect(consumed()).not.toContain('ai-minute');
   });
 
   it('S4: AI limits are isolated per user by the @AIThrottle key', async () => {
     const { guard } = await createGuard();
-    const userA = makeContext(AiController.prototype.chat, AiController, 'user-A');
-    const userB = makeContext(AiController.prototype.chat, AiController, 'user-B');
+    const userA = makeContext(
+      AiController.prototype.chat,
+      AiController,
+      'user-A',
+    );
+    const userB = makeContext(
+      AiController.prototype.chat,
+      AiController,
+      'user-B',
+    );
 
     for (let i = 0; i < 10; i++) {
       expect(await guard.canActivate(userA.context)).toBe(true);
@@ -143,7 +169,9 @@ describe('ThrottlerGuard behaviour with THROTTLER_DEFINITIONS', () => {
     await sleep(CLEAR_SHORT_MS);
 
     // user-A exhausted its own 10/min budget.
-    await expect(guard.canActivate(userA.context)).rejects.toThrow(ThrottlerException);
+    await expect(guard.canActivate(userA.context)).rejects.toThrow(
+      ThrottlerException,
+    );
 
     // user-B has a separate key (`user:<id>`) and is unaffected.
     expect(await guard.canActivate(userB.context)).toBe(true);
@@ -175,7 +203,8 @@ describe('ThrottlerGuard behaviour with THROTTLER_DEFINITIONS', () => {
       skipIf?: (ctx: ExecutionContext) => boolean;
     }>;
 
-    const find = (name: string) => buckets.find((bucket) => bucket.name === name)!;
+    const find = (name: string) =>
+      buckets.find((bucket) => bucket.name === name)!;
 
     expect(find('short')).toMatchObject({ ttl: 1000, limit: 10 });
     expect(find('medium')).toMatchObject({ ttl: 10000, limit: 50 });

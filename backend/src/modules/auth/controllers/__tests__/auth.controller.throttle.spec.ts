@@ -39,7 +39,11 @@ afterEach(() => {
 async function createGuard() {
   const storage = new ThrottlerStorageService();
   openStorages.push(storage);
-  const guard = new ThrottlerGuard(THROTTLER_DEFINITIONS, storage, new Reflector());
+  const guard = new ThrottlerGuard(
+    THROTTLER_DEFINITIONS,
+    storage,
+    new Reflector(),
+  );
   // Required: populates `throttlers` / `commonOptions` from the definitions.
   await guard.onModuleInit();
   return { guard, storage };
@@ -77,12 +81,22 @@ async function expectBlockedAfter(
 describe('auth route rate limits (enforcement)', () => {
   it('login allows 20 requests per minute and rejects the 21st', async () => {
     const { guard } = await createGuard();
-    await expectBlockedAfter(guard, AuthController.prototype.login, 20, CLIENT_IP);
+    await expectBlockedAfter(
+      guard,
+      AuthController.prototype.login,
+      20,
+      CLIENT_IP,
+    );
   });
 
   it('register allows 5 requests per minute and rejects the 6th', async () => {
     const { guard } = await createGuard();
-    await expectBlockedAfter(guard, AuthController.prototype.register, 5, CLIENT_IP);
+    await expectBlockedAfter(
+      guard,
+      AuthController.prototype.register,
+      5,
+      CLIENT_IP,
+    );
   });
 
   it('forgot-password allows 5 requests per minute and rejects the 6th', async () => {
@@ -117,12 +131,22 @@ describe('auth route rate limits (enforcement)', () => {
 
   it('refresh allows 30 requests per minute and rejects the 31st', async () => {
     const { guard } = await createGuard();
-    await expectBlockedAfter(guard, AuthController.prototype.refresh, 30, CLIENT_IP);
+    await expectBlockedAfter(
+      guard,
+      AuthController.prototype.refresh,
+      30,
+      CLIENT_IP,
+    );
   });
 
   it('logout allows 30 requests per minute and rejects the 31st', async () => {
     const { guard } = await createGuard();
-    await expectBlockedAfter(guard, AuthController.prototype.logout, 30, CLIENT_IP);
+    await expectBlockedAfter(
+      guard,
+      AuthController.prototype.logout,
+      30,
+      CLIENT_IP,
+    );
   });
 
   it('reports the blocking bucket through a suffixed Retry-After header', async () => {
@@ -158,7 +182,12 @@ describe('auth route rate limits (enforcement)', () => {
 
   it('scopes the limit per IP: another source is unaffected', async () => {
     const { guard } = await createGuard();
-    await expectBlockedAfter(guard, AuthController.prototype.login, 20, CLIENT_IP);
+    await expectBlockedAfter(
+      guard,
+      AuthController.prototype.login,
+      20,
+      CLIENT_IP,
+    );
 
     const other = makeContext(AuthController.prototype.login, OTHER_IP);
     for (let i = 0; i < 20; i++) {
@@ -168,7 +197,12 @@ describe('auth route rate limits (enforcement)', () => {
 
   it('scopes the limit per route: exhausting login does not throttle register', async () => {
     const { guard } = await createGuard();
-    await expectBlockedAfter(guard, AuthController.prototype.login, 20, CLIENT_IP);
+    await expectBlockedAfter(
+      guard,
+      AuthController.prototype.login,
+      20,
+      CLIENT_IP,
+    );
 
     const register = makeContext(AuthController.prototype.register, CLIENT_IP);
     for (let i = 0; i < 5; i++) {

@@ -1,7 +1,10 @@
 import 'reflect-metadata';
 import { ExecutionContext } from '@nestjs/common';
 import { THROTTLER_DEFINITIONS } from '../../../common/config/throttler.config';
-import { AI_THROTTLE_KEY, isAiThrottleRoute } from '../decorators/ai-throttle.decorator';
+import {
+  AI_THROTTLE_KEY,
+  isAiThrottleRoute,
+} from '../decorators/ai-throttle.decorator';
 
 /**
  * Scope tests for the `ai-minute` / `ai-hour` throttler buckets.
@@ -19,8 +22,14 @@ import { AI_THROTTLE_KEY, isAiThrottleRoute } from '../decorators/ai-throttle.de
  * limits so a future change cannot silently weaken them.
  */
 
-function fakeContext(handler: (...args: any[]) => any, cls: any): ExecutionContext {
-  return { getHandler: () => handler, getClass: () => cls } as unknown as ExecutionContext;
+function fakeContext(
+  handler: (...args: any[]) => any,
+  cls: any,
+): ExecutionContext {
+  return {
+    getHandler: () => handler,
+    getClass: () => cls,
+  } as unknown as ExecutionContext;
 }
 
 /** Stands in for the real @AIThrottle() marker metadata. */
@@ -78,7 +87,9 @@ describe('isAiThrottleRoute', () => {
       create(): void {}
     }
     expect(
-      isAiThrottleRoute(fakeContext(ProductsController.prototype.create, ProductsController)),
+      isAiThrottleRoute(
+        fakeContext(ProductsController.prototype.create, ProductsController),
+      ),
     ).toBe(false);
   });
 
@@ -90,7 +101,9 @@ describe('isAiThrottleRoute', () => {
       history(): void {}
     }
     expect(
-      isAiThrottleRoute(fakeContext(AiController.prototype.history, AiController)),
+      isAiThrottleRoute(
+        fakeContext(AiController.prototype.history, AiController),
+      ),
     ).toBe(false);
   });
 
@@ -105,9 +118,9 @@ describe('isAiThrottleRoute', () => {
     class Handler {
       run(): void {}
     }
-    expect(isAiThrottleRoute(fakeContext(Handler.prototype.run, ScopedAiController))).toBe(
-      true,
-    );
+    expect(
+      isAiThrottleRoute(fakeContext(Handler.prototype.run, ScopedAiController)),
+    ).toBe(true);
   });
 
   it('does not treat undecorated routes as AI routes by name', () => {
@@ -116,7 +129,9 @@ describe('isAiThrottleRoute', () => {
       conversationList(): void {}
     }
     expect(
-      isAiThrottleRoute(fakeContext(AIController.prototype.conversationList, AIController)),
+      isAiThrottleRoute(
+        fakeContext(AIController.prototype.conversationList, AIController),
+      ),
     ).toBe(false);
   });
 });
@@ -153,9 +168,13 @@ describe('ai throttler bucket configuration', () => {
     }
 
     expect(
-      skipIf(fakeContext(ProductsController.prototype.create, ProductsController)),
+      skipIf(
+        fakeContext(ProductsController.prototype.create, ProductsController),
+      ),
     ).toBe(true);
-    expect(skipIf(fakeContext(AiController.prototype.chat, AiController))).toBe(false);
+    expect(skipIf(fakeContext(AiController.prototype.chat, AiController))).toBe(
+      false,
+    );
   });
 
   it('scopes the hour bucket identically to the minute bucket', () => {
@@ -165,7 +184,10 @@ describe('ai throttler bucket configuration', () => {
     class ProductsController {
       create(): void {}
     }
-    const ctx = fakeContext(ProductsController.prototype.create, ProductsController);
+    const ctx = fakeContext(
+      ProductsController.prototype.create,
+      ProductsController,
+    );
 
     expect(hour(ctx)).toBe(minute(ctx));
   });
