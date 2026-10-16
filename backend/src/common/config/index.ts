@@ -5,5 +5,6 @@ export * from './jwt.config';
 export * from './platform.config';
 export * from './redis.config';
 export * from './swagger.config';
+export * from './throttler.config';
 export * from './configuration';
 export * from './config.module';

@@ -1,4 +1,5 @@
-import { applyDecorators, SetMetadata } from '@nestjs/common';
+import { applyDecorators, ExecutionContext, SetMetadata } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Throttle } from '@nestjs/throttler';
 
 /**
@@ -15,6 +16,28 @@ export const AI_THROTTLE_KEY = 'ai_throttle_config';
 export interface AIThrottleConfig {
   minuteLimit: number;
   hourLimit: number;
+}
+
+const reflector = new Reflector();
+
+/**
+ * True when the route is explicitly marked with {@link AIThrottle}.
+ *
+ * The throttler guard evaluates every throttler registered in
+ * `ThrottlerModule.forRoot()` against every request, so the `ai-minute` and
+ * `ai-hour` buckets must opt out of non-AI routes. Otherwise ordinary API
+ * endpoints inherit the 10 req/min per-IP AI budget.
+ *
+ * Uses the marker metadata already written by {@link AIThrottle} rather than
+ * matching URL fragments, so the scope always tracks the decorator itself.
+ */
+export function isAiThrottleRoute(context: ExecutionContext): boolean {
+  return (
+    reflector.getAllAndOverride(AI_THROTTLE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]) !== undefined
+  );
 }
 
 /**

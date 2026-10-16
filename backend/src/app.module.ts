@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppConfigModule } from './common/config/config.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { THROTTLER_DEFINITIONS } from './common/config/throttler.config';
 import { ObservabilityModule } from './common/observability/observability.module';
 import { MetricsInterceptor } from './common/observability/metrics.interceptor';
 import { PrismaModule } from './common/prisma';
@@ -64,34 +65,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
     NotificationsModule,
     AIModule,
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 1000,
-        limit: 10,
-      },
-      {
-        name: 'medium',
-        ttl: 10000,
-        limit: 50,
-      },
-      {
-        name: 'long',
-        ttl: 60000,
-        limit: 200,
-      },
-      // AI-specific rate limits (per-user, applied via @AIThrottle decorator)
-      {
-        name: 'ai-minute',
-        ttl: 60000, // 1 minute
-        limit: 10, // 10 requests per minute per user
-      },
-      {
-        name: 'ai-hour',
-        ttl: 3600000, // 1 hour
-        limit: 50, // 50 requests per hour per user
-      },
-    ]),
+    ThrottlerModule.forRoot(THROTTLER_DEFINITIONS),
   ],
   providers: [
     {
