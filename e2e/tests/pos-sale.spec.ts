@@ -68,6 +68,7 @@ test.beforeAll(async ({ request }) => {
       name: 'E2E Widget',
       sku: `WIDGET-${unique}`,
       price: '1500.00',
+      costPrice: '900.00',
       unit: 'pcs',
     },
   });

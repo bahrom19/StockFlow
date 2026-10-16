@@ -230,7 +230,7 @@ test.describe('Supplier lifecycle (G1)', () => {
     const deleteRes = await request.delete(`${apiBase}/suppliers/${supplierId}`, {
       headers: auth(tenantA),
     });
-    expect(deleteRes.status()).toBe(200);
+    expect(deleteRes.status(), await deleteRes.text()).toBe(204);
 
     // Default list no longer contains it.
     const listRes = await request.get(`${apiBase}/suppliers?search=${encodeURIComponent(companyName)}`, {

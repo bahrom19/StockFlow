@@ -67,6 +67,7 @@ test.beforeAll(async ({ request }) => {
       name: 'E2E Oversell Widget',
       sku: `OVERWIDGET-${unique}`,
       price: '2000.00',
+      costPrice: '1200.00',
       unit: 'pcs',
     },
   });
