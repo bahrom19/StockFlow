@@ -136,12 +136,13 @@ npx jest --coverage --passWithNoTests
 ### Stage 6: Integration Tests
 
 ```bash
-npx jest --config jest.integration.config.js --coverage --passWithNoTests
+npx jest --config jest.integration.config.js --coverage
 ```
 
 - **Requires PostgreSQL** (provided via GitHub Actions `services.postgres`)
 - Uses a separate Jest config for integration tests
 - `DATABASE_URL` points to the ephemeral PostgreSQL service container
+- Zero discovered integration suites fails the step (`No tests found, exiting with code 1`) — a broken discovery pattern must not pass vacuously
 
 > ⚠️ An integration test Jest config (`jest.integration.config.js`) must be created in the project root. See [Integration Test Database](#5-integration-test-database).
 

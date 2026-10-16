@@ -10,6 +10,4 @@ module.exports = {
   coverageDirectory: '../coverage-integration',
   testEnvironment: 'node',
   testTimeout: 30000,
-  // When no integration tests exist, this prevents the "no tests found" error
-  passWithNoTests: true,
 };
