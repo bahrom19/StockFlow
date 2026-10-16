@@ -102,7 +102,7 @@ test.describe('Supplier Edit (F-01 regression)', () => {
     // supplierId — the form loaded empty. Use page.goto for reliable
     // routing (hash assignment via JS doesn't always fire popstate
     // that GoRouter listens to).
-    await page.goto(`/#/suppliers/${supplierId}`);
+    await page.goto(`/#/suppliers/${supplierId}/edit`);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3000);
     await reenableSemantics(page);
