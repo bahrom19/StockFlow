@@ -138,7 +138,11 @@ jobs:
       # 5. Unit tests with coverage
       # ───────────────────────────────────────────────────────────
       - name: 🧪 Unit tests
-        run: npx jest --coverage --passWithNoTests
+        # --passWithNoTests is deliberately NOT used here: with zero
+        # discovered unit suites the pattern is broken and the pipeline
+        # must fail loudly rather than report a green build on an empty
+        # test tier (G16-RR-01).
+        run: npx jest --coverage
         shell: bash
         env:
           DATABASE_URL: postgresql://stockflow:stockflow@localhost:5432/stockflow_test

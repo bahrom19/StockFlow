@@ -126,12 +126,12 @@ npx eslint "{src,apps,libs,test}/**/*.ts"
 ### Stage 5: Unit Tests
 
 ```bash
-npx jest --coverage --passWithNoTests
+npx jest --coverage
 ```
 
 - Uses Jest config from `jest.config.js`
 - `--coverage` generates coverage reports (Istanbul/nyc format)
-- `--passWithNoTests` ensures pipeline doesn't break if a test suite is temporarily empty
+- Zero discovered unit suites fails the step (`No tests found, exiting with code 1`) — a broken discovery pattern must not pass vacuously. `--passWithNoTests` is deliberately not used, for the same reason as in Stage 6
 
 ### Stage 6: Integration Tests
 
@@ -394,7 +394,7 @@ npm run build
 npx eslint "{src,apps,libs,test}/**/*.ts"
 
 # Stage 5
-npx jest --coverage --passWithNoTests
+npx jest --coverage
 
 # Stage 8
 npm audit --audit-level=high
