@@ -173,11 +173,32 @@ export class CompanySubscriptionRepository {
   async findExpiredTrials(
     tx?: Prisma.TransactionClient,
   ): Promise<CompanySubscription[]> {
+    // R1 + F3 FIX: select BOTH (a) expired trials (`trialEndsAt <= now`,
+    // existing semantics unchanged for rows with a real trialEndsAt) and
+    // (b) legacy TRIAL rows with `trialEndsAt = NULL`, which the previous
+    // predicate never matched in SQL (NULL comparisons are never true),
+    // leaving them stuck in TRIAL forever.
+    //
+    // F3 P-C cutoff: a NULL-trialEndsAt row is expired once 30 × 24h have
+    // elapsed since `createdAt` — grace interval is the half-open range
+    // [createdAt, createdAt + 30d), and `createdAt <= now - 30d`
+    // (equivalently `now >= createdAt + 30d`) means expired, so equality at
+    // the boundary counts as expired. The AND inside the null branch is
+    // required: an OR of `{ trialEndsAt: null }` alone would select every
+    // NULL row regardless of age. `now` is captured once so both branches
+    // share one consistent instant.
+    const now = new Date();
+    const legacyCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     return this.getClient(tx).companySubscription.findMany({
       where: {
         status: 'TRIAL',
-        trialEndsAt: { lte: new Date() },
         deletedAt: null,
+        OR: [
+          { trialEndsAt: { lte: now } },
+          {
+            AND: [{ trialEndsAt: null }, { createdAt: { lte: legacyCutoff } }],
+          },
+        ],
       },
       include: { plan: true },
     });

@@ -1076,6 +1076,183 @@ describe('BillingCronService - TTL verification', () => {
     });
   });
 
+  // ── F2: strict downgrade-only expiry (activation branch removed) ──
+
+  function buildExpiryService(jobRun = jobRunStub()) {
+    const service = new BillingCronService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      jobRun,
+    );
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED('token-f2')),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    const transitionStatus = jest.fn().mockResolvedValue(undefined);
+    const downgradeToFree = jest.fn().mockResolvedValue(undefined);
+    (service as any).companySubscriptionService = {
+      transitionStatus,
+      downgradeToFree,
+    };
+    return { service, jobRun, transitionStatus, downgradeToFree };
+  }
+
+  it('F2: expired trial WITH providerCustomerId and NO confirmed payment is NOT activated — downgraded to FREE', async () => {
+    // providerCustomerId alone must never gate activation: it is assigned by
+    // ensureCustomer() during checkout creation, before any charge succeeds.
+    const { service, jobRun, transitionStatus, downgradeToFree } =
+      buildExpiryService();
+    (service as any).subscriptionRepository = {
+      findExpiredTrials: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'sub-1', companyId: 'comp-1', providerCustomerId: 'cus_1' },
+        ]),
+    };
+
+    await service.processExpiredTrials();
+
+    // Never ACTIVE — no transition at all from this job.
+    expect(transitionStatus).not.toHaveBeenCalled();
+    expect(downgradeToFree).toHaveBeenCalledWith('comp-1', 'system');
+    expect(jobRun.finish).toHaveBeenCalledWith('jobrun-test-id', 'SUCCEEDED', {
+      processed: 1,
+      failed: 0,
+    });
+  });
+
+  it('F2: no expired-trial row — with or without providerCustomerId — is ever activated', async () => {
+    const { service, transitionStatus, downgradeToFree } = buildExpiryService();
+    (service as any).subscriptionRepository = {
+      findExpiredTrials: jest.fn().mockResolvedValue([
+        { id: 'sub-1', companyId: 'comp-1', providerCustomerId: 'cus_1' },
+        { id: 'sub-2', companyId: 'comp-2', providerCustomerId: null },
+        { id: 'sub-3', companyId: 'comp-3', providerCustomerId: 'cus_3' },
+      ]),
+    };
+
+    await service.processExpiredTrials();
+
+    expect(transitionStatus).not.toHaveBeenCalled();
+    expect(downgradeToFree).toHaveBeenCalledTimes(3);
+  });
+
+  it('F2: repeated cron runs have no repeated side effects (second run is a no-op)', async () => {
+    // Stateful pool mimics the real repository: rows stop matching once
+    // downgradeToFree flips them out of TRIAL, and downgradeToFree itself is
+    // a scheduler-safe no-op for any row no longer in TRIAL (stale-state
+    // guard in CompanySubscriptionService.downgradeToFree).
+    const pool: Array<{ id: string; companyId: string; status: string }> = [
+      { id: 'sub-1', companyId: 'comp-1', status: 'TRIAL' },
+      { id: 'sub-2', companyId: 'comp-2', status: 'TRIAL' },
+    ];
+    const { service, jobRun, transitionStatus, downgradeToFree } =
+      buildExpiryService();
+    (service as any).subscriptionRepository = {
+      findExpiredTrials: jest
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(pool.filter((s) => s.status === 'TRIAL')),
+        ),
+    };
+    downgradeToFree.mockImplementation((companyId: string) => {
+      const row = pool.find((s) => s.companyId === companyId);
+      if (row) row.status = 'FREE';
+      return Promise.resolve(undefined);
+    });
+
+    await service.processExpiredTrials();
+    await service.processExpiredTrials();
+    await service.processExpiredTrials();
+
+    // Each company downgraded exactly once across three runs; never activated.
+    expect(downgradeToFree).toHaveBeenCalledTimes(2);
+    expect(transitionStatus).not.toHaveBeenCalled();
+    expect(jobRun.finish).toHaveBeenNthCalledWith(
+      1,
+      'jobrun-test-id',
+      'SUCCEEDED',
+      { processed: 2, failed: 0 },
+    );
+    expect(jobRun.finish).toHaveBeenNthCalledWith(
+      2,
+      'jobrun-test-id',
+      'SUCCEEDED',
+      { processed: 0, failed: 0 },
+    );
+    expect(jobRun.finish).toHaveBeenNthCalledWith(
+      3,
+      'jobrun-test-id',
+      'SUCCEEDED',
+      { processed: 0, failed: 0 },
+    );
+    expect(pool.every((s) => s.status === 'FREE')).toBe(true);
+  });
+
+  it('F2 (removed behavior pin): an expired trial with a paid-looking providerCustomerId never sees transitionStatus("ACTIVE")', async () => {
+    // Guards against re-introducing the old branch: the ONLY way this job
+    // may touch subscription state is downgradeToFree.
+    const source = require('fs').readFileSync(
+      require('path').join(__dirname, '..', 'billing-cron.service.ts'),
+      'utf8',
+    );
+    const body = source.slice(
+      source.indexOf('async processExpiredTrials'),
+      source.indexOf('async generateRecurringInvoices'),
+    );
+    expect(body).toContain('downgradeToFree');
+    // The literal 'ACTIVE' status and the providerCustomerId branch must
+    // never reappear in this method (comments may mention the id).
+    expect(body).not.toContain("'ACTIVE'");
+    expect(body).not.toMatch(/if\s*\(\s*sub\.providerCustomerId/);
+  });
+
+  it('R1: expired trial WITHOUT providerCustomerId downgrades to FREE', async () => {
+    const jobRun = jobRunStub();
+    const service = new BillingCronService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      jobRun,
+    );
+    (service as any).redisService = {
+      acquireLock: jest.fn().mockResolvedValue(ACQUIRED('token-r1-free')),
+      releaseLock: jest.fn().mockResolvedValue(true),
+    };
+    (service as any).subscriptionRepository = {
+      // Includes a legacy NULL-trialEndsAt row — exactly the stuck-trial
+      // shape the R1 repository fix now surfaces.
+      findExpiredTrials: jest.fn().mockResolvedValue([
+        {
+          id: 'sub-2',
+          companyId: 'comp-2',
+          providerCustomerId: null,
+          trialEndsAt: null,
+        },
+      ]),
+    };
+    const transitionStatus = jest.fn();
+    const downgradeToFree = jest.fn();
+    (service as any).companySubscriptionService = {
+      transitionStatus,
+      downgradeToFree,
+    };
+
+    await service.processExpiredTrials();
+
+    expect(downgradeToFree).toHaveBeenCalledWith('comp-2', 'system');
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
   it('G16-X: retry-payments records failed = 1 when one retry body throws', async () => {
     const { service, jobRun } = setupBillingJobService();
     (service as any).subscriptionRepository = {

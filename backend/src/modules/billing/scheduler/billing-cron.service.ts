@@ -123,8 +123,20 @@ export class BillingCronService {
   }
 
   /**
-   * Every minute: process expired trials.
-   * TRIAL → ACTIVE (if payment method exists) or TRIAL → FREE (downgrade)
+   * Every minute: process expired trials — STRICT DOWNGRADE-ONLY (F2).
+   * TRIAL → FREE via downgradeToFree, for every row the repository returns.
+   *
+   * This job NEVER activates a subscription. The previous
+   * `providerCustomerId` branch transitioned expired trials to ACTIVE purely
+   * because a customer id existed on file, which is not payment evidence:
+   * `providerCustomerId` is assigned by ensureCustomer() during checkout
+   * creation, before any payment succeeds. Activation remains the exclusive
+   * job of the evidence-bearing paths (webhook payment events, manual admin
+   * authorization, resumeAfterPayment), which are untouched here.
+   *
+   * Selection (findExpiredTrials): expired trials (trialEndsAt <= now) plus
+   * legacy TRIAL rows with trialEndsAt = NULL once the 30-day grace from
+   * createdAt has elapsed (F3). No trial row can remain stuck in TRIAL.
    */
   @Cron(CronExpression.EVERY_MINUTE)
   async processExpiredTrials(): Promise<void> {
@@ -145,13 +157,15 @@ export class BillingCronService {
       let failedSubscriptions = 0;
       for (const sub of expiredTrials) {
         try {
-          if (!sub.providerCustomerId) {
-            await this.companySubscriptionService.downgradeToFree(
-              sub.companyId,
-              SYSTEM_USER,
-            );
-            this.logger.log(`Trial expired: company ${sub.companyId} → FREE`);
-          }
+          // F2: downgrade-only. `providerCustomerId` is NOT payment
+          // evidence (it is created before any charge succeeds), so it must
+          // never gate an activation here. downgradeToFree is idempotent for
+          // a row already past TRIAL, so a re-run has no side effects.
+          await this.companySubscriptionService.downgradeToFree(
+            sub.companyId,
+            SYSTEM_USER,
+          );
+          this.logger.log(`Trial expired: company ${sub.companyId} → FREE`);
         } catch (error) {
           failedSubscriptions += 1;
           this.logger.error(
