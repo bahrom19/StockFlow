@@ -399,3 +399,102 @@ test.describe('resolveApiBase - error contract & integration (ephemeral port)', 
     expect(apiBase).toBe('http://localhost:3000/api');
   });
 });
+
+test.describe('test-server lifecycle (F5)', () => {
+  test('close() cancels a pending delayed-response timer', async () => {
+    const server = await createTestServer();
+    const controller = new AbortController();
+    try {
+      server.setAssetResponse({
+        status: 200,
+        body: 'API_BASE_URL=http://localhost:3000/api\n',
+        delayMs: 10_000,
+      });
+      const inFlight = fetch(`${server.url}/assets/env/.env.e2e`, {
+        signal: controller.signal,
+      }).catch(() => 'aborted');
+
+      // Deterministic sync: the request handler runs synchronously, so once
+      // lastRequestPath is visible the delayed timer is already scheduled.
+      await expect.poll(() => server.lastRequestPath).toBe('/assets/env/.env.e2e');
+      expect(server.pendingTimerCount).toBe(1);
+
+      controller.abort();
+      await inFlight;
+
+      await server.close();
+      // Count-based proof of cancellation — no wall-clock assertion.
+      expect(server.pendingTimerCount).toBe(0);
+    } finally {
+      controller.abort();
+      await server.close().catch(() => undefined);
+    }
+  });
+
+  test('delayed callback cannot write after its response is closed', async () => {
+    const server = await createTestServer();
+    const controller = new AbortController();
+    try {
+      server.setAssetResponse({
+        status: 200,
+        body: 'API_BASE_URL=http://localhost:3000/api\n',
+        // Ordering margin: receipt is observed within one expect.poll tick
+        // (≤100ms) and the client aborts immediately, so the abort is
+        // guaranteed to precede the timer firing at +1s.
+        delayMs: 1_000,
+      });
+      const inFlight = fetch(`${server.url}/assets/env/.env.e2e`, {
+        signal: controller.signal,
+      }).catch(() => 'aborted');
+
+      await expect.poll(() => server.lastRequestPath).toBe('/assets/env/.env.e2e');
+      controller.abort();
+      await inFlight;
+
+      // Deterministic signal (not elapsed time): the fired callback must
+      // observe the dead response and skip its write. Without the guard the
+      // counter stays 0 and this fails.
+      await expect
+        .poll(() => server.lateCallbackSkips, { timeout: 5_000 })
+        .toBe(1);
+      // The timer fired and removed itself from the set.
+      expect(server.pendingTimerCount).toBe(0);
+    } finally {
+      controller.abort();
+      await server.close().catch(() => undefined);
+    }
+  });
+
+  test('repeated and concurrent close() calls settle safely', async () => {
+    const server = await createTestServer();
+    const first = server.close();
+    const second = server.close();
+    // Concurrent callers share the single cached shutdown promise.
+    expect(second).toBe(first);
+    await Promise.all([first, second]);
+    // Repeated call after settlement resolves as well (never rejects).
+    await server.close();
+  });
+
+  test('EADDRINUSE rejects creation and the original server still closes', async () => {
+    const first = await createTestServer();
+    try {
+      const port = Number(new URL(first.url).port);
+
+      let caught: unknown;
+      try {
+        await createTestServer({ port });
+      } catch (error) {
+        caught = error;
+      }
+
+      // The bind failure rejects the creation promise with the original
+      // error instead of crashing the worker via an unhandled 'error' event.
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as { code?: string }).code).toBe('EADDRINUSE');
+    } finally {
+      // Releases the first server on success AND assertion-failure paths.
+      await first.close();
+    }
+  });
+});
