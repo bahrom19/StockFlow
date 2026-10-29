@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { request } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
+import { createServer } from 'node:http';
 import { resolveApiBase } from './api-base';
 import {
   parseE2EEnv,
+  assertLoopbackBundle,
   EnvGuardError,
   GuardReasonCode,
 } from './env-guard';
@@ -258,7 +260,7 @@ test.describe('resolveApiBase - error contract & integration (ephemeral port)', 
     expect((error as EnvGuardError).message).not.toContain(transportMarker);
   });
 
-  test('HTTP redirect returns E_FETCH (maxRedirects: 0)', async () => {
+  test('HTTP redirect returns E_REDIRECT (maxRedirects: 0)', async () => {
     await integrationTestServer.setAssetResponse({
       status: 302,
       body: '',
@@ -270,8 +272,69 @@ test.describe('resolveApiBase - error contract & integration (ephemeral port)', 
     );
 
     expect(error).toBeInstanceOf(EnvGuardError);
-    expect((error as EnvGuardError).code).toBe('E_FETCH');
-    expect((error as EnvGuardError).message).toBe('EnvGuard:E_FETCH');
+    expect((error as EnvGuardError).code).toBe('E_REDIRECT');
+    expect((error as EnvGuardError).message).toBe('EnvGuard:E_REDIRECT');
+  });
+
+  test('every redirect status (301, 307, 308) maps to E_REDIRECT', async () => {
+    for (const status of [301, 307, 308]) {
+      await integrationTestServer.setAssetResponse({
+        status,
+        body: '',
+        delayMs: 0,
+      });
+
+      const error = await withRequestContext(async (context) =>
+        resolveApiBase(context, integrationTestServer.url).catch((caught) => caught),
+      );
+
+      expect(error, `status ${status}`).toBeInstanceOf(EnvGuardError);
+      expect((error as EnvGuardError).code, `status ${status}`).toBe('E_REDIRECT');
+      expect((error as EnvGuardError).message, `status ${status}`).toBe(
+        'EnvGuard:E_REDIRECT',
+      );
+    }
+  });
+
+  test('helper and guard classify 3xx identically (both E_REDIRECT)', async () => {
+    // Inline server that answers EVERY path with a redirect, so the guard's
+    // BUILD_ENV fetch and the helper's .env.e2e fetch both hit a 3xx.
+    const redirectEverything = createServer((_req, res) => {
+      res.writeHead(302, { Location: '/redirect-target' });
+      res.end();
+    });
+    await new Promise<void>((resolveListen) => {
+      redirectEverything.listen(0, '127.0.0.1', resolveListen);
+    });
+    const address = redirectEverything.address();
+    const origin =
+      typeof address === 'object' && address !== null
+        ? `http://127.0.0.1:${address.port}`
+        : '';
+
+    try {
+      const guardError = await assertLoopbackBundle(origin).catch((caught) => caught);
+      expect(guardError).toBeInstanceOf(EnvGuardError);
+      expect((guardError as EnvGuardError).code).toBe('E_REDIRECT');
+
+      const helperError = await withRequestContext((context) =>
+        resolveApiBase(context, origin).catch((caught) => caught),
+      );
+      expect(helperError).toBeInstanceOf(EnvGuardError);
+      expect((helperError as EnvGuardError).code).toBe('E_REDIRECT');
+
+      // The F3 invariant: identical classification for identical behavior.
+      expect((helperError as EnvGuardError).code).toBe(
+        (guardError as EnvGuardError).code,
+      );
+      expect((helperError as EnvGuardError).message).toBe(
+        (guardError as EnvGuardError).message,
+      );
+    } finally {
+      await new Promise<void>((resolveClose) => {
+        redirectEverything.close(() => resolveClose());
+      });
+    }
   });
 
   test('redirect target is never requested', async () => {
@@ -287,7 +350,7 @@ test.describe('resolveApiBase - error contract & integration (ephemeral port)', 
     );
 
     expect(error).toBeInstanceOf(EnvGuardError);
-    expect((error as EnvGuardError).code).toBe('E_FETCH');
+    expect((error as EnvGuardError).code).toBe('E_REDIRECT');
     expect(integrationTestServer.redirectTargetCount).toBe(initialRedirectTargetCount);
     expect(integrationTestServer.lastRequestPath).toBe('/assets/env/.env.e2e');
   });

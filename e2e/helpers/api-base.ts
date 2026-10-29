@@ -45,7 +45,14 @@ export async function resolveApiBase(
       maxRedirects: 0,
       timeout: 5000,
     });
-    if (res.status() === 404) {
+    // F3: classify 3xx exactly like the shared guard's fetchAsset branch
+    // (env-guard.ts), so both consumers agree on the same reason code.
+    // Redirects are never followed (maxRedirects: 0) and never accepted.
+    const status = res.status();
+    if (status >= 300 && status < 400) {
+      throw new EnvGuardError('E_REDIRECT');
+    }
+    if (status === 404) {
       throw new EnvGuardError('E_ASSET_MISSING');
     }
     if (!res.ok()) {
