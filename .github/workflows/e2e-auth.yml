@@ -173,20 +173,46 @@ jobs:
         run: flutter build web --release --dart-define=ENV=e2e
         working-directory: mobile
 
+      # Configuration label (NOT cryptographic attestation): written only
+      # after the trusted e2e build above, immediately, so the served label
+      # is never older than the compiled entry it describes. Verified below
+      # by the fail-closed step and again by the Playwright globalSetup
+      # guard (e2e/helpers/env-guard.ts) against the actually served bundle.
+      # The build/ tree is gitignored, so the stamp is ephemeral and can
+      # never be committed.
+      - name: Stamp e2e build (BUILD_ENV)
+        run: printf 'e2e\n' > mobile/build/web/assets/env/BUILD_ENV
+
       - name: Install Playwright dependencies
         working-directory: e2e
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: 'Fail-closed: refuse non-loopback API target'
+      - name: 'Fail-closed: refuse stale, mislabeled, or non-loopback API target'
         run: |
           set -euo pipefail
+          # Sequence guard: build → stamp → this validation → Playwright suite.
           # Both the Playwright specs and the Flutter web bundle resolve the API
           # base from this single asset. The asset is rebuilt by
           # "flutter build web --release --dart-define=ENV=e2e" from the tracked
           # mobile/env/.env.e2e, so it MUST be verified here before any test is
           # allowed to start. The production asset is never the target.
+          #
+          # BUILD_ENV is a configuration label (NOT cryptographic attestation):
+          # it must exist and read "e2e", proving the preceding build step ran
+          # and labeled this output. A missing or different label means the
+          # bundle was not produced by the e2e build above — refuse to run.
+          STAMP='mobile/build/web/assets/env/BUILD_ENV'
+          if [ ! -f "$STAMP" ]; then
+            echo "::error::E2E target check failed: BUILD_ENV stamp not found — refusing to run"
+            exit 1
+          fi
+          STAMP_VALUE=$(tr -d '[:space:]' < "$STAMP")
+          if [ "$STAMP_VALUE" != "e2e" ]; then
+            echo "::error::E2E target check failed: BUILD_ENV stamp does not read e2e — refusing to run"
+            exit 1
+          fi
           ASSET='mobile/build/web/assets/env/.env.e2e'
           if [ ! -f "$ASSET" ]; then
             echo "::error::E2E target check failed: $ASSET not found — refusing to run"
