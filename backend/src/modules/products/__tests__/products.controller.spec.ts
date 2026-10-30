@@ -6,7 +6,8 @@ import { REQUIRED_PERMISSIONS_KEY } from '../../rbac/decorators/require-permissi
  * G15-05-D regression — product endpoints enforce existing RBAC permissions.
  *
  * POST /products requires `products:create`, PATCH /products/:id requires
- * `products:update` (both seeded permissions; no new permission introduced).
+ * `products:update`, DELETE /products/:id requires `products:delete` (all
+ * seeded permissions; no new permission introduced — SEC-02).
  * RolesGuard itself is covered by rbac specs; here we assert the metadata
  * wiring on the controller.
  */
@@ -29,5 +30,9 @@ describe('ProductsController — RBAC metadata (G15-05-D)', () => {
 
   it('PATCH /products/:id/cost-price requires products:update (G16-H-2 B4)', () => {
     expect(required('setCostPrice')).toBe('products:update');
+  });
+
+  it('DELETE /products/:id requires products:delete (SEC-02)', () => {
+    expect(required('softDelete')).toBe('products:delete');
   });
 });

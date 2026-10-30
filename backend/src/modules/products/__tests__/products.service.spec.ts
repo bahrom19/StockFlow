@@ -519,6 +519,20 @@ describe('ProductsService', () => {
     expect(result.deletedAt).not.toBeNull();
   });
 
+  it('should block cross-tenant soft delete with 404 (SEC-02)', async () => {
+    // The product exists in another company — findById is tenant-scoped, so it
+    // resolves to null and softDelete must fail closed before any write.
+    mockRepo.findById.mockResolvedValue(null);
+    await expect(
+      service.softDelete('prod-1', {
+        ...currentUser,
+        companyId: 'other-company',
+      }),
+    ).rejects.toThrow(NotFoundException);
+    expect(mockRepo.findById).toHaveBeenCalledWith('prod-1', 'other-company');
+    expect(mockRepo.softDelete).not.toHaveBeenCalled();
+  });
+
   it('should enforce company isolation', async () => {
     mockRepo.findById.mockResolvedValue(null);
     await expect(

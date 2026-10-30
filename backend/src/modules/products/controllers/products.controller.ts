@@ -161,6 +161,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
+  @RequirePermission('products:delete')
   @ApiOperation({ summary: 'Soft delete a product' })
   @ApiResponse({
     status: HttpStatus.OK,
